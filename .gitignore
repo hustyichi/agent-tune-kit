@@ -1,0 +1,41 @@
+# macOS / editor noise
+.DS_Store
+*.swp
+*.swo
+*~
+
+# Local runtime state
+.omx/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Python caches and virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+env/
+
+# Build and package output
+build/
+dist/
+*.egg-info/
+
+# Node dependencies and caches, if frontend/tooling is added later
+node_modules/
+.npm/
+.pnpm-store/
+
+# Agent tune kit generated outputs
+agent-tuning/results/
+agent-tuning/**/*.log
+
