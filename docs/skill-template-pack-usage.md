@@ -58,7 +58,7 @@ If you do not want plugin registration, use the legacy copy/register path: copy 
 - `skills/atk-filter-rules/SKILL.md` — generate or update `.atk/runner/filter_abnormal.py` for manual rule-based filtering.
 - `skills/atk-filter/SKILL.md` — inspect current `results.csv` and write current `abnormal_cases.csv` using model judgment.
 - `skills/atk-report/SKILL.md` — write current `report.md`, including adjacent-version validation when possible.
-- `skills/atk-apply/SKILL.md` — tune the target Agent and write current `tuning_plan.md`.
+- `skills/atk-tune/SKILL.md` — tune the target Agent and write current `tuning_plan.md`.
 - `templates/.atk/runner/test_runner.py.md` — script template preserving original dataset columns and appending `agent_output`.
 - `templates/.atk/runner/filter_abnormal.py.md` — stdlib CSV rule-filter template.
 - `docs/shared-versioning-and-confirmation.md` — shared current/new version semantics and confirmation triggers.
@@ -75,7 +75,7 @@ If you do not want plugin registration, use the legacy copy/register path: copy 
    - Trigger `atk-filter-rules`, then manually run `python3 .atk/runner/filter_abnormal.py` to write `abnormal_cases.csv`.
    - Or trigger `atk-filter` to write `abnormal_cases.csv` directly from the current `results.csv`.
 6. Trigger `atk-report` to create `.atk/results/vN/report.md`. From `v2` onward, it compares the current version with the previous existing version and reads the previous `tuning_plan.md` when available.
-7. Trigger `atk-apply` to change the Agent and write `.atk/results/vN/tuning_plan.md`.
+7. Trigger `atk-tune` to change the Agent and write `.atk/results/vN/tuning_plan.md`.
 8. Optionally create a user git commit/checkpoint. Rollback remains user-git-only guidance; this plugin does not automate restore.
 9. Run the same loop again. The next test run creates `v{N+1}` when the current max version already has `results.csv`.
 

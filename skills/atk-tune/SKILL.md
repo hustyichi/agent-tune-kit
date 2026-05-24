@@ -1,9 +1,9 @@
 ---
-name: atk-apply
-description: Apply Agent improvements from the current report and write a fixed-heading tuning_plan.md for the next iteration's validation.
+name: atk-tune
+description: Tune the Agent from the current report and write a fixed-heading tuning_plan.md for the next iteration's validation.
 ---
 
-# Agent Tuning — Apply Tuning
+# Agent Tuning — Tune Agent
 
 ## Purpose
 
@@ -85,7 +85,7 @@ Ask only when:
 
 ## Handoff message
 
-After applying tuning, summarize:
+After tuning, summarize:
 
 - current version;
 - files changed;

@@ -151,7 +151,7 @@ Codex 会生成：
 输入：
 
 ```text
-$atk-apply
+$atk-tune
 ```
 
 Codex 会基于报告修改你的 Agent，并写入：
@@ -187,7 +187,7 @@ $atk-setup
 $atk-run
 $atk-filter
 $atk-report
-$atk-apply
+$atk-tune
 ```
 
 下一轮从再次运行 `$atk-run` 开始。
@@ -219,7 +219,7 @@ $atk-apply
 - `$atk-filter`：让 Codex 判断异常样本。
 - `$atk-filter-rules`：按明确规则筛选异常样本。
 - `$atk-report`：生成分析报告和跨轮验证结论。
-- `$atk-apply`：根据报告修改 Agent，并记录本轮调优计划。
+- `$atk-tune`：根据报告修改 Agent，并记录本轮调优计划。
 
 ## 当前边界
 
@@ -236,7 +236,7 @@ $atk-apply
 - `skills/atk-filter-rules/SKILL.md`
 - `skills/atk-filter/SKILL.md`
 - `skills/atk-report/SKILL.md`
-- `skills/atk-apply/SKILL.md`
+- `skills/atk-tune/SKILL.md`
 - `templates/.atk/runner/test_runner.py.md`
 - `templates/.atk/runner/filter_abnormal.py.md`
 - `docs/shared-versioning-and-confirmation.md`

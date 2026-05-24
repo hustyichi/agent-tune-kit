@@ -16,7 +16,7 @@ This Skill preserves the existing stage Skill contracts:
 - `atk-filter-rules`
 - `atk-filter`
 - `atk-report`
-- `atk-apply`
+- `atk-tune`
 
 It does not bypass existing confirmation triggers, does not perform full automatic tuning, and does not run the 2.2 → 2.6 loop end-to-end.
 
@@ -49,7 +49,7 @@ It does not bypass existing confirmation triggers, does not perform full automat
    - runner exists but no current `results.csv`: trigger `atk-run`;
    - current `results.csv` exists but no `abnormal_cases.csv`: choose `atk-filter-rules` or `atk-filter`;
    - current `abnormal_cases.csv` exists but no `report.md`: trigger `atk-report`;
-   - current `report.md` exists but no `tuning_plan.md`: trigger `atk-apply`;
+   - current `report.md` exists but no `tuning_plan.md`: trigger `atk-tune`;
    - current `tuning_plan.md` exists: optionally create a user git checkpoint, then trigger `atk-run` to create the next version.
 4. Keep guidance over hidden automation: this Skill may summarize commands and Skill names, but it does not run generated runner/filter scripts unless the user explicitly asks in the target workflow.
 

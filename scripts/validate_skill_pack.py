@@ -23,7 +23,7 @@ REQUIRED_FILES = [
     "skills/atk-filter-rules/SKILL.md",
     "skills/atk-filter/SKILL.md",
     "skills/atk-report/SKILL.md",
-    "skills/atk-apply/SKILL.md",
+    "skills/atk-tune/SKILL.md",
     "templates/.atk/runner/test_runner.py.md",
     "templates/.atk/runner/filter_abnormal.py.md",
     "docs/skill-template-pack-usage.md",
@@ -128,7 +128,7 @@ PER_FILE_PHRASES = {
         "atk-filter-rules",
         "atk-filter",
         "atk-report",
-        "atk-apply",
+        "atk-tune",
         "RESULTS_DIR = Path(\".atk/results\")",
     ],
     "skills/atk-setup/SKILL.md": [
@@ -175,7 +175,7 @@ PER_FILE_PHRASES = {
         "无法判断",
         "degrade to single-version or lower-confidence report with explicit explanation",
     ],
-    "skills/atk-apply/SKILL.md": [
+    "skills/atk-tune/SKILL.md": [
         "require_current_file(current_dir, \"report.md\")",
         "## 目标异常清单",
         "## 调优手段",
@@ -237,7 +237,7 @@ PER_FILE_PHRASES = {
         "atk-filter-rules",
         "atk-filter",
         "atk-report",
-        "atk-apply",
+        "atk-tune",
         "python3 scripts/validate_skill_pack.py",
         "python3 scripts/install_plugin.py --dry-run",
     ],
@@ -252,7 +252,7 @@ PER_FILE_PHRASES = {
         "atk-filter-rules",
         "atk-filter",
         "atk-report",
-        "atk-apply",
+        "atk-tune",
         "python3 scripts/validate_skill_pack.py",
         "python3 scripts/install_plugin.py --dry-run",
     ],
@@ -267,7 +267,7 @@ PER_FILE_PHRASES = {
         "atk-filter-rules",
         "atk-filter",
         "atk-report",
-        "atk-apply",
+        "atk-tune",
         "python3 scripts/validate_skill_pack.py",
         "python3 scripts/install_plugin.py --dry-run",
     ],
@@ -413,7 +413,7 @@ def main() -> int:
     for phrase in PRD_REFERENCES:
         require(contains_any(all_text, [phrase]), f"missing PRD traceability phrase: {phrase}", errors)
 
-    tuning_text = existing_texts.get("skills/atk-apply/SKILL.md", "")
+    tuning_text = existing_texts.get("skills/atk-tune/SKILL.md", "")
     for heading in ["## 目标异常清单", "## 调优手段", "## 关联改动"]:
         require(heading in tuning_text, f"tuning Skill missing exact heading {heading}", errors)
 

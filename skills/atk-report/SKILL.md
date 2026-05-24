@@ -108,4 +108,4 @@ After writing the report, summarize:
 - counts of total and abnormal cases;
 - cross-version validation status distribution: `已解决` / `部分解决` / `未解决` / `无法判断`;
 - output path `.atk/results/vN/report.md`;
-- whether the next step is `atk-apply`.
+- whether the next step is `atk-tune`.

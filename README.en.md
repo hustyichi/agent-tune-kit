@@ -151,7 +151,7 @@ The report summarizes test results, abnormal cases, likely causes, and recommend
 Run:
 
 ```text
-$atk-apply
+$atk-tune
 ```
 
 Codex edits the Agent based on the report and records the tuning plan in:
@@ -185,7 +185,7 @@ $atk-setup
 $atk-run
 $atk-filter
 $atk-report
-$atk-apply
+$atk-tune
 ```
 
 Start the next loop by running `$atk-run` again.
@@ -217,7 +217,7 @@ Most users only need to read `results.csv`, `abnormal_cases.csv`, and `report.md
 - `$atk-filter`: let Codex identify abnormal cases.
 - `$atk-filter-rules`: identify abnormal cases with explicit rules.
 - `$atk-report`: generate analysis and cross-loop validation.
-- `$atk-apply`: tune the Agent and record the tuning plan.
+- `$atk-tune`: tune the Agent and record the tuning plan.
 
 ## Current scope
 
@@ -234,7 +234,7 @@ Out of scope for this pass: no public marketplace release, no brand assets/scree
 - `skills/atk-filter-rules/SKILL.md`
 - `skills/atk-filter/SKILL.md`
 - `skills/atk-report/SKILL.md`
-- `skills/atk-apply/SKILL.md`
+- `skills/atk-tune/SKILL.md`
 - `templates/.atk/runner/test_runner.py.md`
 - `templates/.atk/runner/filter_abnormal.py.md`
 - `docs/shared-versioning-and-confirmation.md`
