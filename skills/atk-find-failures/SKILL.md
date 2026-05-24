@@ -24,7 +24,7 @@ Traceability note: section 2.4 defines failure-case discovery entries, section 4
 ## Outputs
 
 - Current `.atk/results/vN/failure_cases.csv`.
-- No `find_failures_by_rule.py` is required for this mode.
+- No `failure_rule.py` is required for this mode.
 
 ## Workflow
 

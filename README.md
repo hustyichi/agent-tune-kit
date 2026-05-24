@@ -113,19 +113,25 @@ $atk-run
 $atk-find-failures
 ```
 
-如果你有明确规则，例如“期望答案不等于输出就是异常”，可以用：
+如果你有明确规则，例如“期望答案不等于输出就是异常”，先创建或更新规则脚本：
+
+```text
+$atk-init-failure-rule
+```
+
+它会生成规则脚本：
+
+```text
+.atk/runner/failure_rule.py
+```
+
+然后执行规则脚本来写入异常结果：
 
 ```text
 $atk-find-failures-by-rule
 ```
 
-它会生成规则筛选脚本：
-
-```text
-.atk/runner/find_failures_by_rule.py
-```
-
-如果这个脚本已经存在，`$atk-find-failures-by-rule` 会复用现有脚本，不会重复生成。你可以按需要修改脚本里的规则，然后手动运行它来写入异常结果。
+如果 `.atk/runner/failure_rule.py` 不存在，`$atk-find-failures-by-rule` 会停止并提醒你先运行 `$atk-init-failure-rule`。
 
 异常结果会写入：
 
@@ -188,7 +194,7 @@ $atk-report
 .atk/
 ├── runner/
 │   ├── eval_runner.py
-│   └── find_failures_by_rule.py
+│   └── failure_rule.py
 └── results/
     ├── v1/
     │   ├── eval_results.csv
@@ -207,6 +213,7 @@ $atk-report
 - `$atk-init`：生成适配当前 Agent 的测试脚本。
 - `$atk-run`：运行测试脚本并生成当前版本结果。
 - `$atk-find-failures`：让 Codex 判断异常样本。
-- `$atk-find-failures-by-rule`：按明确规则筛选异常样本。
+- `$atk-init-failure-rule`：创建或更新 `.atk/runner/failure_rule.py`。
+- `$atk-find-failures-by-rule`：执行 `.atk/runner/failure_rule.py`，按明确规则筛选异常样本。
 - `$atk-report`：生成分析报告和跨轮验证结论。
 - `$atk-tune`：根据报告修改 Agent，并记录本轮调优计划。

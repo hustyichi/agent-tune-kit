@@ -13,6 +13,7 @@ This Skill preserves the existing stage Skill contracts:
 
 - `atk-init`
 - `atk-run`
+- `atk-init-failure-rule`
 - `atk-find-failures-by-rule`
 - `atk-find-failures`
 - `atk-report`
@@ -37,7 +38,7 @@ It does not bypass existing confirmation triggers, does not perform full automat
 
 1. Inspect the current repository before asking questions:
    - Does `.atk/runner/eval_runner.py` exist?
-   - Does `.atk/runner/find_failures_by_rule.py` exist?
+   - Does `.atk/runner/failure_rule.py` exist?
    - Does `.atk/results/` contain `vN` directories?
    - For the numerically largest current version, are `eval_results.csv`, `failure_cases.csv`, `report.md`, and `tuning_plan.md` present?
 2. Apply the shared current-version semantics from `docs/shared-versioning-and-confirmation.md`:
@@ -47,7 +48,7 @@ It does not bypass existing confirmation triggers, does not perform full automat
 3. Recommend the next step:
    - no runner: trigger `atk-init`;
    - runner exists but no current `eval_results.csv`: trigger `atk-run`;
-   - current `eval_results.csv` exists but no `failure_cases.csv`: choose `atk-find-failures-by-rule` or `atk-find-failures`;
+   - current `eval_results.csv` exists but no `failure_cases.csv`: if the user wants rules and `.atk/runner/failure_rule.py` is missing, trigger `atk-init-failure-rule`; if the rule script exists, choose `atk-find-failures-by-rule`; otherwise choose `atk-find-failures`;
    - current `failure_cases.csv` exists but no `report.md`: trigger `atk-report`;
    - current `report.md` exists but no `tuning_plan.md`: trigger `atk-tune`;
    - current `tuning_plan.md` exists: optionally create a user git checkpoint, then trigger `atk-run` to create the next version.
@@ -73,7 +74,8 @@ Ask a concise question only when inspection cannot safely decide:
 - whether the user wants rule-based or LLM-based failure finding;
 - whether an existing partial `.atk/` directory belongs to this workflow;
 - whether to treat a missing current-version file as a rerun/repair task or move to a different target project;
-- whether a generated script should be run now when that would execute the user's Agent or overwrite current outputs.
+- whether a generated script should be run now when that would execute the user's Agent or overwrite current outputs;
+- whether an existing `failure_rule.py` should be initialized, reused, or updated before rule-based failure finding.
 
 ## Failure behavior
 

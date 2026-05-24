@@ -20,12 +20,13 @@ REQUIRED_FILES = [
     "skills/atk-status/SKILL.md",
     "skills/atk-init/SKILL.md",
     "skills/atk-run/SKILL.md",
+    "skills/atk-init-failure-rule/SKILL.md",
     "skills/atk-find-failures-by-rule/SKILL.md",
     "skills/atk-find-failures/SKILL.md",
     "skills/atk-report/SKILL.md",
     "skills/atk-tune/SKILL.md",
     "templates/.atk/runner/eval_runner.py.md",
-    "templates/.atk/runner/find_failures_by_rule.py.md",
+    "templates/.atk/runner/failure_rule.py.md",
     "docs/skill-template-pack-usage.md",
     "docs/shared-versioning-and-confirmation.md",
     "docs/codex_agent_tuning_prd.md",
@@ -138,6 +139,7 @@ PER_FILE_PHRASES = {
         "does not perform full automatic tuning",
         "atk-init",
         "atk-run",
+        "atk-init-failure-rule",
         "atk-find-failures-by-rule",
         "atk-find-failures",
         "atk-report",
@@ -163,19 +165,30 @@ PER_FILE_PHRASES = {
         "If the runner is missing",
         "next recommended Skill: `atk-find-failures`",
     ],
-    "skills/atk-find-failures-by-rule/SKILL.md": [
-        ".atk/runner/find_failures_by_rule.py",
+    "skills/atk-init-failure-rule/SKILL.md": [
+        "atk-init-failure-rule",
+        ".atk/runner/failure_rule.py",
+        "templates/.atk/runner/failure_rule.py.md",
+        "This Skill only prepares the rule script",
+        "does not write `.atk/results/vN/failure_cases.csv`",
+        "Tell the user to run `atk-find-failures-by-rule`",
         "require_current_file(current_dir, \"eval_results.csv\")",
-        "It does not run `find_failures_by_rule.py` itself",
-        "ask whether to reuse or update rule logic",
-        "manual execution",
-        "overwrites the current version's existing file",
+    ],
+    "skills/atk-find-failures-by-rule/SKILL.md": [
+        ".atk/runner/failure_rule.py",
+        "require_current_file(current_dir, \"eval_results.csv\")",
+        "This Skill only runs an existing rule script",
+        "does not create or update `.atk/runner/failure_rule.py`",
+        "run `atk-init-failure-rule` first",
+        "<python-runtime> .atk/runner/failure_rule.py",
+        "If `.atk/runner/failure_rule.py` contains `TODO_AGENT_TUNING`",
+        "current `failure_cases.csv` already exists",
     ],
     "skills/atk-find-failures/SKILL.md": [
         "write failing rows to `failure_cases.csv` directly",
         "expected-result columns or failure criteria are ambiguous",
         "Overwrites",
-        "No `find_failures_by_rule.py` is required",
+        "No `failure_rule.py` is required",
         "preserving all original `eval_results.csv` columns",
     ],
     "skills/atk-report/SKILL.md": [
@@ -213,7 +226,7 @@ PER_FILE_PHRASES = {
         "Preserves all original dataset columns",
         "Current max version",
     ],
-    "templates/.atk/runner/find_failures_by_rule.py.md": [
+    "templates/.atk/runner/failure_rule.py.md": [
         "def resolve_current_version(results_dir=RESULTS_DIR)",
         "def require_current_file(current_dir, filename)",
         "FAILURE_FILENAME = \"failure_cases.csv\"",
@@ -253,6 +266,7 @@ PER_FILE_PHRASES = {
         "atk-status",
         "atk-init",
         "atk-run",
+        "atk-init-failure-rule",
         "atk-find-failures-by-rule",
         "atk-find-failures",
         "atk-report",
@@ -268,6 +282,7 @@ PER_FILE_PHRASES = {
         "atk-status",
         "atk-init",
         "atk-run",
+        "atk-init-failure-rule",
         "atk-find-failures-by-rule",
         "atk-find-failures",
         "atk-report",
@@ -283,6 +298,7 @@ PER_FILE_PHRASES = {
         "atk-status",
         "atk-init",
         "atk-run",
+        "atk-init-failure-rule",
         "atk-find-failures-by-rule",
         "atk-find-failures",
         "atk-report",
@@ -299,7 +315,7 @@ VERSION_HELPER_SNIPPETS = {
         "target = results_dir / \"v1\"",
         "target = results_dir / f\"v{max_n + 1}\" if (current / \"eval_results.csv\").exists() else current",
     ],
-    "templates/.atk/runner/find_failures_by_rule.py.md": [
+    "templates/.atk/runner/failure_rule.py.md": [
         "RESULTS_DIR = Path(\".atk/results\")",
         "def list_version_dirs(results_dir=RESULTS_DIR):",
         "if not results_dir.exists():\n        return []",
@@ -452,13 +468,16 @@ def main() -> int:
     require("--concurrency" in runner_template and "ThreadPoolExecutor" in runner_template, "runner template must support concurrent runs", errors)
     require("writer.writerow(result_row)" in runner_template and "os.fsync(handle.fileno())" in runner_template, "runner template must write and flush results incrementally", errors)
 
+    init_rules_skill = existing_texts.get("skills/atk-init-failure-rule/SKILL.md", "")
     rules_skill = existing_texts.get("skills/atk-find-failures-by-rule/SKILL.md", "")
     llm_skill = existing_texts.get("skills/atk-find-failures/SKILL.md", "")
+    require("atk-init-failure-rule" in init_rules_skill, "rules initializer Skill identity missing", errors)
     require("atk-find-failures-by-rule" in rules_skill, "rules failure-finding Skill identity missing", errors)
     require("atk-find-failures" in llm_skill, "LLM failure-finding Skill identity missing", errors)
+    require("failure_rule.py" in init_rules_skill and "failure_rule.py" in rules_skill, "rules initializer and executor must share failure_rule.py", errors)
     require("failure_cases.csv" in rules_skill and "failure_cases.csv" in llm_skill, "both failure-finding Skills must write failure_cases.csv", errors)
 
-    filter_template = existing_texts.get("templates/.atk/runner/find_failures_by_rule.py.md", "")
+    filter_template = existing_texts.get("templates/.atk/runner/failure_rule.py.md", "")
     require("Conservative placeholder" not in filter_template, "filter template must not ship a runnable placeholder heuristic", errors)
 
     validate_manifest(errors)

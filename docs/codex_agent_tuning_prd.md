@@ -71,21 +71,22 @@
   - 脚本崩溃时不主动清理已创建的目录，由用户手工处理
   - 用户不需要指定版本号或结果目录
 
-### 2.4 异常筛选模块（两个独立 Skill 入口）
-- **模式与入口**：用户根据需求选择不同 Skill 入口调用，二者输出文件名一致，互不依赖
-  1. **规则模式 Skill**：与用户交互确认筛选规则（如字段比较、阈值、关键字等）后，生成共享脚本 `.atk/runner/find_failures_by_rule.py`；用户手工运行该脚本输出 `failure_cases.csv`。脚本已存在时，Skill 默认复用并允许用户决定是否更新规则
-  2. **大模型模式 Skill**：由 Skill 直接读取当前版本目录下的 `eval_results.csv` 与数据集中的预期结果，结合用户给定的判断说明（或由 Skill 基于预期结果自行推断）筛选异常样本，输出 `failure_cases.csv`
-- **写入行为**：两种模式写入的 `failure_cases.csv` 文件名一致；若当前版本目录下已存在该文件，**直接覆盖**，不做备份或合并
+### 2.4 异常筛选模块（规则初始化、规则执行与大模型入口）
+- **模式与入口**：用户根据需求选择不同 Skill 入口调用；规则模式将脚本初始化和脚本执行拆开，大模型模式直接写结果
+  1. **规则初始化 Skill (`atk-init-failure-rule`)**：与用户交互确认筛选规则（如字段比较、阈值、关键字等）后，生成或更新共享脚本 `.atk/runner/failure_rule.py`。脚本已存在时，Skill 默认复用并允许用户决定是否更新规则
+  2. **规则执行 Skill (`atk-find-failures-by-rule`)**：只执行已有 `.atk/runner/failure_rule.py`，从当前版本 `eval_results.csv` 输出 `failure_cases.csv`；如果脚本不存在，则提示先运行 `atk-init-failure-rule`
+  3. **大模型模式 Skill (`atk-find-failures`)**：由 Skill 直接读取当前版本目录下的 `eval_results.csv` 与数据集中的预期结果，结合用户给定的判断说明（或由 Skill 基于预期结果自行推断）筛选异常样本，输出 `failure_cases.csv`
+- **写入行为**：规则执行与大模型模式写入的 `failure_cases.csv` 文件名一致；若当前版本目录下已存在该文件，默认覆盖、不做备份或合并，并按各 Skill 的确认规则在覆盖前提示风险
 - **异常定义来源**：
   - 规则模式由用户在 Skill 交互中显式给出
   - 大模型模式由用户给出自然语言说明，或在用户未指定时由 Skill 基于"Agent 输出 vs 预期结果"自行推断
 - **数据确认机制**：当 `eval_results.csv` 字段含义不明、缺少预期结果或无法推断异常标准时，Skill 与用户确认后再继续
 - **输出**：
-  - 规则模式下生成共享筛选脚本 `.atk/runner/find_failures_by_rule.py`
-  - 当前版本目录下的异常筛选数据 `failure_cases.csv`
+  - 规则初始化生成共享规则脚本 `.atk/runner/failure_rule.py`
+  - 规则执行或大模型模式生成当前版本目录下的异常筛选数据 `failure_cases.csv`
 - **版本目录兼容要求**：
-  - 两个 Skill 入口均自动选择当前版本目录（见第 4 章规则），从中读取 `eval_results.csv`，向同一目录写入 `failure_cases.csv`
-  - `.atk/runner/find_failures_by_rule.py` 为跨版本共享脚本，不按版本复制
+  - 规则执行和大模型模式均自动选择当前版本目录（见第 4 章规则），从中读取 `eval_results.csv`，向同一目录写入 `failure_cases.csv`
+  - `.atk/runner/failure_rule.py` 为跨版本共享脚本，不按版本复制
   - 用户不需要指定版本号或结果目录
 
 ### 2.5 异常归因分析、跨版本调优验证与最终报告生成（Codex Skill）
@@ -198,7 +199,7 @@
   - 跨版本验证结果写入当前版本 `report.md`，不新增独立对比报告文件
   - 当上一版本不存在或缺少 `tuning_plan.md` 时，报告 Skill 退化为单版本报告并说明原因
 - **目录职责**：
-  - `.atk/runner/`：跨版本共享脚本，例如 `eval_runner.py`、`find_failures_by_rule.py`
+  - `.atk/runner/`：跨版本共享脚本，例如 `eval_runner.py`、`failure_rule.py`
   - `.atk/results/{version}/`：存放该轮调优的测试结果、日志、异常数据、报告与调优计划
 - **兼容要求**：
   - 各版本结果之间不能互相覆盖
@@ -220,9 +221,9 @@
 1. 完成数据准备：本地待调优的 Agent 服务 + 评估数据集（默认 CSV）
 2. 执行**批量测试脚本生成 Skill**，生成 `.atk/runner/eval_runner.py`；遇到 Agent 接入或字段不确定时按需与用户确认
 3. 执行 `atk-run`，由其运行 `.atk/runner/eval_runner.py`，脚本自动创建 `.atk/results/v1/` 并写入 `eval_results.csv`（及可选 `app.log`）
-4. 执行异常筛选（按需选择一个 Skill 入口）：
-   - **规则模式 Skill**：交互确认规则后生成 `.atk/runner/find_failures_by_rule.py`，用户运行后输出 `failure_cases.csv`
-   - **大模型模式 Skill**：直接读取当前版本 `eval_results.csv` 并输出 `failure_cases.csv`
+4. 执行异常筛选（按需选择规则路径或大模型路径）：
+   - **规则路径**：先执行 `atk-init-failure-rule` 交互确认规则并生成 `.atk/runner/failure_rule.py`，再执行 `atk-find-failures-by-rule` 运行该脚本并输出 `failure_cases.csv`
+   - **大模型路径**：执行 `atk-find-failures`，直接读取当前版本 `eval_results.csv` 并输出 `failure_cases.csv`
 5. 执行**归因分析与报告生成 Skill**，生成 `.atk/results/v1/report.md`
    - 当前版本为 `v1` 时为单版本报告，说明无上一版本可对比
 6. 执行**Agent 调优 Skill**：基于 `report.md` 完成调优，并在 `v1/` 下写入 `tuning_plan.md`；建议用户随后做一次 git commit
@@ -236,7 +237,7 @@
 /.atk/
 ├── runner/
 │   ├── eval_runner.py          # 跨版本共享测试脚本
-│   └── find_failures_by_rule.py      # 跨版本共享异常数据过滤脚本（规则模式使用）
+│   └── failure_rule.py          # 跨版本共享失败判定规则脚本（规则模式使用）
 └── results/
     ├── v1/
     │   ├── eval_results.csv          # v1 测试结果

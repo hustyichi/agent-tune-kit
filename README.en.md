@@ -113,19 +113,25 @@ For the simplest path, let Codex judge which cases failed:
 $atk-find-failures
 ```
 
-If you already have a clear rule, use the rule-based Skill instead:
+If you already have a clear rule, first create or update the reusable rule script:
+
+```text
+$atk-init-failure-rule
+```
+
+It generates the rule script at:
+
+```text
+.atk/runner/failure_rule.py
+```
+
+Then execute that rule script to write the failing cases:
 
 ```text
 $atk-find-failures-by-rule
 ```
 
-It generates the rule-based filtering script at:
-
-```text
-.atk/runner/find_failures_by_rule.py
-```
-
-If that script already exists, `$atk-find-failures-by-rule` reuses it and does not generate it again. You can edit the rule in that script as needed, then run it manually to write the failing cases.
+If `.atk/runner/failure_rule.py` is missing, `$atk-find-failures-by-rule` stops and tells you to run `$atk-init-failure-rule` first.
 
 The failing cases are written to:
 
@@ -186,7 +192,7 @@ Starting with the second loop, the report reads the previous `tuning_plan.md` an
 .atk/
 ├── runner/
 │   ├── eval_runner.py
-│   └── find_failures_by_rule.py
+│   └── failure_rule.py
 └── results/
     ├── v1/
     │   ├── eval_results.csv
@@ -205,6 +211,7 @@ Most users only need to read `eval_results.csv`, `failure_cases.csv`, and `repor
 - `$atk-init`: generate a test runner for the current Agent.
 - `$atk-run`: run the test runner and create the current result version.
 - `$atk-find-failures`: let Codex identify failing cases.
-- `$atk-find-failures-by-rule`: identify failing cases with explicit rules.
+- `$atk-init-failure-rule`: create or update `.atk/runner/failure_rule.py`.
+- `$atk-find-failures-by-rule`: execute `.atk/runner/failure_rule.py` to identify failing cases with explicit rules.
 - `$atk-report`: generate analysis and cross-loop validation.
 - `$atk-tune`: tune the Agent and record the tuning plan.
