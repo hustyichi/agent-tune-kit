@@ -66,21 +66,11 @@ If the status is already `Installed` but `$atk-status` still does not appear in 
 
 If your environment cannot use local plugins, use the legacy copy/register path: copy or register this pack as a whole while keeping `skills/`, `templates/`, and `docs/` together.
 
-## Fastest way to validate the flow
+## Minimal tuning loop
 
 Run these steps in **your Agent repository**, not in this Agent Tune Kit repository.
 
-### 1. Let Codex inspect the current state
-
-Open your Agent project in Codex and run:
-
-```text
-$atk-status
-```
-
-It tells you which step should come next. On a fresh project, it usually recommends generating the test runner.
-
-### 2. Generate a test runner
+### 1. Generate a test runner
 
 Run:
 
@@ -96,7 +86,7 @@ Point Codex to your Agent entrypoint and evaluation dataset. Codex generates:
 
 The runner keeps your original dataset columns and adds the Agent's actual output as `agent_output`.
 
-### 3. Run the Agent on the dataset
+### 2. Run the Agent on the dataset
 
 Run:
 
@@ -110,7 +100,7 @@ This writes:
 .atk/results/v1/results.csv
 ```
 
-### 4. Find failing cases
+### 3. Find failing cases
 
 For the simplest path, let Codex judge which cases failed:
 
@@ -130,7 +120,7 @@ The failing cases are written to:
 .atk/results/v1/abnormal_cases.csv
 ```
 
-### 5. Generate the analysis report
+### 4. Generate the analysis report
 
 Run:
 
@@ -146,7 +136,7 @@ Codex writes:
 
 The report summarizes test results, abnormal cases, likely causes, and recommended tuning priorities.
 
-### 6. Let Codex tune the Agent
+### 5. Let Codex tune the Agent
 
 Run:
 
@@ -179,8 +169,9 @@ Starting with the second loop, the report reads the previous `tuning_plan.md` an
 
 ## One-loop cheat sheet
 
+Optionally run `$atk-status` first if you want Codex to inspect progress and recommend the next step.
+
 ```text
-$atk-status
 $atk-setup
 $atk-run
 $atk-find-failures
@@ -219,37 +210,3 @@ Most users only need to read `results.csv`, `abnormal_cases.csv`, and `report.md
 - `$atk-report`: generate analysis and cross-loop validation.
 - `$atk-tune`: tune the Agent and record the tuning plan.
 
-## Current scope
-
-This repository ships as a local Codex plugin with `.codex-plugin/plugin.json`, seven Skills, reusable runner/filter templates, shared versioning rules, docs, a safe personal marketplace installer/smoke tool, and static validation.
-
-Out of scope for this pass: no public marketplace release, no brand assets/screenshots, no one-click orchestration, no universal Schema requirement, no bundled example Agent/data fixtures, no automatic rollback or baseline restore, and no full E2E test suite.
-
-## Included files
-
-- `.codex-plugin/plugin.json`
-- `skills/atk-status/SKILL.md`
-- `skills/atk-setup/SKILL.md`
-- `skills/atk-run/SKILL.md`
-- `skills/atk-find-failures-by-rule/SKILL.md`
-- `skills/atk-find-failures/SKILL.md`
-- `skills/atk-report/SKILL.md`
-- `skills/atk-tune/SKILL.md`
-- `templates/.atk/runner/test_runner.py.md`
-- `templates/.atk/runner/filter_abnormal.py.md`
-- `docs/shared-versioning-and-confirmation.md`
-- `docs/skill-template-pack-usage.md`
-- `docs/codex_agent_tuning_prd.md`
-- `scripts/install_plugin.py`
-- `scripts/validate_skill_pack.py`
-
-## Validate and smoke the plugin
-
-```sh
-python3 scripts/validate_skill_pack.py
-git diff --check
-python3 scripts/install_plugin.py --dry-run --smoke
-python3 scripts/install_plugin.py --marketplace-path /tmp/agent-tune-marketplace.json --plugin-store /tmp/agent-tune-plugins --apply --smoke
-```
-
-The validator fails loudly when required Skill sections, manifest fields, installer behavior, PRD references, version helper snippets, output paths, non-goals, or tuning/report contracts are missing.

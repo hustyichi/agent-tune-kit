@@ -238,8 +238,6 @@ PER_FILE_PHRASES = {
         "atk-find-failures",
         "atk-report",
         "atk-tune",
-        "python3 scripts/validate_skill_pack.py",
-        "python3 scripts/install_plugin.py --dry-run",
     ],
     "README.en.md": [
         "local Codex plugin",
@@ -253,8 +251,6 @@ PER_FILE_PHRASES = {
         "atk-find-failures",
         "atk-report",
         "atk-tune",
-        "python3 scripts/validate_skill_pack.py",
-        "python3 scripts/install_plugin.py --dry-run",
     ],
     "README.zh-CN.md": [
         "本地 Codex 插件",
@@ -268,8 +264,6 @@ PER_FILE_PHRASES = {
         "atk-find-failures",
         "atk-report",
         "atk-tune",
-        "python3 scripts/validate_skill_pack.py",
-        "python3 scripts/install_plugin.py --dry-run",
     ],
 }
 
