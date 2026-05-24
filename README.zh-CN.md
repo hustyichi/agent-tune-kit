@@ -82,13 +82,13 @@ $atk-start
 
 ### 2. 生成测试脚本
 
-输入：
+输入时请同时说明 Agent 从哪里启动、评估数据在哪里，例如：
 
 ```text
-$atk-setup
+$atk-setup 我希望调优的 Agent 服务为 scripts/merge_js_simple.py，对应的数据集为 scripts/service_source_codes.csv
 ```
 
-告诉 Codex 你的 Agent 大概从哪里启动、评估数据在哪里。Codex 会根据项目代码和数据样例生成：
+不要只输入空的 `$atk-setup`。Codex 需要这些路径来读取项目代码和数据样例，然后生成：
 
 ```text
 agent-tuning/runner/test_runner.py
