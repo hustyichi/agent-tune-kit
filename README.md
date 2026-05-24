@@ -65,7 +65,7 @@ Run these steps in **your Agent repository**, not in this Agent Tune Kit reposit
 Open your Agent project in Codex and run:
 
 ```text
-agent-tuning-start
+atk-start
 ```
 
 It tells you which step should come next. On a fresh project, it usually recommends generating the test runner.
@@ -75,7 +75,7 @@ It tells you which step should come next. On a fresh project, it usually recomme
 Run:
 
 ```text
-agent-tuning-generate-runner
+atk-setup
 ```
 
 Point Codex to your Agent entrypoint and evaluation dataset. Codex generates:
@@ -88,10 +88,10 @@ The runner keeps your original dataset columns and adds the Agent's actual outpu
 
 ### 3. Run the Agent on the dataset
 
-From your Agent repository root:
+Run:
 
-```sh
-python3 agent-tuning/runner/test_runner.py
+```text
+atk-run
 ```
 
 This writes:
@@ -105,13 +105,13 @@ agent-tuning/results/v1/results.csv
 For the simplest path, let Codex judge abnormal cases:
 
 ```text
-agent-tuning-filter-abnormal-llm
+atk-filter
 ```
 
 If you already have a clear rule, use the rule-based Skill instead:
 
 ```text
-agent-tuning-filter-abnormal-rules
+atk-filter-rules
 ```
 
 The abnormal cases are written to:
@@ -125,7 +125,7 @@ agent-tuning/results/v1/abnormal_cases.csv
 Run:
 
 ```text
-agent-tuning-report
+atk-report
 ```
 
 Codex writes:
@@ -141,7 +141,7 @@ The report summarizes test results, abnormal cases, likely causes, and recommend
 Run:
 
 ```text
-agent-tuning-apply-tuning
+atk-apply
 ```
 
 Codex edits the Agent based on the report and records the tuning plan in:
@@ -152,17 +152,17 @@ agent-tuning/results/v1/tuning_plan.md
 
 ## Verify that tuning worked
 
-After tuning, run the same test runner again:
+After tuning, run the test again:
 
-```sh
-python3 agent-tuning/runner/test_runner.py
+```text
+atk-run
 ```
 
 This creates `agent-tuning/results/v2/results.csv`. Then run:
 
 ```text
-agent-tuning-filter-abnormal-llm
-agent-tuning-report
+atk-filter
+atk-report
 ```
 
 Starting with the second loop, the report reads the previous `tuning_plan.md` and tells you whether the target failures were resolved, partially resolved, unresolved, or impossible to judge.
@@ -170,15 +170,15 @@ Starting with the second loop, the report reads the previous `tuning_plan.md` an
 ## One-loop cheat sheet
 
 ```text
-agent-tuning-start
-agent-tuning-generate-runner
-python3 agent-tuning/runner/test_runner.py
-agent-tuning-filter-abnormal-llm
-agent-tuning-report
-agent-tuning-apply-tuning
+atk-start
+atk-setup
+atk-run
+atk-filter
+atk-report
+atk-apply
 ```
 
-Start the next loop by running `python3 agent-tuning/runner/test_runner.py` again.
+Start the next loop by running `atk-run` again.
 
 ## Expected output
 
@@ -201,28 +201,30 @@ Most users only need to read `results.csv`, `abnormal_cases.csv`, and `report.md
 
 ## Available Skills
 
-- `agent-tuning-start`: inspect progress and recommend the next step.
-- `agent-tuning-generate-runner`: generate a test runner for the current Agent.
-- `agent-tuning-filter-abnormal-llm`: let Codex identify abnormal cases.
-- `agent-tuning-filter-abnormal-rules`: identify abnormal cases with explicit rules.
-- `agent-tuning-report`: generate analysis and cross-loop validation.
-- `agent-tuning-apply-tuning`: tune the Agent and record the tuning plan.
+- `atk-start`: inspect progress and recommend the next step.
+- `atk-setup`: generate a test runner for the current Agent.
+- `atk-run`: run the test runner and create the current result version.
+- `atk-filter`: let Codex identify abnormal cases.
+- `atk-filter-rules`: identify abnormal cases with explicit rules.
+- `atk-report`: generate analysis and cross-loop validation.
+- `atk-apply`: tune the Agent and record the tuning plan.
 
 ## Current scope
 
-This repository ships as a local Codex plugin with `.codex-plugin/plugin.json`, six Skills, reusable runner/filter templates, shared versioning rules, docs, a safe personal marketplace installer/smoke tool, and static validation.
+This repository ships as a local Codex plugin with `.codex-plugin/plugin.json`, seven Skills, reusable runner/filter templates, shared versioning rules, docs, a safe personal marketplace installer/smoke tool, and static validation.
 
 Out of scope for this pass: no public marketplace release, no brand assets/screenshots, no one-click orchestration, no universal Schema requirement, no bundled example Agent/data fixtures, no automatic rollback or baseline restore, and no full E2E test suite.
 
 ## Included files
 
 - `.codex-plugin/plugin.json`
-- `skills/agent-tuning-start/SKILL.md`
-- `skills/agent-tuning-generate-runner/SKILL.md`
-- `skills/agent-tuning-filter-abnormal-rules/SKILL.md`
-- `skills/agent-tuning-filter-abnormal-llm/SKILL.md`
-- `skills/agent-tuning-report/SKILL.md`
-- `skills/agent-tuning-apply-tuning/SKILL.md`
+- `skills/atk-start/SKILL.md`
+- `skills/atk-setup/SKILL.md`
+- `skills/atk-run/SKILL.md`
+- `skills/atk-filter-rules/SKILL.md`
+- `skills/atk-filter/SKILL.md`
+- `skills/atk-report/SKILL.md`
+- `skills/atk-apply/SKILL.md`
 - `templates/agent-tuning/runner/test_runner.py.md`
 - `templates/agent-tuning/runner/filter_abnormal.py.md`
 - `docs/shared-versioning-and-confirmation.md`

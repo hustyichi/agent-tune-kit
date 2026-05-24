@@ -17,12 +17,13 @@ ROOT = Path(__file__).resolve().parents[1]
 
 REQUIRED_FILES = [
     ".codex-plugin/plugin.json",
-    "skills/agent-tuning-start/SKILL.md",
-    "skills/agent-tuning-generate-runner/SKILL.md",
-    "skills/agent-tuning-filter-abnormal-rules/SKILL.md",
-    "skills/agent-tuning-filter-abnormal-llm/SKILL.md",
-    "skills/agent-tuning-report/SKILL.md",
-    "skills/agent-tuning-apply-tuning/SKILL.md",
+    "skills/atk-start/SKILL.md",
+    "skills/atk-setup/SKILL.md",
+    "skills/atk-run/SKILL.md",
+    "skills/atk-filter-rules/SKILL.md",
+    "skills/atk-filter/SKILL.md",
+    "skills/atk-report/SKILL.md",
+    "skills/atk-apply/SKILL.md",
     "templates/agent-tuning/runner/test_runner.py.md",
     "templates/agent-tuning/runner/filter_abnormal.py.md",
     "docs/skill-template-pack-usage.md",
@@ -116,19 +117,20 @@ PER_FILE_PHRASES = {
         "symlink",
         "copy fallback",
     ],
-    "skills/agent-tuning-start/SKILL.md": [
-        "agent-tuning-start",
+    "skills/atk-start/SKILL.md": [
+        "atk-start",
         "router/status guide",
         "does not bypass existing confirmation triggers",
         "does not perform full automatic tuning",
-        "agent-tuning-generate-runner",
-        "agent-tuning-filter-abnormal-rules",
-        "agent-tuning-filter-abnormal-llm",
-        "agent-tuning-report",
-        "agent-tuning-apply-tuning",
+        "atk-setup",
+        "atk-run",
+        "atk-filter-rules",
+        "atk-filter",
+        "atk-report",
+        "atk-apply",
         "RESULTS_DIR = Path(\"agent-tuning/results\")",
     ],
-    "skills/agent-tuning-generate-runner/SKILL.md": [
+    "skills/atk-setup/SKILL.md": [
         "agent-tuning/runner/test_runner.py",
         "Preserve all original dataset columns",
         "Append the fixed actual-output column `agent_output`",
@@ -136,7 +138,15 @@ PER_FILE_PHRASES = {
         "ask the user to confirm before writing `test_runner.py`",
         "Agent invocation, dataset path/format, log source, or `agent_output` column conflict",
     ],
-    "skills/agent-tuning-filter-abnormal-rules/SKILL.md": [
+    "skills/atk-run/SKILL.md": [
+        "atk-run",
+        "agent-tuning/runner/test_runner.py",
+        "python3 agent-tuning/runner/test_runner.py",
+        "RESULTS_DIR = Path(\"agent-tuning/results\")",
+        "If the runner is missing",
+        "next recommended Skill: `atk-filter`",
+    ],
+    "skills/atk-filter-rules/SKILL.md": [
         "agent-tuning/runner/filter_abnormal.py",
         "require_current_file(current_dir, \"results.csv\")",
         "It does not run `filter_abnormal.py` itself",
@@ -144,14 +154,14 @@ PER_FILE_PHRASES = {
         "manual execution",
         "overwrites the current version's existing file",
     ],
-    "skills/agent-tuning-filter-abnormal-llm/SKILL.md": [
+    "skills/atk-filter/SKILL.md": [
         "write `abnormal_cases.csv` directly",
         "expected-result columns or abnormal criteria are ambiguous",
         "Overwrites",
         "No `filter_abnormal.py` is required",
         "preserving all original `results.csv` columns",
     ],
-    "skills/agent-tuning-report/SKILL.md": [
+    "skills/atk-report/SKILL.md": [
         "require_current_file(current_dir, \"results.csv\")",
         "require_current_file(current_dir, \"abnormal_cases.csv\")",
         "resolve_previous_version(current_dir)",
@@ -161,7 +171,7 @@ PER_FILE_PHRASES = {
         "无法判断",
         "degrade to single-version or lower-confidence report with explicit explanation",
     ],
-    "skills/agent-tuning-apply-tuning/SKILL.md": [
+    "skills/atk-apply/SKILL.md": [
         "require_current_file(current_dir, \"report.md\")",
         "## 目标异常清单",
         "## 调优手段",
@@ -212,12 +222,13 @@ PER_FILE_PHRASES = {
         "legacy copy/register",
         "Quickstart",
         "Prerequisites",
-        "agent-tuning-start",
-        "agent-tuning-generate-runner",
-        "agent-tuning-filter-abnormal-rules",
-        "agent-tuning-filter-abnormal-llm",
-        "agent-tuning-report",
-        "agent-tuning-apply-tuning",
+        "atk-start",
+        "atk-setup",
+        "atk-run",
+        "atk-filter-rules",
+        "atk-filter",
+        "atk-report",
+        "atk-apply",
         "python3 scripts/validate_skill_pack.py",
         "python3 scripts/install_plugin.py --dry-run",
     ],
@@ -226,12 +237,13 @@ PER_FILE_PHRASES = {
         "legacy copy/register",
         "快速开始",
         "使用前准备",
-        "agent-tuning-start",
-        "agent-tuning-generate-runner",
-        "agent-tuning-filter-abnormal-rules",
-        "agent-tuning-filter-abnormal-llm",
-        "agent-tuning-report",
-        "agent-tuning-apply-tuning",
+        "atk-start",
+        "atk-setup",
+        "atk-run",
+        "atk-filter-rules",
+        "atk-filter",
+        "atk-report",
+        "atk-apply",
         "python3 scripts/validate_skill_pack.py",
         "python3 scripts/install_plugin.py --dry-run",
     ],
@@ -377,11 +389,11 @@ def main() -> int:
     for phrase in PRD_REFERENCES:
         require(contains_any(all_text, [phrase]), f"missing PRD traceability phrase: {phrase}", errors)
 
-    tuning_text = existing_texts.get("skills/agent-tuning-apply-tuning/SKILL.md", "")
+    tuning_text = existing_texts.get("skills/atk-apply/SKILL.md", "")
     for heading in ["## 目标异常清单", "## 调优手段", "## 关联改动"]:
         require(heading in tuning_text, f"tuning Skill missing exact heading {heading}", errors)
 
-    report_text = existing_texts.get("skills/agent-tuning-report/SKILL.md", "")
+    report_text = existing_texts.get("skills/atk-report/SKILL.md", "")
     for status in ["已解决", "部分解决", "未解决", "无法判断"]:
         require(status in report_text, f"report Skill missing cross-version status {status}", errors)
 
@@ -391,10 +403,10 @@ def main() -> int:
     require("except Exception as exc" not in runner_template, "runner template must not catch broad Exception and mask configuration failures", errors)
     require("except UserActionRequired:\n            # Configuration/TODO/confirmation failures must stop the run" in runner_template, "runner template must propagate UserActionRequired before row-error handling", errors)
 
-    rules_skill = existing_texts.get("skills/agent-tuning-filter-abnormal-rules/SKILL.md", "")
-    llm_skill = existing_texts.get("skills/agent-tuning-filter-abnormal-llm/SKILL.md", "")
-    require("agent-tuning-filter-abnormal-rules" in rules_skill, "rules abnormal Skill identity missing", errors)
-    require("agent-tuning-filter-abnormal-llm" in llm_skill, "LLM abnormal Skill identity missing", errors)
+    rules_skill = existing_texts.get("skills/atk-filter-rules/SKILL.md", "")
+    llm_skill = existing_texts.get("skills/atk-filter/SKILL.md", "")
+    require("atk-filter-rules" in rules_skill, "rules abnormal Skill identity missing", errors)
+    require("atk-filter" in llm_skill, "LLM abnormal Skill identity missing", errors)
     require("abnormal_cases.csv" in rules_skill and "abnormal_cases.csv" in llm_skill, "both abnormal Skills must write abnormal_cases.csv", errors)
 
     filter_template = existing_texts.get("templates/agent-tuning/runner/filter_abnormal.py.md", "")

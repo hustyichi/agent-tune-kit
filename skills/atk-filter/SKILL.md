@@ -1,5 +1,5 @@
 ---
-name: agent-tuning-filter-abnormal-llm
+name: atk-filter
 description: Use Codex judgment to filter the current Agent tuning results into abnormal_cases.csv without generating a rule script.
 ---
 
@@ -9,7 +9,7 @@ description: Use Codex judgment to filter the current Agent tuning results into 
 
 Read the current version's `results.csv`, infer or apply the abnormal-case criteria, and write `abnormal_cases.csv` directly. This Skill maps to `docs/codex_agent_tuning_prd.md` sections 2.4, 4, 5, and 7.
 
-This is separate from `agent-tuning-filter-abnormal-rules`; both write the same current-version filename `abnormal_cases.csv` and either mode may overwrite the other.
+This is separate from `atk-filter-rules`; both write the same current-version filename `abnormal_cases.csv` and either mode may overwrite the other.
 
 Traceability note: section 2.4 defines abnormal filtering entries, section 4 defines current-version behavior, and section 7 defines delivery requirements.
 

@@ -1,5 +1,5 @@
 ---
-name: agent-tuning-filter-abnormal-rules
+name: atk-filter-rules
 description: Generate or update a reusable rule-based abnormal-case filter script for the current Agent tuning results version.
 ---
 

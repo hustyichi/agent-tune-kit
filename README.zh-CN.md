@@ -65,7 +65,7 @@ python3 scripts/install_plugin.py --apply --smoke
 在 Codex 中打开你的 Agent 项目，输入：
 
 ```text
-agent-tuning-start
+atk-start
 ```
 
 它会告诉你现在应该做哪一步。第一次使用时，通常会建议你生成测试 runner。
@@ -75,7 +75,7 @@ agent-tuning-start
 输入：
 
 ```text
-agent-tuning-generate-runner
+atk-setup
 ```
 
 告诉 Codex 你的 Agent 大概从哪里启动、评估数据在哪里。Codex 会根据项目代码和数据样例生成：
@@ -88,10 +88,10 @@ agent-tuning/runner/test_runner.py
 
 ### 3. 跑一遍 Agent
 
-在你的 Agent 项目根目录运行：
+输入：
 
-```sh
-python3 agent-tuning/runner/test_runner.py
+```text
+atk-run
 ```
 
 运行完成后会得到：
@@ -105,13 +105,13 @@ agent-tuning/results/v1/results.csv
 如果你希望 Codex 帮你判断哪些结果异常，直接用：
 
 ```text
-agent-tuning-filter-abnormal-llm
+atk-filter
 ```
 
 如果你有明确规则，例如“期望答案不等于输出就是异常”，可以用：
 
 ```text
-agent-tuning-filter-abnormal-rules
+atk-filter-rules
 ```
 
 异常结果会写入：
@@ -125,7 +125,7 @@ agent-tuning/results/v1/abnormal_cases.csv
 输入：
 
 ```text
-agent-tuning-report
+atk-report
 ```
 
 Codex 会生成：
@@ -141,7 +141,7 @@ agent-tuning/results/v1/report.md
 输入：
 
 ```text
-agent-tuning-apply-tuning
+atk-apply
 ```
 
 Codex 会基于报告修改你的 Agent，并写入：
@@ -154,17 +154,17 @@ agent-tuning/results/v1/tuning_plan.md
 
 ## 怎么确认调优真的有效
 
-调优后，再跑一次同一个测试脚本：
+调优后，再跑一次测试：
 
-```sh
-python3 agent-tuning/runner/test_runner.py
+```text
+atk-run
 ```
 
 这次会生成 `agent-tuning/results/v2/results.csv`。继续执行异常筛选和报告生成：
 
 ```text
-agent-tuning-filter-abnormal-llm
-agent-tuning-report
+atk-filter
+atk-report
 ```
 
 从第二轮开始，报告会读取上一轮的 `tuning_plan.md`，判断上一轮目标异常是已解决、部分解决、未解决，还是无法判断。这样你就能看到调优是否真的带来了效果。
@@ -172,15 +172,15 @@ agent-tuning-report
 ## 一轮流程速记
 
 ```text
-agent-tuning-start
-agent-tuning-generate-runner
-python3 agent-tuning/runner/test_runner.py
-agent-tuning-filter-abnormal-llm
-agent-tuning-report
-agent-tuning-apply-tuning
+atk-start
+atk-setup
+atk-run
+atk-filter
+atk-report
+atk-apply
 ```
 
-下一轮从再次运行 `python3 agent-tuning/runner/test_runner.py` 开始。
+下一轮从再次运行 `atk-run` 开始。
 
 ## 你会看到的结果目录
 
@@ -203,28 +203,30 @@ agent-tuning/
 
 ## 可用 Skill
 
-- `agent-tuning-start`：检查当前进度，告诉你下一步。
-- `agent-tuning-generate-runner`：生成适配当前 Agent 的测试脚本。
-- `agent-tuning-filter-abnormal-llm`：让 Codex 判断异常样本。
-- `agent-tuning-filter-abnormal-rules`：按明确规则筛选异常样本。
-- `agent-tuning-report`：生成分析报告和跨轮验证结论。
-- `agent-tuning-apply-tuning`：根据报告修改 Agent，并记录本轮调优计划。
+- `atk-start`：检查当前进度，告诉你下一步。
+- `atk-setup`：生成适配当前 Agent 的测试脚本。
+- `atk-run`：运行测试脚本并生成当前版本结果。
+- `atk-filter`：让 Codex 判断异常样本。
+- `atk-filter-rules`：按明确规则筛选异常样本。
+- `atk-report`：生成分析报告和跨轮验证结论。
+- `atk-apply`：根据报告修改 Agent，并记录本轮调优计划。
 
 ## 当前边界
 
-本仓库当前交付的是本地 Codex 插件和 Skill 模板包，包含 `.codex-plugin/plugin.json`、六个 Skill、runner/filter 模板、共享版本规则、文档、安装/冒烟工具和静态校验。
+本仓库当前交付的是本地 Codex 插件和 Skill 模板包，包含 `.codex-plugin/plugin.json`、七个 Skill、runner/filter 模板、共享版本规则、文档、安装/冒烟工具和静态校验。
 
 本阶段非目标：no public marketplace（不发布公共 marketplace）、no brand assets（不提供品牌资产/截图）、no one-click orchestration（不做一键编排）、no universal Schema（不强制通用数据 Schema）、no bundled example Agent/data fixtures（不内置示例 Agent 或数据集）、no automatic rollback（不做自动回滚或基线恢复）、no full E2E test suite（不提供完整端到端测试套件）。
 
 ## 仓库内容
 
 - `.codex-plugin/plugin.json`
-- `skills/agent-tuning-start/SKILL.md`
-- `skills/agent-tuning-generate-runner/SKILL.md`
-- `skills/agent-tuning-filter-abnormal-rules/SKILL.md`
-- `skills/agent-tuning-filter-abnormal-llm/SKILL.md`
-- `skills/agent-tuning-report/SKILL.md`
-- `skills/agent-tuning-apply-tuning/SKILL.md`
+- `skills/atk-start/SKILL.md`
+- `skills/atk-setup/SKILL.md`
+- `skills/atk-run/SKILL.md`
+- `skills/atk-filter-rules/SKILL.md`
+- `skills/atk-filter/SKILL.md`
+- `skills/atk-report/SKILL.md`
+- `skills/atk-apply/SKILL.md`
 - `templates/agent-tuning/runner/test_runner.py.md`
 - `templates/agent-tuning/runner/filter_abnormal.py.md`
 - `docs/shared-versioning-and-confirmation.md`

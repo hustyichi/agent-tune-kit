@@ -1,5 +1,5 @@
 ---
-name: agent-tuning-generate-runner
+name: atk-setup
 description: Generate a reusable test runner for a local Agent and dataset, preserving source columns and writing versioned results.csv with agent_output.
 ---
 
@@ -25,7 +25,7 @@ Traceability note: section 2.2 defines runner generation, section 4 defines vers
 
 - `agent-tuning/runner/test_runner.py`
 - No version directory is required before this Skill runs; no version directory is required for generation.
-- Runtime results are produced later by manually running the generated script:
+- Runtime results are produced later by running `atk-run`, which executes the generated script:
   - `agent-tuning/results/vN/results.csv`
   - optional `agent-tuning/results/vN/app.log`
 
@@ -39,7 +39,7 @@ Traceability note: section 2.2 defines runner generation, section 4 defines vers
 2. Apply the uncertainty confirmation pattern from `docs/shared-versioning-and-confirmation.md`.
 3. If safe, create `agent-tuning/runner/` and write `test_runner.py` from `templates/agent-tuning/runner/test_runner.py.md`.
 4. Keep the generated script project-local and low dependency. Prefer Python stdlib plus the target project environment.
-5. Tell the user the next manual command is `python3 agent-tuning/runner/test_runner.py`.
+5. Tell the user the next command is `atk-run`.
 
 ## Required runner behavior
 
@@ -89,5 +89,5 @@ After writing the runner, summarize:
 - inferred Agent entrypoint and dataset path;
 - preserved source columns and appended `agent_output` behavior;
 - whether `app.log` will be captured;
-- manual command to run;
+- next command to run: `atk-run`;
 - expected next output path `agent-tuning/results/vN/results.csv`.

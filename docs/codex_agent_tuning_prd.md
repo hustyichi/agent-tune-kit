@@ -55,9 +55,9 @@
 - **依赖处理**：
   - 尽量避免引入额外依赖；针对本地已有项目调优时，优先复用项目自身的依赖与虚拟环境
 
-### 2.3 批量执行模块（用户手工执行生成的测试脚本）
+### 2.3 批量执行模块（用户通过 `atk-run` 执行生成的测试脚本）
 - **功能**：
-  - 用户手动运行 `agent-tuning/runner/test_runner.py`
+  - 用户触发 `atk-run`，由该 Skill 执行 `agent-tuning/runner/test_runner.py`
   - 简单机制实现批量测试执行和结果收集
   - 仅在「上一轮已有结果」时才新建版本目录；否则直接复用当前最新版本目录重跑
 - **输出**：
@@ -219,14 +219,14 @@
 ## 5. 使用示例（手工执行）
 1. 完成数据准备：本地待调优的 Agent 服务 + 评估数据集（默认 CSV）
 2. 执行**批量测试脚本生成 Skill**，生成 `agent-tuning/runner/test_runner.py`；遇到 Agent 接入或字段不确定时按需与用户确认
-3. 用户手动运行 `agent-tuning/runner/test_runner.py`，脚本自动创建 `agent-tuning/results/v1/` 并写入 `results.csv`（及可选 `app.log`）
+3. 执行 `atk-run`，由其运行 `agent-tuning/runner/test_runner.py`，脚本自动创建 `agent-tuning/results/v1/` 并写入 `results.csv`（及可选 `app.log`）
 4. 执行异常筛选（按需选择一个 Skill 入口）：
    - **规则模式 Skill**：交互确认规则后生成 `agent-tuning/runner/filter_abnormal.py`，用户运行后输出 `abnormal_cases.csv`
    - **大模型模式 Skill**：直接读取当前版本 `results.csv` 并输出 `abnormal_cases.csv`
 5. 执行**归因分析与报告生成 Skill**，生成 `agent-tuning/results/v1/report.md`
    - 当前版本为 `v1` 时为单版本报告，说明无上一版本可对比
 6. 执行**Agent 调优 Skill**：基于 `report.md` 完成调优，并在 `v1/` 下写入 `tuning_plan.md`；建议用户随后做一次 git commit
-7. 进入下一轮：再次运行 `test_runner.py`，自动创建 `agent-tuning/results/v2/`
+7. 进入下一轮：再次执行 `atk-run`，自动创建 `agent-tuning/results/v2/`
 8. 重新执行异常筛选与报告生成 Skill，`v2/report.md` 自动读取 `v1/tuning_plan.md`，逐条核验上一轮目标异常在 `v2` 是否仍然出现，并给出"上一轮调优是否符合预期"的结论
 
 ---

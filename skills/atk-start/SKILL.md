@@ -1,5 +1,5 @@
 ---
-name: agent-tuning-start
+name: atk-start
 description: Guide the next safe step in the Agent tune kit loop without bypassing the existing stage Skills or their confirmation gates.
 ---
 
@@ -9,13 +9,14 @@ description: Guide the next safe step in the Agent tune kit loop without bypassi
 
 Use this Skill when a user wants to start or resume an Agent tune kit workflow from the local Codex plugin. It is a router/status guide for the existing stage Skills, not a hidden orchestrator. It inspects the target project's `agent-tuning/` state, explains the next recommended action, and points the user to the correct Skill or manual command.
 
-This Skill preserves the existing five Skill contracts:
+This Skill preserves the existing stage Skill contracts:
 
-- `agent-tuning-generate-runner`
-- `agent-tuning-filter-abnormal-rules`
-- `agent-tuning-filter-abnormal-llm`
-- `agent-tuning-report`
-- `agent-tuning-apply-tuning`
+- `atk-setup`
+- `atk-run`
+- `atk-filter-rules`
+- `atk-filter`
+- `atk-report`
+- `atk-apply`
 
 It does not bypass existing confirmation triggers, does not perform full automatic tuning, and does not run the 2.2 → 2.6 loop end-to-end.
 
@@ -44,12 +45,12 @@ It does not bypass existing confirmation triggers, does not perform full automat
    - non-runner Skills use the numerically largest existing `vN` as current;
    - only `test_runner.py` creates or reuses result versions.
 3. Recommend the next step:
-   - no runner: trigger `agent-tuning-generate-runner`;
-   - runner exists but no current `results.csv`: manually run `python3 agent-tuning/runner/test_runner.py`;
-   - current `results.csv` exists but no `abnormal_cases.csv`: choose `agent-tuning-filter-abnormal-rules` or `agent-tuning-filter-abnormal-llm`;
-   - current `abnormal_cases.csv` exists but no `report.md`: trigger `agent-tuning-report`;
-   - current `report.md` exists but no `tuning_plan.md`: trigger `agent-tuning-apply-tuning`;
-   - current `tuning_plan.md` exists: optionally create a user git checkpoint, then manually run `python3 agent-tuning/runner/test_runner.py` to create the next version.
+   - no runner: trigger `atk-setup`;
+   - runner exists but no current `results.csv`: trigger `atk-run`;
+   - current `results.csv` exists but no `abnormal_cases.csv`: choose `atk-filter-rules` or `atk-filter`;
+   - current `abnormal_cases.csv` exists but no `report.md`: trigger `atk-report`;
+   - current `report.md` exists but no `tuning_plan.md`: trigger `atk-apply`;
+   - current `tuning_plan.md` exists: optionally create a user git checkpoint, then trigger `atk-run` to create the next version.
 4. Keep guidance over hidden automation: this Skill may summarize commands and Skill names, but it does not run generated runner/filter scripts unless the user explicitly asks in the target workflow.
 
 ## Shared version rules
@@ -76,7 +77,7 @@ Ask a concise question only when inspection cannot safely decide:
 
 ## Failure behavior
 
-- If no Agent project or dataset can be identified, stop with a recommendation to provide the target Agent path and dataset path, then use `agent-tuning-generate-runner`.
+- If no Agent project or dataset can be identified, stop with a recommendation to provide the target Agent path and dataset path, then use `atk-setup`.
 - If `agent-tuning/results/` has malformed version directories, ignore non-`vN` names and report the evidence.
 - If the current version is missing a required file, direct the user to the prior stage instead of silently using an older version.
 - If executing a command would alter user data or invoke the Agent, do not do it from this router Skill unless the user explicitly requested that execution.

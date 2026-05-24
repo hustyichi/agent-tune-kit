@@ -1,5 +1,5 @@
 ---
-name: agent-tuning-apply-tuning
+name: atk-apply
 description: Apply Agent improvements from the current report and write a fixed-heading tuning_plan.md for the next iteration's validation.
 ---
 
@@ -55,7 +55,7 @@ Traceability note: section 2.6 defines Agent tuning, section 4 defines current-v
 - <file path and optional user-provided git commit hash>
 ```
 
-The section titles are exact contract strings for the next `agent-tuning-report` run. Content may remain free-form Markdown; do not force a universal Schema.
+The section titles are exact contract strings for the next `atk-report` run. Content may remain free-form Markdown; do not force a universal Schema.
 
 ## Shared version rules
 
@@ -91,4 +91,4 @@ After applying tuning, summarize:
 - files changed;
 - validation run and result;
 - output path `agent-tuning/results/vN/tuning_plan.md`;
-- suggested manual next step: run `python3 agent-tuning/runner/test_runner.py` for the next version and optionally create a git commit.
+- suggested next step: run `atk-run` for the next version and optionally create a git commit.
