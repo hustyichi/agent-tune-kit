@@ -227,7 +227,7 @@ def main(argv: list[str] | None = None) -> int:
             print("next step: open /plugins in Codex, select Agent Tune Kit, and install/enable it")
             print(
                 "verify: plugin status should change from Available to Installed; "
-                "restart Codex or open a new session if $atk-start is not autocompleted"
+                "restart Codex or open a new session if $atk-status is not autocompleted"
             )
         return 0
     except (InstallError, json.JSONDecodeError) as exc:

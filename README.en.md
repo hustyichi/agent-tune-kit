@@ -60,9 +60,9 @@ You still need to enable it in Codex:
 /plugins
 ```
 
-Select `Agent Tune Kit` in the plugin list and follow the UI prompt to install/enable it. After the status becomes `Installed`, `$atk-start` and the other Skill commands will appear in autocomplete.
+Select `Agent Tune Kit` in the plugin list and follow the UI prompt to install/enable it. After the status becomes `Installed`, `$atk-status` and the other Skill commands will appear in autocomplete.
 
-If the status is already `Installed` but `$atk-start` still does not appear in the current session, that is expected: Codex usually loads installed plugin Skills when a session starts, so newly enabled plugins may not be hot-loaded into an already running session. Restart Codex, or close the current Codex session and reopen this project, then type `$atk-start` again to verify.
+If the status is already `Installed` but `$atk-status` still does not appear in the current session, that is expected: Codex usually loads installed plugin Skills when a session starts, so newly enabled plugins may not be hot-loaded into an already running session. Restart Codex, or close the current Codex session and reopen this project, then type `$atk-status` again to verify.
 
 If your environment cannot use local plugins, use the legacy copy/register path: copy or register this pack as a whole while keeping `skills/`, `templates/`, and `docs/` together.
 
@@ -75,7 +75,7 @@ Run these steps in **your Agent repository**, not in this Agent Tune Kit reposit
 Open your Agent project in Codex and run:
 
 ```text
-$atk-start
+$atk-status
 ```
 
 It tells you which step should come next. On a fresh project, it usually recommends generating the test runner.
@@ -180,7 +180,7 @@ Starting with the second loop, the report reads the previous `tuning_plan.md` an
 ## One-loop cheat sheet
 
 ```text
-$atk-start
+$atk-status
 $atk-setup
 $atk-run
 $atk-filter
@@ -211,7 +211,7 @@ Most users only need to read `results.csv`, `abnormal_cases.csv`, and `report.md
 
 ## Available Skills
 
-- `$atk-start`: inspect progress and recommend the next step.
+- `$atk-status`: inspect progress and recommend the next step.
 - `$atk-setup`: generate a test runner for the current Agent.
 - `$atk-run`: run the test runner and create the current result version.
 - `$atk-filter`: let Codex identify abnormal cases.
@@ -228,7 +228,7 @@ Out of scope for this pass: no public marketplace release, no brand assets/scree
 ## Included files
 
 - `.codex-plugin/plugin.json`
-- `skills/atk-start/SKILL.md`
+- `skills/atk-status/SKILL.md`
 - `skills/atk-setup/SKILL.md`
 - `skills/atk-run/SKILL.md`
 - `skills/atk-filter-rules/SKILL.md`

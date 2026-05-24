@@ -31,7 +31,7 @@
     ],
     "websiteURL": "https://github.com/hustyichi/agent-tune-kit",
     "defaultPrompt": [
-      "Start an Agent tuning loop",
+      "Check Agent tuning status",
       "Filter abnormal Agent cases",
       "Generate an Agent tuning report"
     ],

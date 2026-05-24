@@ -1,13 +1,13 @@
 ---
-name: atk-start
-description: Guide the next safe step in the Agent tune kit loop without bypassing the existing stage Skills or their confirmation gates.
+name: atk-status
+description: Inspect Agent tune kit state and guide the next safe step without bypassing existing stage Skills or confirmation gates.
 ---
 
-# Agent Tuning Start
+# Agent Tuning Status
 
 ## Purpose
 
-Use this Skill when a user wants to start or resume an Agent tune kit workflow from the local Codex plugin. It is a router/status guide for the existing stage Skills, not a hidden orchestrator. It inspects the target project's `.atk/` state, explains the next recommended action, and points the user to the correct Skill or manual command.
+Use this Skill when a user wants to inspect or resume an Agent tune kit workflow from the local Codex plugin. It is a router/status guide for the existing stage Skills, not a hidden orchestrator. It inspects the target project's `.atk/` state, explains the next recommended action, and points the user to the correct Skill or manual command.
 
 This Skill preserves the existing stage Skill contracts:
 

@@ -60,9 +60,9 @@ python3 scripts/install_plugin.py --apply --smoke
 /plugins
 ```
 
-在插件列表中选择 `Agent Tune Kit`，按界面提示安装/启用。状态变成 `Installed` 后，`$atk-start` 等 Skill 命令才会出现在自动补全里。
+在插件列表中选择 `Agent Tune Kit`，按界面提示安装/启用。状态变成 `Installed` 后，`$atk-status` 等 Skill 命令才会出现在自动补全里。
 
-如果状态已经是 `Installed`，但当前会话里仍然看不到 `$atk-start` 的自动补全，这是正常现象：Codex 通常会在会话启动时加载已安装插件的 Skill 列表，刚启用的插件不一定会被当前会话热加载。请重启 Codex，或关闭当前 Codex 会话后重新进入该项目，再输入 `$atk-start` 验证。
+如果状态已经是 `Installed`，但当前会话里仍然看不到 `$atk-status` 的自动补全，这是正常现象：Codex 通常会在会话启动时加载已安装插件的 Skill 列表，刚启用的插件不一定会被当前会话热加载。请重启 Codex，或关闭当前 Codex 会话后重新进入该项目，再输入 `$atk-status` 验证。
 
 如果你不能使用本地插件，也可以走 legacy copy/register 路径：整体复制或注册本仓库，并保持 `skills/`、`templates/`、`docs/` 在同一相对结构下。
 
@@ -75,7 +75,7 @@ python3 scripts/install_plugin.py --apply --smoke
 在 Codex 中打开你的 Agent 项目，输入：
 
 ```text
-$atk-start
+$atk-status
 ```
 
 它会告诉你现在应该做哪一步。第一次使用时，通常会建议你生成测试 runner。
@@ -182,7 +182,7 @@ $atk-report
 ## 一轮流程速记
 
 ```text
-$atk-start
+$atk-status
 $atk-setup
 $atk-run
 $atk-filter
@@ -213,7 +213,7 @@ $atk-apply
 
 ## 可用 Skill
 
-- `$atk-start`：检查当前进度，告诉你下一步。
+- `$atk-status`：检查当前进度，告诉你下一步。
 - `$atk-setup`：生成适配当前 Agent 的测试脚本。
 - `$atk-run`：运行测试脚本并生成当前版本结果。
 - `$atk-filter`：让 Codex 判断异常样本。
@@ -230,7 +230,7 @@ $atk-apply
 ## 仓库内容
 
 - `.codex-plugin/plugin.json`
-- `skills/atk-start/SKILL.md`
+- `skills/atk-status/SKILL.md`
 - `skills/atk-setup/SKILL.md`
 - `skills/atk-run/SKILL.md`
 - `skills/atk-filter-rules/SKILL.md`

@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 REQUIRED_FILES = [
     ".codex-plugin/plugin.json",
-    "skills/atk-start/SKILL.md",
+    "skills/atk-status/SKILL.md",
     "skills/atk-setup/SKILL.md",
     "skills/atk-run/SKILL.md",
     "skills/atk-filter-rules/SKILL.md",
@@ -118,8 +118,8 @@ PER_FILE_PHRASES = {
         "symlink",
         "copy fallback",
     ],
-    "skills/atk-start/SKILL.md": [
-        "atk-start",
+    "skills/atk-status/SKILL.md": [
+        "atk-status",
         "router/status guide",
         "does not bypass existing confirmation triggers",
         "does not perform full automatic tuning",
@@ -231,7 +231,7 @@ PER_FILE_PHRASES = {
         "legacy copy/register",
         "快速开始",
         "使用前准备",
-        "atk-start",
+        "atk-status",
         "atk-setup",
         "atk-run",
         "atk-filter-rules",
@@ -246,7 +246,7 @@ PER_FILE_PHRASES = {
         "legacy copy/register",
         "Quickstart",
         "Prerequisites",
-        "atk-start",
+        "atk-status",
         "atk-setup",
         "atk-run",
         "atk-filter-rules",
@@ -261,7 +261,7 @@ PER_FILE_PHRASES = {
         "legacy copy/register",
         "快速开始",
         "使用前准备",
-        "atk-start",
+        "atk-status",
         "atk-setup",
         "atk-run",
         "atk-filter-rules",

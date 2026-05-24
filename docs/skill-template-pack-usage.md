@@ -2,7 +2,7 @@
 
 Agent Tune Kit now provides a local Codex plugin for the manual Agent tuning loop described in `docs/codex_agent_tuning_prd.md`. The same files also remain usable through a legacy copy/register boundary: keep `skills/`, `templates/`, and `docs/` together because individual Skill directories reference shared pack assets by relative path.
 
-This pass is a local-product minimum: `.codex-plugin/plugin.json`, personal marketplace registration, smoke validation, and a guided start Skill. It deliberately avoids public marketplace publishing, brand assets/screenshots, one-click orchestration, bundled example Agent/data fixtures, auto rollback, universal schemas, and a full E2E test suite.
+This pass is a local-product minimum: `.codex-plugin/plugin.json`, personal marketplace registration, smoke validation, and a guided status Skill. It deliberately avoids public marketplace publishing, brand assets/screenshots, one-click orchestration, bundled example Agent/data fixtures, auto rollback, universal schemas, and a full E2E test suite.
 
 ## Local plugin install and smoke
 
@@ -43,7 +43,7 @@ The installer writes marketplace JSON atomically where practical and reports smo
 
 After `--apply --smoke`, the plugin is available in the Personal marketplace but not enabled yet. Open `/plugins`, select `Agent Tune Kit`, and install/enable it there. The Skill commands become available after the plugin status changes from `Available` to `Installed`.
 
-If `$atk-start` does not appear in autocomplete after the plugin is `Installed`, restart Codex or open a new Codex session for the project. Current Codex sessions may not hot-load Skills from a plugin that was enabled after the session started.
+If `$atk-status` does not appear in autocomplete after the plugin is `Installed`, restart Codex or open a new Codex session for the project. Current Codex sessions may not hot-load Skills from a plugin that was enabled after the session started.
 
 ## Copy/register boundary
 
@@ -52,7 +52,7 @@ If you do not want plugin registration, use the legacy copy/register path: copy 
 ## What is included
 
 - `.codex-plugin/plugin.json` — local plugin manifest using `skills: "./skills/"`.
-- `skills/atk-start/SKILL.md` — guided router/status Skill that recommends the next step without bypassing confirmation gates.
+- `skills/atk-status/SKILL.md` — guided router/status Skill that recommends the next step without bypassing confirmation gates.
 - `skills/atk-setup/SKILL.md` — generate `.atk/runner/test_runner.py`.
 - `skills/atk-run/SKILL.md` — run `.atk/runner/test_runner.py` through a short Skill command and summarize the current results version.
 - `skills/atk-filter-rules/SKILL.md` — generate or update `.atk/runner/filter_abnormal.py` for manual rule-based filtering.
@@ -68,7 +68,7 @@ If you do not want plugin registration, use the legacy copy/register path: copy 
 ## Manual 2.2 → 2.6 loop
 
 1. Prepare the local Agent service and evaluation dataset.
-2. Trigger `atk-start` to inspect state and route to the right stage.
+2. Trigger `atk-status` to inspect state and route to the right stage.
 3. Trigger `atk-setup` in Codex. The Skill reads the Agent source and dataset, asks only about unsafe ambiguity, then writes `.atk/runner/test_runner.py`.
 4. Trigger `atk-run`. It executes `python3 .atk/runner/test_runner.py`; the runner creates or reuses a version directory and writes `.atk/results/vN/results.csv` plus optional `app.log`.
 5. Choose one abnormal filtering entry:
