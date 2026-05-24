@@ -17,13 +17,13 @@ Traceability note: section 2.5 defines report and cross-version validation, sect
 
 - Current version directory resolved from `.atk/results/vN`.
 - Required current files:
-  - `results.csv`
+  - `eval_results.csv`
   - `failure_cases.csv`
 - Optional current file: `app.log`.
 - Previous version files, when available:
   - `tuning_plan.md`
   - `report.md`
-  - `results.csv`
+  - `eval_results.csv`
   - `failure_cases.csv`
   - optional `app.log`
 - Shared rules in `docs/shared-versioning-and-confirmation.md`.
@@ -35,12 +35,12 @@ Traceability note: section 2.5 defines report and cross-version validation, sect
 ## Workflow
 
 1. Resolve current version with `resolve_current_version()` using `RESULTS_DIR = Path(".atk/results")`.
-2. Require current files with `require_current_file(current_dir, "results.csv")` and `require_current_file(current_dir, "failure_cases.csv")`.
+2. Require current files with `require_current_file(current_dir, "eval_results.csv")` and `require_current_file(current_dir, "failure_cases.csv")`.
 3. Read optional current `app.log` if present.
 4. Resolve previous version with `resolve_previous_version(current_dir)`.
 5. If no previous version exists, generate a single-version report and explain that no previous version can be compared.
 6. If previous version exists but lacks `tuning_plan.md`, degrade to a single-version or lower-confidence report with explicit explanation.
-7. If previous `tuning_plan.md` exists, extract targets from `## 目标异常清单`, compare them with current `results.csv` and `failure_cases.csv`, and classify each target as `已解决`, `部分解决`, `未解决`, or `无法判断`.
+7. If previous `tuning_plan.md` exists, extract targets from `## 目标异常清单`, compare them with current `eval_results.csv` and `failure_cases.csv`, and classify each target as `已解决`, `部分解决`, `未解决`, or `无法判断`.
 8. Write `report.md` in the current version directory.
 
 ## Required report structure
@@ -95,7 +95,7 @@ Ask before producing a cross-version judgment when:
 
 ## Failure behavior
 
-- Require current `results.csv` and `failure_cases.csv`; if missing, stop and tell the user to run testing and failure finding first.
+- Require current `eval_results.csv` and `failure_cases.csv`; if missing, stop and tell the user to run testing and failure finding first.
 - `app.log` is optional; if absent, explain that log-based attribution is unavailable.
 - If previous version lacks `tuning_plan.md` or sample matching is unreliable, degrade to single-version or lower-confidence report with explicit explanation, not silent failure.
 - If a previous version exists but is missing optional comparison files, include the limitation and continue only where evidence supports it.

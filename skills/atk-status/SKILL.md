@@ -36,18 +36,18 @@ It does not bypass existing confirmation triggers, does not perform full automat
 ## Workflow
 
 1. Inspect the current repository before asking questions:
-   - Does `.atk/runner/test_runner.py` exist?
+   - Does `.atk/runner/eval_runner.py` exist?
    - Does `.atk/runner/filter_abnormal.py` exist?
    - Does `.atk/results/` contain `vN` directories?
-   - For the numerically largest current version, are `results.csv`, `failure_cases.csv`, `report.md`, and `tuning_plan.md` present?
+   - For the numerically largest current version, are `eval_results.csv`, `failure_cases.csv`, `report.md`, and `tuning_plan.md` present?
 2. Apply the shared current-version semantics from `docs/shared-versioning-and-confirmation.md`:
    - `RESULTS_DIR = Path(".atk/results")`
    - non-runner Skills use the numerically largest existing `vN` as current;
-   - only `test_runner.py` creates or reuses result versions.
+   - only `eval_runner.py` creates or reuses result versions.
 3. Recommend the next step:
    - no runner: trigger `atk-init`;
-   - runner exists but no current `results.csv`: trigger `atk-run`;
-   - current `results.csv` exists but no `failure_cases.csv`: choose `atk-find-failures-by-rule` or `atk-find-failures`;
+   - runner exists but no current `eval_results.csv`: trigger `atk-run`;
+   - current `eval_results.csv` exists but no `failure_cases.csv`: choose `atk-find-failures-by-rule` or `atk-find-failures`;
    - current `failure_cases.csv` exists but no `report.md`: trigger `atk-report`;
    - current `report.md` exists but no `tuning_plan.md`: trigger `atk-tune`;
    - current `tuning_plan.md` exists: optionally create a user git checkpoint, then trigger `atk-run` to create the next version.
@@ -64,7 +64,7 @@ RESULTS_DIR = Path(".atk/results")
 - Current version means the numerically largest existing `.atk/results/vN` directory.
 - Do not filter current-version selection by required files.
 - Missing current-version inputs are blockers for the corresponding stage; never fall back to an older version.
-- New version creation is owned only by `.atk/runner/test_runner.py`.
+- New version creation is owned only by `.atk/runner/eval_runner.py`.
 
 ## Confirmation triggers
 

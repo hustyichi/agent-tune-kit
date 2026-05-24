@@ -86,7 +86,7 @@ $atk-init
 Point Codex to your Agent entrypoint and evaluation dataset. Codex generates:
 
 ```text
-.atk/runner/test_runner.py
+.atk/runner/eval_runner.py
 ```
 
 The runner keeps your original dataset columns and adds the Agent's actual output as `agent_output`.
@@ -102,7 +102,7 @@ $atk-run
 This writes:
 
 ```text
-.atk/results/v1/results.csv
+.atk/results/v1/eval_results.csv
 ```
 
 ### 3. Find failing cases
@@ -163,7 +163,7 @@ After tuning, run the test again:
 $atk-run
 ```
 
-This creates `.atk/results/v2/results.csv`. Then run:
+This creates `.atk/results/v2/eval_results.csv`. Then run:
 
 ```text
 $atk-find-failures
@@ -177,11 +177,11 @@ Starting with the second loop, the report reads the previous `tuning_plan.md` an
 ```text
 .atk/
 ├── runner/
-│   ├── test_runner.py
+│   ├── eval_runner.py
 │   └── filter_abnormal.py
 └── results/
     ├── v1/
-    │   ├── results.csv
+    │   ├── eval_results.csv
     │   ├── failure_cases.csv
     │   ├── report.md
     │   └── tuning_plan.md
@@ -189,7 +189,7 @@ Starting with the second loop, the report reads the previous `tuning_plan.md` an
         └── ...
 ```
 
-Most users only need to read `results.csv`, `failure_cases.csv`, and `report.md`. Version directories are managed automatically.
+Most users only need to read `eval_results.csv`, `failure_cases.csv`, and `report.md`. Version directories are managed automatically.
 
 ## Available Skills
 

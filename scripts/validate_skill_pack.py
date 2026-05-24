@@ -24,7 +24,7 @@ REQUIRED_FILES = [
     "skills/atk-find-failures/SKILL.md",
     "skills/atk-report/SKILL.md",
     "skills/atk-tune/SKILL.md",
-    "templates/.atk/runner/test_runner.py.md",
+    "templates/.atk/runner/eval_runner.py.md",
     "templates/.atk/runner/filter_abnormal.py.md",
     "docs/skill-template-pack-usage.md",
     "docs/shared-versioning-and-confirmation.md",
@@ -54,9 +54,9 @@ GLOBAL_PHRASES = [
     "def resolve_previous_version(current_dir, results_dir=RESULTS_DIR)",
     "def require_current_file(current_dir, filename)",
     "def allocate_next_results_version(results_dir=RESULTS_DIR)",
-    "No vN results directory exists; run test_runner.py first or confirm repair.",
+    "No vN results directory exists; run eval_runner.py first or confirm repair.",
     "Current version {current_dir.name} is missing {filename}; fix or rerun the prior step.",
-    ".atk/results/vN/results.csv",
+    ".atk/results/vN/eval_results.csv",
     ".atk/results/vN/failure_cases.csv",
     ".atk/results/vN/report.md",
     ".atk/results/vN/tuning_plan.md",
@@ -145,17 +145,17 @@ PER_FILE_PHRASES = {
         "RESULTS_DIR = Path(\".atk/results\")",
     ],
     "skills/atk-init/SKILL.md": [
-        ".atk/runner/test_runner.py",
+        ".atk/runner/eval_runner.py",
         "Preserve all original dataset columns",
         "Append the fixed actual-output column `agent_output`",
         "no version directory is required",
-        "ask the user to confirm before writing `test_runner.py`",
+        "ask the user to confirm before writing `eval_runner.py`",
         "Agent invocation, dataset path/format, log source, or `agent_output` column conflict",
     ],
     "skills/atk-run/SKILL.md": [
         "atk-run",
-        ".atk/runner/test_runner.py",
-        "<python-runtime> .atk/runner/test_runner.py",
+        ".atk/runner/eval_runner.py",
+        "<python-runtime> .atk/runner/eval_runner.py",
         "uv run python",
         "--limit",
         "--concurrency",
@@ -165,7 +165,7 @@ PER_FILE_PHRASES = {
     ],
     "skills/atk-find-failures-by-rule/SKILL.md": [
         ".atk/runner/filter_abnormal.py",
-        "require_current_file(current_dir, \"results.csv\")",
+        "require_current_file(current_dir, \"eval_results.csv\")",
         "It does not run `filter_abnormal.py` itself",
         "ask whether to reuse or update rule logic",
         "manual execution",
@@ -176,10 +176,10 @@ PER_FILE_PHRASES = {
         "expected-result columns or failure criteria are ambiguous",
         "Overwrites",
         "No `filter_abnormal.py` is required",
-        "preserving all original `results.csv` columns",
+        "preserving all original `eval_results.csv` columns",
     ],
     "skills/atk-report/SKILL.md": [
-        "require_current_file(current_dir, \"results.csv\")",
+        "require_current_file(current_dir, \"eval_results.csv\")",
         "require_current_file(current_dir, \"failure_cases.csv\")",
         "resolve_previous_version(current_dir)",
         "已解决",
@@ -196,7 +196,7 @@ PER_FILE_PHRASES = {
         "user-git-only guidance",
         "never perform automatic rollback",
     ],
-    "templates/.atk/runner/test_runner.py.md": [
+    "templates/.atk/runner/eval_runner.py.md": [
         "DATASET_PATH = Path(\"TODO_AGENT_TUNING_DATASET_PATH\")",
         "def allocate_next_results_version(results_dir: Path = RESULTS_DIR) -> Path",
         "class AgentExecutionError(RuntimeError)",
@@ -223,7 +223,7 @@ PER_FILE_PHRASES = {
     ],
     "docs/shared-versioning-and-confirmation.md": [
         "Current version vs new version creation",
-        "Only `test_runner.py` creates or reuses result versions",
+        "Only `eval_runner.py` creates or reuses result versions",
         "Do not filter current-version selection by required files",
         "never fall back to an older version",
         "Per-Skill preconditions and failure behavior",
@@ -291,13 +291,13 @@ PER_FILE_PHRASES = {
 }
 
 VERSION_HELPER_SNIPPETS = {
-    "templates/.atk/runner/test_runner.py.md": [
+    "templates/.atk/runner/eval_runner.py.md": [
         "RESULTS_DIR = Path(\".atk/results\")",
         "def list_version_dirs(results_dir: Path = RESULTS_DIR) -> list[tuple[int, Path]]:",
         "if not results_dir.exists():\n        return []",
         "def allocate_next_results_version(results_dir: Path = RESULTS_DIR) -> Path:",
         "target = results_dir / \"v1\"",
-        "target = results_dir / f\"v{max_n + 1}\" if (current / \"results.csv\").exists() else current",
+        "target = results_dir / f\"v{max_n + 1}\" if (current / \"eval_results.csv\").exists() else current",
     ],
     "templates/.atk/runner/filter_abnormal.py.md": [
         "RESULTS_DIR = Path(\".atk/results\")",
@@ -438,7 +438,7 @@ def main() -> int:
     for status in ["已解决", "部分解决", "未解决", "无法判断"]:
         require(status in report_text, f"report Skill missing cross-version status {status}", errors)
 
-    runner_template = existing_texts.get("templates/.atk/runner/test_runner.py.md", "")
+    runner_template = existing_texts.get("templates/.atk/runner/eval_runner.py.md", "")
     require(
         "return list(source_fieldnames) + [\"agent_output\"] + fixed_output_fields + auxiliary_fields"
         in runner_template,

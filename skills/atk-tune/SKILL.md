@@ -65,7 +65,7 @@ Use the canonical helper names and semantics from `docs/shared-versioning-and-co
 - `resolve_current_version(results_dir=RESULTS_DIR)`
 - `require_current_file(current_dir, filename)`
 
-The next test run creates a new version only when `test_runner.py` sees current `results.csv`. This Skill writes into the current version and never asks the user for a version argument.
+The next test run creates a new version only when `eval_runner.py` sees current `eval_results.csv`. This Skill writes into the current version and never asks the user for a version argument.
 
 ## Confirmation triggers
 

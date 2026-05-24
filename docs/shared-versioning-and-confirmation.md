@@ -30,7 +30,7 @@ Non-goals for this pass:
 
 - Shared runner scripts: `.atk/runner/`
 - Versioned results: `.atk/results/vN/`
-- Test runner output: `.atk/results/vN/results.csv`
+- Test runner output: `.atk/results/vN/eval_results.csv`
 - Optional run log: `.atk/results/vN/app.log`
 - Failure cases: `.atk/results/vN/failure_cases.csv`
 - Report: `.atk/results/vN/report.md`
@@ -40,14 +40,14 @@ Non-goals for this pass:
 
 All non-runner Skills use the current-version rule: the current version is the numerically largest existing `.atk/results/vN` directory where `N` is a positive integer. Do not filter current-version selection by required files. If the current version is missing the required input file for a module, stop and ask the user to repair or rerun that module; never fall back to an older version.
 
-Only `test_runner.py` creates or reuses result versions:
+Only `eval_runner.py` creates or reuses result versions:
 
 - If no `vN` exists, create `v1`.
-- If the largest `vN` already contains `results.csv`, create `v{N+1}`.
-- If the largest `vN` does not contain `results.csv`, reuse that directory and overwrite partial intermediates as needed.
+- If the largest `vN` already contains `eval_results.csv`, create `v{N+1}`.
+- If the largest `vN` does not contain `eval_results.csv`, reuse that directory and overwrite partial intermediates as needed.
 - Do not ask the user for a version number or result directory in the normal flow.
 - Do not clean up an incomplete directory automatically after script failure.
-- Runners should write `results.csv` incrementally and flush after each row. A user interruption or per-run failure may leave a partial `results.csv`; downstream Skills should report missing/incomplete evidence instead of deleting or silently treating partial output as a complete evaluation.
+- Runners should write `eval_results.csv` incrementally and flush after each row. A user interruption or per-run failure may leave a partial `eval_results.csv`; downstream Skills should report missing/incomplete evidence instead of deleting or silently treating partial output as a complete evaluation.
 - Runners should support `--limit` and `--offset` for bounded smoke runs while preserving the same version allocation rules.
 - Runners should support `--concurrency` for faster batch execution. Concurrent runners must keep CSV writes on one writer path and flush after each completed row; with concurrency greater than 1, output rows may be written in completion order unless the generated runner explicitly preserves dataset order.
 
@@ -80,7 +80,7 @@ def resolve_current_version(results_dir=RESULTS_DIR):
     # Used by every non-runner Skill. Do not filter by required files.
     versions = list_version_dirs(results_dir)
     if not versions:
-        raise UserActionRequired("No vN results directory exists; run test_runner.py first or confirm repair.")
+        raise UserActionRequired("No vN results directory exists; run eval_runner.py first or confirm repair.")
     return versions[-1][1]
 
 
@@ -100,13 +100,13 @@ def require_current_file(current_dir, filename):
 
 
 def allocate_next_results_version(results_dir=RESULTS_DIR):
-    # Used only by test_runner.py.
+    # Used only by eval_runner.py.
     versions = list_version_dirs(results_dir)
     if not versions:
         target = results_dir / "v1"
     else:
         max_n, current = versions[-1]
-        target = results_dir / f"v{max_n + 1}" if (current / "results.csv").exists() else current
+        target = results_dir / f"v{max_n + 1}" if (current / "eval_results.csv").exists() else current
     target.mkdir(parents=True, exist_ok=True)
     return target
 ```
@@ -132,9 +132,9 @@ Do not ask for confirmation for routine, reversible local file generation when t
 ## Per-Skill preconditions and failure behavior
 
 - `atk-status`: no version directory is required. It inspects `.atk/` state and recommends the next Skill or manual command without bypassing confirmation triggers.
-- `atk-init`: no version directory is required. If Agent invocation, target runtime/import roots, dataset path/format, log source, or `agent_output` column conflict cannot be inferred safely, ask the user to confirm before writing `.atk/runner/test_runner.py`. Generated runners should support `--limit`/`--offset`/`--concurrency`, write results incrementally, and be import-checked under the inferred project runtime without invoking the Agent.
-- `atk-run`: require `.atk/runner/test_runner.py`; execute it as the short command surface for batch testing using the target repository's Python runtime when available (`uv run python`, `.venv/bin/python`, Poetry, then `python3`). Pass through safe runner flags such as `--limit`, `--offset`, and `--concurrency`. The runner remains the only component that creates or reuses result versions. If the runner fails or no current `results.csv` is produced, report the failure and do not clean up partial version directories. If a partial `results.csv` exists after interruption/failure, report it explicitly.
-- `atk-find-failures-by-rule`: require current `vN/results.csv`; if no current version or missing `results.csv`, stop with repair/rerun guidance. If existing `.atk/runner/filter_abnormal.py` exists, ask whether to reuse or update rule logic. This Skill generates or updates the script and instructs the user to run it manually; it does not run `filter_abnormal.py` itself in the normal PRD flow.
-- `atk-find-failures`: require current `vN/results.csv`; if expected-result columns or failure criteria are ambiguous, ask for judgment. It writes `failure_cases.csv` in the current version and states that the file is overwritten.
-- `atk-report`: require current `results.csv` and `failure_cases.csv`; `app.log` is optional. If previous version lacks `tuning_plan.md` or sample matching is unreliable, degrade to single-version or lower-confidence report with explicit explanation, not silent failure.
+- `atk-init`: no version directory is required. If Agent invocation, target runtime/import roots, dataset path/format, log source, or `agent_output` column conflict cannot be inferred safely, ask the user to confirm before writing `.atk/runner/eval_runner.py`. Generated runners should support `--limit`/`--offset`/`--concurrency`, write results incrementally, and be import-checked under the inferred project runtime without invoking the Agent.
+- `atk-run`: require `.atk/runner/eval_runner.py`; execute it as the short command surface for batch testing using the target repository's Python runtime when available (`uv run python`, `.venv/bin/python`, Poetry, then `python3`). Pass through safe runner flags such as `--limit`, `--offset`, and `--concurrency`. The runner remains the only component that creates or reuses result versions. If the runner fails or no current `eval_results.csv` is produced, report the failure and do not clean up partial version directories. If a partial `eval_results.csv` exists after interruption/failure, report it explicitly.
+- `atk-find-failures-by-rule`: require current `vN/eval_results.csv`; if no current version or missing `eval_results.csv`, stop with repair/rerun guidance. If existing `.atk/runner/filter_abnormal.py` exists, ask whether to reuse or update rule logic. This Skill generates or updates the script and instructs the user to run it manually; it does not run `filter_abnormal.py` itself in the normal PRD flow.
+- `atk-find-failures`: require current `vN/eval_results.csv`; if expected-result columns or failure criteria are ambiguous, ask for judgment. It writes `failure_cases.csv` in the current version and states that the file is overwritten.
+- `atk-report`: require current `eval_results.csv` and `failure_cases.csv`; `app.log` is optional. If previous version lacks `tuning_plan.md` or sample matching is unreliable, degrade to single-version or lower-confidence report with explicit explanation, not silent failure.
 - `atk-tune`: require current `report.md`; if missing, stop and tell the user to run report generation first. After changes, write `tuning_plan.md` with the exact headings `## 目标异常清单`, `## 调优手段`, and `## 关联改动`. Suggest user git commits/checkpoints; do not perform automatic Agent tuning workflow rollback/baseline restore.

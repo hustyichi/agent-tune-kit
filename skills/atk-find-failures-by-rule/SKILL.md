@@ -7,7 +7,7 @@ description: Generate or update a reusable rule-based script for finding failing
 
 ## Purpose
 
-Create or update `.atk/runner/filter_abnormal.py` so the user can find failing rows in the current version's `results.csv` and write them to `failure_cases.csv`. This Skill maps to `docs/codex_agent_tuning_prd.md` sections 2.4, 4, 5, and 7.
+Create or update `.atk/runner/filter_abnormal.py` so the user can find failing rows in the current version's `eval_results.csv` and write them to `failure_cases.csv`. This Skill maps to `docs/codex_agent_tuning_prd.md` sections 2.4, 4, 5, and 7.
 
 This Skill generates/reuses a script and instructs the user to run it manually. It does not run `filter_abnormal.py` itself in the normal PRD flow.
 
@@ -16,7 +16,7 @@ Traceability note: section 2.4 defines rule-based failure-case discovery, sectio
 ## Inputs
 
 - Current version directory resolved from `.atk/results/vN`.
-- Required current file: `results.csv`.
+- Required current file: `eval_results.csv`.
 - User-provided rule description, such as field comparison, thresholds, keyword matches, JSON-path checks, or custom predicates.
 - Optional existing `.atk/runner/filter_abnormal.py`.
 - Shared rules in `docs/shared-versioning-and-confirmation.md`.
@@ -31,8 +31,8 @@ Traceability note: section 2.4 defines rule-based failure-case discovery, sectio
 ## Workflow
 
 1. Resolve current version with `resolve_current_version()` using `RESULTS_DIR = Path(".atk/results")`.
-2. Require `results.csv` with `require_current_file(current_dir, "results.csv")`.
-3. Inspect `results.csv` headers and sample rows, especially `agent_output` and likely expected-result columns.
+2. Require `eval_results.csv` with `require_current_file(current_dir, "eval_results.csv")`.
+3. Inspect `eval_results.csv` headers and sample rows, especially `agent_output` and likely expected-result columns.
 4. If `.atk/runner/filter_abnormal.py` exists, ask whether to reuse it unchanged or update rule logic.
 5. If rule criteria are unclear, ask the user for a concise rule statement.
 6. Write/update `filter_abnormal.py` from `templates/.atk/runner/filter_abnormal.py.md`.
@@ -41,7 +41,7 @@ Traceability note: section 2.4 defines rule-based failure-case discovery, sectio
 ## Required rule behavior
 
 - Use the current version directory, not a user-supplied version argument.
-- Read current `results.csv` and write current `failure_cases.csv`.
+- Read current `eval_results.csv` and write current `failure_cases.csv`.
 - Preserve original result columns in `failure_cases.csv`.
 - Default to overwriting `failure_cases.csv`; do not backup or merge.
 - Keep `filter_abnormal.py` under `.atk/runner/` and reuse it across versions.
@@ -55,7 +55,7 @@ Use the canonical helper names and semantics from `docs/shared-versioning-and-co
 - `resolve_current_version(results_dir=RESULTS_DIR)`
 - `require_current_file(current_dir, filename)`
 
-Do not fall back to an older version if current `results.csv` is missing.
+Do not fall back to an older version if current `eval_results.csv` is missing.
 
 ## Confirmation triggers
 
@@ -68,7 +68,7 @@ Ask before changing the script when:
 
 ## Failure behavior
 
-- Require current `vN/results.csv`; if no current version or missing `results.csv`, stop with repair/rerun guidance.
+- Require current `vN/eval_results.csv`; if no current version or missing `eval_results.csv`, stop with repair/rerun guidance.
 - If existing `filter_abnormal.py` exists, ask whether to reuse or update rule logic.
 - If rule logic cannot be represented safely, stop and ask for a clarified rule.
 - Do not run `filter_abnormal.py` yourself in the normal PRD flow; generate/update it and instruct manual execution.

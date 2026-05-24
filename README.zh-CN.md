@@ -86,7 +86,7 @@ $atk-init 我希望调优的 Agent 服务为 scripts/merge_js_simple.py，对应
 不要只输入空的 `$atk-init`。Codex 需要这些路径来读取项目代码和数据样例，然后生成：
 
 ```text
-.atk/runner/test_runner.py
+.atk/runner/eval_runner.py
 ```
 
 这个脚本会保留你的原始数据列，并额外写入 Agent 的实际输出列 `agent_output`。
@@ -102,7 +102,7 @@ $atk-run
 运行完成后会得到：
 
 ```text
-.atk/results/v1/results.csv
+.atk/results/v1/eval_results.csv
 ```
 
 ### 3. 找出异常样本
@@ -165,7 +165,7 @@ Codex 会基于报告修改你的 Agent，并写入：
 $atk-run
 ```
 
-这次会生成 `.atk/results/v2/results.csv`。继续执行异常筛选和报告生成：
+这次会生成 `.atk/results/v2/eval_results.csv`。继续执行异常筛选和报告生成：
 
 ```text
 $atk-find-failures
@@ -179,11 +179,11 @@ $atk-report
 ```text
 .atk/
 ├── runner/
-│   ├── test_runner.py
+│   ├── eval_runner.py
 │   └── filter_abnormal.py
 └── results/
     ├── v1/
-    │   ├── results.csv
+    │   ├── eval_results.csv
     │   ├── failure_cases.csv
     │   ├── report.md
     │   └── tuning_plan.md
@@ -191,7 +191,7 @@ $atk-report
         └── ...
 ```
 
-你通常只需要看 `results.csv`、`failure_cases.csv` 和 `report.md`。版本号由脚本自动管理，不需要手动指定。
+你通常只需要看 `eval_results.csv`、`failure_cases.csv` 和 `report.md`。版本号由脚本自动管理，不需要手动指定。
 
 ## 可用 Skill
 
