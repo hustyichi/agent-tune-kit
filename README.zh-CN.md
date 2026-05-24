@@ -180,7 +180,7 @@ $atk-report
 .atk/
 ├── runner/
 │   ├── eval_runner.py
-│   └── filter_abnormal.py
+│   └── find_failures_by_rule.py
 └── results/
     ├── v1/
     │   ├── eval_results.csv

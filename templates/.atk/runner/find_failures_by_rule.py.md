@@ -1,6 +1,6 @@
-# Template: .atk/runner/filter_abnormal.py
+# Template: .atk/runner/find_failures_by_rule.py
 
-Copy this template into `.atk/runner/filter_abnormal.py` when using the `atk-find-failures-by-rule` Skill. Replace every `TODO_AGENT_TUNING` block with the confirmed rule logic. The user runs this script manually.
+Copy this template into `.atk/runner/find_failures_by_rule.py` when using the `atk-find-failures-by-rule` Skill. Replace every `TODO_AGENT_TUNING` block with the confirmed rule logic. The user runs this script manually.
 
 ```python
 #!/usr/bin/env python3

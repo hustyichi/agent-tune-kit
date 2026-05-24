@@ -178,7 +178,7 @@ Starting with the second loop, the report reads the previous `tuning_plan.md` an
 .atk/
 ├── runner/
 │   ├── eval_runner.py
-│   └── filter_abnormal.py
+│   └── find_failures_by_rule.py
 └── results/
     ├── v1/
     │   ├── eval_results.csv

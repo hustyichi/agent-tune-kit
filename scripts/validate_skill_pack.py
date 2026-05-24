@@ -25,7 +25,7 @@ REQUIRED_FILES = [
     "skills/atk-report/SKILL.md",
     "skills/atk-tune/SKILL.md",
     "templates/.atk/runner/eval_runner.py.md",
-    "templates/.atk/runner/filter_abnormal.py.md",
+    "templates/.atk/runner/find_failures_by_rule.py.md",
     "docs/skill-template-pack-usage.md",
     "docs/shared-versioning-and-confirmation.md",
     "docs/codex_agent_tuning_prd.md",
@@ -164,9 +164,9 @@ PER_FILE_PHRASES = {
         "next recommended Skill: `atk-find-failures`",
     ],
     "skills/atk-find-failures-by-rule/SKILL.md": [
-        ".atk/runner/filter_abnormal.py",
+        ".atk/runner/find_failures_by_rule.py",
         "require_current_file(current_dir, \"eval_results.csv\")",
-        "It does not run `filter_abnormal.py` itself",
+        "It does not run `find_failures_by_rule.py` itself",
         "ask whether to reuse or update rule logic",
         "manual execution",
         "overwrites the current version's existing file",
@@ -175,7 +175,7 @@ PER_FILE_PHRASES = {
         "write failing rows to `failure_cases.csv` directly",
         "expected-result columns or failure criteria are ambiguous",
         "Overwrites",
-        "No `filter_abnormal.py` is required",
+        "No `find_failures_by_rule.py` is required",
         "preserving all original `eval_results.csv` columns",
     ],
     "skills/atk-report/SKILL.md": [
@@ -213,7 +213,7 @@ PER_FILE_PHRASES = {
         "Preserves all original dataset columns",
         "Current max version",
     ],
-    "templates/.atk/runner/filter_abnormal.py.md": [
+    "templates/.atk/runner/find_failures_by_rule.py.md": [
         "def resolve_current_version(results_dir=RESULTS_DIR)",
         "def require_current_file(current_dir, filename)",
         "FAILURE_FILENAME = \"failure_cases.csv\"",
@@ -299,7 +299,7 @@ VERSION_HELPER_SNIPPETS = {
         "target = results_dir / \"v1\"",
         "target = results_dir / f\"v{max_n + 1}\" if (current / \"eval_results.csv\").exists() else current",
     ],
-    "templates/.atk/runner/filter_abnormal.py.md": [
+    "templates/.atk/runner/find_failures_by_rule.py.md": [
         "RESULTS_DIR = Path(\".atk/results\")",
         "def list_version_dirs(results_dir=RESULTS_DIR):",
         "if not results_dir.exists():\n        return []",
@@ -458,7 +458,7 @@ def main() -> int:
     require("atk-find-failures" in llm_skill, "LLM failure-finding Skill identity missing", errors)
     require("failure_cases.csv" in rules_skill and "failure_cases.csv" in llm_skill, "both failure-finding Skills must write failure_cases.csv", errors)
 
-    filter_template = existing_texts.get("templates/.atk/runner/filter_abnormal.py.md", "")
+    filter_template = existing_texts.get("templates/.atk/runner/find_failures_by_rule.py.md", "")
     require("Conservative placeholder" not in filter_template, "filter template must not ship a runnable placeholder heuristic", errors)
 
     validate_manifest(errors)

@@ -37,7 +37,7 @@ It does not bypass existing confirmation triggers, does not perform full automat
 
 1. Inspect the current repository before asking questions:
    - Does `.atk/runner/eval_runner.py` exist?
-   - Does `.atk/runner/filter_abnormal.py` exist?
+   - Does `.atk/runner/find_failures_by_rule.py` exist?
    - Does `.atk/results/` contain `vN` directories?
    - For the numerically largest current version, are `eval_results.csv`, `failure_cases.csv`, `report.md`, and `tuning_plan.md` present?
 2. Apply the shared current-version semantics from `docs/shared-versioning-and-confirmation.md`:
