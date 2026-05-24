@@ -1,4 +1,4 @@
-# Agent tune kit
+# Agent Tune Kit
 
 简体中文 | [English](README.en.md)
 
@@ -211,4 +211,3 @@ $atk-tune
 - `$atk-find-failures-by-rule`：按明确规则筛选异常样本。
 - `$atk-report`：生成分析报告和跨轮验证结论。
 - `$atk-tune`：根据报告修改 Agent，并记录本轮调优计划。
-

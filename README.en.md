@@ -1,4 +1,4 @@
-# Agent tune kit
+# Agent Tune Kit
 
 English | [简体中文](README.md)
 
@@ -209,4 +209,3 @@ Most users only need to read `results.csv`, `abnormal_cases.csv`, and `report.md
 - `$atk-find-failures-by-rule`: identify failing cases with explicit rules.
 - `$atk-report`: generate analysis and cross-loop validation.
 - `$atk-tune`: tune the Agent and record the tuning plan.
-

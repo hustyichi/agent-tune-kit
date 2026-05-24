@@ -1,7 +1,7 @@
 # Codex Agent 迭代调优服务 — 产品需求文档
 
 ## 1. 产品概述
-- **产品名称**：Agent tune kit
+- **产品名称**：Agent Tune Kit
 - **目标用户**：开发者
 - **使用方式**：作为 Codex 插件以 Codex Skill 形式提供，用户在 Codex 内手动触发各 Skill，并结合本地手工命令完成完整流程
 - **MVP 交付边界（2026-05-24）**：本仓库当前交付为本地 Codex 插件（包含 `.codex-plugin/plugin.json`、个人 marketplace 安装/冒烟工具与 Skill 模板包），并继续支持 legacy copy/register；本阶段不发布 public marketplace，不提供 brand assets/截图、自动升级、端到端一键编排、示例 Agent/数据集、自动回滚或完整 E2E 测试套件
