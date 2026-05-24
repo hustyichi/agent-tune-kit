@@ -1,6 +1,6 @@
 {
   "name": "agent-tune-kit",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "Local Codex plugin for iterative Agent tuning with guided Skills, reusable runner templates, versioned results, and static validation.",
   "author": {
     "name": "hustyichi",

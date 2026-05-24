@@ -106,7 +106,7 @@ PRD_REFERENCES = [
 PER_FILE_PHRASES = {
     ".codex-plugin/plugin.json": [
         '"name": "agent-tune-kit"',
-        '"version": "0.3.3"',
+        '"version": "0.3.4"',
         '"skills": "./skills/"',
         '"displayName": "Agent Tune Kit"',
         '"defaultPrompt"',
