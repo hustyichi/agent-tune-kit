@@ -225,7 +225,10 @@ def main(argv: list[str] | None = None) -> int:
             print("temp smoke cleanup: no temporary files created")
         if not args.dry_run:
             print("next step: open /plugins in Codex, select Agent Tune Kit, and install/enable it")
-            print("verify: plugin status should change from Available to Installed; then use $atk-start")
+            print(
+                "verify: plugin status should change from Available to Installed; "
+                "restart Codex or open a new session if $atk-start is not autocompleted"
+            )
         return 0
     except (InstallError, json.JSONDecodeError) as exc:
         print(f"install_plugin.py: error: {exc}", file=sys.stderr)

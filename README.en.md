@@ -62,6 +62,8 @@ You still need to enable it in Codex:
 
 Select `Agent Tune Kit` in the plugin list and follow the UI prompt to install/enable it. After the status becomes `Installed`, `$atk-start` and the other Skill commands will appear in autocomplete.
 
+If the status is already `Installed` but `$atk-start` still does not appear in the current session, that is expected: Codex usually loads installed plugin Skills when a session starts, so newly enabled plugins may not be hot-loaded into an already running session. Restart Codex, or close the current Codex session and reopen this project, then type `$atk-start` again to verify.
+
 If your environment cannot use local plugins, use the legacy copy/register path: copy or register this pack as a whole while keeping `skills/`, `templates/`, and `docs/` together.
 
 ## Fastest way to validate the flow

@@ -43,6 +43,8 @@ The installer writes marketplace JSON atomically where practical and reports smo
 
 After `--apply --smoke`, the plugin is available in the Personal marketplace but not enabled yet. Open `/plugins`, select `Agent Tune Kit`, and install/enable it there. The Skill commands become available after the plugin status changes from `Available` to `Installed`.
 
+If `$atk-start` does not appear in autocomplete after the plugin is `Installed`, restart Codex or open a new Codex session for the project. Current Codex sessions may not hot-load Skills from a plugin that was enabled after the session started.
+
 ## Copy/register boundary
 
 If you do not want plugin registration, use the legacy copy/register path: copy or register the repository-native pack as a whole. Do not copy a single `skills/*` directory by itself unless you also preserve the referenced shared docs and templates or intentionally inline them. This keeps existing Skill users compatible while the plugin path adds local Codex UI discovery.

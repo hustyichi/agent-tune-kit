@@ -62,6 +62,8 @@ python3 scripts/install_plugin.py --apply --smoke
 
 在插件列表中选择 `Agent Tune Kit`，按界面提示安装/启用。状态变成 `Installed` 后，`$atk-start` 等 Skill 命令才会出现在自动补全里。
 
+如果状态已经是 `Installed`，但当前会话里仍然看不到 `$atk-start` 的自动补全，这是正常现象：Codex 通常会在会话启动时加载已安装插件的 Skill 列表，刚启用的插件不一定会被当前会话热加载。请重启 Codex，或关闭当前 Codex 会话后重新进入该项目，再输入 `$atk-start` 验证。
+
 如果你不能使用本地插件，也可以走 legacy copy/register 路径：整体复制或注册本仓库，并保持 `skills/`、`templates/`、`docs/` 在同一相对结构下。
 
 ## 最短验证流程
