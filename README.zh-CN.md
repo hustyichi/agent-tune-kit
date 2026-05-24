@@ -28,7 +28,7 @@ Agent Tune Kit 是一个**本地 Codex 插件**，帮助你快速完成本地 Ag
 - 一个可被 Codex 读取和修改的本地 Agent 项目。
 - 一份简单评估数据，推荐 CSV。字段名不必完全标准，Codex 会尽量根据数据内容判断输入和期望结果。
 
-建议在调优前做一次 git checkpoint，方便你对比或回滚。Agent Tune Kit 不做自动回滚。
+建议在调优前做一次 git checkpoint，方便你对比或回滚。Agent Tune Kit 不做 Agent 调优流程的自动回滚；安装器的 rollback 只恢复本地 marketplace/plugin-store 安装状态。
 
 ## 快速开始：安装插件
 
@@ -39,20 +39,25 @@ git clone git@github.com:hustyichi/agent-tune-kit.git
 cd agent-tune-kit
 ```
 
-然后运行校验和安装预览：
+然后运行主安装命令：
 
 ```sh
-python3 scripts/validate_skill_pack.py
-python3 scripts/install_plugin.py --dry-run --smoke
+python3 scripts/install_plugin.py install
 ```
 
-确认预览结果正常后安装：
+安装脚本会先校验 manifest，再把插件加入 Personal marketplace，写入或更新 `~/.agents/plugins/marketplace.json`，并默认执行本地 smoke/status 检查。它只证明本地文件和 marketplace 状态，不会绕过或修改 Codex 隐藏的 UI 启用状态。
+
+常用辅助命令：
 
 ```sh
-python3 scripts/install_plugin.py --apply --smoke
+python3 scripts/install_plugin.py preview --smoke   # 只预览，不写入
+python3 scripts/install_plugin.py status            # 查看本地安装状态和下一步提示
+python3 scripts/install_plugin.py rollback --backup <backup-id>  # 只回滚 installer 管理的本地安装状态
 ```
 
-安装脚本会把插件加入 Personal marketplace，并写入或更新 `~/.agents/plugins/marketplace.json`。此时在 `/plugins` 里会看到 Agent Tune Kit 处于 `Available` 状态。
+如果安装时遇到已有 marketplace/plugin-store 冲突，交互式终端会先确认；非交互式替换必须显式使用 `--yes --force`，且替换前会创建备份并打印 rollback 命令。旧命令 `--dry-run` 和 `--apply --smoke` 仍作为兼容路径保留。
+
+安装完成后，Agent Tune Kit 应该会在 `/plugins` 里可见/可用。
 
 还需要在 Codex 里执行一次启用：
 
@@ -60,9 +65,9 @@ python3 scripts/install_plugin.py --apply --smoke
 /plugins
 ```
 
-在插件列表中选择 `Agent Tune Kit`，按界面提示安装/启用。状态变成 `Installed` 后，`$atk-status` 等 Skill 命令才会出现在自动补全里。
+在插件列表中选择 `Agent Tune Kit`，按界面提示安装/启用。启用后，`$atk-status` 等 Skill 命令才会出现在自动补全里。
 
-如果状态已经是 `Installed`，但当前会话里仍然看不到 `$atk-status` 的自动补全，这是正常现象：Codex 通常会在会话启动时加载已安装插件的 Skill 列表，刚启用的插件不一定会被当前会话热加载。请重启 Codex，或关闭当前 Codex 会话后重新进入该项目，再输入 `$atk-status` 验证。
+如果已在 `/plugins` 启用，但当前会话里仍然看不到 `$atk-status` 的自动补全，这是正常现象：Codex 通常会在会话启动时加载已启用插件的 Skill 列表，刚启用的插件不一定会被当前会话热加载。请重启 Codex，或关闭当前 Codex 会话后重新进入该项目，再输入 `$atk-status` 验证。
 
 如果你不能使用本地插件，也可以走 legacy copy/register 路径：整体复制或注册本仓库，并保持 `skills/`、`templates/`、`docs/` 在同一相对结构下。
 

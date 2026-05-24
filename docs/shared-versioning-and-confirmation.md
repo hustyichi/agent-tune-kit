@@ -4,16 +4,16 @@ This document is the single source of truth for the Agent Tune Kit Skills. It ex
 
 ## Delivery boundary
 
-This repository ships a local Codex plugin: `.codex-plugin/plugin.json`, complete `SKILL.md` files, reusable script templates, docs, safe personal marketplace installer/smoke tooling, and static validation. The original Skill template pack remains copy/register-ready as a whole repository-native pack; individual Skill directories depend on shared `docs/` and `templates/` assets unless a future packaging pass inlines them.
+This repository ships a local Codex plugin: `.codex-plugin/plugin.json`, complete `SKILL.md` files, reusable script templates, docs, safe personal marketplace installer/smoke/status/rollback tooling, and static validation. The original Skill template pack remains copy/register-ready as a whole repository-native pack; individual Skill directories depend on shared `docs/` and `templates/` assets unless a future packaging pass inlines them.
 
 Non-goals for this pass:
 
 - no public marketplace publishing or shared catalog release;
 - no brand assets, logo files, screenshots, or public listing polish;
-- no one-click orchestration or hidden full automation across the 2.2 → 2.6 loop;
+- no hidden one-click orchestration or full automation across the 2.2 → 2.6 Agent tuning loop;
 - no universal Schema requirement for Agent inputs, datasets, metrics, or expected-result fields;
 - no bundled example Agent/data fixtures;
-- no automatic rollback, baseline restore, or historical code recovery; rollback is user-git-only guidance;
+- no automatic Agent tuning workflow rollback, baseline restore, or historical code recovery; Agent code rollback is user-git-only guidance;
 - no full E2E test suite against a real Agent service.
 
 ## Plugin and legacy loading
@@ -21,8 +21,10 @@ Non-goals for this pass:
 - Local plugin manifest: `.codex-plugin/plugin.json` with `skills: "./skills/"`.
 - Personal marketplace installer: `scripts/install_plugin.py`.
 - Default marketplace `source.path`: `./plugins/agent-tune-kit`.
-- Preview command: `python3 scripts/install_plugin.py --dry-run --smoke`.
-- Apply command: `python3 scripts/install_plugin.py --apply --smoke`.
+- Main install command: `python3 scripts/install_plugin.py install`.
+- Status command: `python3 scripts/install_plugin.py status`.
+- Installer rollback command: `python3 scripts/install_plugin.py rollback --backup <backup-id>`.
+- Legacy compatibility commands: `python3 scripts/install_plugin.py --dry-run --smoke` and `python3 scripts/install_plugin.py --apply --smoke`.
 - Legacy copy/register path: keep `skills/`, `templates/`, and `docs/` together.
 
 ## Canonical paths
@@ -136,4 +138,4 @@ Do not ask for confirmation for routine, reversible local file generation when t
 - `atk-find-failures-by-rule`: require current `vN/results.csv`; if no current version or missing `results.csv`, stop with repair/rerun guidance. If existing `.atk/runner/filter_abnormal.py` exists, ask whether to reuse or update rule logic. This Skill generates or updates the script and instructs the user to run it manually; it does not run `filter_abnormal.py` itself in the normal PRD flow.
 - `atk-find-failures`: require current `vN/results.csv`; if expected-result columns or failure criteria are ambiguous, ask for judgment. It writes `failure_cases.csv` in the current version and states that the file is overwritten.
 - `atk-report`: require current `results.csv` and `failure_cases.csv`; `app.log` is optional. If previous version lacks `tuning_plan.md` or sample matching is unreliable, degrade to single-version or lower-confidence report with explicit explanation, not silent failure.
-- `atk-tune`: require current `report.md`; if missing, stop and tell the user to run report generation first. After changes, write `tuning_plan.md` with the exact headings `## 目标异常清单`, `## 调优手段`, and `## 关联改动`. Suggest user git commits/checkpoints; do not perform automatic rollback/baseline restore.
+- `atk-tune`: require current `report.md`; if missing, stop and tell the user to run report generation first. After changes, write `tuning_plan.md` with the exact headings `## 目标异常清单`, `## 调优手段`, and `## 关联改动`. Suggest user git commits/checkpoints; do not perform automatic Agent tuning workflow rollback/baseline restore.

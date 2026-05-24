@@ -68,21 +68,26 @@ GLOBAL_PHRASES = [
 NON_GOALS = [
     "no public marketplace",
     "no brand assets",
-    "no one-click orchestration",
+    "no hidden one-click orchestration",
     "no universal Schema",
     "no bundled example Agent/data fixtures",
-    "no automatic rollback",
+    "no automatic Agent tuning workflow rollback",
     "no full E2E test suite",
 ]
 
 PLUGIN_DOC_PHRASES = [
     "local Codex plugin",
     ".codex-plugin/plugin.json",
+    "scripts/install_plugin.py install",
+    "scripts/install_plugin.py status",
+    "scripts/install_plugin.py rollback --backup",
     "scripts/install_plugin.py --dry-run",
     "scripts/install_plugin.py --apply --smoke",
     "legacy copy/register",
     "source.path",
     "./plugins/agent-tune-kit",
+    "--yes --force",
+    "Codex UI enablement state",
 ]
 
 PRD_REFERENCES = [
@@ -105,6 +110,14 @@ PER_FILE_PHRASES = {
     ],
     "scripts/install_plugin.py": [
         "argparse",
+        "install",
+        "preview",
+        "status",
+        "rollback",
+        "--backup",
+        "--backup-root",
+        "--yes",
+        "--no-input",
         "--dry-run",
         "--force",
         "--marketplace-path",
@@ -113,8 +126,10 @@ PER_FILE_PHRASES = {
         "--smoke",
         "--apply",
         "SOURCE_PATH = f\"./plugins/{PLUGIN_NAME}\"",
+        "DEFAULT_BACKUP_ROOT",
         "write_json_atomic",
-        "refusing to replace existing",
+        "refusing destructive replacement",
+        "newer unrelated state",
         "symlink",
         "copy fallback",
     ],
@@ -215,6 +230,9 @@ PER_FILE_PHRASES = {
         "never fall back to an older version",
         "Per-Skill preconditions and failure behavior",
         "local Codex plugin",
+        "python3 scripts/install_plugin.py install",
+        "python3 scripts/install_plugin.py status",
+        "python3 scripts/install_plugin.py rollback --backup <backup-id>",
         "legacy copy/register",
     ],
     "docs/skill-template-pack-usage.md": [
@@ -224,10 +242,15 @@ PER_FILE_PHRASES = {
         "Manual 2.2 → 2.6 loop",
         "v1 → v2",
         "python3 scripts/validate_skill_pack.py",
-        "python3 scripts/install_plugin.py --dry-run",
+        "python3 scripts/install_plugin.py install",
+        "python3 scripts/install_plugin.py status",
+        "python3 scripts/install_plugin.py rollback --backup <backup-id>",
     ],
     "README.md": [
         "本地 Codex 插件",
+        "python3 scripts/install_plugin.py install",
+        "python3 scripts/install_plugin.py status",
+        "python3 scripts/install_plugin.py rollback --backup <backup-id>",
         "legacy copy/register",
         "快速开始",
         "使用前准备",
@@ -241,6 +264,9 @@ PER_FILE_PHRASES = {
     ],
     "README.en.md": [
         "local Codex plugin",
+        "python3 scripts/install_plugin.py install",
+        "python3 scripts/install_plugin.py status",
+        "python3 scripts/install_plugin.py rollback --backup <backup-id>",
         "legacy copy/register",
         "Quickstart",
         "Prerequisites",
@@ -254,6 +280,9 @@ PER_FILE_PHRASES = {
     ],
     "README.zh-CN.md": [
         "本地 Codex 插件",
+        "python3 scripts/install_plugin.py install",
+        "python3 scripts/install_plugin.py status",
+        "python3 scripts/install_plugin.py rollback --backup <backup-id>",
         "legacy copy/register",
         "快速开始",
         "使用前准备",
@@ -359,7 +388,7 @@ def validate_installer(errors: list[str]) -> None:
     text = read_rel("scripts/install_plugin.py") if (ROOT / "scripts/install_plugin.py").exists() else ""
     require("DEFAULT_MARKETPLACE = Path(\"~/.agents/plugins/marketplace.json\")" in text, "installer must default to personal marketplace", errors)
     require("DEFAULT_PLUGIN_STORE = Path(\"~/plugins\")" in text, "installer must default to ~/plugins", errors)
-    for phrase in ["AVAILABLE", "ON_INSTALL", "category", "Coding", "atomic", "os.replace", "smoke-resolved plugin path"]:
+    for phrase in ["AVAILABLE", "ON_INSTALL", "category", "Coding", "atomic", "os.replace", "smoke-resolved plugin path", "Codex UI boundary", "--yes --force", "rollback complete"]:
         require(phrase in text, f"installer missing behavior phrase: {phrase}", errors)
 
 

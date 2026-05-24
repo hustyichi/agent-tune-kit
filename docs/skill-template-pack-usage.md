@@ -1,49 +1,69 @@
 # Agent Tune Kit Local Plugin and Skill Pack Usage
 
-Agent Tune Kit now provides a local Codex plugin for the manual Agent tuning loop described in `docs/codex_agent_tuning_prd.md`. The same files also remain usable through a legacy copy/register boundary: keep `skills/`, `templates/`, and `docs/` together because individual Skill directories reference shared pack assets by relative path.
+Agent Tune Kit provides a local Codex plugin for the manual Agent tuning loop described in `docs/codex_agent_tuning_prd.md`. The same files also remain usable through a legacy copy/register boundary: keep `skills/`, `templates/`, and `docs/` together because individual Skill directories reference shared pack assets by relative path.
 
-This pass is a local-product minimum: `.codex-plugin/plugin.json`, personal marketplace registration, smoke validation, and a guided status Skill. It deliberately avoids public marketplace publishing, brand assets/screenshots, one-click orchestration, bundled example Agent/data fixtures, auto rollback, universal schemas, and a full E2E test suite.
+This pass is a local-product minimum: `.codex-plugin/plugin.json`, personal marketplace registration, one-command installer orchestration, local smoke/status validation, installer-state backup/rollback, and a guided status Skill. It deliberately avoids public marketplace publishing, brand assets/screenshots, hidden one-click orchestration across the Agent tuning loop, bundled example Agent/data fixtures, automatic Agent tuning workflow rollback, universal schemas, and a full E2E test suite against a real Agent service.
 
 ## Local plugin install and smoke
 
-Preview first; dry-run is the default:
+Use the main command for normal setup:
 
 ```sh
-python3 scripts/validate_skill_pack.py
-python3 scripts/install_plugin.py --dry-run --smoke
-```
-
-Install only after the preview is acceptable:
-
-```sh
-python3 scripts/install_plugin.py --apply --smoke
+python3 scripts/install_plugin.py install
 ```
 
 Default behavior:
 
+- validates `.codex-plugin/plugin.json`;
 - marketplace path: `~/.agents/plugins/marketplace.json`;
 - plugin store: `~/plugins`;
 - marketplace entry name: `agent-tune-kit`;
 - marketplace `source.path`: `./plugins/agent-tune-kit`;
 - default install target: `~/plugins/agent-tune-kit` as a symlink to this repository;
-- `--copy` is an explicit copy fallback;
-- `--force` is required before replacing an existing same-name marketplace entry pointing elsewhere or a plugin-store target.
+- runs local smoke/status checks by default;
+- prints `/plugins` enablement guidance without claiming hidden Codex UI `Installed` state.
+
+Useful commands:
+
+```sh
+python3 scripts/install_plugin.py preview --smoke
+python3 scripts/install_plugin.py status
+python3 scripts/install_plugin.py rollback --backup <backup-id>
+```
+
+Conflict and rollback behavior:
+
+- `preview` and legacy `--dry-run` never write marketplace/plugin-store files or backups;
+- interactive terminals prompt before replacing conflicting marketplace/plugin-store state;
+- noninteractive destructive replacement requires `--yes --force`;
+- `--yes` alone does not replace conflicts;
+- `--no-input` never waits for prompts;
+- destructive replacement creates a backup under `~/.agents/plugins/backups/agent-tune-kit/<backup-id>/` by default;
+- rollback restores only installer-managed marketplace/plugin-store state, not Agent tuning workflow changes.
 
 For isolated smoke tests, use temp paths:
 
 ```sh
-python3 scripts/install_plugin.py \
+python3 scripts/install_plugin.py install \
   --marketplace-path /tmp/agent-tune-marketplace.json \
   --plugin-store /tmp/agent-tune-plugins \
-  --apply \
-  --smoke
+  --backup-root /tmp/agent-tune-backups \
+  --yes --force
+python3 scripts/install_plugin.py status \
+  --marketplace-path /tmp/agent-tune-marketplace.json \
+  --plugin-store /tmp/agent-tune-plugins
 ```
 
-The installer writes marketplace JSON atomically where practical and reports smoke cleanup status. It does not create a public marketplace package.
+Legacy compatibility remains available for existing scripts:
 
-After `--apply --smoke`, the plugin is available in the Personal marketplace but not enabled yet. Open `/plugins`, select `Agent Tune Kit`, and install/enable it there. The Skill commands become available after the plugin status changes from `Available` to `Installed`.
+```sh
+python3 scripts/install_plugin.py --dry-run --smoke
+python3 scripts/install_plugin.py --apply --smoke
+```
 
-If `$atk-status` does not appear in autocomplete after the plugin is `Installed`, restart Codex or open a new Codex session for the project. Current Codex sessions may not hot-load Skills from a plugin that was enabled after the session started.
+The installer writes marketplace JSON atomically where practical and reports smoke status. It does not create a public marketplace package and does not mutate hidden Codex UI enablement state.
+
+After install, the plugin should be visible/available in the Personal marketplace. Open `/plugins`, select `Agent Tune Kit`, and enable it there if needed. If `$atk-status` does not appear in autocomplete after enabling the plugin, restart Codex or open a new Codex session for the project. Current Codex sessions may not hot-load Skills from a plugin that was enabled after the session started.
 
 ## Copy/register boundary
 
@@ -62,7 +82,7 @@ If you do not want plugin registration, use the legacy copy/register path: copy 
 - `templates/.atk/runner/test_runner.py.md` — script template preserving original dataset columns and appending `agent_output`.
 - `templates/.atk/runner/filter_abnormal.py.md` — stdlib CSV rule-filter template.
 - `docs/shared-versioning-and-confirmation.md` — shared current/new version semantics and confirmation triggers.
-- `scripts/install_plugin.py` — safe local marketplace installer/smoke tool.
+- `scripts/install_plugin.py` — safe local marketplace installer/smoke/status/rollback tool.
 - `scripts/validate_skill_pack.py` — lightweight static checker for this local plugin and legacy pack.
 
 ## Manual 2.2 → 2.6 loop
@@ -76,7 +96,7 @@ If you do not want plugin registration, use the legacy copy/register path: copy 
    - Or trigger `atk-find-failures` to write `failure_cases.csv` directly from the current `results.csv`.
 6. Trigger `atk-report` to create `.atk/results/vN/report.md`. From `v2` onward, it compares the current version with the previous existing version and reads the previous `tuning_plan.md` when available.
 7. Trigger `atk-tune` to change the Agent and write `.atk/results/vN/tuning_plan.md`.
-8. Optionally create a user git commit/checkpoint. Rollback remains user-git-only guidance; this plugin does not automate restore.
+8. Optionally create a user git commit/checkpoint. Agent tuning rollback remains user-git-only guidance; this plugin does not automate Agent code restore.
 9. Run the same loop again. The next test run creates `v{N+1}` when the current max version already has `results.csv`.
 
 ## Version example: v1 → v2

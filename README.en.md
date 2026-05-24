@@ -28,7 +28,7 @@ You only need:
 - A local Agent project that Codex can inspect and edit.
 - A simple evaluation dataset, preferably CSV. Column names do not need to follow a strict Schema; Codex will infer inputs and expected results where possible.
 
-Create a git checkpoint before tuning if you want an easy rollback path. Agent Tune Kit does not automate rollback.
+Create a git checkpoint before tuning if you want an easy rollback path. Agent Tune Kit does not automate Agent tuning rollback; installer rollback only restores local marketplace/plugin-store install state.
 
 ## Quickstart: install the plugin
 
@@ -39,20 +39,25 @@ git clone git@github.com:hustyichi/agent-tune-kit.git
 cd agent-tune-kit
 ```
 
-Then run validation and the install preview:
+Then run the main install command:
 
 ```sh
-python3 scripts/validate_skill_pack.py
-python3 scripts/install_plugin.py --dry-run --smoke
+python3 scripts/install_plugin.py install
 ```
 
-If the preview looks right, install it:
+The installer validates the manifest, adds the plugin to the Personal marketplace, writes or updates `~/.agents/plugins/marketplace.json`, and runs local smoke/status checks by default. It proves local files and marketplace state only; it does not bypass or modify hidden Codex UI enablement state.
+
+Useful helper commands:
 
 ```sh
-python3 scripts/install_plugin.py --apply --smoke
+python3 scripts/install_plugin.py preview --smoke   # preview only; no writes
+python3 scripts/install_plugin.py status            # read local install status and next steps
+python3 scripts/install_plugin.py rollback --backup <backup-id>  # restore installer-managed local install state only
 ```
 
-The installer adds the plugin to the Personal marketplace and writes or updates `~/.agents/plugins/marketplace.json`. At this point `/plugins` will show Agent Tune Kit as `Available`.
+When an existing marketplace/plugin-store conflict is found, interactive terminals prompt before replacement. Noninteractive replacement requires `--yes --force`; destructive replacement creates a backup first and prints a rollback command. Legacy `--dry-run` and `--apply --smoke` commands remain supported for compatibility.
+
+After install, Agent Tune Kit should be visible/available in `/plugins`.
 
 You still need to enable it in Codex:
 
@@ -60,9 +65,9 @@ You still need to enable it in Codex:
 /plugins
 ```
 
-Select `Agent Tune Kit` in the plugin list and follow the UI prompt to install/enable it. After the status becomes `Installed`, `$atk-status` and the other Skill commands will appear in autocomplete.
+Select `Agent Tune Kit` in the plugin list and follow the UI prompt to install/enable it. After you enable it in the UI, `$atk-status` and the other Skill commands should appear in autocomplete.
 
-If the status is already `Installed` but `$atk-status` still does not appear in the current session, that is expected: Codex usually loads installed plugin Skills when a session starts, so newly enabled plugins may not be hot-loaded into an already running session. Restart Codex, or close the current Codex session and reopen this project, then type `$atk-status` again to verify.
+If the plugin is enabled in `/plugins` but `$atk-status` still does not appear in the current session, that is expected: Codex usually loads plugin Skills when a session starts, so newly enabled plugins may not be hot-loaded into an already running session. Restart Codex, or close the current Codex session and reopen this project, then type `$atk-status` again to verify.
 
 If your environment cannot use local plugins, use the legacy copy/register path: copy or register this pack as a whole while keeping `skills/`, `templates/`, and `docs/` together.
 
