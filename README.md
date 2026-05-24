@@ -89,7 +89,7 @@ $atk-init 我希望调优的 Agent 服务为 scripts/merge_js_simple.py，对应
 .atk/runner/eval_runner.py
 ```
 
-这个脚本会保留你的原始数据列，并额外写入 Agent 的实际输出列 `agent_output`。它还会追加 `agent_output_log_path`；当可信的串行 Python `logging` 采集已配置时，该列会指向类似 `logs/row_000001.log` 的逐行日志文件。
+这个脚本会保留你的原始数据列，并额外写入 Agent 的实际输出列 `agent_output`。它还会追加 `agent_output_log_path`；当可信的 Python `logging` 采集已配置时，该列会在串行或同进程并发运行中指向类似 `logs/row_000001.log` 的逐行日志文件。
 
 ### 2. 跑一遍 Agent
 
@@ -105,7 +105,7 @@ $atk-run
 .atk/results/v1/eval_results.csv
 ```
 
-如果逐行日志处于启用状态，同一版本目录还会包含 `.atk/results/v1/logs/row_*.log`。逐行日志只在配置了 Python `logging` 且 `--concurrency 1` 时生成；并发运行会显式降级到 `app.log`/CSV 证据，不创建可能混杂的逐行日志。
+如果逐行日志处于启用状态，同一版本目录还会包含 `.atk/results/v1/logs/row_*.log`。逐行日志会在配置了同进程 Python `logging` 的串行运行中生成；当 `CONCURRENT_ROW_LOGGING_ENABLED` 保持启用时，也支持 `--concurrency > 1`。runner 只写入 ATK 行上下文处于活动状态时发出的记录；stdout/stderr、子进程、多进程和行结束后的后台日志不在范围内。若禁用并发逐行日志，并发运行会显式降级到 `app.log`/CSV 证据，不创建逐行日志。
 
 ### 3. 找出异常样本
 

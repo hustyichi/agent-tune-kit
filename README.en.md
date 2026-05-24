@@ -89,7 +89,7 @@ Point Codex to your Agent entrypoint and evaluation dataset. Codex generates:
 .atk/runner/eval_runner.py
 ```
 
-The runner keeps your original dataset columns and adds the Agent's actual output as `agent_output`. It also adds `agent_output_log_path`; when trustworthy serial Python `logging` capture is configured, this column points to row-specific files such as `logs/row_000001.log`.
+The runner keeps your original dataset columns and adds the Agent's actual output as `agent_output`. It also adds `agent_output_log_path`; when trustworthy Python `logging` capture is configured, this column points to row-specific files such as `logs/row_000001.log` for serial or same-process concurrent runs.
 
 ### 2. Run the Agent on the dataset
 
@@ -105,7 +105,7 @@ This writes:
 .atk/results/v1/eval_results.csv
 ```
 
-If row logging is active, the same version also contains `.atk/results/v1/logs/row_*.log`. Row logs are generated only for configured Python `logging` capture with `--concurrency 1`; concurrent runs visibly downgrade to `app.log`/CSV evidence instead of creating mixed per-row logs.
+If row logging is active, the same version also contains `.atk/results/v1/logs/row_*.log`. Row logs are generated for configured same-process Python `logging` capture in serial runs and, when `CONCURRENT_ROW_LOGGING_ENABLED` remains enabled, with `--concurrency > 1`. The runner only writes records emitted while an ATK row context is active; stdout/stderr, subprocess, multiprocess, and post-row background logs remain out of scope. If concurrent row logging is disabled, concurrent runs visibly downgrade to `app.log`/CSV evidence instead of creating row logs.
 
 ### 3. Find failing cases
 

@@ -153,7 +153,7 @@ PER_FILE_PHRASES = {
         "Preserve all original dataset columns",
         "Append the fixed actual-output column `agent_output`",
         "agent_output_log_path",
-        "--concurrency == 1",
+        "CONCURRENT_ROW_LOGGING_ENABLED",
         "no version directory is required",
         "ask the user to confirm before writing `eval_runner.py`",
         "Agent invocation, dataset path/format, log source, Python logger names, or `agent_output` / `agent_output_log_path` column conflict",
@@ -235,7 +235,9 @@ PER_FILE_PHRASES = {
         "ROW_LOG_FORMAT",
         "ROW_LOG_LEVEL",
         "ROW_LOGS_DIRNAME",
-        "logging.FileHandler",
+        "ATKRowLogHandler",
+        "contextvars",
+        "CONCURRENT_ROW_LOGGING_ENABLED",
         "row_{source_index:06d}.log",
         "relative_path.as_posix()",
         "ROW_LOGGING_CONCURRENCY_DOWNGRADE_MESSAGE",
@@ -498,21 +500,21 @@ def main() -> int:
         and "ROW_LOGGER_NAMES" in runner_template
         and "ROW_LOG_FORMAT" in runner_template
         and "ROW_LOG_LEVEL" in runner_template
-        and "ROW_LOGS_DIRNAME" in runner_template,
+        and "ROW_LOGS_DIRNAME" in runner_template
+        and "CONCURRENT_ROW_LOGGING_ENABLED" in runner_template,
         "runner template must expose row-log generated config constants",
         errors,
     )
-    require("logging.FileHandler" in runner_template, "runner template must use stdlib logging.FileHandler for row logs", errors)
-    require(
-        "logging.FileHandler(log_path, mode=\"w\", encoding=\"utf-8\")" in runner_template,
-        "runner template must truncate row logs on reused partial versions",
-        errors,
-    )
+    require("contextvars" in runner_template and "ContextVar" in runner_template, "runner template must use contextvars for row attribution", errors)
+    require("class ATKRowLogHandler(logging.Handler)" in runner_template, "runner template must use an ATK-owned stdlib logging.Handler router for row logs", errors)
+    require("log_path.open(\"w\", encoding=\"utf-8\").close()" in runner_template, "runner template must truncate row logs on reused partial versions", errors)
+    require("_ACTIVE_ROW_LOG_CONTEXT.reset(token)" in runner_template, "runner template must reset row logging context tokens in finally", errors)
     require("row_{source_index:06d}.log" in runner_template, "runner template must use source-row-numbered row log filenames", errors)
     require(".as_posix()" in runner_template, "runner template must serialize row-log CSV paths as POSIX paths", errors)
     require("AGENT_OUTPUT_LOG_PATH_FIELD" in runner_template and "reserved_output_fields" in runner_template, "runner template must guard agent_output_log_path source conflicts", errors)
     require("ROW_LOGGING_CONCURRENCY_DOWNGRADE_MESSAGE" in runner_template and "sys.__stderr__" in runner_template, "runner template must report concurrency row-log downgrade outside app.log redirect", errors)
     require("logger.setLevel(ROW_LOG_LEVEL)" in runner_template and "logger.setLevel(previous_levels[logger])" in runner_template, "runner template must restore row logger levels", errors)
+    require("logger.addHandler(row_handler)" in runner_template and "logger.removeHandler(row_handler)" in runner_template, "runner template must install and remove the ATK row handler once per run", errors)
     require("except Exception as exc" not in runner_template, "runner template must not catch broad Exception and mask configuration failures", errors)
     require(
         "except UserActionRequired:" in runner_template
@@ -522,6 +524,7 @@ def main() -> int:
     )
     require("--limit" in runner_template and "--offset" in runner_template, "runner template must support bounded runs", errors)
     require("--concurrency" in runner_template and "ThreadPoolExecutor" in runner_template, "runner template must support concurrent runs", errors)
+    require("row_logging_enabled=row_logging_enabled" in runner_template, "concurrent worker path must receive row logging state instead of forcing false", errors)
     require("writer.writerow(result_row)" in runner_template and "os.fsync(handle.fileno())" in runner_template, "runner template must write and flush results incrementally", errors)
 
     init_rules_skill = existing_texts.get("skills/atk-init-failure-rule/SKILL.md", "")

@@ -28,7 +28,7 @@ Traceability note: section 2.2 defines runner generation, section 4 defines vers
 - Runtime results are produced later by running `atk-run`, which executes the generated script:
   - `.atk/results/vN/eval_results.csv`
   - optional `.atk/results/vN/app.log`
-  - optional serial row logs under `.atk/results/vN/logs/`, referenced by `agent_output_log_path`
+  - optional row logs under `.atk/results/vN/logs/`, referenced by `agent_output_log_path`
 
 ## Workflow
 
@@ -51,7 +51,7 @@ Traceability note: section 2.2 defines runner generation, section 4 defines vers
 
 - Preserve all original dataset columns and their order.
 - Append the fixed actual-output column `agent_output`.
-- Append the stable row-log evidence column `agent_output_log_path`. When serial Python logging capture is configured and active, it must contain a relative POSIX path such as `logs/row_000001.log`; otherwise it should be blank.
+- Append the stable row-log evidence column `agent_output_log_path`. When same-process Python logging capture is configured and active, it must contain a relative POSIX path such as `logs/row_000001.log`; otherwise it should be blank.
 - If Agent output has multiple fields, serialize the primary result as JSON in `agent_output` or add auxiliary `agent_output_*` columns.
 - If the input dataset already contains `agent_output` or `agent_output_log_path`, ask the user to confirm a rename strategy before writing the script.
 - Automatically allocate the output version with `allocate_next_results_version()`.
@@ -63,8 +63,8 @@ Traceability note: section 2.2 defines runner generation, section 4 defines vers
 - Emit visible per-row progress by default, with a `--no-progress` option for quiet runs.
 - Do not clean up partial version directories on crash.
 - Capture `app.log` only when a reliable source is found; otherwise omit it and explain why.
-- Prefer Python stdlib `logging` for row-specific evidence when the Agent uses configured loggers. Generated row-log capture is v1 serial-only: create row files by default only when Python logging capture is configured and `--concurrency == 1`; create the referenced file even if it remains empty; do not create per-row files when `--concurrency > 1`.
-- When configured row-log capture is downgraded because `--concurrency > 1`, make that downgrade visible in runner output outside the redirected `app.log`.
+- Prefer Python stdlib `logging` for row-specific evidence when the Agent uses configured loggers. Generated row-log capture should use ATK-owned context state and stdlib logging routing: create row files when Python logging capture is configured and an ATK row context is active, including same-process `--concurrency > 1` while `CONCURRENT_ROW_LOGGING_ENABLED` remains enabled; create the referenced file even if it remains empty; never include stdout/stderr, subprocess, multiprocess, context-free, or post-row background logs.
+- When configured row-log capture is downgraded because `--concurrency > 1` and concurrent row logging is disabled, make that downgrade visible in runner output outside the redirected `app.log`.
 - Add the target repository import roots required by the Agent before importing local modules. For Python `src/` layout projects, generated runners should add `REPO_ROOT / "src"` to `sys.path`; for package-at-root projects, add `REPO_ROOT` when needed.
 - If the target project declares a managed runtime (`uv`, Poetry, pipenv, `.venv`, etc.), record that execution command in the setup summary and generate a runner that can be executed by that runtime. Do not assume bare system `python3` has project dependencies.
 - For sync Agents, generated runners should be concurrency-ready with a standard-library worker pool. For async Agents, use an explicit async runner (`asyncio.run(...)`) with an async semaphore or equivalent bounded concurrency. In both cases, preserve incremental row writes from a single writer path.
