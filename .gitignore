@@ -38,5 +38,3 @@ node_modules/
 # Agent tune kit generated outputs
 .atk/results/
 .atk/**/*.log
-agent-tuning/results/
-agent-tuning/**/*.log
