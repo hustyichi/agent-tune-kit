@@ -169,20 +169,6 @@ $atk-report
 
 从第二轮开始，报告会读取上一轮的 `tuning_plan.md`，判断上一轮目标异常是已解决、部分解决、未解决，还是无法判断。这样你就能看到调优是否真的带来了效果。
 
-## 一轮流程速记
-
-需要判断当前进度时，可先运行 `$atk-status`。
-
-```text
-$atk-setup
-$atk-run
-$atk-find-failures
-$atk-report
-$atk-tune
-```
-
-下一轮从再次运行 `$atk-run` 开始。
-
 ## 你会看到的结果目录
 
 ```text

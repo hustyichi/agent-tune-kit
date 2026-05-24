@@ -167,20 +167,6 @@ $atk-report
 
 Starting with the second loop, the report reads the previous `tuning_plan.md` and tells you whether the target failures were resolved, partially resolved, unresolved, or impossible to judge.
 
-## One-loop cheat sheet
-
-Optionally run `$atk-status` first if you want Codex to inspect progress and recommend the next step.
-
-```text
-$atk-setup
-$atk-run
-$atk-find-failures
-$atk-report
-$atk-tune
-```
-
-Start the next loop by running `$atk-run` again.
-
 ## Expected output
 
 ```text
