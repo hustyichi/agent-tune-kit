@@ -1,19 +1,29 @@
 # Shared Versioning and Confirmation Rules
 
-This document is the single source of truth for the Agent tune kit Skill template pack. It extracts the version rules and uncertainty-confirmation behavior from `docs/codex_agent_tuning_prd.md` so every Skill uses the same terms.
+This document is the single source of truth for the Agent Tune Kit Skills. It extracts the version rules and uncertainty-confirmation behavior from `docs/codex_agent_tuning_prd.md` so every Skill uses the same terms whether the repo is loaded as a local Codex plugin or through the legacy copy/register path.
 
-## MVP boundary
+## Delivery boundary
 
-This repository ships a Codex Skill template pack: complete `SKILL.md` files, reusable script templates, docs, and static validation. Treat it as a whole repository-native pack; individual Skill directories depend on shared `docs/` and `templates/` assets unless a future packaging pass inlines them. It is copy/register-ready, but it is not a production plugin installer.
+This repository ships a local Codex plugin: `.codex-plugin/plugin.json`, complete `SKILL.md` files, reusable script templates, docs, safe personal marketplace installer/smoke tooling, and static validation. The original Skill template pack remains copy/register-ready as a whole repository-native pack; individual Skill directories depend on shared `docs/` and `templates/` assets unless a future packaging pass inlines them.
 
-Non-goals for this MVP:
+Non-goals for this pass:
 
-- no plugin install UX, manifest, marketplace entry, upgrade flow, or packaging workflow;
+- no public marketplace publishing or shared catalog release;
+- no brand assets, logo files, screenshots, or public listing polish;
 - no one-click orchestration or hidden full automation across the 2.2 → 2.6 loop;
 - no universal Schema requirement for Agent inputs, datasets, metrics, or expected-result fields;
 - no bundled example Agent/data fixtures;
 - no automatic rollback, baseline restore, or historical code recovery; rollback is user-git-only guidance;
 - no full E2E test suite against a real Agent service.
+
+## Plugin and legacy loading
+
+- Local plugin manifest: `.codex-plugin/plugin.json` with `skills: "./skills/"`.
+- Personal marketplace installer: `scripts/install_plugin.py`.
+- Default marketplace `source.path`: `./plugins/agent-tune-kit`.
+- Preview command: `python3 scripts/install_plugin.py --dry-run --smoke`.
+- Apply command: `python3 scripts/install_plugin.py --apply --smoke`.
+- Legacy copy/register path: keep `skills/`, `templates/`, and `docs/` together.
 
 ## Canonical paths
 
@@ -116,6 +126,7 @@ Do not ask for confirmation for routine, reversible local file generation when t
 
 ## Per-Skill preconditions and failure behavior
 
+- `agent-tuning-start`: no version directory is required. It inspects `agent-tuning/` state and recommends the next Skill or manual command without bypassing confirmation triggers.
 - `agent-tuning-generate-runner`: no version directory is required. If Agent invocation, dataset path/format, log source, or `agent_output` column conflict cannot be inferred safely, ask the user to confirm before writing `agent-tuning/runner/test_runner.py`.
 - `agent-tuning-filter-abnormal-rules`: require current `vN/results.csv`; if no current version or missing `results.csv`, stop with repair/rerun guidance. If existing `agent-tuning/runner/filter_abnormal.py` exists, ask whether to reuse or update rule logic. This Skill generates or updates the script and instructs the user to run it manually; it does not run `filter_abnormal.py` itself in the normal PRD flow.
 - `agent-tuning-filter-abnormal-llm`: require current `vN/results.csv`; if expected-result columns or abnormal criteria are ambiguous, ask for judgment. It writes `abnormal_cases.csv` in the current version and states that the file is overwritten.

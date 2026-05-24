@@ -4,7 +4,7 @@
 - **产品名称**：Agent tune kit
 - **目标用户**：开发者
 - **使用方式**：作为 Codex 插件以 Codex Skill 形式提供，用户在 Codex 内手动触发各 Skill，并结合本地手工命令完成完整流程
-- **MVP 交付边界（2026-05-24）**：本仓库当前交付为 Codex Skill 模板包，可复制/注册到 Codex Skill 环境使用；本阶段不提供插件安装 UX、manifest/marketplace 打包、自动升级、端到端一键编排、示例 Agent/数据集、自动回滚或完整 E2E 测试套件
+- **MVP 交付边界（2026-05-24）**：本仓库当前交付为本地 Codex 插件（包含 `.codex-plugin/plugin.json`、个人 marketplace 安装/冒烟工具与 Skill 模板包），并继续支持 legacy copy/register；本阶段不发布 public marketplace，不提供 brand assets/截图、自动升级、端到端一键编排、示例 Agent/数据集、自动回滚或完整 E2E 测试套件
 - **目标**：提供一套通用、可复用的服务，用于对本地 Agent 服务进行迭代调优，通过手工执行 Codex Skill 完成测试、异常筛选、归因分析、跨版本调优验证、调优，并在统一的 `agent-tuning/` 目录下按调优版本生成隔离的结果产物与最终 Markdown 报告
 - **适用场景与开放设计**：
   - **Agent 形态**：本地实现的、可被代码直接调用的大模型 Agent 服务；Skill 通过阅读 Agent 源码理解其调用方式、参数与日志，不预设接口 Schema

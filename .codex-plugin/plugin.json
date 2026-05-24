@@ -1,0 +1,41 @@
+{
+  "name": "agent-tune-kit",
+  "version": "0.2.0",
+  "description": "Local Codex plugin for iterative Agent tuning with guided Skills, reusable runner templates, versioned results, and static validation.",
+  "author": {
+    "name": "hustyichi",
+    "email": "hustyichi@163.com",
+    "url": "https://github.com/hustyichi"
+  },
+  "homepage": "https://github.com/hustyichi/agent-tune-kit",
+  "repository": "https://github.com/hustyichi/agent-tune-kit",
+  "license": "UNLICENSED",
+  "keywords": [
+    "agent-tuning",
+    "codex-skills",
+    "evaluation",
+    "reporting",
+    "local-plugin"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Agent Tune Kit",
+    "shortDescription": "Run a guided local Agent tuning loop",
+    "longDescription": "Agent Tune Kit provides Codex Skills for generating local test runners, filtering abnormal cases, reporting regressions and improvements, and applying focused Agent tuning with versioned local artifacts.",
+    "developerName": "hustyichi",
+    "category": "Coding",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/hustyichi/agent-tune-kit",
+    "defaultPrompt": [
+      "Start an Agent tuning loop",
+      "Filter abnormal Agent cases",
+      "Generate an Agent tuning report"
+    ],
+    "brandColor": "#334155",
+    "screenshots": []
+  }
+}

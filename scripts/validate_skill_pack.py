@@ -1,18 +1,23 @@
 #!/usr/bin/env python3
-"""Static validation for the Agent tune kit Skill template pack.
+"""Static validation for the Agent tune kit local Codex plugin.
 
-This intentionally avoids third-party dependencies and checks only source/template
+This intentionally avoids third-party dependencies and checks source/template/plugin
 contracts. It does not run an end-to-end Agent tuning flow.
 """
 
 from __future__ import annotations
 
+import json
+import re
 import sys
 from pathlib import Path
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 
 REQUIRED_FILES = [
+    ".codex-plugin/plugin.json",
+    "skills/agent-tuning-start/SKILL.md",
     "skills/agent-tuning-generate-runner/SKILL.md",
     "skills/agent-tuning-filter-abnormal-rules/SKILL.md",
     "skills/agent-tuning-filter-abnormal-llm/SKILL.md",
@@ -23,6 +28,7 @@ REQUIRED_FILES = [
     "docs/skill-template-pack-usage.md",
     "docs/shared-versioning-and-confirmation.md",
     "docs/codex_agent_tuning_prd.md",
+    "scripts/install_plugin.py",
     "README.md",
     "README.zh-CN.md",
 ]
@@ -58,12 +64,23 @@ GLOBAL_PHRASES = [
 ]
 
 NON_GOALS = [
-    "no plugin install UX",
+    "no public marketplace",
+    "no brand assets",
     "no one-click orchestration",
     "no universal Schema",
     "no bundled example Agent/data fixtures",
     "no automatic rollback",
     "no full E2E test suite",
+]
+
+PLUGIN_DOC_PHRASES = [
+    "local Codex plugin",
+    ".codex-plugin/plugin.json",
+    "scripts/install_plugin.py --dry-run",
+    "scripts/install_plugin.py --apply --smoke",
+    "legacy copy/register",
+    "source.path",
+    "./plugins/agent-tune-kit",
 ]
 
 PRD_REFERENCES = [
@@ -76,18 +93,41 @@ PRD_REFERENCES = [
     "section 7",
 ]
 
-FORBIDDEN_MVP_PATH_PARTS = [
-    ".codex-plugin",
-    "marketplace",
-]
-
-FORBIDDEN_MVP_FILENAMES = [
-    "plugin.json",
-    "install.sh",
-    "installer.sh",
-]
-
 PER_FILE_PHRASES = {
+    ".codex-plugin/plugin.json": [
+        '"name": "agent-tune-kit"',
+        '"version": "0.2.0"',
+        '"skills": "./skills/"',
+        '"displayName": "Agent Tune Kit"',
+        '"defaultPrompt"',
+    ],
+    "scripts/install_plugin.py": [
+        "argparse",
+        "--dry-run",
+        "--force",
+        "--marketplace-path",
+        "--plugin-store",
+        "--copy",
+        "--smoke",
+        "--apply",
+        "SOURCE_PATH = f\"./plugins/{PLUGIN_NAME}\"",
+        "write_json_atomic",
+        "refusing to replace existing",
+        "symlink",
+        "copy fallback",
+    ],
+    "skills/agent-tuning-start/SKILL.md": [
+        "agent-tuning-start",
+        "router/status guide",
+        "does not bypass existing confirmation triggers",
+        "does not perform full automatic tuning",
+        "agent-tuning-generate-runner",
+        "agent-tuning-filter-abnormal-rules",
+        "agent-tuning-filter-abnormal-llm",
+        "agent-tuning-report",
+        "agent-tuning-apply-tuning",
+        "RESULTS_DIR = Path(\"agent-tuning/results\")",
+    ],
     "skills/agent-tuning-generate-runner/SKILL.md": [
         "agent-tuning/runner/test_runner.py",
         "Preserve all original dataset columns",
@@ -155,38 +195,45 @@ PER_FILE_PHRASES = {
         "Do not filter current-version selection by required files",
         "never fall back to an older version",
         "Per-Skill preconditions and failure behavior",
-        "whole repository-native pack",
+        "local Codex plugin",
+        "legacy copy/register",
     ],
     "docs/skill-template-pack-usage.md": [
+        "Local plugin install and smoke",
         "Copy/register boundary",
         "keep `skills/`, `templates/`, and `docs/` together",
         "Manual 2.2 → 2.6 loop",
         "v1 → v2",
         "python3 scripts/validate_skill_pack.py",
+        "python3 scripts/install_plugin.py --dry-run",
     ],
     "README.md": [
-        "Codex Skill template pack",
-        "keep `skills/`, `templates/`, and `docs/` together",
+        "local Codex plugin",
+        "legacy copy/register",
         "Quickstart",
         "Prerequisites",
+        "agent-tuning-start",
         "agent-tuning-generate-runner",
         "agent-tuning-filter-abnormal-rules",
         "agent-tuning-filter-abnormal-llm",
         "agent-tuning-report",
         "agent-tuning-apply-tuning",
         "python3 scripts/validate_skill_pack.py",
+        "python3 scripts/install_plugin.py --dry-run",
     ],
     "README.zh-CN.md": [
-        "Codex Skill 模板包",
-        "保持 `skills/`、`templates/`、`docs/`",
+        "本地 Codex 插件",
+        "legacy copy/register",
         "快速开始",
         "使用前准备",
+        "agent-tuning-start",
         "agent-tuning-generate-runner",
         "agent-tuning-filter-abnormal-rules",
         "agent-tuning-filter-abnormal-llm",
         "agent-tuning-report",
         "agent-tuning-apply-tuning",
         "python3 scripts/validate_skill_pack.py",
+        "python3 scripts/install_plugin.py --dry-run",
     ],
 }
 
@@ -233,6 +280,59 @@ def contains_any(text: str, options: list[str]) -> bool:
     return any(option.lower() in lower for option in options)
 
 
+def validate_manifest(errors: list[str]) -> None:
+    path = ROOT / ".codex-plugin/plugin.json"
+    try:
+        manifest: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        errors.append(f"manifest JSON invalid or unreadable: {exc}")
+        return
+
+    require(manifest.get("name") == "agent-tune-kit", "manifest name must be agent-tune-kit", errors)
+    require(bool(re.fullmatch(r"\d+\.\d+\.\d+", str(manifest.get("version", "")))), "manifest version must be strict semver", errors)
+    require(manifest.get("skills") == "./skills/", "manifest skills must be ./skills/", errors)
+    require("hooks" not in manifest, "manifest must not include unsupported hooks field", errors)
+    for optional_path_field in ["apps", "mcpServers"]:
+        value = manifest.get(optional_path_field)
+        if value:
+            require((ROOT / value).exists(), f"manifest {optional_path_field} points to missing file: {value}", errors)
+
+    author = manifest.get("author")
+    require(isinstance(author, dict) and bool(author.get("name")), "manifest author.name is required", errors)
+    require(bool(manifest.get("description")), "manifest description is required", errors)
+    require("TODO" not in json.dumps(manifest), "manifest must not contain TODO placeholders", errors)
+
+    interface = manifest.get("interface")
+    require(isinstance(interface, dict), "manifest interface must be an object", errors)
+    if not isinstance(interface, dict):
+        return
+    for key in ["displayName", "shortDescription", "longDescription", "developerName", "category", "capabilities", "defaultPrompt"]:
+        require(key in interface, f"manifest interface missing {key}", errors)
+    prompts = interface.get("defaultPrompt")
+    require(isinstance(prompts, list) and 1 <= len(prompts) <= 3, "manifest defaultPrompt must contain 1-3 prompts", errors)
+    if isinstance(prompts, list):
+        for prompt in prompts:
+            require(isinstance(prompt, str) and len(prompt) <= 128, f"manifest defaultPrompt too long or non-string: {prompt!r}", errors)
+    for asset_field in ["composerIcon", "logo"]:
+        asset = interface.get(asset_field)
+        if asset:
+            require((ROOT / asset).exists(), f"manifest {asset_field} points to missing asset: {asset}", errors)
+    screenshots = interface.get("screenshots", [])
+    require(isinstance(screenshots, list), "manifest screenshots must be an array", errors)
+    if isinstance(screenshots, list):
+        for screenshot in screenshots:
+            require(str(screenshot).startswith("./assets/") and str(screenshot).endswith(".png"), f"manifest screenshot must be ./assets/*.png: {screenshot}", errors)
+            require((ROOT / str(screenshot)).exists(), f"manifest screenshot file missing: {screenshot}", errors)
+
+
+def validate_installer(errors: list[str]) -> None:
+    text = read_rel("scripts/install_plugin.py") if (ROOT / "scripts/install_plugin.py").exists() else ""
+    require("DEFAULT_MARKETPLACE = Path(\"~/.agents/plugins/marketplace.json\")" in text, "installer must default to personal marketplace", errors)
+    require("DEFAULT_PLUGIN_STORE = Path(\"~/plugins\")" in text, "installer must default to ~/plugins", errors)
+    for phrase in ["AVAILABLE", "ON_INSTALL", "category", "Coding", "atomic", "os.replace", "smoke-resolved plugin path"]:
+        require(phrase in text, f"installer missing behavior phrase: {phrase}", errors)
+
+
 def main() -> int:
     errors: list[str] = []
 
@@ -242,16 +342,6 @@ def main() -> int:
 
     existing_texts = {rel: read_rel(rel) for rel in REQUIRED_FILES if (ROOT / rel).exists()}
     all_text = "\n".join(existing_texts.values())
-
-    for path in ROOT.rglob("*"):
-        if ".git" in path.parts or ".omx" in path.parts:
-            continue
-        rel = path.relative_to(ROOT)
-        lowered_parts = {part.lower() for part in rel.parts}
-        lowered_name = path.name.lower()
-        for forbidden in FORBIDDEN_MVP_PATH_PARTS:
-            require(forbidden not in lowered_parts, f"forbidden MVP packaging path present: {rel}", errors)
-        require(lowered_name not in FORBIDDEN_MVP_FILENAMES, f"forbidden MVP packaging/installer file present: {rel}", errors)
 
     for rel in SKILL_FILES:
         text = existing_texts.get(rel, "")
@@ -280,7 +370,9 @@ def main() -> int:
         for rel in ["README.md", "README.zh-CN.md", "docs/shared-versioning-and-confirmation.md", "docs/skill-template-pack-usage.md", "docs/codex_agent_tuning_prd.md"]
     )
     for phrase in NON_GOALS:
-        require(phrase.lower() in docs_and_readme.lower(), f"missing MVP non-goal documentation: {phrase}", errors)
+        require(phrase.lower() in docs_and_readme.lower(), f"missing non-goal documentation: {phrase}", errors)
+    for phrase in PLUGIN_DOC_PHRASES:
+        require(phrase.lower() in docs_and_readme.lower(), f"missing plugin documentation phrase: {phrase}", errors)
 
     for phrase in PRD_REFERENCES:
         require(contains_any(all_text, [phrase]), f"missing PRD traceability phrase: {phrase}", errors)
@@ -308,14 +400,18 @@ def main() -> int:
     filter_template = existing_texts.get("templates/agent-tuning/runner/filter_abnormal.py.md", "")
     require("Conservative placeholder" not in filter_template, "filter template must not ship a runnable placeholder heuristic", errors)
 
+    validate_manifest(errors)
+    validate_installer(errors)
+
     if errors:
-        print("Skill pack validation FAILED", file=sys.stderr)
+        print("Agent Tune Kit validation FAILED", file=sys.stderr)
         for error in errors:
-            print(f"- {error}", file=sys.stderr)
+            if error:
+                print(f"- {error}", file=sys.stderr)
         return 1
 
-    print("Skill pack validation passed")
-    print(f"Checked {len(REQUIRED_FILES)} files and {len(SKILL_FILES)} Skill templates")
+    print("Agent Tune Kit validation passed")
+    print(f"Checked {len(REQUIRED_FILES)} files, {len(SKILL_FILES)} Skill templates, plugin manifest, and installer tooling")
     return 0
 
 
