@@ -24,6 +24,7 @@ REQUIRED_FILES = [
     "docs/shared-versioning-and-confirmation.md",
     "docs/codex_agent_tuning_prd.md",
     "README.md",
+    "README.zh-CN.md",
 ]
 
 SKILL_FILES = [path for path in REQUIRED_FILES if path.startswith("skills/")]
@@ -167,6 +168,24 @@ PER_FILE_PHRASES = {
         "Codex Skill template pack",
         "keep `skills/`, `templates/`, and `docs/` together",
         "Quickstart",
+        "Prerequisites",
+        "agent-tuning-generate-runner",
+        "agent-tuning-filter-abnormal-rules",
+        "agent-tuning-filter-abnormal-llm",
+        "agent-tuning-report",
+        "agent-tuning-apply-tuning",
+        "python3 scripts/validate_skill_pack.py",
+    ],
+    "README.zh-CN.md": [
+        "Codex Skill 模板包",
+        "保持 `skills/`、`templates/`、`docs/`",
+        "快速开始",
+        "使用前准备",
+        "agent-tuning-generate-runner",
+        "agent-tuning-filter-abnormal-rules",
+        "agent-tuning-filter-abnormal-llm",
+        "agent-tuning-report",
+        "agent-tuning-apply-tuning",
         "python3 scripts/validate_skill_pack.py",
     ],
 }
@@ -258,7 +277,7 @@ def main() -> int:
 
     docs_and_readme = "\n".join(
         existing_texts.get(rel, "")
-        for rel in ["README.md", "docs/shared-versioning-and-confirmation.md", "docs/skill-template-pack-usage.md", "docs/codex_agent_tuning_prd.md"]
+        for rel in ["README.md", "README.zh-CN.md", "docs/shared-versioning-and-confirmation.md", "docs/skill-template-pack-usage.md", "docs/codex_agent_tuning_prd.md"]
     )
     for phrase in NON_GOALS:
         require(phrase.lower() in docs_and_readme.lower(), f"missing MVP non-goal documentation: {phrase}", errors)
