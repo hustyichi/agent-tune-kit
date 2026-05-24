@@ -52,7 +52,15 @@ If the preview looks right, install it:
 python3 scripts/install_plugin.py --apply --smoke
 ```
 
-After installation, Codex can discover the tuning Skills. The installer writes or updates `~/.agents/plugins/marketplace.json` and keeps marketplace `source.path` as `./plugins/agent-tune-kit`.
+The installer adds the plugin to the Personal marketplace and writes or updates `~/.agents/plugins/marketplace.json`. At this point `/plugins` will show Agent Tune Kit as `Available`.
+
+You still need to enable it in Codex:
+
+```text
+/plugins
+```
+
+Select `Agent Tune Kit` in the plugin list and follow the UI prompt to install/enable it. After the status becomes `Installed`, `$atk-start` and the other Skill commands will appear in autocomplete.
 
 If your environment cannot use local plugins, use the legacy copy/register path: copy or register this pack as a whole while keeping `skills/`, `templates/`, and `docs/` together.
 
@@ -65,7 +73,7 @@ Run these steps in **your Agent repository**, not in this Agent Tune Kit reposit
 Open your Agent project in Codex and run:
 
 ```text
-atk-start
+$atk-start
 ```
 
 It tells you which step should come next. On a fresh project, it usually recommends generating the test runner.
@@ -75,7 +83,7 @@ It tells you which step should come next. On a fresh project, it usually recomme
 Run:
 
 ```text
-atk-setup
+$atk-setup
 ```
 
 Point Codex to your Agent entrypoint and evaluation dataset. Codex generates:
@@ -91,7 +99,7 @@ The runner keeps your original dataset columns and adds the Agent's actual outpu
 Run:
 
 ```text
-atk-run
+$atk-run
 ```
 
 This writes:
@@ -105,13 +113,13 @@ agent-tuning/results/v1/results.csv
 For the simplest path, let Codex judge abnormal cases:
 
 ```text
-atk-filter
+$atk-filter
 ```
 
 If you already have a clear rule, use the rule-based Skill instead:
 
 ```text
-atk-filter-rules
+$atk-filter-rules
 ```
 
 The abnormal cases are written to:
@@ -125,7 +133,7 @@ agent-tuning/results/v1/abnormal_cases.csv
 Run:
 
 ```text
-atk-report
+$atk-report
 ```
 
 Codex writes:
@@ -141,7 +149,7 @@ The report summarizes test results, abnormal cases, likely causes, and recommend
 Run:
 
 ```text
-atk-apply
+$atk-apply
 ```
 
 Codex edits the Agent based on the report and records the tuning plan in:
@@ -155,14 +163,14 @@ agent-tuning/results/v1/tuning_plan.md
 After tuning, run the test again:
 
 ```text
-atk-run
+$atk-run
 ```
 
 This creates `agent-tuning/results/v2/results.csv`. Then run:
 
 ```text
-atk-filter
-atk-report
+$atk-filter
+$atk-report
 ```
 
 Starting with the second loop, the report reads the previous `tuning_plan.md` and tells you whether the target failures were resolved, partially resolved, unresolved, or impossible to judge.
@@ -170,15 +178,15 @@ Starting with the second loop, the report reads the previous `tuning_plan.md` an
 ## One-loop cheat sheet
 
 ```text
-atk-start
-atk-setup
-atk-run
-atk-filter
-atk-report
-atk-apply
+$atk-start
+$atk-setup
+$atk-run
+$atk-filter
+$atk-report
+$atk-apply
 ```
 
-Start the next loop by running `atk-run` again.
+Start the next loop by running `$atk-run` again.
 
 ## Expected output
 
@@ -201,13 +209,13 @@ Most users only need to read `results.csv`, `abnormal_cases.csv`, and `report.md
 
 ## Available Skills
 
-- `atk-start`: inspect progress and recommend the next step.
-- `atk-setup`: generate a test runner for the current Agent.
-- `atk-run`: run the test runner and create the current result version.
-- `atk-filter`: let Codex identify abnormal cases.
-- `atk-filter-rules`: identify abnormal cases with explicit rules.
-- `atk-report`: generate analysis and cross-loop validation.
-- `atk-apply`: tune the Agent and record the tuning plan.
+- `$atk-start`: inspect progress and recommend the next step.
+- `$atk-setup`: generate a test runner for the current Agent.
+- `$atk-run`: run the test runner and create the current result version.
+- `$atk-filter`: let Codex identify abnormal cases.
+- `$atk-filter-rules`: identify abnormal cases with explicit rules.
+- `$atk-report`: generate analysis and cross-loop validation.
+- `$atk-apply`: tune the Agent and record the tuning plan.
 
 ## Current scope
 

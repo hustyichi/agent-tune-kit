@@ -41,6 +41,8 @@ python3 scripts/install_plugin.py \
 
 The installer writes marketplace JSON atomically where practical and reports smoke cleanup status. It does not create a public marketplace package.
 
+After `--apply --smoke`, the plugin is available in the Personal marketplace but not enabled yet. Open `/plugins`, select `Agent Tune Kit`, and install/enable it there. The Skill commands become available after the plugin status changes from `Available` to `Installed`.
+
 ## Copy/register boundary
 
 If you do not want plugin registration, use the legacy copy/register path: copy or register the repository-native pack as a whole. Do not copy a single `skills/*` directory by itself unless you also preserve the referenced shared docs and templates or intentionally inline them. This keeps existing Skill users compatible while the plugin path adds local Codex UI discovery.

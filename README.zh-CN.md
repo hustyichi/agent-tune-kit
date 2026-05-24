@@ -52,7 +52,15 @@ python3 scripts/install_plugin.py --dry-run --smoke
 python3 scripts/install_plugin.py --apply --smoke
 ```
 
-安装后，Codex 会识别本项目提供的调优 Skill。安装器会写入或更新 `~/.agents/plugins/marketplace.json`，并保持 marketplace `source.path` 为 `./plugins/agent-tune-kit`。
+安装脚本会把插件加入 Personal marketplace，并写入或更新 `~/.agents/plugins/marketplace.json`。此时在 `/plugins` 里会看到 Agent Tune Kit 处于 `Available` 状态。
+
+还需要在 Codex 里执行一次启用：
+
+```text
+/plugins
+```
+
+在插件列表中选择 `Agent Tune Kit`，按界面提示安装/启用。状态变成 `Installed` 后，`$atk-start` 等 Skill 命令才会出现在自动补全里。
 
 如果你不能使用本地插件，也可以走 legacy copy/register 路径：整体复制或注册本仓库，并保持 `skills/`、`templates/`、`docs/` 在同一相对结构下。
 
@@ -65,7 +73,7 @@ python3 scripts/install_plugin.py --apply --smoke
 在 Codex 中打开你的 Agent 项目，输入：
 
 ```text
-atk-start
+$atk-start
 ```
 
 它会告诉你现在应该做哪一步。第一次使用时，通常会建议你生成测试 runner。
@@ -75,7 +83,7 @@ atk-start
 输入：
 
 ```text
-atk-setup
+$atk-setup
 ```
 
 告诉 Codex 你的 Agent 大概从哪里启动、评估数据在哪里。Codex 会根据项目代码和数据样例生成：
@@ -91,7 +99,7 @@ agent-tuning/runner/test_runner.py
 输入：
 
 ```text
-atk-run
+$atk-run
 ```
 
 运行完成后会得到：
@@ -105,13 +113,13 @@ agent-tuning/results/v1/results.csv
 如果你希望 Codex 帮你判断哪些结果异常，直接用：
 
 ```text
-atk-filter
+$atk-filter
 ```
 
 如果你有明确规则，例如“期望答案不等于输出就是异常”，可以用：
 
 ```text
-atk-filter-rules
+$atk-filter-rules
 ```
 
 异常结果会写入：
@@ -125,7 +133,7 @@ agent-tuning/results/v1/abnormal_cases.csv
 输入：
 
 ```text
-atk-report
+$atk-report
 ```
 
 Codex 会生成：
@@ -141,7 +149,7 @@ agent-tuning/results/v1/report.md
 输入：
 
 ```text
-atk-apply
+$atk-apply
 ```
 
 Codex 会基于报告修改你的 Agent，并写入：
@@ -157,14 +165,14 @@ agent-tuning/results/v1/tuning_plan.md
 调优后，再跑一次测试：
 
 ```text
-atk-run
+$atk-run
 ```
 
 这次会生成 `agent-tuning/results/v2/results.csv`。继续执行异常筛选和报告生成：
 
 ```text
-atk-filter
-atk-report
+$atk-filter
+$atk-report
 ```
 
 从第二轮开始，报告会读取上一轮的 `tuning_plan.md`，判断上一轮目标异常是已解决、部分解决、未解决，还是无法判断。这样你就能看到调优是否真的带来了效果。
@@ -172,15 +180,15 @@ atk-report
 ## 一轮流程速记
 
 ```text
-atk-start
-atk-setup
-atk-run
-atk-filter
-atk-report
-atk-apply
+$atk-start
+$atk-setup
+$atk-run
+$atk-filter
+$atk-report
+$atk-apply
 ```
 
-下一轮从再次运行 `atk-run` 开始。
+下一轮从再次运行 `$atk-run` 开始。
 
 ## 你会看到的结果目录
 
@@ -203,13 +211,13 @@ agent-tuning/
 
 ## 可用 Skill
 
-- `atk-start`：检查当前进度，告诉你下一步。
-- `atk-setup`：生成适配当前 Agent 的测试脚本。
-- `atk-run`：运行测试脚本并生成当前版本结果。
-- `atk-filter`：让 Codex 判断异常样本。
-- `atk-filter-rules`：按明确规则筛选异常样本。
-- `atk-report`：生成分析报告和跨轮验证结论。
-- `atk-apply`：根据报告修改 Agent，并记录本轮调优计划。
+- `$atk-start`：检查当前进度，告诉你下一步。
+- `$atk-setup`：生成适配当前 Agent 的测试脚本。
+- `$atk-run`：运行测试脚本并生成当前版本结果。
+- `$atk-filter`：让 Codex 判断异常样本。
+- `$atk-filter-rules`：按明确规则筛选异常样本。
+- `$atk-report`：生成分析报告和跨轮验证结论。
+- `$atk-apply`：根据报告修改 Agent，并记录本轮调优计划。
 
 ## 当前边界
 
