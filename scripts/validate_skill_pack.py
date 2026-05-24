@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Static validation for the Agent tune kit local Codex plugin.
+"""Static validation for the Agent Tune Kit local Codex plugin.
 
 This intentionally avoids third-party dependencies and checks source/template/plugin
 contracts. It does not run an end-to-end Agent tuning flow.
@@ -57,11 +57,11 @@ GLOBAL_PHRASES = [
     "No vN results directory exists; run test_runner.py first or confirm repair.",
     "Current version {current_dir.name} is missing {filename}; fix or rerun the prior step.",
     ".atk/results/vN/results.csv",
-    ".atk/results/vN/abnormal_cases.csv",
+    ".atk/results/vN/failure_cases.csv",
     ".atk/results/vN/report.md",
     ".atk/results/vN/tuning_plan.md",
     "agent_output",
-    "abnormal_cases.csv",
+    "failure_cases.csv",
     "tuning_plan.md",
 ]
 
@@ -159,7 +159,7 @@ PER_FILE_PHRASES = {
         "overwrites the current version's existing file",
     ],
     "skills/atk-find-failures/SKILL.md": [
-        "write failing or abnormal rows to `abnormal_cases.csv` directly",
+        "write failing rows to `failure_cases.csv` directly",
         "expected-result columns or failure criteria are ambiguous",
         "Overwrites",
         "No `filter_abnormal.py` is required",
@@ -167,7 +167,7 @@ PER_FILE_PHRASES = {
     ],
     "skills/atk-report/SKILL.md": [
         "require_current_file(current_dir, \"results.csv\")",
-        "require_current_file(current_dir, \"abnormal_cases.csv\")",
+        "require_current_file(current_dir, \"failure_cases.csv\")",
         "resolve_previous_version(current_dir)",
         "已解决",
         "部分解决",
@@ -203,10 +203,10 @@ PER_FILE_PHRASES = {
     "templates/.atk/runner/filter_abnormal.py.md": [
         "def resolve_current_version(results_dir=RESULTS_DIR)",
         "def require_current_file(current_dir, filename)",
-        "ABNORMAL_FILENAME = \"abnormal_cases.csv\"",
-        "Overwrote {abnormal_path}",
+        "FAILURE_FILENAME = \"failure_cases.csv\"",
+        "Overwrote {failure_path}",
         "TODO_AGENT_TUNING",
-        "raise UserActionRequired(\"TODO_AGENT_TUNING: implement confirmed abnormal rule before running.\")",
+        "raise UserActionRequired(\"TODO_AGENT_TUNING: implement confirmed failure rule before running.\")",
     ],
     "docs/shared-versioning-and-confirmation.md": [
         "Current version vs new version creation",
@@ -431,9 +431,9 @@ def main() -> int:
 
     rules_skill = existing_texts.get("skills/atk-find-failures-by-rule/SKILL.md", "")
     llm_skill = existing_texts.get("skills/atk-find-failures/SKILL.md", "")
-    require("atk-find-failures-by-rule" in rules_skill, "rules abnormal Skill identity missing", errors)
-    require("atk-find-failures" in llm_skill, "LLM abnormal Skill identity missing", errors)
-    require("abnormal_cases.csv" in rules_skill and "abnormal_cases.csv" in llm_skill, "both abnormal Skills must write abnormal_cases.csv", errors)
+    require("atk-find-failures-by-rule" in rules_skill, "rules failure-finding Skill identity missing", errors)
+    require("atk-find-failures" in llm_skill, "LLM failure-finding Skill identity missing", errors)
+    require("failure_cases.csv" in rules_skill and "failure_cases.csv" in llm_skill, "both failure-finding Skills must write failure_cases.csv", errors)
 
     filter_template = existing_texts.get("templates/.atk/runner/filter_abnormal.py.md", "")
     require("Conservative placeholder" not in filter_template, "filter template must not ship a runnable placeholder heuristic", errors)

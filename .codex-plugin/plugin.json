@@ -32,7 +32,7 @@
     "websiteURL": "https://github.com/hustyichi/agent-tune-kit",
     "defaultPrompt": [
       "Check Agent tuning status",
-      "Filter abnormal Agent cases",
+      "Find Agent failure cases",
       "Generate an Agent tuning report"
     ],
     "brandColor": "#334155",

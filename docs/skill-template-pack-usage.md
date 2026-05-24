@@ -56,7 +56,7 @@ If you do not want plugin registration, use the legacy copy/register path: copy 
 - `skills/atk-setup/SKILL.md` — generate `.atk/runner/test_runner.py`.
 - `skills/atk-run/SKILL.md` — run `.atk/runner/test_runner.py` through a short Skill command and summarize the current results version.
 - `skills/atk-find-failures-by-rule/SKILL.md` — generate or update `.atk/runner/filter_abnormal.py` for rule-based failure finding.
-- `skills/atk-find-failures/SKILL.md` — inspect current `results.csv` and write current `abnormal_cases.csv` using model judgment.
+- `skills/atk-find-failures/SKILL.md` — inspect current `results.csv` and write current `failure_cases.csv` using model judgment.
 - `skills/atk-report/SKILL.md` — write current `report.md`, including adjacent-version validation when possible.
 - `skills/atk-tune/SKILL.md` — tune the target Agent and write current `tuning_plan.md`.
 - `templates/.atk/runner/test_runner.py.md` — script template preserving original dataset columns and appending `agent_output`.
@@ -71,9 +71,9 @@ If you do not want plugin registration, use the legacy copy/register path: copy 
 2. Trigger `atk-status` to inspect state and route to the right stage.
 3. Trigger `atk-setup` in Codex. The Skill reads the Agent source and dataset, asks only about unsafe ambiguity, then writes `.atk/runner/test_runner.py`.
 4. Trigger `atk-run`. It executes `python3 .atk/runner/test_runner.py`; the runner creates or reuses a version directory and writes `.atk/results/vN/results.csv` plus optional `app.log`.
-5. Choose one abnormal filtering entry:
-   - Trigger `atk-find-failures-by-rule`, then manually run `python3 .atk/runner/filter_abnormal.py` to write `abnormal_cases.csv`.
-   - Or trigger `atk-find-failures` to write `abnormal_cases.csv` directly from the current `results.csv`.
+5. Choose one failure-finding entry:
+   - Trigger `atk-find-failures-by-rule`, then manually run `python3 .atk/runner/filter_abnormal.py` to write `failure_cases.csv`.
+   - Or trigger `atk-find-failures` to write `failure_cases.csv` directly from the current `results.csv`.
 6. Trigger `atk-report` to create `.atk/results/vN/report.md`. From `v2` onward, it compares the current version with the previous existing version and reads the previous `tuning_plan.md` when available.
 7. Trigger `atk-tune` to change the Agent and write `.atk/results/vN/tuning_plan.md`.
 8. Optionally create a user git commit/checkpoint. Rollback remains user-git-only guidance; this plugin does not automate restore.
@@ -95,7 +95,7 @@ Run:
 python3 scripts/validate_skill_pack.py
 git diff --check
 find skills templates docs scripts .codex-plugin -maxdepth 4 -type f | sort
-grep -R "agent_output\|abnormal_cases.csv\|tuning_plan.md\|目标异常清单\|调优手段\|关联改动\|source.path" skills templates docs README.md README.zh-CN.md .codex-plugin scripts
+grep -R "agent_output\|failure_cases.csv\|tuning_plan.md\|目标异常清单\|调优手段\|关联改动\|source.path" skills templates docs README.md README.zh-CN.md .codex-plugin scripts
 ```
 
 `validate_skill_pack.py` checks required files, required sections, manifest fields, installer behavior, PRD traceability, canonical version helper names and snippets, output paths, non-goal boundaries, and each Skill's precondition/failure behavior.

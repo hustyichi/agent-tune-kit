@@ -24,7 +24,7 @@ It does not bypass existing confirmation triggers, does not perform full automat
 
 - Target Agent repository path or current working directory.
 - Optional evaluation dataset path or user description of the dataset.
-- Optional user preference for abnormal filtering mode: rules or LLM judgment.
+- Optional user preference for failure-finding mode: rules or LLM judgment.
 - Existing `.atk/` directory state, if any.
 
 ## Outputs
@@ -39,7 +39,7 @@ It does not bypass existing confirmation triggers, does not perform full automat
    - Does `.atk/runner/test_runner.py` exist?
    - Does `.atk/runner/filter_abnormal.py` exist?
    - Does `.atk/results/` contain `vN` directories?
-   - For the numerically largest current version, are `results.csv`, `abnormal_cases.csv`, `report.md`, and `tuning_plan.md` present?
+   - For the numerically largest current version, are `results.csv`, `failure_cases.csv`, `report.md`, and `tuning_plan.md` present?
 2. Apply the shared current-version semantics from `docs/shared-versioning-and-confirmation.md`:
    - `RESULTS_DIR = Path(".atk/results")`
    - non-runner Skills use the numerically largest existing `vN` as current;
@@ -47,8 +47,8 @@ It does not bypass existing confirmation triggers, does not perform full automat
 3. Recommend the next step:
    - no runner: trigger `atk-setup`;
    - runner exists but no current `results.csv`: trigger `atk-run`;
-   - current `results.csv` exists but no `abnormal_cases.csv`: choose `atk-find-failures-by-rule` or `atk-find-failures`;
-   - current `abnormal_cases.csv` exists but no `report.md`: trigger `atk-report`;
+   - current `results.csv` exists but no `failure_cases.csv`: choose `atk-find-failures-by-rule` or `atk-find-failures`;
+   - current `failure_cases.csv` exists but no `report.md`: trigger `atk-report`;
    - current `report.md` exists but no `tuning_plan.md`: trigger `atk-tune`;
    - current `tuning_plan.md` exists: optionally create a user git checkpoint, then trigger `atk-run` to create the next version.
 4. Keep guidance over hidden automation: this Skill may summarize commands and Skill names, but it does not run generated runner/filter scripts unless the user explicitly asks in the target workflow.
@@ -70,7 +70,7 @@ RESULTS_DIR = Path(".atk/results")
 
 Ask a concise question only when inspection cannot safely decide:
 
-- whether the user wants rule-based or LLM-based abnormal filtering;
+- whether the user wants rule-based or LLM-based failure finding;
 - whether an existing partial `.atk/` directory belongs to this workflow;
 - whether to treat a missing current-version file as a rerun/repair task or move to a different target project;
 - whether a generated script should be run now when that would execute the user's Agent or overwrite current outputs.

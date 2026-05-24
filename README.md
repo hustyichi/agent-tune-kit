@@ -117,7 +117,7 @@ $atk-find-failures-by-rule
 异常结果会写入：
 
 ```text
-.atk/results/v1/abnormal_cases.csv
+.atk/results/v1/failure_cases.csv
 ```
 
 ### 4. 生成分析报告
@@ -193,14 +193,14 @@ $atk-tune
 └── results/
     ├── v1/
     │   ├── results.csv
-    │   ├── abnormal_cases.csv
+    │   ├── failure_cases.csv
     │   ├── report.md
     │   └── tuning_plan.md
     └── v2/
         └── ...
 ```
 
-你通常只需要看 `results.csv`、`abnormal_cases.csv` 和 `report.md`。版本号由脚本自动管理，不需要手动指定。
+你通常只需要看 `results.csv`、`failure_cases.csv` 和 `report.md`。版本号由脚本自动管理，不需要手动指定。
 
 ## 可用 Skill
 

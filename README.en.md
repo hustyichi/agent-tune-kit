@@ -4,7 +4,7 @@ English | [简体中文](README.md)
 
 Agent Tune Kit is a **local Codex plugin** that helps you evaluate and improve the quality of your own local Agent.
 
-If you already have a working Agent but are not sure where it fails, why it fails, or what to tune next, this project lets Codex help you run a complete loop: batch test the Agent, find abnormal cases, write an analysis report, tune the Agent, and verify the next run.
+If you already have a working Agent but are not sure where it fails, why it fails, or what to tune next, this project lets Codex help you run a complete loop: batch test the Agent, find failure cases, write an analysis report, tune the Agent, and verify the next run.
 
 Its main advantage is a **low-friction start**. You do not need to design a complex evaluation schema or expose a universal Agent interface first. Bring a local Agent project and a small evaluation dataset; Codex reads the code and data samples, then generates the project-specific runner and tuning workflow.
 
@@ -117,7 +117,7 @@ $atk-find-failures-by-rule
 The failing cases are written to:
 
 ```text
-.atk/results/v1/abnormal_cases.csv
+.atk/results/v1/failure_cases.csv
 ```
 
 ### 4. Generate the analysis report
@@ -134,7 +134,7 @@ Codex writes:
 .atk/results/v1/report.md
 ```
 
-The report summarizes test results, abnormal cases, likely causes, and recommended tuning priorities.
+The report summarizes test results, failure cases, likely causes, and recommended tuning priorities.
 
 ### 5. Let Codex tune the Agent
 
@@ -191,14 +191,14 @@ Start the next loop by running `$atk-run` again.
 └── results/
     ├── v1/
     │   ├── results.csv
-    │   ├── abnormal_cases.csv
+    │   ├── failure_cases.csv
     │   ├── report.md
     │   └── tuning_plan.md
     └── v2/
         └── ...
 ```
 
-Most users only need to read `results.csv`, `abnormal_cases.csv`, and `report.md`. Version directories are managed automatically.
+Most users only need to read `results.csv`, `failure_cases.csv`, and `report.md`. Version directories are managed automatically.
 
 ## Available Skills
 
