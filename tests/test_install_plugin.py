@@ -28,38 +28,35 @@ def run_cli(*args: str, timeout: float = 5) -> subprocess.CompletedProcess[str]:
 
 
 class InstallPluginCliTests(unittest.TestCase):
-    def test_compatibility_help_and_preview_modes(self) -> None:
+    def test_explicit_subcommands_and_preview_no_write(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)
             common = ["--marketplace-path", str(base / "marketplace.json"), "--plugin-store", str(base / "plugins"), "--backup-root", str(base / "backups")]
-            for args in [[], ["--dry-run"], ["preview", "--smoke"]]:
-                result = run_cli(*args, *common)
-                self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertIn("mode: preview", result.stdout)
-                self.assertIn("marketplace write: skipped", result.stdout)
+            result = run_cli("preview", "--smoke", *common)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("mode: preview", result.stdout)
+            self.assertIn("marketplace write: skipped", result.stdout)
             self.assertFalse((base / "marketplace.json").exists())
             self.assertFalse((base / "plugins" / "agent-tune-kit").exists())
             self.assertFalse((base / "backups").exists())
 
+        for old_args in [[], ["--dry-run"], ["--apply"]]:
+            old = run_cli(*old_args)
+            self.assertNotEqual(old.returncode, 0)
+
         help_result = run_cli("--help")
         self.assertEqual(help_result.returncode, 0)
+        self.assertIn("install", help_result.stdout)
+        self.assertIn("preview", help_result.stdout)
         self.assertIn("status", help_result.stdout)
         self.assertIn("rollback", help_result.stdout)
+        self.assertNotIn("--dry-run", help_result.stdout)
+        self.assertNotIn("--apply", help_result.stdout)
         rollback_help = run_cli("rollback", "--help")
         self.assertEqual(rollback_help.returncode, 0)
         self.assertIn("--backup", rollback_help.stdout)
 
-    def test_legacy_apply_smoke_and_install_happy_path(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            base = Path(tmp)
-            common = ["--marketplace-path", str(base / "marketplace.json"), "--plugin-store", str(base / "plugins"), "--backup-root", str(base / "backups")]
-            legacy = run_cli("--apply", "--smoke", *common)
-            self.assertEqual(legacy.returncode, 0, legacy.stderr)
-            self.assertIn("mode: apply (legacy)", legacy.stdout)
-            self.assertIn("smoke:", legacy.stdout)
-            self.assertTrue((base / "marketplace.json").exists())
-            self.assertTrue((base / "plugins" / "agent-tune-kit").exists())
-
+    def test_install_happy_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)
             result = run_cli(

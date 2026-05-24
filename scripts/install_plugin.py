@@ -4,9 +4,9 @@
 Recommended path:
     python3 scripts/install_plugin.py install
 
-Bare invocation and --dry-run remain non-destructive previews. The installer only
-manages local marketplace/plugin-store files; it does not observe, bypass, or
-modify hidden Codex UI plugin enablement state.
+Use explicit subcommands only: install, preview, status, and rollback. The
+installer only manages local marketplace/plugin-store files; it does not observe,
+bypass, or modify hidden Codex UI plugin enablement state.
 """
 
 from __future__ import annotations
@@ -458,7 +458,7 @@ def run_install(args: argparse.Namespace) -> int:
     store_action = ensure_plugin_store(target, use_copy=args.copy, dry_run=False)
     write_json_atomic(marketplace_path, marketplace)
 
-    print("mode: install" if not args.legacy_apply else "mode: apply (legacy)")
+    print("mode: install")
     print(f"repo: {ROOT}")
     print(f"marketplace: {marketplace_path}")
     print(f"plugin store: {plugin_store}")
@@ -618,10 +618,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     add_common_flags(common)
     parser = argparse.ArgumentParser(description="Register Agent Tune Kit as a local Codex plugin.")
     add_common_flags(parser)
-    mode = parser.add_mutually_exclusive_group()
-    mode.add_argument("--dry-run", action="store_true", default=argparse.SUPPRESS, help="preview actions without writing (default legacy behavior)")
-    mode.add_argument("--apply", action="store_true", default=argparse.SUPPRESS, help="legacy install path: write marketplace and plugin-store changes")
-    subparsers = parser.add_subparsers(dest="command")
+    subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("preview", parents=[common], help="preview planned marketplace/plugin-store changes without writing")
     subparsers.add_parser("install", parents=[common], help="install locally, then run smoke/status by default")
     subparsers.add_parser("status", parents=[common], help="print read-only local install status and Codex UI boundary guidance")
@@ -639,26 +636,14 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         "copy": False,
         "smoke": False,
         "no_smoke": False,
-        "dry_run": False,
-        "apply": False,
     }.items():
         if not hasattr(args, name):
             setattr(args, name, value)
 
-    args.legacy_apply = False
-    if args.command is None:
-        if args.apply:
-            args.command = "install"
-            args.legacy_apply = True
-            # Preserve legacy behavior: --apply only smokes when --smoke is supplied.
-        else:
-            args.command = "preview"
     if args.command == "preview":
         args.smoke = bool(args.smoke)
-    elif args.command == "install" and not args.legacy_apply:
+    elif args.command == "install":
         args.smoke = not args.no_smoke if not args.smoke else True
-    elif args.command == "install" and args.legacy_apply:
-        args.smoke = bool(args.smoke)
     return args
 
 

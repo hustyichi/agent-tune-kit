@@ -1,22 +1,23 @@
 # Shared Versioning and Confirmation Rules
 
-This document is the single source of truth for the Agent Tune Kit Skills. It extracts the version rules and uncertainty-confirmation behavior from `docs/codex_agent_tuning_prd.md` so every Skill uses the same terms whether the repo is loaded as a local Codex plugin or through the legacy copy/register path.
+This document is the single source of truth for the Agent Tune Kit Skills. It extracts the version rules and uncertainty-confirmation behavior from `docs/codex_agent_tuning_prd.md` so every Skill uses the same terms when the repo is loaded as a local Codex plugin.
 
 ## Delivery boundary
 
-This repository ships a local Codex plugin: `.codex-plugin/plugin.json`, complete `SKILL.md` files, reusable script templates, docs, safe personal marketplace installer/smoke/status/rollback tooling, and static validation. The original Skill template pack remains copy/register-ready as a whole repository-native pack; individual Skill directories depend on shared `docs/` and `templates/` assets unless a future packaging pass inlines them.
+This repository ships a local Codex plugin: `.codex-plugin/plugin.json`, complete `SKILL.md` files, reusable script templates, docs, safe personal marketplace installer/smoke/status/rollback tooling, and static validation. Individual Skill directories depend on shared `docs/` and `templates/` assets unless a future packaging pass inlines them.
 
 Non-goals for this pass:
 
 - no public marketplace publishing or shared catalog release;
 - no brand assets, logo files, screenshots, or public listing polish;
 - no hidden one-click orchestration or full automation across the 2.2 → 2.6 Agent tuning loop;
+- no old installer command compatibility before launch;
 - no universal Schema requirement for Agent inputs, datasets, metrics, or expected-result fields;
 - no bundled example Agent/data fixtures;
 - no automatic Agent tuning workflow rollback, baseline restore, or historical code recovery; Agent code rollback is user-git-only guidance;
 - no full E2E test suite against a real Agent service.
 
-## Plugin and legacy loading
+## Plugin loading
 
 - Local plugin manifest: `.codex-plugin/plugin.json` with `skills: "./skills/"`.
 - Personal marketplace installer: `scripts/install_plugin.py`.
@@ -24,8 +25,6 @@ Non-goals for this pass:
 - Main install command: `python3 scripts/install_plugin.py install`.
 - Status command: `python3 scripts/install_plugin.py status`.
 - Installer rollback command: `python3 scripts/install_plugin.py rollback --backup <backup-id>`.
-- Legacy compatibility commands: `python3 scripts/install_plugin.py --dry-run --smoke` and `python3 scripts/install_plugin.py --apply --smoke`.
-- Legacy copy/register path: keep `skills/`, `templates/`, and `docs/` together.
 
 ## Canonical paths
 

@@ -55,7 +55,7 @@ python3 scripts/install_plugin.py status            # read local install status 
 python3 scripts/install_plugin.py rollback --backup <backup-id>  # restore installer-managed local install state only
 ```
 
-When an existing marketplace/plugin-store conflict is found, interactive terminals prompt before replacement. Noninteractive replacement requires `--yes --force`; destructive replacement creates a backup first and prints a rollback command. Legacy `--dry-run` and `--apply --smoke` commands remain supported for compatibility.
+When an existing marketplace/plugin-store conflict is found, interactive terminals prompt before replacement. Noninteractive replacement requires `--yes --force`; destructive replacement creates a backup first and prints a rollback command. The installer supports explicit subcommands only and does not keep old entry points; use `preview` for no-write preview.
 
 After install, Agent Tune Kit should be visible/available in `/plugins`.
 
@@ -69,7 +69,7 @@ Select `Agent Tune Kit` in the plugin list and follow the UI prompt to install/e
 
 If the plugin is enabled in `/plugins` but `$atk-status` still does not appear in the current session, that is expected: Codex usually loads plugin Skills when a session starts, so newly enabled plugins may not be hot-loaded into an already running session. Restart Codex, or close the current Codex session and reopen this project, then type `$atk-status` again to verify.
 
-If your environment cannot use local plugins, use the legacy copy/register path: copy or register this pack as a whole while keeping `skills/`, `templates/`, and `docs/` together.
+If your environment cannot use local plugins, do not split-copy individual `skills/*` directories; this repository now treats the local Codex plugin install path as the only recommended entry point.
 
 ## Minimal tuning loop
 

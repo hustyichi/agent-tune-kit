@@ -1,8 +1,8 @@
 # Agent Tune Kit Local Plugin and Skill Pack Usage
 
-Agent Tune Kit provides a local Codex plugin for the manual Agent tuning loop described in `docs/codex_agent_tuning_prd.md`. The same files also remain usable through a legacy copy/register boundary: keep `skills/`, `templates/`, and `docs/` together because individual Skill directories reference shared pack assets by relative path.
+Agent Tune Kit provides a local Codex plugin for the manual Agent tuning loop described in `docs/codex_agent_tuning_prd.md`. The supported setup path is the local plugin installer; do not split-copy individual `skills/*` directories because they reference shared pack assets by relative path.
 
-This pass is a local-product minimum: `.codex-plugin/plugin.json`, personal marketplace registration, one-command installer orchestration, local smoke/status validation, installer-state backup/rollback, and a guided status Skill. It deliberately avoids public marketplace publishing, brand assets/screenshots, hidden one-click orchestration across the Agent tuning loop, bundled example Agent/data fixtures, automatic Agent tuning workflow rollback, universal schemas, and a full E2E test suite against a real Agent service.
+This pass is a local-product minimum: `.codex-plugin/plugin.json`, personal marketplace registration, one-command installer orchestration, local smoke/status validation, installer-state backup/rollback, and a guided status Skill. It deliberately avoids public marketplace publishing, brand assets/screenshots, hidden one-click orchestration across the Agent tuning loop, bundled example Agent/data fixtures, automatic Agent tuning workflow rollback, universal schemas, old installer command compatibility, and a full E2E test suite against a real Agent service.
 
 ## Local plugin install and smoke
 
@@ -33,7 +33,7 @@ python3 scripts/install_plugin.py rollback --backup <backup-id>
 
 Conflict and rollback behavior:
 
-- `preview` and legacy `--dry-run` never write marketplace/plugin-store files or backups;
+- `preview` never writes marketplace/plugin-store files or backups;
 - interactive terminals prompt before replacing conflicting marketplace/plugin-store state;
 - noninteractive destructive replacement requires `--yes --force`;
 - `--yes` alone does not replace conflicts;
@@ -54,20 +54,13 @@ python3 scripts/install_plugin.py status \
   --plugin-store /tmp/agent-tune-plugins
 ```
 
-Legacy compatibility remains available for existing scripts:
-
-```sh
-python3 scripts/install_plugin.py --dry-run --smoke
-python3 scripts/install_plugin.py --apply --smoke
-```
-
 The installer writes marketplace JSON atomically where practical and reports smoke status. It does not create a public marketplace package and does not mutate hidden Codex UI enablement state.
 
 After install, the plugin should be visible/available in the Personal marketplace. Open `/plugins`, select `Agent Tune Kit`, and enable it there if needed. If `$atk-status` does not appear in autocomplete after enabling the plugin, restart Codex or open a new Codex session for the project. Current Codex sessions may not hot-load Skills from a plugin that was enabled after the session started.
 
-## Copy/register boundary
+## Repository layout boundary
 
-If you do not want plugin registration, use the legacy copy/register path: copy or register the repository-native pack as a whole. Do not copy a single `skills/*` directory by itself unless you also preserve the referenced shared docs and templates or intentionally inline them. This keeps existing Skill users compatible while the plugin path adds local Codex UI discovery.
+Do not copy a single `skills/*` directory by itself; keep `skills/`, `templates/`, and `docs/` together unless a future packaging pass intentionally inlines those shared assets. The plugin installer is the supported setup path; this project does not keep old installer command compatibility before launch.
 
 ## What is included
 
@@ -83,7 +76,7 @@ If you do not want plugin registration, use the legacy copy/register path: copy 
 - `templates/.atk/runner/filter_abnormal.py.md` — stdlib CSV rule-filter template.
 - `docs/shared-versioning-and-confirmation.md` — shared current/new version semantics and confirmation triggers.
 - `scripts/install_plugin.py` — safe local marketplace installer/smoke/status/rollback tool.
-- `scripts/validate_skill_pack.py` — lightweight static checker for this local plugin and legacy pack.
+- `scripts/validate_skill_pack.py` — lightweight static checker for this local plugin pack.
 
 ## Manual 2.2 → 2.6 loop
 
