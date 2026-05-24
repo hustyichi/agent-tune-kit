@@ -31,6 +31,7 @@ REQUIRED_FILES = [
     "docs/codex_agent_tuning_prd.md",
     "scripts/install_plugin.py",
     "README.md",
+    "README.en.md",
     "README.zh-CN.md",
 ]
 
@@ -218,6 +219,21 @@ PER_FILE_PHRASES = {
         "python3 scripts/install_plugin.py --dry-run",
     ],
     "README.md": [
+        "本地 Codex 插件",
+        "legacy copy/register",
+        "快速开始",
+        "使用前准备",
+        "atk-start",
+        "atk-setup",
+        "atk-run",
+        "atk-filter-rules",
+        "atk-filter",
+        "atk-report",
+        "atk-apply",
+        "python3 scripts/validate_skill_pack.py",
+        "python3 scripts/install_plugin.py --dry-run",
+    ],
+    "README.en.md": [
         "local Codex plugin",
         "legacy copy/register",
         "Quickstart",
@@ -379,7 +395,7 @@ def main() -> int:
 
     docs_and_readme = "\n".join(
         existing_texts.get(rel, "")
-        for rel in ["README.md", "README.zh-CN.md", "docs/shared-versioning-and-confirmation.md", "docs/skill-template-pack-usage.md", "docs/codex_agent_tuning_prd.md"]
+        for rel in ["README.md", "README.en.md", "README.zh-CN.md", "docs/shared-versioning-and-confirmation.md", "docs/skill-template-pack-usage.md", "docs/codex_agent_tuning_prd.md"]
     )
     for phrase in NON_GOALS:
         require(phrase.lower() in docs_and_readme.lower(), f"missing non-goal documentation: {phrase}", errors)

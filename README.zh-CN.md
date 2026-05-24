@@ -1,6 +1,6 @@
 # Agent tune kit
 
-[English](README.md) | 简体中文
+简体中文 | [English](README.en.md)
 
 Agent Tune Kit 是一个**本地 Codex 插件**，帮助你快速完成本地 Agent 的效果评测与调优。
 
