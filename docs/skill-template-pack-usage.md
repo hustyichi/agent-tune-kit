@@ -53,14 +53,14 @@ If you do not want plugin registration, use the legacy copy/register path: copy 
 
 - `.codex-plugin/plugin.json` — local plugin manifest using `skills: "./skills/"`.
 - `skills/atk-start/SKILL.md` — guided router/status Skill that recommends the next step without bypassing confirmation gates.
-- `skills/atk-setup/SKILL.md` — generate `agent-tuning/runner/test_runner.py`.
-- `skills/atk-run/SKILL.md` — run `agent-tuning/runner/test_runner.py` through a short Skill command and summarize the current results version.
-- `skills/atk-filter-rules/SKILL.md` — generate or update `agent-tuning/runner/filter_abnormal.py` for manual rule-based filtering.
+- `skills/atk-setup/SKILL.md` — generate `.atk/runner/test_runner.py`.
+- `skills/atk-run/SKILL.md` — run `.atk/runner/test_runner.py` through a short Skill command and summarize the current results version.
+- `skills/atk-filter-rules/SKILL.md` — generate or update `.atk/runner/filter_abnormal.py` for manual rule-based filtering.
 - `skills/atk-filter/SKILL.md` — inspect current `results.csv` and write current `abnormal_cases.csv` using model judgment.
 - `skills/atk-report/SKILL.md` — write current `report.md`, including adjacent-version validation when possible.
 - `skills/atk-apply/SKILL.md` — tune the target Agent and write current `tuning_plan.md`.
-- `templates/agent-tuning/runner/test_runner.py.md` — script template preserving original dataset columns and appending `agent_output`.
-- `templates/agent-tuning/runner/filter_abnormal.py.md` — stdlib CSV rule-filter template.
+- `templates/.atk/runner/test_runner.py.md` — script template preserving original dataset columns and appending `agent_output`.
+- `templates/.atk/runner/filter_abnormal.py.md` — stdlib CSV rule-filter template.
 - `docs/shared-versioning-and-confirmation.md` — shared current/new version semantics and confirmation triggers.
 - `scripts/install_plugin.py` — safe local marketplace installer/smoke tool.
 - `scripts/validate_skill_pack.py` — lightweight static checker for this local plugin and legacy pack.
@@ -69,19 +69,19 @@ If you do not want plugin registration, use the legacy copy/register path: copy 
 
 1. Prepare the local Agent service and evaluation dataset.
 2. Trigger `atk-start` to inspect state and route to the right stage.
-3. Trigger `atk-setup` in Codex. The Skill reads the Agent source and dataset, asks only about unsafe ambiguity, then writes `agent-tuning/runner/test_runner.py`.
-4. Trigger `atk-run`. It executes `python3 agent-tuning/runner/test_runner.py`; the runner creates or reuses a version directory and writes `agent-tuning/results/vN/results.csv` plus optional `app.log`.
+3. Trigger `atk-setup` in Codex. The Skill reads the Agent source and dataset, asks only about unsafe ambiguity, then writes `.atk/runner/test_runner.py`.
+4. Trigger `atk-run`. It executes `python3 .atk/runner/test_runner.py`; the runner creates or reuses a version directory and writes `.atk/results/vN/results.csv` plus optional `app.log`.
 5. Choose one abnormal filtering entry:
-   - Trigger `atk-filter-rules`, then manually run `python3 agent-tuning/runner/filter_abnormal.py` to write `abnormal_cases.csv`.
+   - Trigger `atk-filter-rules`, then manually run `python3 .atk/runner/filter_abnormal.py` to write `abnormal_cases.csv`.
    - Or trigger `atk-filter` to write `abnormal_cases.csv` directly from the current `results.csv`.
-6. Trigger `atk-report` to create `agent-tuning/results/vN/report.md`. From `v2` onward, it compares the current version with the previous existing version and reads the previous `tuning_plan.md` when available.
-7. Trigger `atk-apply` to change the Agent and write `agent-tuning/results/vN/tuning_plan.md`.
+6. Trigger `atk-report` to create `.atk/results/vN/report.md`. From `v2` onward, it compares the current version with the previous existing version and reads the previous `tuning_plan.md` when available.
+7. Trigger `atk-apply` to change the Agent and write `.atk/results/vN/tuning_plan.md`.
 8. Optionally create a user git commit/checkpoint. Rollback remains user-git-only guidance; this plugin does not automate restore.
 9. Run the same loop again. The next test run creates `v{N+1}` when the current max version already has `results.csv`.
 
 ## Version example: v1 → v2
 
-- First test run: no version exists, so `test_runner.py` creates `agent-tuning/results/v1/results.csv`.
+- First test run: no version exists, so `test_runner.py` creates `.atk/results/v1/results.csv`.
 - First report: no previous version exists, so `v1/report.md` is a single-version report.
 - First tuning: writes `v1/tuning_plan.md` with `## 目标异常清单`, `## 调优手段`, and `## 关联改动`.
 - Second test run: `v1/results.csv` exists, so the runner creates `v2/results.csv`.

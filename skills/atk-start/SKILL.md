@@ -7,7 +7,7 @@ description: Guide the next safe step in the Agent tune kit loop without bypassi
 
 ## Purpose
 
-Use this Skill when a user wants to start or resume an Agent tune kit workflow from the local Codex plugin. It is a router/status guide for the existing stage Skills, not a hidden orchestrator. It inspects the target project's `agent-tuning/` state, explains the next recommended action, and points the user to the correct Skill or manual command.
+Use this Skill when a user wants to start or resume an Agent tune kit workflow from the local Codex plugin. It is a router/status guide for the existing stage Skills, not a hidden orchestrator. It inspects the target project's `.atk/` state, explains the next recommended action, and points the user to the correct Skill or manual command.
 
 This Skill preserves the existing stage Skill contracts:
 
@@ -25,23 +25,23 @@ It does not bypass existing confirmation triggers, does not perform full automat
 - Target Agent repository path or current working directory.
 - Optional evaluation dataset path or user description of the dataset.
 - Optional user preference for abnormal filtering mode: rules or LLM judgment.
-- Existing `agent-tuning/` directory state, if any.
+- Existing `.atk/` directory state, if any.
 
 ## Outputs
 
-- A concise status summary of detected `agent-tuning/runner/` and `agent-tuning/results/vN/` artifacts.
+- A concise status summary of detected `.atk/runner/` and `.atk/results/vN/` artifacts.
 - A next-step recommendation naming one of the stage Skills or a manual command.
 - Any confirmation question needed before the recommended next step is safe.
 
 ## Workflow
 
 1. Inspect the current repository before asking questions:
-   - Does `agent-tuning/runner/test_runner.py` exist?
-   - Does `agent-tuning/runner/filter_abnormal.py` exist?
-   - Does `agent-tuning/results/` contain `vN` directories?
+   - Does `.atk/runner/test_runner.py` exist?
+   - Does `.atk/runner/filter_abnormal.py` exist?
+   - Does `.atk/results/` contain `vN` directories?
    - For the numerically largest current version, are `results.csv`, `abnormal_cases.csv`, `report.md`, and `tuning_plan.md` present?
 2. Apply the shared current-version semantics from `docs/shared-versioning-and-confirmation.md`:
-   - `RESULTS_DIR = Path("agent-tuning/results")`
+   - `RESULTS_DIR = Path(".atk/results")`
    - non-runner Skills use the numerically largest existing `vN` as current;
    - only `test_runner.py` creates or reuses result versions.
 3. Recommend the next step:
@@ -58,26 +58,26 @@ It does not bypass existing confirmation triggers, does not perform full automat
 Read `docs/shared-versioning-and-confirmation.md` as the single source of truth. In short:
 
 ```python
-RESULTS_DIR = Path("agent-tuning/results")
+RESULTS_DIR = Path(".atk/results")
 ```
 
-- Current version means the numerically largest existing `agent-tuning/results/vN` directory.
+- Current version means the numerically largest existing `.atk/results/vN` directory.
 - Do not filter current-version selection by required files.
 - Missing current-version inputs are blockers for the corresponding stage; never fall back to an older version.
-- New version creation is owned only by `agent-tuning/runner/test_runner.py`.
+- New version creation is owned only by `.atk/runner/test_runner.py`.
 
 ## Confirmation triggers
 
 Ask a concise question only when inspection cannot safely decide:
 
 - whether the user wants rule-based or LLM-based abnormal filtering;
-- whether an existing partial `agent-tuning/` directory belongs to this workflow;
+- whether an existing partial `.atk/` directory belongs to this workflow;
 - whether to treat a missing current-version file as a rerun/repair task or move to a different target project;
 - whether a generated script should be run now when that would execute the user's Agent or overwrite current outputs.
 
 ## Failure behavior
 
 - If no Agent project or dataset can be identified, stop with a recommendation to provide the target Agent path and dataset path, then use `atk-setup`.
-- If `agent-tuning/results/` has malformed version directories, ignore non-`vN` names and report the evidence.
+- If `.atk/results/` has malformed version directories, ignore non-`vN` names and report the evidence.
 - If the current version is missing a required file, direct the user to the prior stage instead of silently using an older version.
 - If executing a command would alter user data or invoke the Agent, do not do it from this router Skill unless the user explicitly requested that execution.

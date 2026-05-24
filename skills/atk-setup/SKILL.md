@@ -7,7 +7,7 @@ description: Generate a reusable test runner for a local Agent and dataset, pres
 
 ## Purpose
 
-Create `agent-tuning/runner/test_runner.py` for the target repository. This Skill maps to `docs/codex_agent_tuning_prd.md` sections 2.2, 2.3, 4, 5, and 7. It inspects the local Agent source and evaluation dataset, then generates a stdlib-first runner that writes `agent-tuning/results/vN/results.csv` incrementally and optional `app.log` without asking the user for a version number.
+Create `.atk/runner/test_runner.py` for the target repository. This Skill maps to `docs/codex_agent_tuning_prd.md` sections 2.2, 2.3, 4, 5, and 7. It inspects the local Agent source and evaluation dataset, then generates a stdlib-first runner that writes `.atk/results/vN/results.csv` incrementally and optional `app.log` without asking the user for a version number.
 
 This is a Codex Skill template. It is copy/register-ready, but it is not a plugin install UX or full automation flow.
 
@@ -19,15 +19,15 @@ Traceability note: section 2.2 defines runner generation, section 4 defines vers
 - Evaluation dataset path, typically CSV. Other formats may be supported by adapting the generated script.
 - Optional user instructions about dataset columns, expected outputs, log capture, or Agent runtime.
 - Shared rules in `docs/shared-versioning-and-confirmation.md`.
-- Script template in `templates/agent-tuning/runner/test_runner.py.md`.
+- Script template in `templates/.atk/runner/test_runner.py.md`.
 
 ## Outputs
 
-- `agent-tuning/runner/test_runner.py`
+- `.atk/runner/test_runner.py`
 - No version directory is required before this Skill runs; no version directory is required for generation.
 - Runtime results are produced later by running `atk-run`, which executes the generated script:
-  - `agent-tuning/results/vN/results.csv`
-  - optional `agent-tuning/results/vN/app.log`
+  - `.atk/results/vN/results.csv`
+  - optional `.atk/results/vN/app.log`
 
 ## Workflow
 
@@ -38,7 +38,7 @@ Traceability note: section 2.2 defines runner generation, section 4 defines vers
    - inspect logging behavior, stdout/stderr use, and log file paths;
    - check whether the dataset already has a column named `agent_output`.
 2. Apply the uncertainty confirmation pattern from `docs/shared-versioning-and-confirmation.md`.
-3. If safe, create `agent-tuning/runner/` and write `test_runner.py` from `templates/agent-tuning/runner/test_runner.py.md`.
+3. If safe, create `.atk/runner/` and write `test_runner.py` from `templates/.atk/runner/test_runner.py.md`.
 4. Keep the generated script project-local and low dependency. Prefer Python stdlib plus the target project environment.
 5. Verify the generated runner without invoking the Agent when possible:
    - syntax check with the same interpreter shape expected for execution;
@@ -53,7 +53,7 @@ Traceability note: section 2.2 defines runner generation, section 4 defines vers
 - If Agent output has multiple fields, serialize the primary result as JSON in `agent_output` or add auxiliary `agent_output_*` columns.
 - If the input dataset already contains `agent_output`, ask the user to confirm a rename strategy before writing the script.
 - Automatically allocate the output version with `allocate_next_results_version()`.
-- Use `RESULTS_DIR = Path("agent-tuning/results")`.
+- Use `RESULTS_DIR = Path(".atk/results")`.
 - Do not require a user-supplied version argument or result path.
 - Support bounded runs with `--limit N` and `--offset N` so users can smoke-test expensive Agents before full execution.
 - Support concurrent runs with `--concurrency N`, defaulting to conservative serial execution when concurrency is not requested.
@@ -69,7 +69,7 @@ Traceability note: section 2.2 defines runner generation, section 4 defines vers
 
 Use the canonical helper names and semantics from `docs/shared-versioning-and-confirmation.md`:
 
-- `RESULTS_DIR = Path("agent-tuning/results")`
+- `RESULTS_DIR = Path(".atk/results")`
 - `list_version_dirs(results_dir=RESULTS_DIR)`
 - `allocate_next_results_version(results_dir=RESULTS_DIR)`
 
@@ -84,9 +84,9 @@ Ask the user before writing `test_runner.py` if any of these cannot be inferred 
 - dataset path, format, encoding, delimiter, input fields, or expected-result fields;
 - log source or capture method;
 - existing dataset column named `agent_output` and the rename strategy;
-- whether writing `agent-tuning/runner/test_runner.py` would overwrite a hand-edited runner.
+- whether writing `.atk/runner/test_runner.py` would overwrite a hand-edited runner.
 
-Do not ask about routine creation of `agent-tuning/runner/` or version-number selection.
+Do not ask about routine creation of `.atk/runner/` or version-number selection.
 
 ## Failure behavior
 
@@ -107,4 +107,4 @@ After writing the runner, summarize:
 - concurrency flag (`--concurrency`) and whether output row order is serial order or completion order when concurrency is greater than 1;
 - whether `app.log` will be captured;
 - next command to run: `atk-run`;
-- expected next output path `agent-tuning/results/vN/results.csv`.
+- expected next output path `.atk/results/vN/results.csv`.

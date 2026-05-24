@@ -91,7 +91,7 @@ $atk-setup
 Point Codex to your Agent entrypoint and evaluation dataset. Codex generates:
 
 ```text
-agent-tuning/runner/test_runner.py
+.atk/runner/test_runner.py
 ```
 
 The runner keeps your original dataset columns and adds the Agent's actual output as `agent_output`.
@@ -107,7 +107,7 @@ $atk-run
 This writes:
 
 ```text
-agent-tuning/results/v1/results.csv
+.atk/results/v1/results.csv
 ```
 
 ### 4. Find abnormal cases
@@ -127,7 +127,7 @@ $atk-filter-rules
 The abnormal cases are written to:
 
 ```text
-agent-tuning/results/v1/abnormal_cases.csv
+.atk/results/v1/abnormal_cases.csv
 ```
 
 ### 5. Generate the analysis report
@@ -141,7 +141,7 @@ $atk-report
 Codex writes:
 
 ```text
-agent-tuning/results/v1/report.md
+.atk/results/v1/report.md
 ```
 
 The report summarizes test results, abnormal cases, likely causes, and recommended tuning priorities.
@@ -157,7 +157,7 @@ $atk-apply
 Codex edits the Agent based on the report and records the tuning plan in:
 
 ```text
-agent-tuning/results/v1/tuning_plan.md
+.atk/results/v1/tuning_plan.md
 ```
 
 ## Verify that tuning worked
@@ -168,7 +168,7 @@ After tuning, run the test again:
 $atk-run
 ```
 
-This creates `agent-tuning/results/v2/results.csv`. Then run:
+This creates `.atk/results/v2/results.csv`. Then run:
 
 ```text
 $atk-filter
@@ -193,7 +193,7 @@ Start the next loop by running `$atk-run` again.
 ## Expected output
 
 ```text
-agent-tuning/
+.atk/
 ├── runner/
 │   ├── test_runner.py
 │   └── filter_abnormal.py
@@ -235,8 +235,8 @@ Out of scope for this pass: no public marketplace release, no brand assets/scree
 - `skills/atk-filter/SKILL.md`
 - `skills/atk-report/SKILL.md`
 - `skills/atk-apply/SKILL.md`
-- `templates/agent-tuning/runner/test_runner.py.md`
-- `templates/agent-tuning/runner/filter_abnormal.py.md`
+- `templates/.atk/runner/test_runner.py.md`
+- `templates/.atk/runner/filter_abnormal.py.md`
 - `docs/shared-versioning-and-confirmation.md`
 - `docs/skill-template-pack-usage.md`
 - `docs/codex_agent_tuning_prd.md`

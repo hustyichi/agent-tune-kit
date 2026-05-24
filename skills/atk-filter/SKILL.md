@@ -15,7 +15,7 @@ Traceability note: section 2.4 defines abnormal filtering entries, section 4 def
 
 ## Inputs
 
-- Current version directory resolved from `agent-tuning/results/vN`.
+- Current version directory resolved from `.atk/results/vN`.
 - Required current file: `results.csv`.
 - Optional user natural-language abnormal definition.
 - Dataset columns preserved in `results.csv`, including required `agent_output`.
@@ -23,12 +23,12 @@ Traceability note: section 2.4 defines abnormal filtering entries, section 4 def
 
 ## Outputs
 
-- Current `agent-tuning/results/vN/abnormal_cases.csv`.
+- Current `.atk/results/vN/abnormal_cases.csv`.
 - No `filter_abnormal.py` is required for this mode.
 
 ## Workflow
 
-1. Resolve current version with `resolve_current_version()` using `RESULTS_DIR = Path("agent-tuning/results")`.
+1. Resolve current version with `resolve_current_version()` using `RESULTS_DIR = Path(".atk/results")`.
 2. Require `results.csv` with `require_current_file(current_dir, "results.csv")`.
 3. Inspect headers and samples to identify original input fields, expected-result fields, and `agent_output`.
 4. If the user supplied abnormal criteria, apply them. Otherwise infer likely abnormal cases from Agent output versus expected results.
@@ -48,7 +48,7 @@ Traceability note: section 2.4 defines abnormal filtering entries, section 4 def
 
 Use the canonical helper names and semantics from `docs/shared-versioning-and-confirmation.md`:
 
-- `RESULTS_DIR = Path("agent-tuning/results")`
+- `RESULTS_DIR = Path(".atk/results")`
 - `resolve_current_version(results_dir=RESULTS_DIR)`
 - `require_current_file(current_dir, filename)`
 
@@ -77,5 +77,5 @@ After writing the file, summarize:
 - current version;
 - criteria used;
 - count of abnormal rows written;
-- output path `agent-tuning/results/vN/abnormal_cases.csv`;
+- output path `.atk/results/vN/abnormal_cases.csv`;
 - any uncertainty or confidence boundary.

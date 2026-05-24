@@ -7,7 +7,7 @@ description: Apply Agent improvements from the current report and write a fixed-
 
 ## Purpose
 
-Use current `report.md` to improve the local Agent, then write `agent-tuning/results/vN/tuning_plan.md` for the next iteration. This Skill maps to `docs/codex_agent_tuning_prd.md` sections 2.6, 4, 5, and 7.
+Use current `report.md` to improve the local Agent, then write `.atk/results/vN/tuning_plan.md` for the next iteration. This Skill maps to `docs/codex_agent_tuning_prd.md` sections 2.6, 4, 5, and 7.
 
 The Skill may adjust prompts, code, parameters, tool config, or other Agent implementation details as appropriate. It does not implement automatic rollback, baseline management, or historical restore; rollback is user-git-only guidance.
 
@@ -15,7 +15,7 @@ Traceability note: section 2.6 defines Agent tuning, section 4 defines current-v
 
 ## Inputs
 
-- Current version directory resolved from `agent-tuning/results/vN`.
+- Current version directory resolved from `.atk/results/vN`.
 - Required current file: `report.md`.
 - Target Agent source files and configuration.
 - Optional existing test results, abnormal cases, logs, and previous reports for context.
@@ -24,11 +24,11 @@ Traceability note: section 2.6 defines Agent tuning, section 4 defines current-v
 ## Outputs
 
 - Modified Agent source/config files as needed.
-- Current `agent-tuning/results/vN/tuning_plan.md`.
+- Current `.atk/results/vN/tuning_plan.md`.
 
 ## Workflow
 
-1. Resolve current version with `resolve_current_version()` using `RESULTS_DIR = Path("agent-tuning/results")`.
+1. Resolve current version with `resolve_current_version()` using `RESULTS_DIR = Path(".atk/results")`.
 2. Require `report.md` with `require_current_file(current_dir, "report.md")`.
 3. Read the report and prioritize unresolved problems,新增问题, and high-confidence root causes.
 4. Inspect relevant Agent implementation files before editing.
@@ -61,7 +61,7 @@ The section titles are exact contract strings for the next `atk-report` run. Con
 
 Use the canonical helper names and semantics from `docs/shared-versioning-and-confirmation.md`:
 
-- `RESULTS_DIR = Path("agent-tuning/results")`
+- `RESULTS_DIR = Path(".atk/results")`
 - `resolve_current_version(results_dir=RESULTS_DIR)`
 - `require_current_file(current_dir, filename)`
 
@@ -90,5 +90,5 @@ After applying tuning, summarize:
 - current version;
 - files changed;
 - validation run and result;
-- output path `agent-tuning/results/vN/tuning_plan.md`;
+- output path `.atk/results/vN/tuning_plan.md`;
 - suggested next step: run `atk-run` for the next version and optionally create a git commit.

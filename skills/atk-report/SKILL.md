@@ -7,7 +7,7 @@ description: Generate a current-version Markdown report with abnormal analysis a
 
 ## Purpose
 
-Generate `agent-tuning/results/vN/report.md` for the current Agent tuning version. This Skill maps to `docs/codex_agent_tuning_prd.md` sections 2.5, 4, 5, 6, and 7.
+Generate `.atk/results/vN/report.md` for the current Agent tuning version. This Skill maps to `docs/codex_agent_tuning_prd.md` sections 2.5, 4, 5, 6, and 7.
 
 The report includes current-version statistics, abnormal-case analysis, root-cause hypotheses, and—when there is a previous version with `tuning_plan.md`—adjacent-version validation of whether the previous tuning goals were achieved.
 
@@ -15,7 +15,7 @@ Traceability note: section 2.5 defines report and cross-version validation, sect
 
 ## Inputs
 
-- Current version directory resolved from `agent-tuning/results/vN`.
+- Current version directory resolved from `.atk/results/vN`.
 - Required current files:
   - `results.csv`
   - `abnormal_cases.csv`
@@ -30,11 +30,11 @@ Traceability note: section 2.5 defines report and cross-version validation, sect
 
 ## Outputs
 
-- Current `agent-tuning/results/vN/report.md`.
+- Current `.atk/results/vN/report.md`.
 
 ## Workflow
 
-1. Resolve current version with `resolve_current_version()` using `RESULTS_DIR = Path("agent-tuning/results")`.
+1. Resolve current version with `resolve_current_version()` using `RESULTS_DIR = Path(".atk/results")`.
 2. Require current files with `require_current_file(current_dir, "results.csv")` and `require_current_file(current_dir, "abnormal_cases.csv")`.
 3. Read optional current `app.log` if present.
 4. Resolve previous version with `resolve_previous_version(current_dir)`.
@@ -77,7 +77,7 @@ The main validation basis is whether previous `tuning_plan.md` target abnormalit
 
 Use the canonical helper names and semantics from `docs/shared-versioning-and-confirmation.md`:
 
-- `RESULTS_DIR = Path("agent-tuning/results")`
+- `RESULTS_DIR = Path(".atk/results")`
 - `resolve_current_version(results_dir=RESULTS_DIR)`
 - `resolve_previous_version(current_dir, results_dir=RESULTS_DIR)`
 - `require_current_file(current_dir, filename)`
@@ -107,5 +107,5 @@ After writing the report, summarize:
 - current version and previous version used, if any;
 - counts of total and abnormal cases;
 - cross-version validation status distribution: `已解决` / `部分解决` / `未解决` / `无法判断`;
-- output path `agent-tuning/results/vN/report.md`;
+- output path `.atk/results/vN/report.md`;
 - whether the next step is `atk-apply`.

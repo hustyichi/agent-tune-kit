@@ -9,26 +9,26 @@ description: Run the generated Agent tuning test runner and summarize the curren
 
 Use this Skill when a user wants the short ATK command for running the generated Agent tuning test runner. It maps to `docs/codex_agent_tuning_prd.md` sections 2.3, 4, 5, and 7.
 
-This Skill executes the project-local `agent-tuning/runner/test_runner.py` after `atk-setup` has generated it. It keeps `test_runner.py` as the only component that creates or reuses result versions. It should use the target repository's Python runtime, not blindly assume system `python3` has the project's dependencies.
+This Skill executes the project-local `.atk/runner/test_runner.py` after `atk-setup` has generated it. It keeps `test_runner.py` as the only component that creates or reuses result versions. It should use the target repository's Python runtime, not blindly assume system `python3` has the project's dependencies.
 
 Traceability note: section 2.3 defines manual batch execution, section 4 defines version management, and section 7 defines delivery requirements.
 
 ## Inputs
 
 - Target Agent repository path or current working directory.
-- Required runner file: `agent-tuning/runner/test_runner.py`.
+- Required runner file: `.atk/runner/test_runner.py`.
 - Shared rules in `docs/shared-versioning-and-confirmation.md`.
 
 ## Outputs
 
 - Runtime results created by `test_runner.py`:
-  - `agent-tuning/results/vN/results.csv`
-  - optional `agent-tuning/results/vN/app.log`
+  - `.atk/results/vN/results.csv`
+  - optional `.atk/results/vN/app.log`
 - A concise run summary with the version directory and next recommended Skill.
 
 ## Workflow
 
-1. Confirm `agent-tuning/runner/test_runner.py` exists in the current target repository.
+1. Confirm `.atk/runner/test_runner.py` exists in the current target repository.
 2. Inspect the target repository for the expected Python execution command:
    - if `uv.lock` or `pyproject.toml` with uv-managed usage is present, prefer `uv run python`;
    - else if `.venv/bin/python` exists, prefer `.venv/bin/python`;
@@ -37,16 +37,16 @@ Traceability note: section 2.3 defines manual batch execution, section 4 defines
 3. Execute the runner with the selected runtime:
 
    ```sh
-   <python-runtime> agent-tuning/runner/test_runner.py
+   <python-runtime> .atk/runner/test_runner.py
    ```
 
    If the user supplies extra runner flags such as `--limit 5`, `--offset 10`, or `--concurrency 4`, pass them through after the script path:
 
    ```sh
-   <python-runtime> agent-tuning/runner/test_runner.py --limit 5 --concurrency 4
+   <python-runtime> .atk/runner/test_runner.py --limit 5 --concurrency 4
    ```
 
-4. Read the runner output and inspect `agent-tuning/results/` to identify the numerically largest `vN` directory.
+4. Read the runner output and inspect `.atk/results/` to identify the numerically largest `vN` directory.
 5. Confirm whether `results.csv` exists in that version.
 6. Summarize the output path and recommend `atk-filter` as the usual next step.
 
@@ -54,7 +54,7 @@ Traceability note: section 2.3 defines manual batch execution, section 4 defines
 
 Use the canonical helper names and semantics from `docs/shared-versioning-and-confirmation.md`:
 
-- `RESULTS_DIR = Path("agent-tuning/results")`
+- `RESULTS_DIR = Path(".atk/results")`
 - `list_version_dirs(results_dir=RESULTS_DIR)`
 - `allocate_next_results_version(results_dir=RESULTS_DIR)`
 
@@ -64,7 +64,7 @@ Only `test_runner.py` creates or reuses result versions. This Skill is a short c
 
 Ask before running only when:
 
-- `agent-tuning/runner/test_runner.py` is missing and `atk-setup` has not been run;
+- `.atk/runner/test_runner.py` is missing and `atk-setup` has not been run;
 - the current directory does not appear to be the intended target Agent repository;
 - the runner appears hand-edited in a way that may execute external production systems, destructive writes, or credential-gated actions;
 - the user explicitly asked for a dry run or inspection only.
@@ -89,6 +89,6 @@ After a successful run, summarize:
 - command executed;
 - any runner flags used, especially `--limit`, `--offset`, or `--concurrency`;
 - current version directory;
-- output path `agent-tuning/results/vN/results.csv`;
+- output path `.atk/results/vN/results.csv`;
 - whether optional `app.log` was produced;
 - next recommended Skill: `atk-filter`.

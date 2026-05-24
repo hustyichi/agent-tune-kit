@@ -1,6 +1,6 @@
 {
   "name": "agent-tune-kit",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Local Codex plugin for iterative Agent tuning with guided Skills, reusable runner templates, versioned results, and static validation.",
   "author": {
     "name": "hustyichi",
@@ -11,7 +11,7 @@
   "repository": "https://github.com/hustyichi/agent-tune-kit",
   "license": "UNLICENSED",
   "keywords": [
-    "agent-tuning",
+    "agent-tune-kit",
     "codex-skills",
     "evaluation",
     "reporting",

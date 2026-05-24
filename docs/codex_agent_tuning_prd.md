@@ -5,7 +5,7 @@
 - **目标用户**：开发者
 - **使用方式**：作为 Codex 插件以 Codex Skill 形式提供，用户在 Codex 内手动触发各 Skill，并结合本地手工命令完成完整流程
 - **MVP 交付边界（2026-05-24）**：本仓库当前交付为本地 Codex 插件（包含 `.codex-plugin/plugin.json`、个人 marketplace 安装/冒烟工具与 Skill 模板包），并继续支持 legacy copy/register；本阶段不发布 public marketplace，不提供 brand assets/截图、自动升级、端到端一键编排、示例 Agent/数据集、自动回滚或完整 E2E 测试套件
-- **目标**：提供一套通用、可复用的服务，用于对本地 Agent 服务进行迭代调优，通过手工执行 Codex Skill 完成测试、异常筛选、归因分析、跨版本调优验证、调优，并在统一的 `agent-tuning/` 目录下按调优版本生成隔离的结果产物与最终 Markdown 报告
+- **目标**：提供一套通用、可复用的服务，用于对本地 Agent 服务进行迭代调优，通过手工执行 Codex Skill 完成测试、异常筛选、归因分析、跨版本调优验证、调优，并在统一的 `.atk/` 目录下按调优版本生成隔离的结果产物与最终 Markdown 报告
 - **适用场景与开放设计**：
   - **Agent 形态**：本地实现的、可被代码直接调用的大模型 Agent 服务；Skill 通过阅读 Agent 源码理解其调用方式、参数与日志，不预设接口 Schema
   - **数据集**：默认以 CSV 为主（依据列名推断输入字段与预期结果），其它格式由 `test_runner.py` 在生成时由 Skill 自适配，不预设 Schema
@@ -29,9 +29,9 @@
 ### 2.1 前置准备
 - **功能**：
   - 用户需要准备需要调优的 Agent 服务以及可以用于评估的数据集
-  - 系统需要在项目内维护统一父目录 `agent-tuning/`
-  - 所有共享脚本需要存储在 `agent-tuning/runner/`
-  - 所有版本化结果需要存储在 `agent-tuning/results/{version}/`
+  - 系统需要在项目内维护统一父目录 `.atk/`
+  - 所有共享脚本需要存储在 `.atk/runner/`
+  - 所有版本化结果需要存储在 `.atk/results/{version}/`
   - 用户不需要手工指定当前调优版本，版本由各模块自动创建或识别
 
 ### 2.2 批量测试脚本生成模块（Codex Skill）
@@ -47,9 +47,9 @@
     - 若用户原数据集已存在名为 `agent_output` 的列，Skill 需提示用户并与其确认改名方案后再生成脚本
   - **数据确认机制**：当 Agent 接入方式、数据集字段、日志位置或上述列名冲突无法可靠推断时，Skill 与用户交互确认后再生成脚本
 - **输出**：
-  - `agent-tuning/runner/test_runner.py`
+  - `.atk/runner/test_runner.py`
 - **版本目录兼容要求**：
-  - `agent-tuning/runner/` 中的脚本为跨版本共享脚本，不需要按 `v1`、`v2` 复制
+  - `.atk/runner/` 中的脚本为跨版本共享脚本，不需要按 `v1`、`v2` 复制
   - `test_runner.py` 运行时需要自动创建新的结果版本目录（详见第 4 章版本管理规则）
   - `test_runner.py` 不应要求用户输入当前版本号
 - **依赖处理**：
@@ -57,14 +57,14 @@
 
 ### 2.3 批量执行模块（用户通过 `atk-run` 执行生成的测试脚本）
 - **功能**：
-  - 用户触发 `atk-run`，由该 Skill 执行 `agent-tuning/runner/test_runner.py`
+  - 用户触发 `atk-run`，由该 Skill 执行 `.atk/runner/test_runner.py`
   - 简单机制实现批量测试执行和结果收集
   - 仅在「上一轮已有结果」时才新建版本目录；否则直接复用当前最新版本目录重跑
 - **输出**：
   - 结果输出为目标版本目录下的 `results.csv`
   - 如果服务中存在执行日志，则采集并存储为同版本目录下的 `app.log`
 - **版本目录创建/复用规则**：
-  - 扫描 `agent-tuning/results/` 下所有 `vN` 目录，取数字最大的目录 `vMax`
+  - 扫描 `.atk/results/` 下所有 `vN` 目录，取数字最大的目录 `vMax`
   - 若不存在任何 `vN` 目录：创建 `v1` 并写入结果
   - 若 `vMax` 目录下**已存在 `results.csv`**：新建 `v{Max+1}` 并写入结果（即使中间版本被删，也不补号）
   - 若 `vMax` 目录下**不存在 `results.csv`**（例如上一次脚本跑挂未产出结果）：直接复用 `vMax` 目录，覆盖该目录下可能残留的中间文件
@@ -73,7 +73,7 @@
 
 ### 2.4 异常筛选模块（两个独立 Skill 入口）
 - **模式与入口**：用户根据需求选择不同 Skill 入口调用，二者输出文件名一致，互不依赖
-  1. **规则模式 Skill**：与用户交互确认筛选规则（如字段比较、阈值、关键字等）后，生成共享脚本 `agent-tuning/runner/filter_abnormal.py`；用户手工运行该脚本输出 `abnormal_cases.csv`。脚本已存在时，Skill 默认复用并允许用户决定是否更新规则
+  1. **规则模式 Skill**：与用户交互确认筛选规则（如字段比较、阈值、关键字等）后，生成共享脚本 `.atk/runner/filter_abnormal.py`；用户手工运行该脚本输出 `abnormal_cases.csv`。脚本已存在时，Skill 默认复用并允许用户决定是否更新规则
   2. **大模型模式 Skill**：由 Skill 直接读取当前版本目录下的 `results.csv` 与数据集中的预期结果，结合用户给定的判断说明（或由 Skill 基于预期结果自行推断）筛选异常样本，输出 `abnormal_cases.csv`
 - **写入行为**：两种模式写入的 `abnormal_cases.csv` 文件名一致；若当前版本目录下已存在该文件，**直接覆盖**，不做备份或合并
 - **异常定义来源**：
@@ -81,11 +81,11 @@
   - 大模型模式由用户给出自然语言说明，或在用户未指定时由 Skill 基于"Agent 输出 vs 预期结果"自行推断
 - **数据确认机制**：当 `results.csv` 字段含义不明、缺少预期结果或无法推断异常标准时，Skill 与用户确认后再继续
 - **输出**：
-  - 规则模式下生成共享筛选脚本 `agent-tuning/runner/filter_abnormal.py`
+  - 规则模式下生成共享筛选脚本 `.atk/runner/filter_abnormal.py`
   - 当前版本目录下的异常筛选数据 `abnormal_cases.csv`
 - **版本目录兼容要求**：
   - 两个 Skill 入口均自动选择当前版本目录（见第 4 章规则），从中读取 `results.csv`，向同一目录写入 `abnormal_cases.csv`
-  - `agent-tuning/runner/filter_abnormal.py` 为跨版本共享脚本，不按版本复制
+  - `.atk/runner/filter_abnormal.py` 为跨版本共享脚本，不按版本复制
   - 用户不需要指定版本号或结果目录
 
 ### 2.5 异常归因分析、跨版本调优验证与最终报告生成（Codex Skill）
@@ -164,8 +164,8 @@
 - **Codex Skill**：实现测试脚本生成、异常筛选（规则模式 / 大模型模式两个入口）、归因分析与报告、Agent 调优
 - **运行环境**：Python；优先复用待调优 Agent 项目自身的虚拟环境与依赖
 - **数据标准化**：表格类产物统一为 CSV，报告与计划统一为 Markdown
-- **版本化结果目录**：通过 `agent-tuning/results/{version}/` 隔离多轮调优结果，`agent-tuning/runner/` 作为跨版本共享脚本目录
-- **自动版本识别**：各模块通过扫描 `agent-tuning/results/` 自动创建或识别当前版本，减少用户手工传参
+- **版本化结果目录**：通过 `.atk/results/{version}/` 隔离多轮调优结果，`.atk/runner/` 作为跨版本共享脚本目录
+- **自动版本识别**：各模块通过扫描 `.atk/results/` 自动创建或识别当前版本，减少用户手工传参
 - **相邻版本对比**：报告 Skill 通过 `vN-1` 的 `tuning_plan.md` 与 `vN` 的 `results.csv` / `abnormal_cases.csv` 完成上一轮调优验证，对比结果写入当前版本 `report.md`
 - **回滚策略**：依赖用户的 git 工作流，本期不在产品内实现自动回滚
 
@@ -173,14 +173,14 @@
 
 ## 4. 版本管理要求
 - **统一父目录**：
-  - 所有调优相关产物统一放在 `agent-tuning/` 下
-  - `agent-tuning/runner/` 存放跨版本共享脚本
-  - `agent-tuning/results/` 存放按版本隔离的结果
+  - 所有调优相关产物统一放在 `.atk/` 下
+  - `.atk/runner/` 存放跨版本共享脚本
+  - `.atk/results/` 存放按版本隔离的结果
 - **版本命名**：
   - 每一轮调优结果使用 `v1`、`v2`、`v3` 等目录表示（`v` + 正整数）
   - 版本号由系统自动生成，用户不需要手工指定
 - **"当前版本"统一定义**：
-  - 除批量执行模块外，所有模块均把 `agent-tuning/results/` 下**形如 `vN` 且 N 为正整数的目录中数字最大的那个**视为"当前版本"，不附加"必须包含某文件"的过滤
+  - 除批量执行模块外，所有模块均把 `.atk/results/` 下**形如 `vN` 且 N 为正整数的目录中数字最大的那个**视为"当前版本"，不附加"必须包含某文件"的过滤
   - 非 `vN` 命名的目录被忽略
   - 若当前版本缺少模块所需的输入文件，模块**不回退到更早版本**，而是提示用户确认或修复
 - **新版本创建规则（批量执行模块专用）**：
@@ -198,8 +198,8 @@
   - 跨版本验证结果写入当前版本 `report.md`，不新增独立对比报告文件
   - 当上一版本不存在或缺少 `tuning_plan.md` 时，报告 Skill 退化为单版本报告并说明原因
 - **目录职责**：
-  - `agent-tuning/runner/`：跨版本共享脚本，例如 `test_runner.py`、`filter_abnormal.py`
-  - `agent-tuning/results/{version}/`：存放该轮调优的测试结果、日志、异常数据、报告与调优计划
+  - `.atk/runner/`：跨版本共享脚本，例如 `test_runner.py`、`filter_abnormal.py`
+  - `.atk/results/{version}/`：存放该轮调优的测试结果、日志、异常数据、报告与调优计划
 - **兼容要求**：
   - 各版本结果之间不能互相覆盖
   - `runner/` 中的共享脚本通过自动版本识别复用，不为每个版本生成重复 runner 文件
@@ -218,22 +218,22 @@
 
 ## 5. 使用示例（手工执行）
 1. 完成数据准备：本地待调优的 Agent 服务 + 评估数据集（默认 CSV）
-2. 执行**批量测试脚本生成 Skill**，生成 `agent-tuning/runner/test_runner.py`；遇到 Agent 接入或字段不确定时按需与用户确认
-3. 执行 `atk-run`，由其运行 `agent-tuning/runner/test_runner.py`，脚本自动创建 `agent-tuning/results/v1/` 并写入 `results.csv`（及可选 `app.log`）
+2. 执行**批量测试脚本生成 Skill**，生成 `.atk/runner/test_runner.py`；遇到 Agent 接入或字段不确定时按需与用户确认
+3. 执行 `atk-run`，由其运行 `.atk/runner/test_runner.py`，脚本自动创建 `.atk/results/v1/` 并写入 `results.csv`（及可选 `app.log`）
 4. 执行异常筛选（按需选择一个 Skill 入口）：
-   - **规则模式 Skill**：交互确认规则后生成 `agent-tuning/runner/filter_abnormal.py`，用户运行后输出 `abnormal_cases.csv`
+   - **规则模式 Skill**：交互确认规则后生成 `.atk/runner/filter_abnormal.py`，用户运行后输出 `abnormal_cases.csv`
    - **大模型模式 Skill**：直接读取当前版本 `results.csv` 并输出 `abnormal_cases.csv`
-5. 执行**归因分析与报告生成 Skill**，生成 `agent-tuning/results/v1/report.md`
+5. 执行**归因分析与报告生成 Skill**，生成 `.atk/results/v1/report.md`
    - 当前版本为 `v1` 时为单版本报告，说明无上一版本可对比
 6. 执行**Agent 调优 Skill**：基于 `report.md` 完成调优，并在 `v1/` 下写入 `tuning_plan.md`；建议用户随后做一次 git commit
-7. 进入下一轮：再次执行 `atk-run`，自动创建 `agent-tuning/results/v2/`
+7. 进入下一轮：再次执行 `atk-run`，自动创建 `.atk/results/v2/`
 8. 重新执行异常筛选与报告生成 Skill，`v2/report.md` 自动读取 `v1/tuning_plan.md`，逐条核验上一轮目标异常在 `v2` 是否仍然出现，并给出"上一轮调优是否符合预期"的结论
 
 ---
 
 ## 6. 输出文件结构
 ```text
-/agent-tuning/
+/.atk/
 ├── runner/
 │   ├── test_runner.py          # 跨版本共享测试脚本
 │   └── filter_abnormal.py      # 跨版本共享异常数据过滤脚本（规则模式使用）
@@ -258,9 +258,9 @@
 1. **Codex Skill**：
    - 模块化 Skill 模板，覆盖：测试脚本生成、异常筛选（规则模式与大模型模式两个独立入口）、归因分析与报告生成、Agent 调优
    - 内置数据不确定性提示机制，遇到无法可靠推断的字段、Agent 接入方式、异常标准或样本对应关系时引导用户确认
-   - 所有模块兼容 `agent-tuning/results/{version}/` 结构，按"数字最大的 `vN`"统一识别当前版本
+   - 所有模块兼容 `.atk/results/{version}/` 结构，按"数字最大的 `vN`"统一识别当前版本
    - 所有模块在常规流程中不要求用户指定版本号
-   - `agent-tuning/runner/` 中的脚本为跨版本共享脚本，不按版本重复生成
+   - `.atk/runner/` 中的脚本为跨版本共享脚本，不按版本重复生成
    - 调优 Skill 必须在当前版本目录产出 `tuning_plan.md`；报告 Skill 在存在上一版本时必须读取其 `tuning_plan.md` 并产出跨版本调优验证章节（以"目标异常是否复现"为主判定）
 2. **可安装部署**：
    - Codex Skill 可注册至 Codex 系统

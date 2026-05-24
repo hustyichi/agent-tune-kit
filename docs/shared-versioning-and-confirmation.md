@@ -27,17 +27,17 @@ Non-goals for this pass:
 
 ## Canonical paths
 
-- Shared runner scripts: `agent-tuning/runner/`
-- Versioned results: `agent-tuning/results/vN/`
-- Test runner output: `agent-tuning/results/vN/results.csv`
-- Optional run log: `agent-tuning/results/vN/app.log`
-- Abnormal cases: `agent-tuning/results/vN/abnormal_cases.csv`
-- Report: `agent-tuning/results/vN/report.md`
-- Tuning plan: `agent-tuning/results/vN/tuning_plan.md`
+- Shared runner scripts: `.atk/runner/`
+- Versioned results: `.atk/results/vN/`
+- Test runner output: `.atk/results/vN/results.csv`
+- Optional run log: `.atk/results/vN/app.log`
+- Abnormal cases: `.atk/results/vN/abnormal_cases.csv`
+- Report: `.atk/results/vN/report.md`
+- Tuning plan: `.atk/results/vN/tuning_plan.md`
 
 ## Current version vs new version creation
 
-All non-runner Skills use the current-version rule: the current version is the numerically largest existing `agent-tuning/results/vN` directory where `N` is a positive integer. Do not filter current-version selection by required files. If the current version is missing the required input file for a module, stop and ask the user to repair or rerun that module; never fall back to an older version.
+All non-runner Skills use the current-version rule: the current version is the numerically largest existing `.atk/results/vN` directory where `N` is a positive integer. Do not filter current-version selection by required files. If the current version is missing the required input file for a module, stop and ask the user to repair or rerun that module; never fall back to an older version.
 
 Only `test_runner.py` creates or reuses result versions:
 
@@ -57,7 +57,7 @@ All Skill templates and script templates must use these helper names and semanti
 ```python
 from pathlib import Path
 
-RESULTS_DIR = Path("agent-tuning/results")
+RESULTS_DIR = Path(".atk/results")
 
 class UserActionRequired(RuntimeError):
     """Raised when the user must repair inputs or confirm an unsafe inference."""
@@ -130,10 +130,10 @@ Do not ask for confirmation for routine, reversible local file generation when t
 
 ## Per-Skill preconditions and failure behavior
 
-- `atk-start`: no version directory is required. It inspects `agent-tuning/` state and recommends the next Skill or manual command without bypassing confirmation triggers.
-- `atk-setup`: no version directory is required. If Agent invocation, target runtime/import roots, dataset path/format, log source, or `agent_output` column conflict cannot be inferred safely, ask the user to confirm before writing `agent-tuning/runner/test_runner.py`. Generated runners should support `--limit`/`--offset`/`--concurrency`, write results incrementally, and be import-checked under the inferred project runtime without invoking the Agent.
-- `atk-run`: require `agent-tuning/runner/test_runner.py`; execute it as the short command surface for batch testing using the target repository's Python runtime when available (`uv run python`, `.venv/bin/python`, Poetry, then `python3`). Pass through safe runner flags such as `--limit`, `--offset`, and `--concurrency`. The runner remains the only component that creates or reuses result versions. If the runner fails or no current `results.csv` is produced, report the failure and do not clean up partial version directories. If a partial `results.csv` exists after interruption/failure, report it explicitly.
-- `atk-filter-rules`: require current `vN/results.csv`; if no current version or missing `results.csv`, stop with repair/rerun guidance. If existing `agent-tuning/runner/filter_abnormal.py` exists, ask whether to reuse or update rule logic. This Skill generates or updates the script and instructs the user to run it manually; it does not run `filter_abnormal.py` itself in the normal PRD flow.
+- `atk-start`: no version directory is required. It inspects `.atk/` state and recommends the next Skill or manual command without bypassing confirmation triggers.
+- `atk-setup`: no version directory is required. If Agent invocation, target runtime/import roots, dataset path/format, log source, or `agent_output` column conflict cannot be inferred safely, ask the user to confirm before writing `.atk/runner/test_runner.py`. Generated runners should support `--limit`/`--offset`/`--concurrency`, write results incrementally, and be import-checked under the inferred project runtime without invoking the Agent.
+- `atk-run`: require `.atk/runner/test_runner.py`; execute it as the short command surface for batch testing using the target repository's Python runtime when available (`uv run python`, `.venv/bin/python`, Poetry, then `python3`). Pass through safe runner flags such as `--limit`, `--offset`, and `--concurrency`. The runner remains the only component that creates or reuses result versions. If the runner fails or no current `results.csv` is produced, report the failure and do not clean up partial version directories. If a partial `results.csv` exists after interruption/failure, report it explicitly.
+- `atk-filter-rules`: require current `vN/results.csv`; if no current version or missing `results.csv`, stop with repair/rerun guidance. If existing `.atk/runner/filter_abnormal.py` exists, ask whether to reuse or update rule logic. This Skill generates or updates the script and instructs the user to run it manually; it does not run `filter_abnormal.py` itself in the normal PRD flow.
 - `atk-filter`: require current `vN/results.csv`; if expected-result columns or abnormal criteria are ambiguous, ask for judgment. It writes `abnormal_cases.csv` in the current version and states that the file is overwritten.
 - `atk-report`: require current `results.csv` and `abnormal_cases.csv`; `app.log` is optional. If previous version lacks `tuning_plan.md` or sample matching is unreliable, degrade to single-version or lower-confidence report with explicit explanation, not silent failure.
 - `atk-apply`: require current `report.md`; if missing, stop and tell the user to run report generation first. After changes, write `tuning_plan.md` with the exact headings `## 目标异常清单`, `## 调优手段`, and `## 关联改动`. Suggest user git commits/checkpoints; do not perform automatic rollback/baseline restore.

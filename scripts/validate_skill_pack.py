@@ -24,8 +24,8 @@ REQUIRED_FILES = [
     "skills/atk-filter/SKILL.md",
     "skills/atk-report/SKILL.md",
     "skills/atk-apply/SKILL.md",
-    "templates/agent-tuning/runner/test_runner.py.md",
-    "templates/agent-tuning/runner/filter_abnormal.py.md",
+    "templates/.atk/runner/test_runner.py.md",
+    "templates/.atk/runner/filter_abnormal.py.md",
     "docs/skill-template-pack-usage.md",
     "docs/shared-versioning-and-confirmation.md",
     "docs/codex_agent_tuning_prd.md",
@@ -48,7 +48,7 @@ REQUIRED_SKILL_SECTIONS = [
 ]
 
 GLOBAL_PHRASES = [
-    "RESULTS_DIR = Path(\"agent-tuning/results\")",
+    "RESULTS_DIR = Path(\".atk/results\")",
     "def list_version_dirs(results_dir=RESULTS_DIR)",
     "def resolve_current_version(results_dir=RESULTS_DIR)",
     "def resolve_previous_version(current_dir, results_dir=RESULTS_DIR)",
@@ -56,10 +56,10 @@ GLOBAL_PHRASES = [
     "def allocate_next_results_version(results_dir=RESULTS_DIR)",
     "No vN results directory exists; run test_runner.py first or confirm repair.",
     "Current version {current_dir.name} is missing {filename}; fix or rerun the prior step.",
-    "agent-tuning/results/vN/results.csv",
-    "agent-tuning/results/vN/abnormal_cases.csv",
-    "agent-tuning/results/vN/report.md",
-    "agent-tuning/results/vN/tuning_plan.md",
+    ".atk/results/vN/results.csv",
+    ".atk/results/vN/abnormal_cases.csv",
+    ".atk/results/vN/report.md",
+    ".atk/results/vN/tuning_plan.md",
     "agent_output",
     "abnormal_cases.csv",
     "tuning_plan.md",
@@ -98,7 +98,7 @@ PRD_REFERENCES = [
 PER_FILE_PHRASES = {
     ".codex-plugin/plugin.json": [
         '"name": "agent-tune-kit"',
-        '"version": "0.2.0"',
+        '"version": "0.2.1"',
         '"skills": "./skills/"',
         '"displayName": "Agent Tune Kit"',
         '"defaultPrompt"',
@@ -129,10 +129,10 @@ PER_FILE_PHRASES = {
         "atk-filter",
         "atk-report",
         "atk-apply",
-        "RESULTS_DIR = Path(\"agent-tuning/results\")",
+        "RESULTS_DIR = Path(\".atk/results\")",
     ],
     "skills/atk-setup/SKILL.md": [
-        "agent-tuning/runner/test_runner.py",
+        ".atk/runner/test_runner.py",
         "Preserve all original dataset columns",
         "Append the fixed actual-output column `agent_output`",
         "no version directory is required",
@@ -141,17 +141,17 @@ PER_FILE_PHRASES = {
     ],
     "skills/atk-run/SKILL.md": [
         "atk-run",
-        "agent-tuning/runner/test_runner.py",
-        "<python-runtime> agent-tuning/runner/test_runner.py",
+        ".atk/runner/test_runner.py",
+        "<python-runtime> .atk/runner/test_runner.py",
         "uv run python",
         "--limit",
         "--concurrency",
-        "RESULTS_DIR = Path(\"agent-tuning/results\")",
+        "RESULTS_DIR = Path(\".atk/results\")",
         "If the runner is missing",
         "next recommended Skill: `atk-filter`",
     ],
     "skills/atk-filter-rules/SKILL.md": [
-        "agent-tuning/runner/filter_abnormal.py",
+        ".atk/runner/filter_abnormal.py",
         "require_current_file(current_dir, \"results.csv\")",
         "It does not run `filter_abnormal.py` itself",
         "ask whether to reuse or update rule logic",
@@ -183,7 +183,7 @@ PER_FILE_PHRASES = {
         "user-git-only guidance",
         "never perform automatic rollback",
     ],
-    "templates/agent-tuning/runner/test_runner.py.md": [
+    "templates/.atk/runner/test_runner.py.md": [
         "DATASET_PATH = Path(\"TODO_AGENT_TUNING_DATASET_PATH\")",
         "def allocate_next_results_version(results_dir: Path = RESULTS_DIR) -> Path",
         "class AgentExecutionError(RuntimeError)",
@@ -200,7 +200,7 @@ PER_FILE_PHRASES = {
         "Preserves all original dataset columns",
         "Current max version",
     ],
-    "templates/agent-tuning/runner/filter_abnormal.py.md": [
+    "templates/.atk/runner/filter_abnormal.py.md": [
         "def resolve_current_version(results_dir=RESULTS_DIR)",
         "def require_current_file(current_dir, filename)",
         "ABNORMAL_FILENAME = \"abnormal_cases.csv\"",
@@ -274,16 +274,16 @@ PER_FILE_PHRASES = {
 }
 
 VERSION_HELPER_SNIPPETS = {
-    "templates/agent-tuning/runner/test_runner.py.md": [
-        "RESULTS_DIR = Path(\"agent-tuning/results\")",
+    "templates/.atk/runner/test_runner.py.md": [
+        "RESULTS_DIR = Path(\".atk/results\")",
         "def list_version_dirs(results_dir: Path = RESULTS_DIR) -> list[tuple[int, Path]]:",
         "if not results_dir.exists():\n        return []",
         "def allocate_next_results_version(results_dir: Path = RESULTS_DIR) -> Path:",
         "target = results_dir / \"v1\"",
         "target = results_dir / f\"v{max_n + 1}\" if (current / \"results.csv\").exists() else current",
     ],
-    "templates/agent-tuning/runner/filter_abnormal.py.md": [
-        "RESULTS_DIR = Path(\"agent-tuning/results\")",
+    "templates/.atk/runner/filter_abnormal.py.md": [
+        "RESULTS_DIR = Path(\".atk/results\")",
         "def list_version_dirs(results_dir=RESULTS_DIR):",
         "if not results_dir.exists():\n        return []",
         "def resolve_current_version(results_dir=RESULTS_DIR):",
@@ -291,7 +291,7 @@ VERSION_HELPER_SNIPPETS = {
         "raise UserActionRequired(f\"Current version {current_dir.name} is missing {filename}; fix or rerun the prior step.\")",
     ],
     "docs/shared-versioning-and-confirmation.md": [
-        "RESULTS_DIR = Path(\"agent-tuning/results\")",
+        "RESULTS_DIR = Path(\".atk/results\")",
         "def list_version_dirs(results_dir=RESULTS_DIR):",
         "if not results_dir.exists():\n        return []",
         "def resolve_current_version(results_dir=RESULTS_DIR):",
@@ -385,7 +385,7 @@ def main() -> int:
         for section in REQUIRED_SKILL_SECTIONS:
             require(section in text, f"{rel} missing section {section}", errors)
         require("docs/shared-versioning-and-confirmation.md" in text, f"{rel} missing shared version doc reference", errors)
-        require("RESULTS_DIR = Path(\"agent-tuning/results\")" in text, f"{rel} missing canonical RESULTS_DIR", errors)
+        require("RESULTS_DIR = Path(\".atk/results\")" in text, f"{rel} missing canonical RESULTS_DIR", errors)
         require("Failure behavior" in text and "Confirmation triggers" in text, f"{rel} missing precondition/failure behavior", errors)
 
     for phrase in GLOBAL_PHRASES:
@@ -421,7 +421,7 @@ def main() -> int:
     for status in ["已解决", "部分解决", "未解决", "无法判断"]:
         require(status in report_text, f"report Skill missing cross-version status {status}", errors)
 
-    runner_template = existing_texts.get("templates/agent-tuning/runner/test_runner.py.md", "")
+    runner_template = existing_texts.get("templates/.atk/runner/test_runner.py.md", "")
     require(
         "return list(source_fieldnames) + [\"agent_output\"] + fixed_output_fields + auxiliary_fields"
         in runner_template,
@@ -441,7 +441,7 @@ def main() -> int:
     require("atk-filter" in llm_skill, "LLM abnormal Skill identity missing", errors)
     require("abnormal_cases.csv" in rules_skill and "abnormal_cases.csv" in llm_skill, "both abnormal Skills must write abnormal_cases.csv", errors)
 
-    filter_template = existing_texts.get("templates/agent-tuning/runner/filter_abnormal.py.md", "")
+    filter_template = existing_texts.get("templates/.atk/runner/filter_abnormal.py.md", "")
     require("Conservative placeholder" not in filter_template, "filter template must not ship a runnable placeholder heuristic", errors)
 
     validate_manifest(errors)
