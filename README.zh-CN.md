@@ -116,10 +116,10 @@ $atk-find-failures
 如果你有明确规则，例如“期望答案不等于输出就是异常”，先创建或更新规则脚本：
 
 ```text
-$atk-init-failure-rule
+$atk-init-failure-rule 规则：当 expected 字段与 agent_output 字段不一致时判定为异常
 ```
 
-它会生成规则脚本：
+Codex 会根据你在命令中给出的规则生成规则脚本：
 
 ```text
 .atk/runner/failure_rule.py

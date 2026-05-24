@@ -116,10 +116,10 @@ $atk-find-failures
 If you already have a clear rule, first create or update the reusable rule script:
 
 ```text
-$atk-init-failure-rule
+$atk-init-failure-rule rule: mark a row as failed when the expected field differs from agent_output
 ```
 
-It generates the rule script at:
+Codex uses the rule you provide in the command to generate the rule script at:
 
 ```text
 .atk/runner/failure_rule.py
