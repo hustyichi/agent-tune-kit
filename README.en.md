@@ -119,6 +119,14 @@ If you already have a clear rule, use the rule-based Skill instead:
 $atk-find-failures-by-rule
 ```
 
+It generates the rule-based filtering script at:
+
+```text
+.atk/runner/find_failures_by_rule.py
+```
+
+If that script already exists, `$atk-find-failures-by-rule` reuses it and does not generate it again. You can edit the rule in that script as needed, then run it manually to write the failing cases.
+
 The failing cases are written to:
 
 ```text

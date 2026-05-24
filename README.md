@@ -119,6 +119,14 @@ $atk-find-failures
 $atk-find-failures-by-rule
 ```
 
+它会生成规则筛选脚本：
+
+```text
+.atk/runner/find_failures_by_rule.py
+```
+
+如果这个脚本已经存在，`$atk-find-failures-by-rule` 会复用现有脚本，不会重复生成。你可以按需要修改脚本里的规则，然后手动运行它来写入异常结果。
+
 异常结果会写入：
 
 ```text
