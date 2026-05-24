@@ -62,6 +62,8 @@ GLOBAL_PHRASES = [
     ".atk/results/vN/report.md",
     ".atk/results/vN/tuning_plan.md",
     "agent_output",
+    "agent_output_log_path",
+    "logs/row_",
     "failure_cases.csv",
     "tuning_plan.md",
 ]
@@ -150,9 +152,11 @@ PER_FILE_PHRASES = {
         ".atk/runner/eval_runner.py",
         "Preserve all original dataset columns",
         "Append the fixed actual-output column `agent_output`",
+        "agent_output_log_path",
+        "--concurrency == 1",
         "no version directory is required",
         "ask the user to confirm before writing `eval_runner.py`",
-        "Agent invocation, dataset path/format, log source, or `agent_output` column conflict",
+        "Agent invocation, dataset path/format, log source, Python logger names, or `agent_output` / `agent_output_log_path` column conflict",
     ],
     "skills/atk-run/SKILL.md": [
         "atk-run",
@@ -161,6 +165,8 @@ PER_FILE_PHRASES = {
         "uv run python",
         "--limit",
         "--concurrency",
+        "agent_output_log_path",
+        "row-log status: active, downgraded, or unavailable",
         "RESULTS_DIR = Path(\".atk/results\")",
         "If the runner is missing",
         "next recommended Skill: `atk-find-failures`",
@@ -199,6 +205,8 @@ PER_FILE_PHRASES = {
         "部分解决",
         "未解决",
         "无法判断",
+        "agent_output_log_path",
+        "fall back to `app.log`",
         "degrade to single-version or lower-confidence report with explicit explanation",
     ],
     "skills/atk-tune/SKILL.md": [
@@ -221,6 +229,16 @@ PER_FILE_PHRASES = {
         "except UserActionRequired:",
         "except AgentExecutionError as exc:",
         "agent_output",
+        "agent_output_log_path",
+        "PYTHON_LOGGING_CAPTURE_ENABLED",
+        "ROW_LOGGER_NAMES",
+        "ROW_LOG_FORMAT",
+        "ROW_LOG_LEVEL",
+        "ROW_LOGS_DIRNAME",
+        "logging.FileHandler",
+        "row_{source_index:06d}.log",
+        "relative_path.as_posix()",
+        "ROW_LOGGING_CONCURRENCY_DOWNGRADE_MESSAGE",
         "agent_output_status",
         "agent_output_error_type",
         "Preserves all original dataset columns",
@@ -239,6 +257,8 @@ PER_FILE_PHRASES = {
         "Only `eval_runner.py` creates or reuses result versions",
         "Do not filter current-version selection by required files",
         "never fall back to an older version",
+        "agent_output_log_path",
+        "logs/row_{source_index:06d}.log",
         "Per-Skill preconditions and failure behavior",
         "local Codex plugin",
         "python3 scripts/install_plugin.py install",
@@ -251,6 +271,8 @@ PER_FILE_PHRASES = {
         "keep `skills/`, `templates/`, and `docs/` together",
         "Manual 2.2 → 2.6 loop",
         "v1 → v2",
+        "agent_output_log_path",
+        "logs/row_{source_index:06d}.log",
         "python3 scripts/validate_skill_pack.py",
         "python3 scripts/install_plugin.py install",
         "python3 scripts/install_plugin.py status",
@@ -461,9 +483,43 @@ def main() -> int:
         "runner template must append agent_output, fixed status fields, and auxiliary agent_output_* columns after original columns",
         errors,
     )
-    require("if \"agent_output\" in fieldnames" in runner_template, "runner template must guard source agent_output conflict", errors)
+    require(
+        "\"agent_output\"" in runner_template and "reserved_output_fields" in runner_template,
+        "runner template must guard source agent_output conflict",
+        errors,
+    )
+    require(
+        "AGENT_OUTPUT_LOG_PATH_FIELD = \"agent_output_log_path\"" in runner_template,
+        "runner template must define stable agent_output_log_path field",
+        errors,
+    )
+    require(
+        "PYTHON_LOGGING_CAPTURE_ENABLED" in runner_template
+        and "ROW_LOGGER_NAMES" in runner_template
+        and "ROW_LOG_FORMAT" in runner_template
+        and "ROW_LOG_LEVEL" in runner_template
+        and "ROW_LOGS_DIRNAME" in runner_template,
+        "runner template must expose row-log generated config constants",
+        errors,
+    )
+    require("logging.FileHandler" in runner_template, "runner template must use stdlib logging.FileHandler for row logs", errors)
+    require(
+        "logging.FileHandler(log_path, mode=\"w\", encoding=\"utf-8\")" in runner_template,
+        "runner template must truncate row logs on reused partial versions",
+        errors,
+    )
+    require("row_{source_index:06d}.log" in runner_template, "runner template must use source-row-numbered row log filenames", errors)
+    require(".as_posix()" in runner_template, "runner template must serialize row-log CSV paths as POSIX paths", errors)
+    require("AGENT_OUTPUT_LOG_PATH_FIELD" in runner_template and "reserved_output_fields" in runner_template, "runner template must guard agent_output_log_path source conflicts", errors)
+    require("ROW_LOGGING_CONCURRENCY_DOWNGRADE_MESSAGE" in runner_template and "sys.__stderr__" in runner_template, "runner template must report concurrency row-log downgrade outside app.log redirect", errors)
+    require("logger.setLevel(ROW_LOG_LEVEL)" in runner_template and "logger.setLevel(previous_levels[logger])" in runner_template, "runner template must restore row logger levels", errors)
     require("except Exception as exc" not in runner_template, "runner template must not catch broad Exception and mask configuration failures", errors)
-    require("except UserActionRequired:\n        # Configuration/TODO/confirmation failures must stop the run" in runner_template, "runner template must propagate UserActionRequired before row-error handling", errors)
+    require(
+        "except UserActionRequired:" in runner_template
+        and "# Configuration/TODO/confirmation failures must stop the run" in runner_template,
+        "runner template must propagate UserActionRequired before row-error handling",
+        errors,
+    )
     require("--limit" in runner_template and "--offset" in runner_template, "runner template must support bounded runs", errors)
     require("--concurrency" in runner_template and "ThreadPoolExecutor" in runner_template, "runner template must support concurrent runs", errors)
     require("writer.writerow(result_row)" in runner_template and "os.fsync(handle.fileno())" in runner_template, "runner template must write and flush results incrementally", errors)

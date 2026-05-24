@@ -37,14 +37,16 @@
 ### 2.2 批量测试脚本生成模块（Codex Skill）
 - **功能**：
   - Skill 阅读待调优 Agent 的源码与用户提供的数据集，生成 Python 测试脚本 `eval_runner.py`
-  - 脚本需要能够：批量读取数据集、调用本地 Agent、记录每条样本的输入/输出/预期结果到 `eval_results.csv`、按需采集 Agent 运行日志到 `app.log`
+  - 脚本需要能够：批量读取数据集、调用本地 Agent、记录每条样本的输入/输出/预期结果到 `eval_results.csv`、按需采集 Agent 运行日志到 `app.log`，并在可信场景下写入逐行日志引用 `agent_output_log_path`
   - **日志采集方案**：由 Skill 在阅读 Agent 源码后自行决定采集方式（例如 stdout 重定向、读取 Agent 写入的日志文件、Hook 日志框架等），并将逻辑固化在生成的 `eval_runner.py` 中；若 Agent 无可识别日志，则不生成 `app.log`
+  - **逐行日志方案**：当可识别的日志源是 Python `logging` 且运行参数为 `--concurrency 1` 时，生成的 runner 可默认使用 stdlib `logging.FileHandler` 为每条源数据行写入 `.atk/results/vN/logs/row_{source_index:06d}.log`，并在 `eval_results.csv` 的 `agent_output_log_path` 中写入相对 POSIX 路径；即使该行没有日志记录，也要创建被引用的空文件。`--concurrency > 1` 时不得生成可能混杂的逐行日志，必须在运行输出中显式降级并使用 `app.log` 作为回退证据。
   - **数据集适配**：以 CSV 为主，列名由 Skill 推断；若数据集为其它格式，由 Skill 自行扩展读取逻辑
   - **`eval_results.csv` 字段约定**：
     - 原则上**完整保留用户输入数据集的所有原始列**（列名、列顺序均不改动），在此基础上追加 Agent 运行产生的列
-    - **唯一强约束**：Agent 的实际输出必须写入固定列名 `agent_output`；若 Agent 返回多字段结构化结果，可序列化为 JSON 字符串存入该列，或额外追加 `agent_output_*` 前缀的辅助列
+    - **强约束**：Agent 的实际输出必须写入固定列名 `agent_output`；若 Agent 返回多字段结构化结果，可序列化为 JSON 字符串存入该列，或额外追加 `agent_output_*` 前缀的辅助列
+    - **逐行日志引用**：固定列 `agent_output_log_path` 用于保存相对当前版本目录的逐行日志路径；无可信逐行日志时该列留空
     - 其它列（输入、预期结果等）不做命名强约束，下游 Skill 通过原数据集列名自行识别
-    - 若用户原数据集已存在名为 `agent_output` 的列，Skill 需提示用户并与其确认改名方案后再生成脚本
+    - 若用户原数据集已存在名为 `agent_output` 或 `agent_output_log_path` 的列，Skill 需提示用户并与其确认改名方案后再生成脚本
   - **数据确认机制**：当 Agent 接入方式、数据集字段、日志位置或上述列名冲突无法可靠推断时，Skill 与用户交互确认后再生成脚本
 - **输出**：
   - `.atk/runner/eval_runner.py`

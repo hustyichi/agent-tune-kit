@@ -20,12 +20,13 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import logging
 import os
 import sys
 import traceback
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from contextlib import redirect_stderr, redirect_stdout
+from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +35,16 @@ RUNNER_DIR = Path(".atk/runner")
 DATASET_PATH = Path("TODO_AGENT_TUNING_DATASET_PATH")
 RESULTS_FILENAME = "eval_results.csv"
 APP_LOG_FILENAME = "app.log"
+PYTHON_LOGGING_CAPTURE_ENABLED = False
+ROW_LOGGER_NAMES: tuple[str, ...] = ("",)  # Empty string means the root logger.
+ROW_LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
+ROW_LOG_LEVEL = logging.INFO
+ROW_LOGS_DIRNAME = "logs"
+AGENT_OUTPUT_LOG_PATH_FIELD = "agent_output_log_path"
+ROW_LOGGING_CONCURRENCY_DOWNGRADE_MESSAGE = (
+    "Row-level Python logging capture is disabled because --concurrency > 1; "
+    "use --concurrency 1 for trustworthy per-row logs."
+)
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # TODO_AGENT_TUNING_IMPORT_PATHS:
@@ -82,8 +93,9 @@ def load_dataset(path: Path) -> tuple[list[str], list[dict[str, str]]]:
     """Load CSV rows while preserving original columns.
 
     TODO_AGENT_TUNING: adapt this function only if the dataset is not CSV.
-    Do not rename user columns here. If the source dataset contains agent_output,
-    the Skill must confirm a rename strategy before generating this script.
+    Do not rename user columns here. If the source dataset contains agent_output
+    or agent_output_log_path, the Skill must confirm a rename strategy before
+    generating this script.
     """
     if not path.exists():
         raise UserActionRequired(f"Dataset not found: {path}")
@@ -92,9 +104,12 @@ def load_dataset(path: Path) -> tuple[list[str], list[dict[str, str]]]:
         if not reader.fieldnames:
             raise UserActionRequired(f"Dataset has no header row: {path}")
         fieldnames = list(reader.fieldnames)
-        if "agent_output" in fieldnames:
+        reserved_output_fields = {"agent_output", AGENT_OUTPUT_LOG_PATH_FIELD}
+        conflicting_fields = [field for field in fieldnames if field in reserved_output_fields]
+        if conflicting_fields:
             raise UserActionRequired(
-                "Dataset already contains agent_output; confirm a rename strategy before running."
+                "Dataset already contains reserved output column(s) "
+                f"{', '.join(conflicting_fields)}; confirm a rename strategy before running."
             )
         return fieldnames, list(reader)
 
@@ -180,31 +195,99 @@ def normalize_agent_output(raw_output: Any) -> str:
     return json.dumps(raw_output, ensure_ascii=False, sort_keys=True)
 
 
-def build_result_row(index: int, row: dict[str, str]) -> dict[str, str]:
-    output_row = dict(row)
+def row_log_relative_path(source_index: int) -> Path:
+    """Return the stable source-row-numbered path stored in eval_results.csv."""
+    return Path(ROW_LOGS_DIRNAME) / f"row_{source_index:06d}.log"
+
+
+def _configured_row_loggers() -> list[logging.Logger]:
+    """Resolve configured Python loggers without mutating project handlers."""
+    loggers: list[logging.Logger] = []
+    seen: set[int] = set()
+    for logger_name in ROW_LOGGER_NAMES:
+        logger = logging.getLogger(logger_name) if logger_name else logging.getLogger()
+        logger_id = id(logger)
+        if logger_id not in seen:
+            loggers.append(logger)
+            seen.add(logger_id)
+    return loggers
+
+
+@contextmanager
+def capture_row_python_logs(
+    version_dir: Path,
+    source_index: int,
+    *,
+    enabled: bool,
+) -> Iterator[str]:
+    """Attach ATK-owned row log handlers for one serial row.
+
+    This captures configured Python logging records for synchronous serial row
+    execution only. It creates the referenced file before Agent input building,
+    removes only handlers it owns, closes them in all cases, and restores logger
+    levels after the row finishes.
+    """
+    if not enabled:
+        yield ""
+        return
+
+    relative_path = row_log_relative_path(source_index)
+    log_path = version_dir / relative_path
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path.touch(exist_ok=True)
+
+    handler = logging.FileHandler(log_path, mode="w", encoding="utf-8")
+    handler.setFormatter(logging.Formatter(ROW_LOG_FORMAT))
+    owned_loggers = _configured_row_loggers()
+    previous_levels: dict[logging.Logger, int] = {}
     try:
-        agent_input = build_agent_input(row)
-        raw_output = call_agent(agent_input)
-        output_row["agent_output"] = normalize_agent_output(raw_output)
-        output_row["agent_output_status"] = "ok"
-    except UserActionRequired:
-        # Configuration/TODO/confirmation failures must stop the run; otherwise
-        # an invalid runner could create a misleading successful eval_results.csv.
-        raise
-    except AgentExecutionError as exc:
-        # Known per-row Agent failures are still useful evaluation evidence.
-        output_row["agent_output"] = json.dumps(
-            {
-                "error": type(exc).__name__,
-                "message": str(exc),
-                "row_number": index,
-                "traceback": traceback.format_exc(limit=8),
-            },
-            ensure_ascii=False,
-        )
-        output_row["agent_output_status"] = "error"
-        output_row["agent_output_error_type"] = type(exc).__name__
-        output_row["agent_output_error_message"] = str(exc)
+        for logger in owned_loggers:
+            previous_levels[logger] = logger.level
+            logger.setLevel(ROW_LOG_LEVEL)
+            logger.addHandler(handler)
+        yield relative_path.as_posix()
+    finally:
+        for logger in owned_loggers:
+            logger.removeHandler(handler)
+            logger.setLevel(previous_levels[logger])
+        handler.close()
+
+
+def build_result_row(
+    index: int,
+    row: dict[str, str],
+    *,
+    version_dir: Path,
+    row_logging_enabled: bool,
+) -> dict[str, str]:
+    output_row = dict(row)
+    output_row[AGENT_OUTPUT_LOG_PATH_FIELD] = ""
+    with capture_row_python_logs(version_dir, index, enabled=row_logging_enabled) as row_log_path:
+        if row_log_path:
+            output_row[AGENT_OUTPUT_LOG_PATH_FIELD] = row_log_path
+        try:
+            agent_input = build_agent_input(row)
+            raw_output = call_agent(agent_input)
+            output_row["agent_output"] = normalize_agent_output(raw_output)
+            output_row["agent_output_status"] = "ok"
+        except UserActionRequired:
+            # Configuration/TODO/confirmation failures must stop the run; otherwise
+            # an invalid runner could create a misleading successful eval_results.csv.
+            raise
+        except AgentExecutionError as exc:
+            # Known per-row Agent failures are still useful evaluation evidence.
+            output_row["agent_output"] = json.dumps(
+                {
+                    "error": type(exc).__name__,
+                    "message": str(exc),
+                    "row_number": index,
+                    "traceback": traceback.format_exc(limit=8),
+                },
+                ensure_ascii=False,
+            )
+            output_row["agent_output_status"] = "error"
+            output_row["agent_output_error_type"] = type(exc).__name__
+            output_row["agent_output_error_message"] = str(exc)
     return output_row
 
 
@@ -216,6 +299,7 @@ def get_output_fieldnames(
         "agent_output_status",
         "agent_output_error_type",
         "agent_output_error_message",
+        AGENT_OUTPUT_LOG_PATH_FIELD,
     ]
     auxiliary_fields = sorted(
         {
@@ -253,6 +337,7 @@ def run_rows(
     total_rows: int,
     show_progress: bool,
     concurrency: int,
+    row_logging_enabled: bool,
 ) -> Path:
     output_path, handle, writer = open_results_writer(
         version_dir,
@@ -261,7 +346,12 @@ def run_rows(
     )
     try:
         for completed, (source_index, result_row) in enumerate(
-            execute_rows(selected_rows, concurrency=concurrency),
+            execute_rows(
+                selected_rows,
+                version_dir=version_dir,
+                concurrency=concurrency,
+                row_logging_enabled=row_logging_enabled,
+            ),
             start=1,
         ):
             writer.writerow(result_row)
@@ -281,7 +371,9 @@ def run_rows(
 def execute_rows(
     selected_rows: list[tuple[int, dict[str, str]]],
     *,
+    version_dir: Path,
     concurrency: int,
+    row_logging_enabled: bool,
 ) -> Iterator[tuple[int, dict[str, str]]]:
     """Execute rows and return results as they complete.
 
@@ -290,12 +382,23 @@ def execute_rows(
     """
     if concurrency == 1:
         for source_index, row in selected_rows:
-            yield source_index, build_result_row(source_index, row)
+            yield source_index, build_result_row(
+                source_index,
+                row,
+                version_dir=version_dir,
+                row_logging_enabled=row_logging_enabled,
+            )
         return
 
     with ThreadPoolExecutor(max_workers=concurrency) as executor:
         futures = {
-            executor.submit(build_result_row, source_index, row): source_index
+            executor.submit(
+                build_result_row,
+                source_index,
+                row,
+                version_dir=version_dir,
+                row_logging_enabled=False,
+            ): source_index
             for source_index, row in selected_rows
         }
         for future in as_completed(futures):
@@ -308,6 +411,9 @@ def run() -> int:
     version_dir = allocate_next_results_version()
     source_fieldnames, dataset_rows = load_dataset(DATASET_PATH)
     selected_rows = select_dataset_rows(dataset_rows, offset=args.offset, limit=args.limit)
+    row_logging_enabled = PYTHON_LOGGING_CAPTURE_ENABLED and args.concurrency == 1
+    if PYTHON_LOGGING_CAPTURE_ENABLED and args.concurrency > 1:
+        print(ROW_LOGGING_CONCURRENCY_DOWNGRADE_MESSAGE, file=sys.__stderr__, flush=True)
     output_path = run_rows(
         version_dir,
         source_fieldnames,
@@ -315,6 +421,7 @@ def run() -> int:
         total_rows=len(dataset_rows),
         show_progress=not args.no_progress,
         concurrency=args.concurrency,
+        row_logging_enabled=row_logging_enabled,
     )
     print(f"Wrote {len(selected_rows)} rows to {output_path}")
     return 0

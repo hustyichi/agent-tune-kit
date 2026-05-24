@@ -89,7 +89,7 @@ Point Codex to your Agent entrypoint and evaluation dataset. Codex generates:
 .atk/runner/eval_runner.py
 ```
 
-The runner keeps your original dataset columns and adds the Agent's actual output as `agent_output`.
+The runner keeps your original dataset columns and adds the Agent's actual output as `agent_output`. It also adds `agent_output_log_path`; when trustworthy serial Python `logging` capture is configured, this column points to row-specific files such as `logs/row_000001.log`.
 
 ### 2. Run the Agent on the dataset
 
@@ -104,6 +104,8 @@ This writes:
 ```text
 .atk/results/v1/eval_results.csv
 ```
+
+If row logging is active, the same version also contains `.atk/results/v1/logs/row_*.log`. Row logs are generated only for configured Python `logging` capture with `--concurrency 1`; concurrent runs visibly downgrade to `app.log`/CSV evidence instead of creating mixed per-row logs.
 
 ### 3. Find failing cases
 
@@ -196,6 +198,8 @@ Starting with the second loop, the report reads the previous `tuning_plan.md` an
 └── results/
     ├── v1/
     │   ├── eval_results.csv
+    │   ├── logs/                    # optional row logs
+    │   │   └── row_000001.log
     │   ├── failure_cases.csv
     │   ├── report.md
     │   └── tuning_plan.md
@@ -203,7 +207,7 @@ Starting with the second loop, the report reads the previous `tuning_plan.md` an
         └── ...
 ```
 
-Most users only need to read `eval_results.csv`, `failure_cases.csv`, and `report.md`. Version directories are managed automatically.
+Most users only need to read `eval_results.csv`, `failure_cases.csv`, `report.md`, and row logs linked from `agent_output_log_path` when available. Version directories are managed automatically.
 
 ## Available Skills
 

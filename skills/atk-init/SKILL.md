@@ -28,6 +28,7 @@ Traceability note: section 2.2 defines runner generation, section 4 defines vers
 - Runtime results are produced later by running `atk-run`, which executes the generated script:
   - `.atk/results/vN/eval_results.csv`
   - optional `.atk/results/vN/app.log`
+  - optional serial row logs under `.atk/results/vN/logs/`, referenced by `agent_output_log_path`
 
 ## Workflow
 
@@ -35,8 +36,8 @@ Traceability note: section 2.2 defines runner generation, section 4 defines vers
    - locate likely Agent entrypoints, constructors, async/sync call methods, prompt files, tool config, and required environment;
    - inspect the repository's expected Python invocation path (`uv run python`, `.venv/bin/python`, `poetry run python`, or `python3`) and import layout (`src/` layout, package-at-root, or script-only);
    - inspect dataset headers/sample rows and infer input/expected-result fields;
-   - inspect logging behavior, stdout/stderr use, and log file paths;
-   - check whether the dataset already has a column named `agent_output`.
+   - inspect logging behavior, Python `logging` logger names, stdout/stderr use, and log file paths;
+   - check whether the dataset already has a column named `agent_output` or `agent_output_log_path`.
 2. Apply the uncertainty confirmation pattern from `docs/shared-versioning-and-confirmation.md`.
 3. If safe, create `.atk/runner/` and write `eval_runner.py` from `templates/.atk/runner/eval_runner.py.md`.
 4. Keep the generated script project-local and low dependency. Prefer Python stdlib plus the target project environment.
@@ -50,8 +51,9 @@ Traceability note: section 2.2 defines runner generation, section 4 defines vers
 
 - Preserve all original dataset columns and their order.
 - Append the fixed actual-output column `agent_output`.
+- Append the stable row-log evidence column `agent_output_log_path`. When serial Python logging capture is configured and active, it must contain a relative POSIX path such as `logs/row_000001.log`; otherwise it should be blank.
 - If Agent output has multiple fields, serialize the primary result as JSON in `agent_output` or add auxiliary `agent_output_*` columns.
-- If the input dataset already contains `agent_output`, ask the user to confirm a rename strategy before writing the script.
+- If the input dataset already contains `agent_output` or `agent_output_log_path`, ask the user to confirm a rename strategy before writing the script.
 - Automatically allocate the output version with `allocate_next_results_version()`.
 - Use `RESULTS_DIR = Path(".atk/results")`.
 - Do not require a user-supplied version argument or result path.
@@ -61,6 +63,8 @@ Traceability note: section 2.2 defines runner generation, section 4 defines vers
 - Emit visible per-row progress by default, with a `--no-progress` option for quiet runs.
 - Do not clean up partial version directories on crash.
 - Capture `app.log` only when a reliable source is found; otherwise omit it and explain why.
+- Prefer Python stdlib `logging` for row-specific evidence when the Agent uses configured loggers. Generated row-log capture is v1 serial-only: create row files by default only when Python logging capture is configured and `--concurrency == 1`; create the referenced file even if it remains empty; do not create per-row files when `--concurrency > 1`.
+- When configured row-log capture is downgraded because `--concurrency > 1`, make that downgrade visible in runner output outside the redirected `app.log`.
 - Add the target repository import roots required by the Agent before importing local modules. For Python `src/` layout projects, generated runners should add `REPO_ROOT / "src"` to `sys.path`; for package-at-root projects, add `REPO_ROOT` when needed.
 - If the target project declares a managed runtime (`uv`, Poetry, pipenv, `.venv`, etc.), record that execution command in the setup summary and generate a runner that can be executed by that runtime. Do not assume bare system `python3` has project dependencies.
 - For sync Agents, generated runners should be concurrency-ready with a standard-library worker pool. For async Agents, use an explicit async runner (`asyncio.run(...)`) with an async semaphore or equivalent bounded concurrency. In both cases, preserve incremental row writes from a single writer path.
@@ -82,15 +86,15 @@ Ask the user before writing `eval_runner.py` if any of these cannot be inferred 
 - Agent invocation, callable signature, required environment, working directory, or async handling;
 - target interpreter/runtime command or import roots needed to load the Agent;
 - dataset path, format, encoding, delimiter, input fields, or expected-result fields;
-- log source or capture method;
-- existing dataset column named `agent_output` and the rename strategy;
+- log source, Python logger names, or capture method;
+- existing dataset column named `agent_output` or `agent_output_log_path` and the rename strategy;
 - whether writing `.atk/runner/eval_runner.py` would overwrite a hand-edited runner.
 
 Do not ask about routine creation of `.atk/runner/` or version-number selection.
 
 ## Failure behavior
 
-- If Agent invocation, dataset path/format, log source, or `agent_output` column conflict cannot be inferred safely, stop and ask the user to confirm before writing `eval_runner.py`.
+- If Agent invocation, dataset path/format, log source, Python logger names, or `agent_output` / `agent_output_log_path` column conflict cannot be inferred safely, stop and ask the user to confirm before writing `eval_runner.py`.
 - If required source files or dataset are missing, report the missing path and do not create a misleading runner.
 - If the generated runner cannot import the target Agent under the inferred project runtime, fix the import/runtime inference before handing off.
 - If an existing runner appears hand-edited, summarize the diff/intent and ask before overwrite.
@@ -103,8 +107,9 @@ After writing the runner, summarize:
 - inferred Agent entrypoint and dataset path;
 - inferred execution command/runtime, including whether bare `python3` is safe or a project runner such as `uv run python` is required;
 - preserved source columns and appended `agent_output` behavior;
+- appended `agent_output_log_path` behavior, including whether row logs will be active, downgraded, or unavailable;
 - bounded-run flags (`--limit`, `--offset`) and incremental `eval_results.csv` write behavior;
 - concurrency flag (`--concurrency`) and whether output row order is serial order or completion order when concurrency is greater than 1;
-- whether `app.log` will be captured;
+- whether `app.log` will be captured, and whether row-specific Python logging files under `logs/` will be captured;
 - next command to run: `atk-run`;
 - expected next output path `.atk/results/vN/eval_results.csv`.

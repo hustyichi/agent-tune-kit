@@ -19,13 +19,14 @@ Traceability note: section 2.5 defines report and cross-version validation, sect
 - Required current files:
   - `eval_results.csv`
   - `failure_cases.csv`
-- Optional current file: `app.log`.
+- Optional current files: `app.log` and row logs referenced by `agent_output_log_path`.
 - Previous version files, when available:
   - `tuning_plan.md`
   - `report.md`
   - `eval_results.csv`
   - `failure_cases.csv`
   - optional `app.log`
+  - optional row logs referenced by `agent_output_log_path`
 - Shared rules in `docs/shared-versioning-and-confirmation.md`.
 
 ## Outputs
@@ -37,11 +38,12 @@ Traceability note: section 2.5 defines report and cross-version validation, sect
 1. Resolve current version with `resolve_current_version()` using `RESULTS_DIR = Path(".atk/results")`.
 2. Require current files with `require_current_file(current_dir, "eval_results.csv")` and `require_current_file(current_dir, "failure_cases.csv")`.
 3. Read optional current `app.log` if present.
-4. Resolve previous version with `resolve_previous_version(current_dir)`.
-5. If no previous version exists, generate a single-version report and explain that no previous version can be compared.
-6. If previous version exists but lacks `tuning_plan.md`, degrade to a single-version or lower-confidence report with explicit explanation.
-7. If previous `tuning_plan.md` exists, extract targets from `## 目标异常清单`, compare them with current `eval_results.csv` and `failure_cases.csv`, and classify each target as `已解决`, `部分解决`, `未解决`, or `无法判断`.
-8. Write `report.md` in the current version directory.
+4. Prefer row-specific evidence from `agent_output_log_path` when a failure row references an existing log file; fall back to `app.log` only when row logs are blank, missing, or unavailable.
+5. Resolve previous version with `resolve_previous_version(current_dir)`.
+6. If no previous version exists, generate a single-version report and explain that no previous version can be compared.
+7. If previous version exists but lacks `tuning_plan.md`, degrade to a single-version or lower-confidence report with explicit explanation.
+8. If previous `tuning_plan.md` exists, extract targets from `## 目标异常清单`, compare them with current `eval_results.csv` and `failure_cases.csv`, and classify each target as `已解决`, `部分解决`, `未解决`, or `无法判断`.
+9. Write `report.md` in the current version directory.
 
 ## Required report structure
 
@@ -96,7 +98,7 @@ Ask before producing a cross-version judgment when:
 ## Failure behavior
 
 - Require current `eval_results.csv` and `failure_cases.csv`; if missing, stop and tell the user to run testing and failure finding first.
-- `app.log` is optional; if absent, explain that log-based attribution is unavailable.
+- Row logs and `app.log` are optional; if row logs are absent, explain that row-specific attribution is unavailable and use `app.log` as a fallback when present.
 - If previous version lacks `tuning_plan.md` or sample matching is unreliable, degrade to single-version or lower-confidence report with explicit explanation, not silent failure.
 - If a previous version exists but is missing optional comparison files, include the limitation and continue only where evidence supports it.
 
@@ -108,4 +110,5 @@ After writing the report, summarize:
 - counts of total and failure cases;
 - cross-version validation status distribution: `已解决` / `部分解决` / `未解决` / `无法判断`;
 - output path `.atk/results/vN/report.md`;
+- whether failure attribution used row-specific logs from `agent_output_log_path` or fell back to `app.log`;
 - whether the next step is `atk-tune`.

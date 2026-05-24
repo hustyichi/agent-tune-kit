@@ -32,6 +32,7 @@ Non-goals for this pass:
 - Versioned results: `.atk/results/vN/`
 - Test runner output: `.atk/results/vN/eval_results.csv`
 - Optional run log: `.atk/results/vN/app.log`
+- Optional serial row logs: `.atk/results/vN/logs/row_{source_index:06d}.log`, referenced from `agent_output_log_path`
 - Failure cases: `.atk/results/vN/failure_cases.csv`
 - Report: `.atk/results/vN/report.md`
 - Tuning plan: `.atk/results/vN/tuning_plan.md`
@@ -120,8 +121,8 @@ Ask before proceeding when any of these remain unresolved after inspection:
 - Agent invocation path, callable signature, required environment, or working directory;
 - target project Python runtime or import roots needed to load local Agent code;
 - dataset path, file format, encoding, delimiter, or field semantics;
-- an existing dataset column named `agent_output` conflicts with the required actual-output column;
-- app log source cannot be reliably captured or the capture method could alter Agent behavior;
+- an existing dataset column named `agent_output` conflicts with the required actual-output column, or `agent_output_log_path` conflicts with the required row-log evidence column;
+- app log source, Python `logging` logger names, or row-log capture method cannot be reliably captured or could alter Agent behavior;
 - failure criteria, expected-result columns, or pass/fail semantics are ambiguous;
 - current/previous-version sample matching is unreliable;
 - an existing `failure_rule.py` should be reused or updated by `atk-init-failure-rule`;
@@ -133,10 +134,10 @@ Do not ask for confirmation for routine, reversible local file generation when t
 ## Per-Skill preconditions and failure behavior
 
 - `atk-status`: no version directory is required. It inspects `.atk/` state and recommends the next Skill or manual command without bypassing confirmation triggers.
-- `atk-init`: no version directory is required. If Agent invocation, target runtime/import roots, dataset path/format, log source, or `agent_output` column conflict cannot be inferred safely, ask the user to confirm before writing `.atk/runner/eval_runner.py`. Generated runners should support `--limit`/`--offset`/`--concurrency`, write results incrementally, and be import-checked under the inferred project runtime without invoking the Agent.
-- `atk-run`: require `.atk/runner/eval_runner.py`; execute it as the short command surface for batch testing using the target repository's Python runtime when available (`uv run python`, `.venv/bin/python`, Poetry, then `python3`). Pass through safe runner flags such as `--limit`, `--offset`, and `--concurrency`. The runner remains the only component that creates or reuses result versions. If the runner fails or no current `eval_results.csv` is produced, report the failure and do not clean up partial version directories. If a partial `eval_results.csv` exists after interruption/failure, report it explicitly.
+- `atk-init`: no version directory is required. If Agent invocation, target runtime/import roots, dataset path/format, log source, Python `logging` logger names, or `agent_output` / `agent_output_log_path` column conflict cannot be inferred safely, ask the user to confirm before writing `.atk/runner/eval_runner.py`. Generated runners should support `--limit`/`--offset`/`--concurrency`, write results incrementally, add `agent_output_log_path`, create trustworthy serial row logs only for configured Python logging capture with `--concurrency == 1`, and be import-checked under the inferred project runtime without invoking the Agent.
+- `atk-run`: require `.atk/runner/eval_runner.py`; execute it as the short command surface for batch testing using the target repository's Python runtime when available (`uv run python`, `.venv/bin/python`, Poetry, then `python3`). Pass through safe runner flags such as `--limit`, `--offset`, and `--concurrency`. The runner remains the only component that creates or reuses result versions. If the runner fails or no current `eval_results.csv` is produced, report the failure and do not clean up partial version directories. If configured row logging is downgraded under `--concurrency > 1`, report that no `logs/row_*.log` files are expected and suggest `--concurrency 1` for row-specific evidence. If a partial `eval_results.csv` exists after interruption/failure, report it explicitly.
 - `atk-init-failure-rule`: require current `vN/eval_results.csv`; if no current version or missing `eval_results.csv`, stop with repair/rerun guidance. If existing `.atk/runner/failure_rule.py` exists, ask whether to reuse or update rule logic. This Skill generates or updates the rule script only; it does not write `failure_cases.csv`.
 - `atk-find-failures-by-rule`: require current `vN/eval_results.csv` and existing `.atk/runner/failure_rule.py`; if the script is missing, stop and tell the user to run `atk-init-failure-rule` first. Execute the script to write current `failure_cases.csv`; if `failure_cases.csv` already exists, confirm before overwriting.
 - `atk-find-failures`: require current `vN/eval_results.csv`; if expected-result columns or failure criteria are ambiguous, ask for judgment. It writes `failure_cases.csv` in the current version and states that the file is overwritten.
-- `atk-report`: require current `eval_results.csv` and `failure_cases.csv`; `app.log` is optional. If previous version lacks `tuning_plan.md` or sample matching is unreliable, degrade to single-version or lower-confidence report with explicit explanation, not silent failure.
+- `atk-report`: require current `eval_results.csv` and `failure_cases.csv`; row logs and `app.log` are optional. Prefer existing files referenced by `agent_output_log_path` for per-row failure attribution, then fall back to `app.log`. If previous version lacks `tuning_plan.md` or sample matching is unreliable, degrade to single-version or lower-confidence report with explicit explanation, not silent failure.
 - `atk-tune`: require current `report.md`; if missing, stop and tell the user to run report generation first. After changes, write `tuning_plan.md` with the exact headings `## 目标异常清单`, `## 调优手段`, and `## 关联改动`. Suggest user git commits/checkpoints; do not perform automatic Agent tuning workflow rollback/baseline restore.

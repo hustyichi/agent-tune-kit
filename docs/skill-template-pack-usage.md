@@ -73,7 +73,7 @@ Do not copy a single `skills/*` directory by itself; keep `skills/`, `templates/
 - `skills/atk-find-failures/SKILL.md` — inspect current `eval_results.csv` and write current `failure_cases.csv` using model judgment.
 - `skills/atk-report/SKILL.md` — write current `report.md`, including adjacent-version validation when possible.
 - `skills/atk-tune/SKILL.md` — tune the target Agent and write current `tuning_plan.md`.
-- `templates/.atk/runner/eval_runner.py.md` — script template preserving original dataset columns and appending `agent_output`.
+- `templates/.atk/runner/eval_runner.py.md` — script template preserving original dataset columns and appending `agent_output` plus `agent_output_log_path`.
 - `templates/.atk/runner/failure_rule.py.md` — stdlib CSV rule-filter template.
 - `docs/shared-versioning-and-confirmation.md` — shared current/new version semantics and confirmation triggers.
 - `scripts/install_plugin.py` — safe local marketplace installer/smoke/status/rollback tool.
@@ -84,11 +84,11 @@ Do not copy a single `skills/*` directory by itself; keep `skills/`, `templates/
 1. Prepare the local Agent service and evaluation dataset.
 2. Trigger `atk-status` to inspect state and route to the right stage.
 3. Trigger `atk-init` in Codex. The Skill reads the Agent source and dataset, asks only about unsafe ambiguity, then writes `.atk/runner/eval_runner.py`.
-4. Trigger `atk-run`. It executes `python3 .atk/runner/eval_runner.py`; the runner creates or reuses a version directory and writes `.atk/results/vN/eval_results.csv` plus optional `app.log`.
+4. Trigger `atk-run`. It executes `python3 .atk/runner/eval_runner.py`; the runner creates or reuses a version directory and writes `.atk/results/vN/eval_results.csv` plus optional `app.log`. When Python `logging` row capture is configured and `--concurrency == 1`, it also creates `.atk/results/vN/logs/row_{source_index:06d}.log` files and records relative POSIX paths in `agent_output_log_path`; under `--concurrency > 1`, row logging is visibly downgraded and no mixed per-row logs are created.
 5. Choose one failure-finding entry:
    - Rule path: trigger `atk-init-failure-rule` to create/update `.atk/runner/failure_rule.py`, then trigger `atk-find-failures-by-rule` to execute it and write `failure_cases.csv`. If the script is missing, `atk-find-failures-by-rule` stops with guidance to run `atk-init-failure-rule` first.
    - Or trigger `atk-find-failures` to write `failure_cases.csv` directly from the current `eval_results.csv`.
-6. Trigger `atk-report` to create `.atk/results/vN/report.md`. From `v2` onward, it compares the current version with the previous existing version and reads the previous `tuning_plan.md` when available.
+6. Trigger `atk-report` to create `.atk/results/vN/report.md`. From `v2` onward, it compares the current version with the previous existing version and reads the previous `tuning_plan.md` when available. Reports prefer row-specific files referenced by `agent_output_log_path` and fall back to `app.log` when row logs are unavailable.
 7. Trigger `atk-tune` to change the Agent and write `.atk/results/vN/tuning_plan.md`.
 8. Optionally create a user git commit/checkpoint. Agent tuning rollback remains user-git-only guidance; this plugin does not automate Agent code restore.
 9. Run the same loop again. The next test run creates `v{N+1}` when the current max version already has `eval_results.csv`.
