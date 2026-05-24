@@ -115,13 +115,13 @@ $atk-run
 如果你希望 Codex 帮你判断哪些结果异常，直接用：
 
 ```text
-$atk-filter
+$atk-find-failures
 ```
 
 如果你有明确规则，例如“期望答案不等于输出就是异常”，可以用：
 
 ```text
-$atk-filter-rules
+$atk-find-failures-by-rule
 ```
 
 异常结果会写入：
@@ -173,7 +173,7 @@ $atk-run
 这次会生成 `.atk/results/v2/results.csv`。继续执行异常筛选和报告生成：
 
 ```text
-$atk-filter
+$atk-find-failures
 $atk-report
 ```
 
@@ -185,7 +185,7 @@ $atk-report
 $atk-status
 $atk-setup
 $atk-run
-$atk-filter
+$atk-find-failures
 $atk-report
 $atk-tune
 ```
@@ -216,8 +216,8 @@ $atk-tune
 - `$atk-status`：检查当前进度，告诉你下一步。
 - `$atk-setup`：生成适配当前 Agent 的测试脚本。
 - `$atk-run`：运行测试脚本并生成当前版本结果。
-- `$atk-filter`：让 Codex 判断异常样本。
-- `$atk-filter-rules`：按明确规则筛选异常样本。
+- `$atk-find-failures`：让 Codex 判断异常样本。
+- `$atk-find-failures-by-rule`：按明确规则筛选异常样本。
 - `$atk-report`：生成分析报告和跨轮验证结论。
 - `$atk-tune`：根据报告修改 Agent，并记录本轮调优计划。
 
@@ -233,8 +233,8 @@ $atk-tune
 - `skills/atk-status/SKILL.md`
 - `skills/atk-setup/SKILL.md`
 - `skills/atk-run/SKILL.md`
-- `skills/atk-filter-rules/SKILL.md`
-- `skills/atk-filter/SKILL.md`
+- `skills/atk-find-failures-by-rule/SKILL.md`
+- `skills/atk-find-failures/SKILL.md`
 - `skills/atk-report/SKILL.md`
 - `skills/atk-tune/SKILL.md`
 - `templates/.atk/runner/test_runner.py.md`

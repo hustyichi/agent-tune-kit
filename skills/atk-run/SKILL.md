@@ -48,7 +48,7 @@ Traceability note: section 2.3 defines manual batch execution, section 4 defines
 
 4. Read the runner output and inspect `.atk/results/` to identify the numerically largest `vN` directory.
 5. Confirm whether `results.csv` exists in that version.
-6. Summarize the output path and recommend `atk-filter` as the usual next step.
+6. Summarize the output path and recommend `atk-find-failures` as the usual next step.
 
 ## Shared version rules
 
@@ -91,4 +91,4 @@ After a successful run, summarize:
 - current version directory;
 - output path `.atk/results/vN/results.csv`;
 - whether optional `app.log` was produced;
-- next recommended Skill: `atk-filter`.
+- next recommended Skill: `atk-find-failures`.

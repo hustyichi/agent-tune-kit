@@ -1,17 +1,17 @@
 ---
-name: atk-filter
-description: Use Codex judgment to filter the current Agent tuning results into abnormal_cases.csv without generating a rule script.
+name: atk-find-failures
+description: Use Codex judgment to find failing Agent tuning cases and write abnormal_cases.csv without generating a rule script.
 ---
 
-# Agent Tuning — Filter Abnormal Cases (LLM)
+# Agent Tuning — Find Failures
 
 ## Purpose
 
-Read the current version's `results.csv`, infer or apply the abnormal-case criteria, and write `abnormal_cases.csv` directly. This Skill maps to `docs/codex_agent_tuning_prd.md` sections 2.4, 4, 5, and 7.
+Read the current version's `results.csv`, infer or apply the failure criteria, and write failing or abnormal rows to `abnormal_cases.csv` directly. This Skill maps to `docs/codex_agent_tuning_prd.md` sections 2.4, 4, 5, and 7.
 
-This is separate from `atk-filter-rules`; both write the same current-version filename `abnormal_cases.csv` and either mode may overwrite the other.
+This is separate from `atk-find-failures-by-rule`; both write the same current-version filename `abnormal_cases.csv` and either mode may overwrite the other.
 
-Traceability note: section 2.4 defines abnormal filtering entries, section 4 defines current-version behavior, and section 7 defines delivery requirements.
+Traceability note: section 2.4 defines abnormal-case discovery entries, section 4 defines current-version behavior, and section 7 defines delivery requirements.
 
 ## Inputs
 
@@ -31,12 +31,12 @@ Traceability note: section 2.4 defines abnormal filtering entries, section 4 def
 1. Resolve current version with `resolve_current_version()` using `RESULTS_DIR = Path(".atk/results")`.
 2. Require `results.csv` with `require_current_file(current_dir, "results.csv")`.
 3. Inspect headers and samples to identify original input fields, expected-result fields, and `agent_output`.
-4. If the user supplied abnormal criteria, apply them. Otherwise infer likely abnormal cases from Agent output versus expected results.
+4. If the user supplied failure criteria, apply them. Otherwise infer likely failing or abnormal cases from Agent output versus expected results.
 5. If criteria or expected-result columns are ambiguous, ask the user for judgment before writing.
 6. State that `abnormal_cases.csv` in the current version will be overwritten.
 7. Write abnormal rows, preserving all original `results.csv` columns and adding optional explanatory columns only when useful.
 
-## Required filtering behavior
+## Required failure-finding behavior
 
 - Use the current version directory, not a user-supplied version argument.
 - Read current `results.csv` and write current `abnormal_cases.csv`.
@@ -59,14 +59,14 @@ The current version is the numerically largest `vN` directory even if it is miss
 Ask before writing when:
 
 - `results.csv` does not clearly identify expected-result columns;
-- abnormal criteria cannot be inferred from `agent_output` and expected fields;
+- failure criteria cannot be inferred from `agent_output` and expected fields;
 - multiple interpretations would materially change which rows are abnormal;
 - current `abnormal_cases.csv` exists and may contain user-edited content.
 
 ## Failure behavior
 
 - Require current `vN/results.csv`; if no current version or missing `results.csv`, stop with repair/rerun guidance.
-- If expected-result columns or abnormal criteria are ambiguous, ask for judgment.
+- If expected-result columns or failure criteria are ambiguous, ask for judgment.
 - Overwrite current `abnormal_cases.csv` only after stating the overwrite behavior.
 - If dataset volume is too large for safe direct model inspection, propose a bounded sampling/partition plan and ask only if the partitioning could change the result semantics.
 

@@ -1,17 +1,17 @@
 ---
-name: atk-filter-rules
-description: Generate or update a reusable rule-based abnormal-case filter script for the current Agent tuning results version.
+name: atk-find-failures-by-rule
+description: Generate or update a reusable rule-based script for finding failing Agent tuning cases in the current results version.
 ---
 
-# Agent Tuning — Filter Abnormal Cases (Rules)
+# Agent Tuning — Find Failures by Rule
 
 ## Purpose
 
-Create or update `.atk/runner/filter_abnormal.py` so the user can manually filter the current version's `results.csv` into `abnormal_cases.csv`. This Skill maps to `docs/codex_agent_tuning_prd.md` sections 2.4, 4, 5, and 7.
+Create or update `.atk/runner/filter_abnormal.py` so the user can find failing or abnormal rows in the current version's `results.csv` and write them to `abnormal_cases.csv`. This Skill maps to `docs/codex_agent_tuning_prd.md` sections 2.4, 4, 5, and 7.
 
 This Skill generates/reuses a script and instructs the user to run it manually. It does not run `filter_abnormal.py` itself in the normal PRD flow.
 
-Traceability note: section 2.4 defines abnormal filtering entries, section 4 defines current-version behavior, and section 7 defines delivery requirements.
+Traceability note: section 2.4 defines rule-based abnormal-case discovery, section 4 defines current-version behavior, and section 7 defines delivery requirements.
 
 ## Inputs
 
@@ -38,7 +38,7 @@ Traceability note: section 2.4 defines abnormal filtering entries, section 4 def
 6. Write/update `filter_abnormal.py` from `templates/.atk/runner/filter_abnormal.py.md`.
 7. Tell the user to run `python3 .atk/runner/filter_abnormal.py`.
 
-## Required filter behavior
+## Required rule behavior
 
 - Use the current version directory, not a user-supplied version argument.
 - Read current `results.csv` and write current `abnormal_cases.csv`.

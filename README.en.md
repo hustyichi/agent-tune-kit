@@ -110,21 +110,21 @@ This writes:
 .atk/results/v1/results.csv
 ```
 
-### 4. Find abnormal cases
+### 4. Find failing cases
 
-For the simplest path, let Codex judge abnormal cases:
+For the simplest path, let Codex judge which cases failed:
 
 ```text
-$atk-filter
+$atk-find-failures
 ```
 
 If you already have a clear rule, use the rule-based Skill instead:
 
 ```text
-$atk-filter-rules
+$atk-find-failures-by-rule
 ```
 
-The abnormal cases are written to:
+The failing cases are written to:
 
 ```text
 .atk/results/v1/abnormal_cases.csv
@@ -171,7 +171,7 @@ $atk-run
 This creates `.atk/results/v2/results.csv`. Then run:
 
 ```text
-$atk-filter
+$atk-find-failures
 $atk-report
 ```
 
@@ -183,7 +183,7 @@ Starting with the second loop, the report reads the previous `tuning_plan.md` an
 $atk-status
 $atk-setup
 $atk-run
-$atk-filter
+$atk-find-failures
 $atk-report
 $atk-tune
 ```
@@ -214,8 +214,8 @@ Most users only need to read `results.csv`, `abnormal_cases.csv`, and `report.md
 - `$atk-status`: inspect progress and recommend the next step.
 - `$atk-setup`: generate a test runner for the current Agent.
 - `$atk-run`: run the test runner and create the current result version.
-- `$atk-filter`: let Codex identify abnormal cases.
-- `$atk-filter-rules`: identify abnormal cases with explicit rules.
+- `$atk-find-failures`: let Codex identify failing cases.
+- `$atk-find-failures-by-rule`: identify failing cases with explicit rules.
 - `$atk-report`: generate analysis and cross-loop validation.
 - `$atk-tune`: tune the Agent and record the tuning plan.
 
@@ -231,8 +231,8 @@ Out of scope for this pass: no public marketplace release, no brand assets/scree
 - `skills/atk-status/SKILL.md`
 - `skills/atk-setup/SKILL.md`
 - `skills/atk-run/SKILL.md`
-- `skills/atk-filter-rules/SKILL.md`
-- `skills/atk-filter/SKILL.md`
+- `skills/atk-find-failures-by-rule/SKILL.md`
+- `skills/atk-find-failures/SKILL.md`
 - `skills/atk-report/SKILL.md`
 - `skills/atk-tune/SKILL.md`
 - `templates/.atk/runner/test_runner.py.md`

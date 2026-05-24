@@ -21,7 +21,7 @@
   "interface": {
     "displayName": "Agent Tune Kit",
     "shortDescription": "Run a guided local Agent tuning loop",
-    "longDescription": "Agent Tune Kit provides Codex Skills for generating local test runners, filtering abnormal cases, reporting regressions and improvements, and applying focused Agent tuning with versioned local artifacts.",
+    "longDescription": "Agent Tune Kit provides Codex Skills for generating local test runners, finding failing cases, reporting regressions and improvements, and applying focused Agent tuning with versioned local artifacts.",
     "developerName": "hustyichi",
     "category": "Coding",
     "capabilities": [

@@ -13,8 +13,8 @@ This Skill preserves the existing stage Skill contracts:
 
 - `atk-setup`
 - `atk-run`
-- `atk-filter-rules`
-- `atk-filter`
+- `atk-find-failures-by-rule`
+- `atk-find-failures`
 - `atk-report`
 - `atk-tune`
 
@@ -47,7 +47,7 @@ It does not bypass existing confirmation triggers, does not perform full automat
 3. Recommend the next step:
    - no runner: trigger `atk-setup`;
    - runner exists but no current `results.csv`: trigger `atk-run`;
-   - current `results.csv` exists but no `abnormal_cases.csv`: choose `atk-filter-rules` or `atk-filter`;
+   - current `results.csv` exists but no `abnormal_cases.csv`: choose `atk-find-failures-by-rule` or `atk-find-failures`;
    - current `abnormal_cases.csv` exists but no `report.md`: trigger `atk-report`;
    - current `report.md` exists but no `tuning_plan.md`: trigger `atk-tune`;
    - current `tuning_plan.md` exists: optionally create a user git checkpoint, then trigger `atk-run` to create the next version.

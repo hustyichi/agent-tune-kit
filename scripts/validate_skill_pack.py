@@ -20,8 +20,8 @@ REQUIRED_FILES = [
     "skills/atk-status/SKILL.md",
     "skills/atk-setup/SKILL.md",
     "skills/atk-run/SKILL.md",
-    "skills/atk-filter-rules/SKILL.md",
-    "skills/atk-filter/SKILL.md",
+    "skills/atk-find-failures-by-rule/SKILL.md",
+    "skills/atk-find-failures/SKILL.md",
     "skills/atk-report/SKILL.md",
     "skills/atk-tune/SKILL.md",
     "templates/.atk/runner/test_runner.py.md",
@@ -125,8 +125,8 @@ PER_FILE_PHRASES = {
         "does not perform full automatic tuning",
         "atk-setup",
         "atk-run",
-        "atk-filter-rules",
-        "atk-filter",
+        "atk-find-failures-by-rule",
+        "atk-find-failures",
         "atk-report",
         "atk-tune",
         "RESULTS_DIR = Path(\".atk/results\")",
@@ -148,9 +148,9 @@ PER_FILE_PHRASES = {
         "--concurrency",
         "RESULTS_DIR = Path(\".atk/results\")",
         "If the runner is missing",
-        "next recommended Skill: `atk-filter`",
+        "next recommended Skill: `atk-find-failures`",
     ],
-    "skills/atk-filter-rules/SKILL.md": [
+    "skills/atk-find-failures-by-rule/SKILL.md": [
         ".atk/runner/filter_abnormal.py",
         "require_current_file(current_dir, \"results.csv\")",
         "It does not run `filter_abnormal.py` itself",
@@ -158,9 +158,9 @@ PER_FILE_PHRASES = {
         "manual execution",
         "overwrites the current version's existing file",
     ],
-    "skills/atk-filter/SKILL.md": [
-        "write `abnormal_cases.csv` directly",
-        "expected-result columns or abnormal criteria are ambiguous",
+    "skills/atk-find-failures/SKILL.md": [
+        "write failing or abnormal rows to `abnormal_cases.csv` directly",
+        "expected-result columns or failure criteria are ambiguous",
         "Overwrites",
         "No `filter_abnormal.py` is required",
         "preserving all original `results.csv` columns",
@@ -234,8 +234,8 @@ PER_FILE_PHRASES = {
         "atk-status",
         "atk-setup",
         "atk-run",
-        "atk-filter-rules",
-        "atk-filter",
+        "atk-find-failures-by-rule",
+        "atk-find-failures",
         "atk-report",
         "atk-tune",
         "python3 scripts/validate_skill_pack.py",
@@ -249,8 +249,8 @@ PER_FILE_PHRASES = {
         "atk-status",
         "atk-setup",
         "atk-run",
-        "atk-filter-rules",
-        "atk-filter",
+        "atk-find-failures-by-rule",
+        "atk-find-failures",
         "atk-report",
         "atk-tune",
         "python3 scripts/validate_skill_pack.py",
@@ -264,8 +264,8 @@ PER_FILE_PHRASES = {
         "atk-status",
         "atk-setup",
         "atk-run",
-        "atk-filter-rules",
-        "atk-filter",
+        "atk-find-failures-by-rule",
+        "atk-find-failures",
         "atk-report",
         "atk-tune",
         "python3 scripts/validate_skill_pack.py",
@@ -435,10 +435,10 @@ def main() -> int:
     require("--concurrency" in runner_template and "ThreadPoolExecutor" in runner_template, "runner template must support concurrent runs", errors)
     require("writer.writerow(result_row)" in runner_template and "os.fsync(handle.fileno())" in runner_template, "runner template must write and flush results incrementally", errors)
 
-    rules_skill = existing_texts.get("skills/atk-filter-rules/SKILL.md", "")
-    llm_skill = existing_texts.get("skills/atk-filter/SKILL.md", "")
-    require("atk-filter-rules" in rules_skill, "rules abnormal Skill identity missing", errors)
-    require("atk-filter" in llm_skill, "LLM abnormal Skill identity missing", errors)
+    rules_skill = existing_texts.get("skills/atk-find-failures-by-rule/SKILL.md", "")
+    llm_skill = existing_texts.get("skills/atk-find-failures/SKILL.md", "")
+    require("atk-find-failures-by-rule" in rules_skill, "rules abnormal Skill identity missing", errors)
+    require("atk-find-failures" in llm_skill, "LLM abnormal Skill identity missing", errors)
     require("abnormal_cases.csv" in rules_skill and "abnormal_cases.csv" in llm_skill, "both abnormal Skills must write abnormal_cases.csv", errors)
 
     filter_template = existing_texts.get("templates/.atk/runner/filter_abnormal.py.md", "")
