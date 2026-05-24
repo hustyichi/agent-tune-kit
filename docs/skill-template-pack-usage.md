@@ -66,7 +66,7 @@ Do not copy a single `skills/*` directory by itself; keep `skills/`, `templates/
 
 - `.codex-plugin/plugin.json` — local plugin manifest using `skills: "./skills/"`.
 - `skills/atk-status/SKILL.md` — guided router/status Skill that recommends the next step without bypassing confirmation gates.
-- `skills/atk-setup/SKILL.md` — generate `.atk/runner/test_runner.py`.
+- `skills/atk-init/SKILL.md` — generate `.atk/runner/test_runner.py`.
 - `skills/atk-run/SKILL.md` — run `.atk/runner/test_runner.py` through a short Skill command and summarize the current results version.
 - `skills/atk-find-failures-by-rule/SKILL.md` — generate or update `.atk/runner/filter_abnormal.py` for rule-based failure finding.
 - `skills/atk-find-failures/SKILL.md` — inspect current `results.csv` and write current `failure_cases.csv` using model judgment.
@@ -82,7 +82,7 @@ Do not copy a single `skills/*` directory by itself; keep `skills/`, `templates/
 
 1. Prepare the local Agent service and evaluation dataset.
 2. Trigger `atk-status` to inspect state and route to the right stage.
-3. Trigger `atk-setup` in Codex. The Skill reads the Agent source and dataset, asks only about unsafe ambiguity, then writes `.atk/runner/test_runner.py`.
+3. Trigger `atk-init` in Codex. The Skill reads the Agent source and dataset, asks only about unsafe ambiguity, then writes `.atk/runner/test_runner.py`.
 4. Trigger `atk-run`. It executes `python3 .atk/runner/test_runner.py`; the runner creates or reuses a version directory and writes `.atk/results/vN/results.csv` plus optional `app.log`.
 5. Choose one failure-finding entry:
    - Trigger `atk-find-failures-by-rule`, then manually run `python3 .atk/runner/filter_abnormal.py` to write `failure_cases.csv`.

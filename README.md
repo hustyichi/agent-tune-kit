@@ -80,10 +80,10 @@ python3 scripts/install_plugin.py rollback --backup <backup-id>  # 只回滚 ins
 输入时请同时说明 Agent 从哪里启动、评估数据在哪里，例如：
 
 ```text
-$atk-setup 我希望调优的 Agent 服务为 scripts/merge_js_simple.py，对应的数据集为 scripts/service_source_codes.csv
+$atk-init 我希望调优的 Agent 服务为 scripts/merge_js_simple.py，对应的数据集为 scripts/service_source_codes.csv
 ```
 
-不要只输入空的 `$atk-setup`。Codex 需要这些路径来读取项目代码和数据样例，然后生成：
+不要只输入空的 `$atk-init`。Codex 需要这些路径来读取项目代码和数据样例，然后生成：
 
 ```text
 .atk/runner/test_runner.py
@@ -196,7 +196,7 @@ $atk-report
 ## 可用 Skill
 
 - `$atk-status`：检查当前进度，告诉你下一步。
-- `$atk-setup`：生成适配当前 Agent 的测试脚本。
+- `$atk-init`：生成适配当前 Agent 的测试脚本。
 - `$atk-run`：运行测试脚本并生成当前版本结果。
 - `$atk-find-failures`：让 Codex 判断异常样本。
 - `$atk-find-failures-by-rule`：按明确规则筛选异常样本。

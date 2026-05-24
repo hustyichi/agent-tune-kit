@@ -80,7 +80,7 @@ Run these steps in **your Agent repository**, not in this Agent Tune Kit reposit
 Run:
 
 ```text
-$atk-setup
+$atk-init
 ```
 
 Point Codex to your Agent entrypoint and evaluation dataset. Codex generates:
@@ -194,7 +194,7 @@ Most users only need to read `results.csv`, `failure_cases.csv`, and `report.md`
 ## Available Skills
 
 - `$atk-status`: inspect progress and recommend the next step.
-- `$atk-setup`: generate a test runner for the current Agent.
+- `$atk-init`: generate a test runner for the current Agent.
 - `$atk-run`: run the test runner and create the current result version.
 - `$atk-find-failures`: let Codex identify failing cases.
 - `$atk-find-failures-by-rule`: identify failing cases with explicit rules.

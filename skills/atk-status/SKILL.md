@@ -11,7 +11,7 @@ Use this Skill when a user wants to inspect or resume an Agent Tune Kit workflow
 
 This Skill preserves the existing stage Skill contracts:
 
-- `atk-setup`
+- `atk-init`
 - `atk-run`
 - `atk-find-failures-by-rule`
 - `atk-find-failures`
@@ -45,7 +45,7 @@ It does not bypass existing confirmation triggers, does not perform full automat
    - non-runner Skills use the numerically largest existing `vN` as current;
    - only `test_runner.py` creates or reuses result versions.
 3. Recommend the next step:
-   - no runner: trigger `atk-setup`;
+   - no runner: trigger `atk-init`;
    - runner exists but no current `results.csv`: trigger `atk-run`;
    - current `results.csv` exists but no `failure_cases.csv`: choose `atk-find-failures-by-rule` or `atk-find-failures`;
    - current `failure_cases.csv` exists but no `report.md`: trigger `atk-report`;
@@ -77,7 +77,7 @@ Ask a concise question only when inspection cannot safely decide:
 
 ## Failure behavior
 
-- If no Agent project or dataset can be identified, stop with a recommendation to provide the target Agent path and dataset path, then use `atk-setup`.
+- If no Agent project or dataset can be identified, stop with a recommendation to provide the target Agent path and dataset path, then use `atk-init`.
 - If `.atk/results/` has malformed version directories, ignore non-`vN` names and report the evidence.
 - If the current version is missing a required file, direct the user to the prior stage instead of silently using an older version.
 - If executing a command would alter user data or invoke the Agent, do not do it from this router Skill unless the user explicitly requested that execution.

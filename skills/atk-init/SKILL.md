@@ -1,5 +1,5 @@
 ---
-name: atk-setup
+name: atk-init
 description: Generate a reusable test runner for a local Agent and dataset, preserving source columns and writing versioned results.csv with agent_output.
 ---
 

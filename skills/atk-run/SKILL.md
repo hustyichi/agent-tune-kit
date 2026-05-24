@@ -9,7 +9,7 @@ description: Run the generated Agent tuning test runner and summarize the curren
 
 Use this Skill when a user wants the short ATK command for running the generated Agent tuning test runner. It maps to `docs/codex_agent_tuning_prd.md` sections 2.3, 4, 5, and 7.
 
-This Skill executes the project-local `.atk/runner/test_runner.py` after `atk-setup` has generated it. It keeps `test_runner.py` as the only component that creates or reuses result versions. It should use the target repository's Python runtime, not blindly assume system `python3` has the project's dependencies.
+This Skill executes the project-local `.atk/runner/test_runner.py` after `atk-init` has generated it. It keeps `test_runner.py` as the only component that creates or reuses result versions. It should use the target repository's Python runtime, not blindly assume system `python3` has the project's dependencies.
 
 Traceability note: section 2.3 defines manual batch execution, section 4 defines version management, and section 7 defines delivery requirements.
 
@@ -64,7 +64,7 @@ Only `test_runner.py` creates or reuses result versions. This Skill is a short c
 
 Ask before running only when:
 
-- `.atk/runner/test_runner.py` is missing and `atk-setup` has not been run;
+- `.atk/runner/test_runner.py` is missing and `atk-init` has not been run;
 - the current directory does not appear to be the intended target Agent repository;
 - the runner appears hand-edited in a way that may execute external production systems, destructive writes, or credential-gated actions;
 - the user explicitly asked for a dry run or inspection only.
@@ -74,9 +74,9 @@ Do not ask before passing through safe runner controls such as `--limit`, `--off
 
 ## Failure behavior
 
-- If the runner is missing, stop and tell the user to run `atk-setup` first.
+- If the runner is missing, stop and tell the user to run `atk-init` first.
 - If the runner fails with `ModuleNotFoundError` or dependency import errors under bare `python3`, retry once with the best project runtime discovered from the repository (`uv run python`, `.venv/bin/python`, or `poetry run python`) before reporting failure.
-- If the runner still cannot import the target Agent, report this as an `atk-setup` generation/runtime inference problem and recommend regenerating the runner after updating setup rules.
+- If the runner still cannot import the target Agent, report this as an `atk-init` generation/runtime inference problem and recommend regenerating the runner after updating setup rules.
 - If the runner exits non-zero, report the failure output and do not claim a result version was produced unless `results.csv` exists.
 - If `results.csv` is missing from the current version after execution, tell the user the run did not complete and point to the runner output for repair.
 - If the user interrupts the run, do not clean up the partial version. Inspect whether the current version contains a partial `results.csv` and report the number of rows written if it can be read.
