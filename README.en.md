@@ -91,6 +91,8 @@ Point Codex to your Agent entrypoint and evaluation dataset. Codex generates:
 
 The runner keeps your original dataset columns and adds the Agent's actual output as `agent_output`. It also adds `agent_output_log_path`; when trustworthy Python `logging` capture is configured, this column points to row-specific files such as `logs/row_000001.log` for serial or same-process concurrent runs.
 
+`$atk-init` first snapshots the provided dataset into `.atk/datasets/`, and the generated runner reads that project-local copy. If a same-name snapshot already exists with identical content, it is reused; if the name exists with different content, ATK uses readable incrementing names such as `dataset_2.csv` and `dataset_3.csv`.
+
 ### 2. Run the Agent on the dataset
 
 Run:
@@ -192,6 +194,8 @@ Starting with the second loop, the report reads the previous `tuning_plan.md` an
 
 ```text
 .atk/
+├── datasets/
+│   └── service_source_codes.csv
 ├── runner/
 │   ├── eval_runner.py
 │   └── failure_rule.py

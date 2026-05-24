@@ -30,6 +30,7 @@
 - **功能**：
   - 用户需要准备需要调优的 Agent 服务以及可以用于评估的数据集
   - 系统需要在项目内维护统一父目录 `.atk/`
+  - 用户提供的数据集需要在生成测试脚本时快照复制到 `.atk/datasets/`
   - 所有共享脚本需要存储在 `.atk/runner/`
   - 所有版本化结果需要存储在 `.atk/results/{version}/`
   - 用户不需要手工指定当前调优版本，版本由各模块自动创建或识别
@@ -37,10 +38,12 @@
 ### 2.2 批量测试脚本生成模块（Codex Skill）
 - **功能**：
   - Skill 阅读待调优 Agent 的源码与用户提供的数据集，生成 Python 测试脚本 `eval_runner.py`
+  - Skill 在生成脚本前将用户提供的数据集复制到 `.atk/datasets/`，生成的脚本读取该项目内快照，避免外部数据集移动导致后续执行失败
   - 脚本需要能够：批量读取数据集、调用本地 Agent、记录每条样本的输入/输出/预期结果到 `eval_results.csv`、按需采集 Agent 运行日志到 `app.log`，并在可信场景下写入逐行日志引用 `agent_output_log_path`
   - **日志采集方案**：由 Skill 在阅读 Agent 源码后自行决定采集方式（例如 stdout 重定向、读取 Agent 写入的日志文件、Hook 日志框架等），并将逻辑固化在生成的 `eval_runner.py` 中；若 Agent 无可识别日志，则不生成 `app.log`
   - **逐行日志方案**：当可识别的日志源是同进程 Python `logging` 时，生成的 runner 可默认使用 stdlib `contextvars` 与 ATK 自有 `logging.Handler` 路由器，为每条源数据行写入 `.atk/results/vN/logs/row_{source_index:06d}.log`，并在 `eval_results.csv` 的 `agent_output_log_path` 中写入相对 POSIX 路径；即使该行没有日志记录，也要创建被引用的空文件。逐行日志只能包含 ATK 行上下文处于活动状态时发出的记录；stdout/stderr、子进程、多进程和行结束后的后台日志不进入逐行日志。若生成的并发逐行日志开关被禁用，`--concurrency > 1` 必须在运行输出中显式降级并使用 `app.log` 作为回退证据。
   - **数据集适配**：以 CSV 为主，列名由 Skill 推断；若数据集为其它格式，由 Skill 自行扩展读取逻辑
+  - **数据集快照命名与去重**：快照文件名优先保留原始文件名以便阅读；若 `.atk/datasets/` 下已有同名文件且内容完全一致，则复用已有快照，不创建重复文件；若同名但内容不同，则使用可读数字后缀（如 `dataset_2.csv`、`dataset_3.csv`）选择第一个未占用文件名，或在已有后缀文件内容一致时复用该文件。内容比较应使用可靠摘要（如 `sha256`），可先用文件大小做快速预筛。
   - **`eval_results.csv` 字段约定**：
     - 原则上**完整保留用户输入数据集的所有原始列**（列名、列顺序均不改动），在此基础上追加 Agent 运行产生的列
     - **强约束**：Agent 的实际输出必须写入固定列名 `agent_output`；若 Agent 返回多字段结构化结果，可序列化为 JSON 字符串存入该列，或额外追加 `agent_output_*` 前缀的辅助列
@@ -177,6 +180,7 @@
 ## 4. 版本管理要求
 - **统一父目录**：
   - 所有调优相关产物统一放在 `.atk/` 下
+  - `.atk/datasets/` 存放由 `atk-init` 复制的数据集快照
   - `.atk/runner/` 存放跨版本共享脚本
   - `.atk/results/` 存放按版本隔离的结果
 - **版本命名**：
@@ -201,6 +205,7 @@
   - 跨版本验证结果写入当前版本 `report.md`，不新增独立对比报告文件
   - 当上一版本不存在或缺少 `tuning_plan.md` 时，报告 Skill 退化为单版本报告并说明原因
 - **目录职责**：
+  - `.atk/datasets/`：存放生成 runner 时使用的数据集快照；runner 读取这里的稳定副本，不依赖外部源路径
   - `.atk/runner/`：跨版本共享脚本，例如 `eval_runner.py`、`failure_rule.py`
   - `.atk/results/{version}/`：存放该轮调优的测试结果、日志、异常数据、报告与调优计划
 - **兼容要求**：
@@ -237,6 +242,8 @@
 ## 6. 输出文件结构
 ```text
 /.atk/
+├── datasets/
+│   └── service_source_codes.csv # atk-init 复制的数据集快照
 ├── runner/
 │   ├── eval_runner.py          # 跨版本共享测试脚本
 │   └── failure_rule.py          # 跨版本共享失败判定规则脚本（规则模式使用）

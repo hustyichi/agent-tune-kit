@@ -21,8 +21,8 @@ def render_runner(*, concurrent_enabled: bool = True, inject_context_free_log: b
     assert match is not None, "runner template must contain a Python code fence"
     code = match.group(1)
     code = code.replace(
-        'DATASET_PATH = Path("TODO_AGENT_TUNING_DATASET_PATH")',
-        'DATASET_PATH = Path("dataset.csv")',
+        'DATASET_PATH = DATASETS_DIR / "TODO_AGENT_TUNING_DATASET_SNAPSHOT"',
+        'DATASET_PATH = DATASETS_DIR / "dataset.csv"',
     )
     code = code.replace("PYTHON_LOGGING_CAPTURE_ENABLED = False", "PYTHON_LOGGING_CAPTURE_ENABLED = True")
     code = code.replace(
@@ -92,7 +92,8 @@ def run_rendered_runner(
         render_runner(concurrent_enabled=concurrent_enabled, inject_context_free_log=inject_context_free_log),
         encoding="utf-8",
     )
-    dataset_path = temp_dir / "dataset.csv"
+    dataset_path = temp_dir / ".atk/datasets/dataset.csv"
+    dataset_path.parent.mkdir(parents=True)
     with dataset_path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=["token", "mode"])
         writer.writeheader()
@@ -116,6 +117,13 @@ def read_results(temp_dir: Path) -> list[dict[str, str]]:
 
 
 class RunnerTemplateRowLoggingTests(unittest.TestCase):
+    def test_template_reads_dataset_from_atk_datasets_snapshot(self) -> None:
+        rendered = render_runner()
+
+        self.assertIn('DATASETS_DIR = Path(".atk/datasets")', rendered)
+        self.assertIn('DATASET_PATH = DATASETS_DIR / "dataset.csv"', rendered)
+        self.assertNotIn("TODO_AGENT_TUNING_DATASET_SNAPSHOT", rendered)
+
     def test_concurrent_row_logs_do_not_cross_contaminate_or_capture_context_free_records(self) -> None:
         completed, temp_dir = run_rendered_runner(
             [

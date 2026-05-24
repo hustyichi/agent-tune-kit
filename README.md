@@ -91,6 +91,8 @@ $atk-init 我希望调优的 Agent 服务为 scripts/merge_js_simple.py，对应
 
 这个脚本会保留你的原始数据列，并额外写入 Agent 的实际输出列 `agent_output`。它还会追加 `agent_output_log_path`；当可信的 Python `logging` 采集已配置时，该列会在串行或同进程并发运行中指向类似 `logs/row_000001.log` 的逐行日志文件。
 
+`$atk-init` 会先把你提供的数据集快照复制到 `.atk/datasets/`，生成的 runner 后续读取这个项目内副本。若同名快照已存在且内容完全一致，会直接复用；若同名但内容不同，会使用 `dataset_2.csv`、`dataset_3.csv` 这样的可读递增名称。
+
 ### 2. 跑一遍 Agent
 
 输入：
@@ -194,6 +196,8 @@ $atk-report
 
 ```text
 .atk/
+├── datasets/
+│   └── service_source_codes.csv
 ├── runner/
 │   ├── eval_runner.py
 │   └── failure_rule.py

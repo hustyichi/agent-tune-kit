@@ -29,6 +29,7 @@ Non-goals for this pass:
 ## Canonical paths
 
 - Shared runner scripts: `.atk/runner/`
+- Dataset snapshots used by generated runners: `.atk/datasets/`
 - Versioned results: `.atk/results/vN/`
 - Test runner output: `.atk/results/vN/eval_results.csv`
 - Optional run log: `.atk/results/vN/app.log`
@@ -52,6 +53,22 @@ Only `eval_runner.py` creates or reuses result versions:
 - Runners should support `--limit` and `--offset` for bounded smoke runs while preserving the same version allocation rules.
 - Runners should support `--concurrency` for faster batch execution. Concurrent runners must keep CSV writes on one writer path and flush after each completed row; with concurrency greater than 1, output rows may be written in completion order unless the generated runner explicitly preserves dataset order.
 
+## Dataset snapshot rules
+
+`atk-init` must copy the user-provided evaluation dataset into `.atk/datasets/` before writing `.atk/runner/eval_runner.py`. The generated runner must read that project-local snapshot, not the original source path, so future source-file moves do not break `atk-run`.
+
+Use readable snapshot names first:
+
+- Prefer the source filename, for example `cases.csv`.
+- If `.atk/datasets/cases.csv` does not exist, copy the dataset there.
+- If it exists and the content is identical, reuse it and do not create a duplicate.
+- If it exists with different content, try readable numeric suffixes such as `cases_2.csv`, `cases_3.csv`, and so on.
+- For each suffix candidate that already exists, reuse it if the content is identical; otherwise continue to the next suffix.
+- Compare content with a reliable digest such as `sha256`, optionally using file size as a fast precheck.
+- If the dataset cannot be copied or content comparison cannot be completed safely, stop before writing the runner instead of pointing the runner at the external source dataset.
+
+Generated runners should define `DATASETS_DIR = Path(".atk/datasets")` and set `DATASET_PATH` to the selected snapshot path under that directory.
+
 ## Canonical version helper pseudocode
 
 All Skill templates and script templates must use these helper names and semantics.
@@ -60,6 +77,7 @@ All Skill templates and script templates must use these helper names and semanti
 from pathlib import Path
 
 RESULTS_DIR = Path(".atk/results")
+DATASETS_DIR = Path(".atk/datasets")
 
 class UserActionRequired(RuntimeError):
     """Raised when the user must repair inputs or confirm an unsafe inference."""

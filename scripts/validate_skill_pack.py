@@ -58,6 +58,7 @@ GLOBAL_PHRASES = [
     "No vN results directory exists; run eval_runner.py first or confirm repair.",
     "Current version {current_dir.name} is missing {filename}; fix or rerun the prior step.",
     ".atk/results/vN/eval_results.csv",
+    ".atk/datasets/",
     ".atk/results/vN/failure_cases.csv",
     ".atk/results/vN/report.md",
     ".atk/results/vN/tuning_plan.md",
@@ -157,6 +158,7 @@ PER_FILE_PHRASES = {
         "no version directory is required",
         "ask the user to confirm before writing `eval_runner.py`",
         "Agent invocation, dataset path/format, log source, Python logger names, or `agent_output` / `agent_output_log_path` column conflict",
+        "Snapshot the input dataset into `.atk/datasets/`",
     ],
     "skills/atk-run/SKILL.md": [
         "atk-run",
@@ -218,7 +220,8 @@ PER_FILE_PHRASES = {
         "never perform automatic rollback",
     ],
     "templates/.atk/runner/eval_runner.py.md": [
-        "DATASET_PATH = Path(\"TODO_AGENT_TUNING_DATASET_PATH\")",
+        "DATASETS_DIR = Path(\".atk/datasets\")",
+        "DATASET_PATH = DATASETS_DIR / \"TODO_AGENT_TUNING_DATASET_SNAPSHOT\"",
         "def allocate_next_results_version(results_dir: Path = RESULTS_DIR) -> Path",
         "class AgentExecutionError(RuntimeError)",
         "parser.add_argument(",
@@ -349,6 +352,7 @@ VERSION_HELPER_SNIPPETS = {
     ],
     "docs/shared-versioning-and-confirmation.md": [
         "RESULTS_DIR = Path(\".atk/results\")",
+        "DATASETS_DIR = Path(\".atk/datasets\")",
         "def list_version_dirs(results_dir=RESULTS_DIR):",
         "if not results_dir.exists():\n        return []",
         "def resolve_current_version(results_dir=RESULTS_DIR):",
@@ -493,6 +497,12 @@ def main() -> int:
     require(
         "AGENT_OUTPUT_LOG_PATH_FIELD = \"agent_output_log_path\"" in runner_template,
         "runner template must define stable agent_output_log_path field",
+        errors,
+    )
+    require(
+        "DATASETS_DIR = Path(\".atk/datasets\")" in runner_template
+        and "DATASET_PATH = DATASETS_DIR / \"TODO_AGENT_TUNING_DATASET_SNAPSHOT\"" in runner_template,
+        "runner template must read the dataset from a .atk/datasets snapshot",
         errors,
     )
     require(
