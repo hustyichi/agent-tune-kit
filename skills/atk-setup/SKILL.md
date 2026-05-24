@@ -7,7 +7,7 @@ description: Generate a reusable test runner for a local Agent and dataset, pres
 
 ## Purpose
 
-Create `agent-tuning/runner/test_runner.py` for the target repository. This Skill maps to `docs/codex_agent_tuning_prd.md` sections 2.2, 2.3, 4, 5, and 7. It inspects the local Agent source and evaluation dataset, then generates a stdlib-first runner that writes `agent-tuning/results/vN/results.csv` and optional `app.log` without asking the user for a version number.
+Create `agent-tuning/runner/test_runner.py` for the target repository. This Skill maps to `docs/codex_agent_tuning_prd.md` sections 2.2, 2.3, 4, 5, and 7. It inspects the local Agent source and evaluation dataset, then generates a stdlib-first runner that writes `agent-tuning/results/vN/results.csv` incrementally and optional `app.log` without asking the user for a version number.
 
 This is a Codex Skill template. It is copy/register-ready, but it is not a plugin install UX or full automation flow.
 
@@ -33,13 +33,18 @@ Traceability note: section 2.2 defines runner generation, section 4 defines vers
 
 1. Inspect first:
    - locate likely Agent entrypoints, constructors, async/sync call methods, prompt files, tool config, and required environment;
+   - inspect the repository's expected Python invocation path (`uv run python`, `.venv/bin/python`, `poetry run python`, or `python3`) and import layout (`src/` layout, package-at-root, or script-only);
    - inspect dataset headers/sample rows and infer input/expected-result fields;
    - inspect logging behavior, stdout/stderr use, and log file paths;
    - check whether the dataset already has a column named `agent_output`.
 2. Apply the uncertainty confirmation pattern from `docs/shared-versioning-and-confirmation.md`.
 3. If safe, create `agent-tuning/runner/` and write `test_runner.py` from `templates/agent-tuning/runner/test_runner.py.md`.
 4. Keep the generated script project-local and low dependency. Prefer Python stdlib plus the target project environment.
-5. Tell the user the next command is `atk-run`.
+5. Verify the generated runner without invoking the Agent when possible:
+   - syntax check with the same interpreter shape expected for execution;
+   - import/load checks for the runner and target Agent entrypoint;
+   - dataset load and one-row input-shaping check.
+6. Tell the user the next command is `atk-run`.
 
 ## Required runner behavior
 
@@ -50,8 +55,15 @@ Traceability note: section 2.2 defines runner generation, section 4 defines vers
 - Automatically allocate the output version with `allocate_next_results_version()`.
 - Use `RESULTS_DIR = Path("agent-tuning/results")`.
 - Do not require a user-supplied version argument or result path.
+- Support bounded runs with `--limit N` and `--offset N` so users can smoke-test expensive Agents before full execution.
+- Support concurrent runs with `--concurrency N`, defaulting to conservative serial execution when concurrency is not requested.
+- Write `results.csv` incrementally row-by-row, flushing after each row, so interrupted long runs leave inspectable partial evidence.
+- Emit visible per-row progress by default, with a `--no-progress` option for quiet runs.
 - Do not clean up partial version directories on crash.
 - Capture `app.log` only when a reliable source is found; otherwise omit it and explain why.
+- Add the target repository import roots required by the Agent before importing local modules. For Python `src/` layout projects, generated runners should add `REPO_ROOT / "src"` to `sys.path`; for package-at-root projects, add `REPO_ROOT` when needed.
+- If the target project declares a managed runtime (`uv`, Poetry, pipenv, `.venv`, etc.), record that execution command in the setup summary and generate a runner that can be executed by that runtime. Do not assume bare system `python3` has project dependencies.
+- For sync Agents, generated runners should be concurrency-ready with a standard-library worker pool. For async Agents, use an explicit async runner (`asyncio.run(...)`) with an async semaphore or equivalent bounded concurrency. In both cases, preserve incremental row writes from a single writer path.
 
 ## Shared version rules
 
@@ -68,6 +80,7 @@ The runner is the only module that creates a new version. If the largest `vN` co
 Ask the user before writing `test_runner.py` if any of these cannot be inferred safely:
 
 - Agent invocation, callable signature, required environment, working directory, or async handling;
+- target interpreter/runtime command or import roots needed to load the Agent;
 - dataset path, format, encoding, delimiter, input fields, or expected-result fields;
 - log source or capture method;
 - existing dataset column named `agent_output` and the rename strategy;
@@ -79,6 +92,7 @@ Do not ask about routine creation of `agent-tuning/runner/` or version-number se
 
 - If Agent invocation, dataset path/format, log source, or `agent_output` column conflict cannot be inferred safely, stop and ask the user to confirm before writing `test_runner.py`.
 - If required source files or dataset are missing, report the missing path and do not create a misleading runner.
+- If the generated runner cannot import the target Agent under the inferred project runtime, fix the import/runtime inference before handing off.
 - If an existing runner appears hand-edited, summarize the diff/intent and ask before overwrite.
 - Never silently impose a universal Schema on the dataset or Agent.
 
@@ -87,7 +101,10 @@ Do not ask about routine creation of `agent-tuning/runner/` or version-number se
 After writing the runner, summarize:
 
 - inferred Agent entrypoint and dataset path;
+- inferred execution command/runtime, including whether bare `python3` is safe or a project runner such as `uv run python` is required;
 - preserved source columns and appended `agent_output` behavior;
+- bounded-run flags (`--limit`, `--offset`) and incremental `results.csv` write behavior;
+- concurrency flag (`--concurrency`) and whether output row order is serial order or completion order when concurrency is greater than 1;
 - whether `app.log` will be captured;
 - next command to run: `atk-run`;
 - expected next output path `agent-tuning/results/vN/results.csv`.

@@ -46,6 +46,9 @@ Only `test_runner.py` creates or reuses result versions:
 - If the largest `vN` does not contain `results.csv`, reuse that directory and overwrite partial intermediates as needed.
 - Do not ask the user for a version number or result directory in the normal flow.
 - Do not clean up an incomplete directory automatically after script failure.
+- Runners should write `results.csv` incrementally and flush after each row. A user interruption or per-run failure may leave a partial `results.csv`; downstream Skills should report missing/incomplete evidence instead of deleting or silently treating partial output as a complete evaluation.
+- Runners should support `--limit` and `--offset` for bounded smoke runs while preserving the same version allocation rules.
+- Runners should support `--concurrency` for faster batch execution. Concurrent runners must keep CSV writes on one writer path and flush after each completed row; with concurrency greater than 1, output rows may be written in completion order unless the generated runner explicitly preserves dataset order.
 
 ## Canonical version helper pseudocode
 
@@ -114,6 +117,7 @@ Each Skill should inspect repository files first, state the evidence it found, a
 Ask before proceeding when any of these remain unresolved after inspection:
 
 - Agent invocation path, callable signature, required environment, or working directory;
+- target project Python runtime or import roots needed to load local Agent code;
 - dataset path, file format, encoding, delimiter, or field semantics;
 - an existing dataset column named `agent_output` conflicts with the required actual-output column;
 - app log source cannot be reliably captured or the capture method could alter Agent behavior;
@@ -127,8 +131,8 @@ Do not ask for confirmation for routine, reversible local file generation when t
 ## Per-Skill preconditions and failure behavior
 
 - `atk-start`: no version directory is required. It inspects `agent-tuning/` state and recommends the next Skill or manual command without bypassing confirmation triggers.
-- `atk-setup`: no version directory is required. If Agent invocation, dataset path/format, log source, or `agent_output` column conflict cannot be inferred safely, ask the user to confirm before writing `agent-tuning/runner/test_runner.py`.
-- `atk-run`: require `agent-tuning/runner/test_runner.py`; execute it as the short command surface for batch testing. The runner remains the only component that creates or reuses result versions. If the runner fails or no current `results.csv` is produced, report the failure and do not clean up partial version directories.
+- `atk-setup`: no version directory is required. If Agent invocation, target runtime/import roots, dataset path/format, log source, or `agent_output` column conflict cannot be inferred safely, ask the user to confirm before writing `agent-tuning/runner/test_runner.py`. Generated runners should support `--limit`/`--offset`/`--concurrency`, write results incrementally, and be import-checked under the inferred project runtime without invoking the Agent.
+- `atk-run`: require `agent-tuning/runner/test_runner.py`; execute it as the short command surface for batch testing using the target repository's Python runtime when available (`uv run python`, `.venv/bin/python`, Poetry, then `python3`). Pass through safe runner flags such as `--limit`, `--offset`, and `--concurrency`. The runner remains the only component that creates or reuses result versions. If the runner fails or no current `results.csv` is produced, report the failure and do not clean up partial version directories. If a partial `results.csv` exists after interruption/failure, report it explicitly.
 - `atk-filter-rules`: require current `vN/results.csv`; if no current version or missing `results.csv`, stop with repair/rerun guidance. If existing `agent-tuning/runner/filter_abnormal.py` exists, ask whether to reuse or update rule logic. This Skill generates or updates the script and instructs the user to run it manually; it does not run `filter_abnormal.py` itself in the normal PRD flow.
 - `atk-filter`: require current `vN/results.csv`; if expected-result columns or abnormal criteria are ambiguous, ask for judgment. It writes `abnormal_cases.csv` in the current version and states that the file is overwritten.
 - `atk-report`: require current `results.csv` and `abnormal_cases.csv`; `app.log` is optional. If previous version lacks `tuning_plan.md` or sample matching is unreliable, degrade to single-version or lower-confidence report with explicit explanation, not silent failure.

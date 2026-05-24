@@ -142,7 +142,10 @@ PER_FILE_PHRASES = {
     "skills/atk-run/SKILL.md": [
         "atk-run",
         "agent-tuning/runner/test_runner.py",
-        "python3 agent-tuning/runner/test_runner.py",
+        "<python-runtime> agent-tuning/runner/test_runner.py",
+        "uv run python",
+        "--limit",
+        "--concurrency",
         "RESULTS_DIR = Path(\"agent-tuning/results\")",
         "If the runner is missing",
         "next recommended Skill: `atk-filter`",
@@ -182,8 +185,13 @@ PER_FILE_PHRASES = {
     ],
     "templates/agent-tuning/runner/test_runner.py.md": [
         "DATASET_PATH = Path(\"TODO_AGENT_TUNING_DATASET_PATH\")",
-        "def allocate_next_results_version(results_dir=RESULTS_DIR)",
+        "def allocate_next_results_version(results_dir: Path = RESULTS_DIR) -> Path",
         "class AgentExecutionError(RuntimeError)",
+        "parser.add_argument(",
+        "--limit",
+        "--concurrency",
+        "ThreadPoolExecutor",
+        "os.fsync(handle.fileno())",
         "except UserActionRequired:",
         "except AgentExecutionError as exc:",
         "agent_output",
@@ -268,9 +276,9 @@ PER_FILE_PHRASES = {
 VERSION_HELPER_SNIPPETS = {
     "templates/agent-tuning/runner/test_runner.py.md": [
         "RESULTS_DIR = Path(\"agent-tuning/results\")",
-        "def list_version_dirs(results_dir=RESULTS_DIR):",
+        "def list_version_dirs(results_dir: Path = RESULTS_DIR) -> list[tuple[int, Path]]:",
         "if not results_dir.exists():\n        return []",
-        "def allocate_next_results_version(results_dir=RESULTS_DIR):",
+        "def allocate_next_results_version(results_dir: Path = RESULTS_DIR) -> Path:",
         "target = results_dir / \"v1\"",
         "target = results_dir / f\"v{max_n + 1}\" if (current / \"results.csv\").exists() else current",
     ],
@@ -414,10 +422,18 @@ def main() -> int:
         require(status in report_text, f"report Skill missing cross-version status {status}", errors)
 
     runner_template = existing_texts.get("templates/agent-tuning/runner/test_runner.py.md", "")
-    require("list(source_fieldnames) + [\"agent_output\"] + auxiliary_fields" in runner_template, "runner template must append agent_output and auxiliary agent_output_* columns after original columns", errors)
+    require(
+        "return list(source_fieldnames) + [\"agent_output\"] + fixed_output_fields + auxiliary_fields"
+        in runner_template,
+        "runner template must append agent_output, fixed status fields, and auxiliary agent_output_* columns after original columns",
+        errors,
+    )
     require("if \"agent_output\" in fieldnames" in runner_template, "runner template must guard source agent_output conflict", errors)
     require("except Exception as exc" not in runner_template, "runner template must not catch broad Exception and mask configuration failures", errors)
-    require("except UserActionRequired:\n            # Configuration/TODO/confirmation failures must stop the run" in runner_template, "runner template must propagate UserActionRequired before row-error handling", errors)
+    require("except UserActionRequired:\n        # Configuration/TODO/confirmation failures must stop the run" in runner_template, "runner template must propagate UserActionRequired before row-error handling", errors)
+    require("--limit" in runner_template and "--offset" in runner_template, "runner template must support bounded runs", errors)
+    require("--concurrency" in runner_template and "ThreadPoolExecutor" in runner_template, "runner template must support concurrent runs", errors)
+    require("writer.writerow(result_row)" in runner_template and "os.fsync(handle.fileno())" in runner_template, "runner template must write and flush results incrementally", errors)
 
     rules_skill = existing_texts.get("skills/atk-filter-rules/SKILL.md", "")
     llm_skill = existing_texts.get("skills/atk-filter/SKILL.md", "")
