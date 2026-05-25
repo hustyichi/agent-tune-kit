@@ -159,7 +159,23 @@ Codex writes:
 
 The report summarizes test results, failure cases, likely causes, and recommended tuning priorities.
 
-### 5. Let Codex tune the Agent
+### 5. Optionally review failures in HTML
+
+Run:
+
+```text
+$atk-visualize-failures
+```
+
+Codex writes:
+
+```text
+.atk/results/v1/failure_cases.html
+```
+
+This optional browser can run any time `failure_cases.csv` exists. If same-version `report.md` exists, it is used as best-effort, non-blocking context; missing or unparseable report context does not block the visualization.
+
+### 6. Let Codex tune the Agent
 
 Run:
 
@@ -205,13 +221,14 @@ Starting with the second loop, the report reads the previous `tuning_plan.md` an
     │   ├── logs/                    # optional row logs
     │   │   └── row_000001.log
     │   ├── failure_cases.csv
+    │   ├── failure_cases.html       # optional failure browser
     │   ├── report.md
     │   └── tuning_plan.md
     └── v2/
         └── ...
 ```
 
-Most users only need to read `eval_results.csv`, `failure_cases.csv`, `report.md`, and row logs linked from `agent_output_log_path` when available. Version directories are managed automatically.
+Most users only need to read `eval_results.csv`, `failure_cases.csv`, optional `failure_cases.html`, `report.md`, and row logs linked from `agent_output_log_path` when available. Version directories are managed automatically.
 
 ## Available Skills
 
@@ -222,4 +239,5 @@ Most users only need to read `eval_results.csv`, `failure_cases.csv`, `report.md
 - `$atk-init-failure-rule`: create or update `.atk/runner/failure_rule.py`.
 - `$atk-find-failures-by-rule`: execute `.atk/runner/failure_rule.py` to identify failing cases with explicit rules.
 - `$atk-report`: generate analysis and cross-loop validation.
+- `$atk-visualize-failures`: generate optional `.atk/results/vN/failure_cases.html` from current `failure_cases.csv`.
 - `$atk-tune`: tune the Agent and record the tuning plan.

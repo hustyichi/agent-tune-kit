@@ -159,7 +159,23 @@ Codex 会生成：
 
 报告会总结测试情况、异常样本、可能原因，以及建议优先调哪些问题。
 
-### 5. 让 Codex 执行调优
+### 5. 可选：用 HTML 审阅异常样本
+
+输入：
+
+```text
+$atk-visualize-failures
+```
+
+Codex 会生成：
+
+```text
+.atk/results/v1/failure_cases.html
+```
+
+这个可选浏览器只要当前版本存在 `failure_cases.csv` 就能运行；如果同版本 `report.md` 存在，会作为 best-effort、non-blocking 上下文使用，报告缺失或无法解析不会阻止生成可视化。
+
+### 6. 让 Codex 执行调优
 
 输入：
 
@@ -207,13 +223,14 @@ $atk-report
     │   ├── logs/                    # 可选逐行日志
     │   │   └── row_000001.log
     │   ├── failure_cases.csv
+    │   ├── failure_cases.html       # 可选异常浏览器
     │   ├── report.md
     │   └── tuning_plan.md
     └── v2/
         └── ...
 ```
 
-你通常只需要看 `eval_results.csv`、`failure_cases.csv`、`report.md`，以及可用时由 `agent_output_log_path` 链接的逐行日志。版本号由脚本自动管理，不需要手动指定。
+你通常只需要看 `eval_results.csv`、`failure_cases.csv`、可选的 `failure_cases.html`、`report.md`，以及可用时由 `agent_output_log_path` 链接的逐行日志。版本号由脚本自动管理，不需要手动指定。
 
 ## 可用 Skill
 
@@ -224,4 +241,5 @@ $atk-report
 - `$atk-init-failure-rule`：创建或更新 `.atk/runner/failure_rule.py`。
 - `$atk-find-failures-by-rule`：执行 `.atk/runner/failure_rule.py`，按明确规则筛选异常样本。
 - `$atk-report`：生成分析报告和跨轮验证结论。
+- `$atk-visualize-failures`：基于当前 `failure_cases.csv` 生成可选的 `.atk/results/vN/failure_cases.html`。
 - `$atk-tune`：根据报告修改 Agent，并记录本轮调优计划。

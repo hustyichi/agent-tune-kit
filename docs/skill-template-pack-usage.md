@@ -72,6 +72,7 @@ Do not copy a single `skills/*` directory by itself; keep `skills/`, `templates/
 - `skills/atk-find-failures-by-rule/SKILL.md` — execute `.atk/runner/failure_rule.py` for rule-based failure finding.
 - `skills/atk-find-failures/SKILL.md` — inspect current `eval_results.csv` and write current `failure_cases.csv` using model judgment.
 - `skills/atk-report/SKILL.md` — write current `report.md`, including adjacent-version validation when possible.
+- `skills/atk-visualize-failures/SKILL.md` — write current `failure_cases.html` as an optional, dependency-free browser for current `failure_cases.csv`.
 - `skills/atk-tune/SKILL.md` — tune the target Agent and write current `tuning_plan.md`.
 - `templates/.atk/runner/eval_runner.py.md` — script template preserving original dataset columns and appending `agent_output` plus `agent_output_log_path`.
 - `templates/.atk/runner/failure_rule.py.md` — stdlib CSV rule-filter template.
@@ -89,9 +90,10 @@ Do not copy a single `skills/*` directory by itself; keep `skills/`, `templates/
    - Rule path: trigger `atk-init-failure-rule` to create/update `.atk/runner/failure_rule.py`, then trigger `atk-find-failures-by-rule` to execute it and write `failure_cases.csv`. If the script is missing, `atk-find-failures-by-rule` stops with guidance to run `atk-init-failure-rule` first.
    - Or trigger `atk-find-failures` to write `failure_cases.csv` directly from the current `eval_results.csv`.
 6. Trigger `atk-report` to create `.atk/results/vN/report.md`. From `v2` onward, it compares the current version with the previous existing version and reads the previous `tuning_plan.md` when available. Reports prefer row-specific files referenced by `agent_output_log_path` and fall back to `app.log` when row logs are unavailable.
-7. Trigger `atk-tune` to change the Agent and write `.atk/results/vN/tuning_plan.md`.
-8. Optionally create a user git commit/checkpoint. Agent tuning rollback remains user-git-only guidance; this plugin does not automate Agent code restore.
-9. Run the same loop again. The next test run creates `v{N+1}` when the current max version already has `eval_results.csv`.
+7. Optionally trigger `atk-visualize-failures` to create `.atk/results/vN/failure_cases.html`. It can run any time current `failure_cases.csv` exists; same-version `report.md` is optional best-effort context and never blocks CSV visualization.
+8. Trigger `atk-tune` to change the Agent and write `.atk/results/vN/tuning_plan.md`.
+9. Optionally create a user git commit/checkpoint. Agent tuning rollback remains user-git-only guidance; this plugin does not automate Agent code restore.
+10. Run the same loop again. The next test run creates `v{N+1}` when the current max version already has `eval_results.csv`.
 
 ## Version example: v1 → v2
 
@@ -109,7 +111,7 @@ Run:
 python3 scripts/validate_skill_pack.py
 git diff --check
 find skills templates docs scripts .codex-plugin -maxdepth 4 -type f | sort
-grep -R "agent_output\|failure_cases.csv\|tuning_plan.md\|目标异常清单\|调优手段\|关联改动\|source.path" skills templates docs README.md README.zh-CN.md .codex-plugin scripts
+grep -R "agent_output\|failure_cases.csv\|failure_cases.html\|tuning_plan.md\|目标异常清单\|调优手段\|关联改动\|source.path" skills templates docs README.md README.zh-CN.md .codex-plugin scripts
 ```
 
 `validate_skill_pack.py` checks required files, required sections, manifest fields, installer behavior, PRD traceability, canonical version helper names and snippets, output paths, non-goal boundaries, and each Skill's precondition/failure behavior.

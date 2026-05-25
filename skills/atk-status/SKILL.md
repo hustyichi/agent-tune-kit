@@ -17,6 +17,7 @@ This Skill preserves the existing stage Skill contracts:
 - `atk-find-failures-by-rule`
 - `atk-find-failures`
 - `atk-report`
+- `atk-visualize-failures`
 - `atk-tune`
 
 It does not bypass existing confirmation triggers, does not perform full automatic tuning, and does not run the 2.2 → 2.6 loop end-to-end.
@@ -40,7 +41,7 @@ It does not bypass existing confirmation triggers, does not perform full automat
    - Does `.atk/runner/eval_runner.py` exist?
    - Does `.atk/runner/failure_rule.py` exist?
    - Does `.atk/results/` contain `vN` directories?
-   - For the numerically largest current version, are `eval_results.csv`, `failure_cases.csv`, `report.md`, and `tuning_plan.md` present?
+   - For the numerically largest current version, are `eval_results.csv`, `failure_cases.csv`, `failure_cases.html`, `report.md`, and `tuning_plan.md` present?
 2. Apply the shared current-version semantics from `docs/shared-versioning-and-confirmation.md`:
    - `RESULTS_DIR = Path(".atk/results")`
    - non-runner Skills use the numerically largest existing `vN` as current;
@@ -49,8 +50,9 @@ It does not bypass existing confirmation triggers, does not perform full automat
    - no runner: trigger `atk-init`;
    - runner exists but no current `eval_results.csv`: trigger `atk-run`;
    - current `eval_results.csv` exists but no `failure_cases.csv`: if the user wants rules and `.atk/runner/failure_rule.py` is missing, trigger `atk-init-failure-rule`; if the rule script exists, choose `atk-find-failures-by-rule`; otherwise choose `atk-find-failures`;
-   - current `failure_cases.csv` exists but no `report.md`: trigger `atk-report`;
-   - current `report.md` exists but no `tuning_plan.md`: trigger `atk-tune`;
+   - current `failure_cases.csv` exists but no `report.md`: trigger `atk-report`, and mention `atk-visualize-failures` as an optional review step that can run any time current `failure_cases.csv` exists;
+   - current `report.md` exists but no `failure_cases.html`: recommend `atk-visualize-failures` as a useful non-blocking review step before `atk-tune`, while preserving `atk-tune` as the required tuning path if the user wants to proceed directly;
+   - current `report.md` and `failure_cases.html` exist but no `tuning_plan.md`: trigger `atk-tune` and do not repeatedly recommend regenerating the existing same-version `failure_cases.html` unless the user explicitly asks for overwrite/regeneration;
    - current `tuning_plan.md` exists: optionally create a user git checkpoint, then trigger `atk-run` to create the next version.
 4. Keep guidance over hidden automation: this Skill may summarize commands and Skill names, but it does not run generated runner/filter scripts unless the user explicitly asks in the target workflow.
 
