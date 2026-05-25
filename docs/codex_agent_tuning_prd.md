@@ -143,6 +143,7 @@
 ### 2.5.1 异常样本可视化（可选 Codex Skill `atk-visualize-failures`）
 - **功能**：
   - 从当前版本目录下的 `failure_cases.csv` 生成便于人工审阅的静态 HTML 浏览器 `failure_cases.html`
+  - 通过插件内固定 Python 标准库脚本生成 HTML，避免模型临场生成可视化、LLM 摘要、项目内模板漂移或额外依赖
   - 该 Skill 是独立的可选审阅步骤，不并入 `atk-report`，也不改变报告生成、异常筛选或调优语义
   - 可在当前版本存在 `failure_cases.csv` 后随时执行；推荐在 `atk-report` 之后、`atk-tune` 之前用于审阅具体异常
 - **输入**：
@@ -159,9 +160,10 @@
 - **HTML 生成要求**：
   - 使用 Python 标准库读取 CSV，保留所有原始列并兼容不同数据集字段
   - 对所有 CSV 与报告派生内容进行 HTML 转义
-  - 使用内嵌 CSS/JS，包含摘要计数、搜索/筛选、异常表格、长字段展开或详情视图
-  - 当存在 expected/expected_output、`agent_output`、failure/failure_reason/explanation/root-cause 类字段时优先展示，但不强制要求统一 Schema
+  - 使用内嵌 CSS/JS，包含摘要计数、搜索/筛选、分页、expected-vs-actual 对比、长字段展开或详情视图
+  - 当存在 expected/expected_output、`agent_output`、failure/failure_reason/explanation/root-cause 类字段时优先展示，但不强制要求统一 Schema；前端提供临时角色切换以适配非标准字段
   - 同版本 `report.md` 缺失、格式异常或不可解析时继续生成 HTML，并说明报告上下文被跳过；报告解析是 best-effort 且 non-blocking
+  - `agent_output_log_path` 等日志路径只在满足安全相对路径约束时生成可点击链接，否则仅作为证据文本展示
 
 ### 2.6 Agent 调优模块（Codex Skill）
 - **功能**：

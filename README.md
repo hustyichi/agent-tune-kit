@@ -173,7 +173,7 @@ Codex 会生成：
 .atk/results/v1/failure_cases.html
 ```
 
-这个可选浏览器只要当前版本存在 `failure_cases.csv` 就能运行；如果同版本 `report.md` 存在，会作为 best-effort、non-blocking 上下文使用，报告缺失或无法解析不会阻止生成可视化。
+这个可选浏览器只要当前版本存在 `failure_cases.csv` 就能运行；如果同版本 `report.md` 存在，会作为 best-effort、non-blocking 上下文使用，报告缺失或无法解析不会阻止生成可视化。该 Skill 使用插件内固定 Python 标准库脚本生成确定性、无依赖 HTML，并提供 expected-vs-actual 审阅、搜索/筛选/分页、非标准字段角色切换和安全相对日志链接。
 
 ### 6. 让 Codex 执行调优
 

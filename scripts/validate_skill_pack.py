@@ -25,6 +25,7 @@ REQUIRED_FILES = [
     "skills/atk-find-failures/SKILL.md",
     "skills/atk-report/SKILL.md",
     "skills/atk-visualize-failures/SKILL.md",
+    "skills/atk-visualize-failures/scripts/generate_failure_browser.py",
     "skills/atk-tune/SKILL.md",
     "templates/.atk/runner/eval_runner.py.md",
     "templates/.atk/runner/failure_rule.py.md",
@@ -37,7 +38,7 @@ REQUIRED_FILES = [
     "README.zh-CN.md",
 ]
 
-SKILL_FILES = [path for path in REQUIRED_FILES if path.startswith("skills/")]
+SKILL_FILES = [path for path in REQUIRED_FILES if path.startswith("skills/") and path.endswith("/SKILL.md")]
 
 REQUIRED_SKILL_SECTIONS = [
     "## Purpose",
@@ -237,6 +238,43 @@ PER_FILE_PHRASES = {
         "same-version",
         "ask before overwriting that HTML artifact only",
         "never change `atk-report` behavior",
+        "scripts/generate_failure_browser.py",
+        "--overwrite",
+        "--results-dir .atk/results",
+        "--no-report",
+        "safe JSON/HTML embedding",
+        "expected-vs-actual",
+        "schema-adaptive role switching",
+        "safe relative log links",
+        "LLM summaries",
+        "project-local template",
+    ],
+
+    "skills/atk-visualize-failures/scripts/generate_failure_browser.py": [
+        "RESULTS_DIR = Path(\".atk/results\")",
+        "def list_version_dirs(results_dir: Path = RESULTS_DIR)",
+        "def resolve_current_version(results_dir: Path = RESULTS_DIR)",
+        "def require_current_file(current_dir: Path, filename: str)",
+        "csv.DictReader",
+        "html.escape",
+        "json.dumps",
+        "ensure_ascii=False",
+        "REPORT_MAX_BYTES = 256 * 1024",
+        "REPORT_MAX_EXCERPTS = 5",
+        "REPORT_EXCERPT_MAX_CHARS = 800",
+        "SNIPPET_MAX_CHARS = 240",
+        "PAGE_SIZES = [25, 50, 100, 250]",
+        "DEFAULT_PAGE_SIZE = 50",
+        "--overwrite",
+        "--results-dir",
+        "--no-report",
+        "expected-vs-actual",
+        "role switching",
+        "Search / filter / pagination",
+        "safe_log_href",
+        "os.replace",
+        "No vN results directory exists",
+        "Refusing to overwrite existing",
     ],
     "skills/atk-tune/SKILL.md": [
         "require_current_file(current_dir, \"report.md\")",
@@ -294,6 +332,7 @@ PER_FILE_PHRASES = {
         "Per-Skill preconditions and failure behavior",
         ".atk/results/vN/failure_cases.html",
         "atk-visualize-failures",
+        "scripts/generate_failure_browser.py",
         "best-effort and non-blocking",
         "local Codex plugin",
         "python3 scripts/install_plugin.py install",
@@ -312,6 +351,7 @@ PER_FILE_PHRASES = {
         "skills/atk-visualize-failures/SKILL.md",
         "failure_cases.html",
         "same-version `report.md` is optional best-effort context",
+        "scripts/generate_failure_browser.py",
         "python3 scripts/install_plugin.py install",
         "python3 scripts/install_plugin.py status",
         "python3 scripts/install_plugin.py rollback --backup <backup-id>",
@@ -332,6 +372,8 @@ PER_FILE_PHRASES = {
         "atk-report",
         "atk-visualize-failures",
         "failure_cases.html",
+        "expected-vs-actual",
+        "角色切换",
         "atk-tune",
     ],
     "README.en.md": [
@@ -350,6 +392,8 @@ PER_FILE_PHRASES = {
         "atk-report",
         "atk-visualize-failures",
         "failure_cases.html",
+        "expected-vs-actual",
+        "role switching",
         "atk-tune",
     ],
     "README.zh-CN.md": [
@@ -368,6 +412,8 @@ PER_FILE_PHRASES = {
         "atk-report",
         "atk-visualize-failures",
         "failure_cases.html",
+        "expected-vs-actual",
+        "角色切换",
         "atk-tune",
     ],
 }

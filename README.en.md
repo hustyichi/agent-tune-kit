@@ -173,7 +173,7 @@ Codex writes:
 .atk/results/v1/failure_cases.html
 ```
 
-This optional browser can run any time `failure_cases.csv` exists. If same-version `report.md` exists, it is used as best-effort, non-blocking context; missing or unparseable report context does not block the visualization.
+This optional browser can run any time `failure_cases.csv` exists. If same-version `report.md` exists, it is used as best-effort, non-blocking context; missing or unparseable report context does not block the visualization. The Skill uses a fixed plugin-owned stdlib generator script, so output is deterministic and dependency-free while still offering expected-vs-actual review, search/filter/pagination, schema-adaptive role switching, and safe relative log links.
 
 ### 6. Let Codex tune the Agent
 
