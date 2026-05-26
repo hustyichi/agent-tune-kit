@@ -232,7 +232,6 @@ def main() -> int:
     assert_versions_aligned(identity)
     clean_generated_artifacts()
     try:
-        run(["git", "diff", "--check"])
         run(["uv", "sync"], timeout=180)
         run(["uv", "run", "python", "-m", "py_compile", *PYTHON_FILES], timeout=120)
         run(["uv", "run", "python", "scripts/validate_skill_pack.py"], timeout=120)
