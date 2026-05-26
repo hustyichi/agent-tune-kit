@@ -25,7 +25,6 @@ Use it if you have:
 
 You need:
 
-- Codex.
 - A local Agent project that Codex can inspect and edit.
 - An evaluation dataset, preferably in CSV format. Column names do not need to follow a strict schema; Codex will infer inputs and expected results where possible.
 
