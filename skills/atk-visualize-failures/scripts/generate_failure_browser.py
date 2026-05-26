@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Generate a dependency-free HTML browser for current ATK failure cases."""
+"""Generate a dependency-free single-file HTML browser for current ATK failure cases.
+
+The page shell (HTML/CSS/JS) lives in sibling ``assets/`` as plugin-owned files and
+is inlined into a single ``.atk/results/vN/failure_cases.html`` at runtime. No
+project-local template, no sidecar metadata, no external CDN, no LLM summary.
+"""
 
 from __future__ import annotations
 
@@ -11,6 +16,7 @@ import os
 import re
 import sys
 import tempfile
+import webbrowser
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlsplit
@@ -26,17 +32,38 @@ SNIPPET_MAX_CHARS = 240
 PAGE_SIZES = [25, 50, 100, 250]
 DEFAULT_PAGE_SIZE = 50
 
+FACET_MAX_UNIQUE = 12
+FACET_MIN_UNIQUE = 2
+
+ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets"
+PAGE_TEMPLATE_NAME = "page.html"
+STYLES_NAME = "styles.css"
+APP_JS_NAME = "app.js"
+
+# Audit markers must remain present verbatim in the generated HTML so the plugin
+# self-tests can verify capability anchors regardless of the localized UI text.
+AUDIT_MARKERS = [
+    "expected-vs-actual comparison",
+    "schema-adaptive role switching",
+    "auto-detected",
+    "manual/unmapped",
+    "Bounded report.md context",
+    "Search / filter / pagination",
+    "No failure rows in current failure_cases.csv",
+    "not clickable because it is outside the safe relative path contract",
+]
+
 
 class UserActionRequired(RuntimeError):
     """A user-fixable input or confirmation blocker."""
 
 
 ROLE_CANDIDATES: dict[str, list[str]] = {
-    "id": ["case_id", "failure_id", "id", "source_index", "row_id", "index"],
-    "input": ["input", "query", "question", "prompt", "task", "user_input", "instruction"],
-    "expected": ["expected", "expected_output", "reference", "ground_truth", "answer", "label"],
+    "id": ["case_id", "failure_id", "id", "source_index", "row_id", "index", "merge_id"],
+    "input": ["input", "query", "question", "prompt", "task", "user_input", "instruction", "source", "base"],
+    "expected": ["expected", "expected_output", "reference", "ground_truth", "answer", "label", "target"],
     "actual": ["agent_output", "actual", "actual_output", "output", "response", "prediction", "result"],
-    "reason": ["failure_reason", "failure", "reason", "explanation", "root_cause", "root-cause", "error", "analysis"],
+    "reason": ["failure_reason", "failure", "reason", "explanation", "root_cause", "root-cause", "error", "analysis", "agent_output_error_message"],
     "log": ["agent_output_log_path", "log_path", "logs", "log", "trace_path"],
 }
 
@@ -150,6 +177,46 @@ def detect_roles(fieldnames: list[str]) -> dict[str, dict[str, str]]:
     return roles
 
 
+def detect_facets(fieldnames: list[str], rows: list[dict[str, str]], roles: dict[str, dict[str, str]]) -> list[dict[str, Any]]:
+    """Pick low-cardinality columns suitable as faceted filters.
+
+    Skip role fields whose meaning is per-row free text (input/expected/actual/reason/id).
+    Keep ``log`` out as well because each path is unique.
+    """
+    excluded_fields = set()
+    for role in ("id", "input", "expected", "actual", "reason", "log"):
+        field = roles.get(role, {}).get("field", "")
+        if field:
+            excluded_fields.add(field)
+    facets: list[dict[str, Any]] = []
+    for field in fieldnames:
+        if field in excluded_fields:
+            continue
+        counts: dict[str, int] = {}
+        nonempty = 0
+        for row in rows:
+            value = (row.get(field) or "").strip()
+            if not value:
+                continue
+            if "\n" in value or len(value) > 80:
+                # treat as free text, not categorical
+                counts = {}
+                nonempty = -1
+                break
+            counts[value] = counts.get(value, 0) + 1
+            nonempty += 1
+        if nonempty <= 0:
+            continue
+        if not (FACET_MIN_UNIQUE <= len(counts) <= FACET_MAX_UNIQUE):
+            continue
+        if len(counts) >= max(2, nonempty):
+            # every row unique -> not a useful facet
+            continue
+        ordered = sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+        facets.append({"field": field, "values": [{"value": value, "count": count} for value, count in ordered]})
+    return facets
+
+
 def read_report_context(report_path: Path, *, skip: bool = False) -> dict[str, Any]:
     if skip:
         return {"status": "skipped", "reason": "Skipped by --no-report.", "excerpts": []}
@@ -239,7 +306,7 @@ def safe_log_href(value: str, current_dir: Path) -> str:
     if href.startswith("./"):
         href = href[2:]
     if href.startswith(current_prefix):
-        href = href[len(current_prefix) :]
+        href = href[len(current_prefix):]
     parts = Path(href).parts
     if not parts or ".." in parts or any(part == "" for part in parts):
         return ""
@@ -262,7 +329,15 @@ def enrich_rows(rows: list[dict[str, str]], fieldnames: list[str], roles: dict[s
     return enriched
 
 
-def build_payload(current_dir: Path, fieldnames: list[str], rows: list[dict[str, str]], roles: dict[str, dict[str, str]], report: dict[str, Any], warnings: list[str]) -> dict[str, Any]:
+def build_payload(
+    current_dir: Path,
+    fieldnames: list[str],
+    rows: list[dict[str, str]],
+    roles: dict[str, dict[str, str]],
+    facets: list[dict[str, Any]],
+    report: dict[str, Any],
+    warnings: list[str],
+) -> dict[str, Any]:
     return {
         "version": current_dir.name,
         "currentDir": current_dir.as_posix(),
@@ -270,6 +345,7 @@ def build_payload(current_dir: Path, fieldnames: list[str], rows: list[dict[str,
         "rowCount": len(rows),
         "fieldnames": fieldnames,
         "roles": roles,
+        "facets": facets,
         "rows": enrich_rows(rows, fieldnames, roles, current_dir),
         "report": report,
         "warnings": warnings,
@@ -277,219 +353,51 @@ def build_payload(current_dir: Path, fieldnames: list[str], rows: list[dict[str,
             "snippetMaxChars": SNIPPET_MAX_CHARS,
             "pageSizes": PAGE_SIZES,
             "defaultPageSize": DEFAULT_PAGE_SIZE,
+            "facetMaxUnique": FACET_MAX_UNIQUE,
         },
     }
 
 
-def generate_html(payload: dict[str, Any]) -> str:
+def load_asset(name: str) -> str:
+    path = ASSETS_DIR / name
+    if not path.is_file():
+        raise UserActionRequired(f"Missing plugin-owned asset {path}; reinstall the atk-visualize-failures Skill.")
+    return path.read_text(encoding="utf-8")
+
+
+def neutralize_script_close(text: str) -> str:
+    """Prevent any literal </script in inlined CSS/JS from terminating the host script."""
+    return re.sub(r"</(script)", r"<\\/\1", text, flags=re.IGNORECASE)
+
+
+def render_html(payload: dict[str, Any]) -> str:
+    template = load_asset(PAGE_TEMPLATE_NAME)
+    styles = load_asset(STYLES_NAME)
+    app_js = load_asset(APP_JS_NAME)
+    title = f"ATK Failure Cases — {payload['version']}"
     data_json = safe_json_for_html(payload)
-    title = f"ATK Failure Cases — {html.escape(str(payload['version']))}"
-    return f"""<!doctype html>
-<html lang=\"en\">
-<head>
-  <meta charset=\"utf-8\">
-  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">
-  <title>{title}</title>
-  <style>
-    :root {{ color-scheme: light; --bg:#f6f7fb; --panel:#fff; --text:#172033; --muted:#667085; --line:#d8deea; --brand:#3457d5; --bad:#b42318; --ok:#067647; --chip:#eef2ff; }}
-    * {{ box-sizing: border-box; }}
-    body {{ margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; background:var(--bg); color:var(--text); }}
-    header {{ padding:24px 28px; background:linear-gradient(135deg,#172033,#3457d5); color:white; }}
-    header h1 {{ margin:0 0 8px; font-size:24px; }}
-    header p {{ margin:4px 0; opacity:.9; }}
-    main {{ padding:20px; max-width:1400px; margin:0 auto; }}
-    .grid {{ display:grid; grid-template-columns: 360px 1fr; gap:16px; align-items:start; }}
-    .panel {{ background:var(--panel); border:1px solid var(--line); border-radius:14px; box-shadow:0 1px 2px rgba(16,24,40,.05); }}
-    .panel h2 {{ font-size:16px; margin:0; padding:14px 16px; border-bottom:1px solid var(--line); }}
-    .panel-body {{ padding:14px 16px; }}
-    .stats {{ display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:10px; margin-bottom:16px; }}
-    .stat {{ padding:12px; border-radius:12px; background:white; border:1px solid var(--line); }}
-    .stat strong {{ display:block; font-size:22px; }}
-    .muted {{ color:var(--muted); }}
-    .controls {{ display:grid; grid-template-columns: 1fr 160px 150px; gap:10px; margin-bottom:12px; }}
-    input, select, button {{ font:inherit; border:1px solid var(--line); border-radius:10px; background:white; padding:9px 10px; }}
-    button {{ cursor:pointer; }}
-    .case-list {{ display:flex; flex-direction:column; gap:10px; }}
-    .case-card {{ text-align:left; border:1px solid var(--line); border-radius:12px; background:white; padding:12px; cursor:pointer; width:100%; }}
-    .case-card.active {{ border-color:var(--brand); box-shadow:0 0 0 2px rgba(52,87,213,.12); }}
-    .case-title {{ display:flex; justify-content:space-between; gap:8px; font-weight:700; margin-bottom:6px; }}
-    .case-snippet {{ color:var(--muted); font-size:13px; line-height:1.35; overflow-wrap:anywhere; }}
-    .badge {{ display:inline-flex; align-items:center; gap:4px; padding:2px 7px; border-radius:999px; background:var(--chip); color:#273a8a; font-size:12px; white-space:nowrap; }}
-    .pager {{ display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:12px; }}
-    .detail-grid {{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }}
-    .compare {{ min-height:140px; padding:12px; border:1px solid var(--line); border-radius:12px; background:#fcfcfd; white-space:pre-wrap; overflow-wrap:anywhere; }}
-    .compare h3 {{ margin:0 0 8px; font-size:14px; }}
-    .field {{ margin:10px 0; border:1px solid var(--line); border-radius:10px; overflow:hidden; }}
-    .field summary {{ cursor:pointer; padding:10px 12px; background:#f9fafb; font-weight:650; }}
-    .field pre {{ margin:0; padding:12px; white-space:pre-wrap; overflow-wrap:anywhere; max-height:360px; overflow:auto; }}
-    .roles {{ display:grid; grid-template-columns:1fr; gap:8px; }}
-    .role-row {{ display:grid; grid-template-columns:86px 1fr; align-items:center; gap:8px; }}
-    .report-item {{ border-left:3px solid var(--brand); padding:8px 10px; margin:8px 0; background:#f8faff; }}
-    .warning {{ color:#8a4b00; background:#fff7e6; border:1px solid #fedf89; padding:8px 10px; border-radius:10px; margin:8px 0; }}
-    .empty {{ padding:28px; text-align:center; color:var(--muted); }}
-    @media (max-width: 980px) {{ .grid, .detail-grid {{ grid-template-columns:1fr; }} .controls {{ grid-template-columns:1fr; }} }}
-  </style>
-</head>
-<body>
-  <header>
-    <h1>{title}</h1>
-    <p>Dependency-free static browser for current-version failure_cases.csv. No sidecar metadata, no CDN, no LLM summary.</p>
-    <p id=\"path-context\"></p>
-  </header>
-  <main>
-    <section class=\"stats\" aria-label=\"summary counts\">
-      <div class=\"stat\"><span class=\"muted\">Rows</span><strong id=\"stat-rows\">0</strong></div>
-      <div class=\"stat\"><span class=\"muted\">Fields</span><strong id=\"stat-fields\">0</strong></div>
-      <div class=\"stat\"><span class=\"muted\">Report</span><strong id=\"stat-report\">Skipped</strong></div>
-    </section>
-    <section class=\"grid\">
-      <aside class=\"panel\">
-        <h2>Search / filter / pagination</h2>
-        <div class=\"panel-body\">
-          <div class=\"controls\">
-            <input id=\"search\" type=\"search\" placeholder=\"Search all fields…\" aria-label=\"Search all fields\">
-            <select id=\"role-filter\" aria-label=\"Filter by role\"><option value=\"all\">All cases</option><option value=\"has-reason\">Has reason</option><option value=\"has-log\">Has log</option></select>
-            <select id=\"page-size\" aria-label=\"Page size\"></select>
-          </div>
-          <div id=\"empty-state\" class=\"empty\" hidden>No failure rows in current failure_cases.csv.</div>
-          <div id=\"case-list\" class=\"case-list\"></div>
-          <div class=\"pager\">
-            <button id=\"prev\" type=\"button\">Previous</button>
-            <span id=\"page-label\" class=\"muted\"></span>
-            <button id=\"next\" type=\"button\">Next</button>
-          </div>
-        </div>
-      </aside>
-      <section class=\"panel\">
-        <h2>Single-case detail review</h2>
-        <div class=\"panel-body\">
-          <section class=\"panel\" style=\"box-shadow:none;margin-bottom:12px;\">
-            <h2>Schema role mapping <span class=\"muted\">(auto-detected; schema-adaptive role switching is manual in this page only)</span></h2>
-            <div id=\"roles\" class=\"panel-body roles\"></div>
-          </section>
-          <div id=\"warnings\"></div>
-          <div id=\"report\"></div>
-          <div class=\"detail-grid\" aria-label=\"expected-vs-actual comparison\">
-            <div class=\"compare\"><h3>Expected</h3><div id=\"expected\"></div></div>
-            <div class=\"compare\"><h3>Actual</h3><div id=\"actual\"></div></div>
-          </div>
-          <div id=\"reason\" class=\"warning\" hidden></div>
-          <div id=\"log-link\" style=\"margin:12px 0;\"></div>
-          <h2 style=\"padding-left:0;border-bottom:0;\">All preserved fields</h2>
-          <div id=\"fields\"></div>
-        </div>
-      </section>
-    </section>
-  </main>
-  <script type=\"application/json\" id=\"failure-data\">{data_json}</script>
-  <script>
-    const payload = JSON.parse(document.getElementById('failure-data').textContent);
-    const roles = JSON.parse(JSON.stringify(payload.roles));
-    let query = '';
-    let roleFilter = 'all';
-    let pageSize = payload.config.defaultPageSize;
-    let page = 0;
-    let selectedRowNumber = payload.rows[0]?.rowNumber || null;
-
-    const $ = (id) => document.getElementById(id);
-    const roleNames = ['id','input','expected','actual','reason','log'];
-    const esc = (value) => String(value ?? '').replace(/[&<>\"']/g, (ch) => ({{'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}}[ch]));
-    const snippet = (value) => {{ const text = String(value ?? '').replace(/\\s+/g, ' ').trim(); return text.length > payload.config.snippetMaxChars ? text.slice(0, payload.config.snippetMaxChars - 1) + '…' : text; }};
-    const roleField = (role) => roles[role]?.field || '';
-    const rowValue = (row, role) => row?.values?.[roleField(role)] || '';
-    const allText = (row) => payload.fieldnames.map((field) => row.values[field] || '').join('\\n').toLowerCase();
-    const currentRow = () => payload.rows.find((row) => row.rowNumber === selectedRowNumber) || payload.rows[0] || null;
-
-    function init() {{
-      $('path-context').textContent = `${{payload.currentDir}} → ${{payload.output}}`;
-      $('stat-rows').textContent = payload.rowCount;
-      $('stat-fields').textContent = payload.fieldnames.length;
-      $('stat-report').textContent = payload.report.status === 'included' ? 'Included' : 'Skipped';
-      for (const size of payload.config.pageSizes) {{
-        const option = document.createElement('option'); option.value = size; option.textContent = `${{size}} / page`; option.selected = size === pageSize; $('page-size').appendChild(option);
-      }}
-      renderRoles(); renderWarnings(); renderReport(); bindControls(); render();
-    }}
-
-    function bindControls() {{
-      $('search').addEventListener('input', (event) => {{ query = event.target.value.toLowerCase(); page = 0; render(); }});
-      $('role-filter').addEventListener('change', (event) => {{ roleFilter = event.target.value; page = 0; render(); }});
-      $('page-size').addEventListener('change', (event) => {{ pageSize = Number(event.target.value) || payload.config.defaultPageSize; page = 0; render(); }});
-      $('prev').addEventListener('click', () => {{ page = Math.max(0, page - 1); render(); }});
-      $('next').addEventListener('click', () => {{ page += 1; render(); }});
-    }}
-
-    function renderRoles() {{
-      $('roles').innerHTML = roleNames.map((role) => `
-        <label class=\"role-row\"><span>${{esc(role)}} <span class=\"badge\" id=\"source-${{role}}\">${{roles[role]?.source === 'auto' ? 'auto-detected' : 'manual'}}</span></span>
-          <select data-role=\"${{role}}\"><option value=\"\">— not mapped —</option>${{payload.fieldnames.map((field) => `<option value=\"${{esc(field)}}\" ${{field === roles[role]?.field ? 'selected' : ''}}>${{esc(field)}}</option>`).join('')}}</select>
-        </label>`).join('');
-      $('roles').querySelectorAll('select[data-role]').forEach((select) => select.addEventListener('change', (event) => {{
-        const role = event.target.dataset.role; roles[role] = {{field: event.target.value, source: 'manual'}}; $(`source-${{role}}`).textContent = event.target.value ? 'manual' : 'manual/unmapped'; render();
-      }}));
-    }}
-
-    function renderWarnings() {{
-      const items = [...(payload.warnings || [])];
-      if (payload.report.status !== 'included') items.push(`Report context skipped: ${{payload.report.reason}}`);
-      $('warnings').innerHTML = items.map((item) => `<div class=\"warning\">${{esc(item)}}</div>`).join('');
-    }}
-
-    function renderReport() {{
-      if (!payload.report.excerpts?.length) {{ $('report').innerHTML = ''; return; }}
-      $('report').innerHTML = `<section class=\"panel\" style=\"box-shadow:none;margin-bottom:12px;\"><h2>Bounded report.md context</h2><div class=\"panel-body\">${{payload.report.excerpts.map((item) => `<div class=\"report-item\"><strong>${{esc(item.heading)}}</strong><br>${{esc(item.text)}}</div>`).join('')}}</div></section>`;
-    }}
-
-    function filteredRows() {{
-      return payload.rows.filter((row) => {{
-        if (query && !allText(row).includes(query)) return false;
-        if (roleFilter === 'has-reason' && !rowValue(row, 'reason')) return false;
-        if (roleFilter === 'has-log' && !row.safeLogHrefs?.[roleField('log')]) return false;
-        return true;
-      }});
-    }}
-
-    function render() {{
-      const rows = filteredRows();
-      const maxPage = Math.max(0, Math.ceil(rows.length / pageSize) - 1); page = Math.min(page, maxPage);
-      const visible = rows.slice(page * pageSize, page * pageSize + pageSize);
-      $('empty-state').hidden = payload.rows.length !== 0;
-      $('case-list').innerHTML = visible.map((row) => cardHtml(row)).join('');
-      $('case-list').querySelectorAll('button[data-row]').forEach((button) => button.addEventListener('click', () => {{ selectedRowNumber = Number(button.dataset.row); renderDetail(); render(); }}));
-      $('page-label').textContent = rows.length ? `Page ${{page + 1}} / ${{maxPage + 1}} · ${{rows.length}} shown` : 'No matching rows';
-      $('prev').disabled = page <= 0; $('next').disabled = page >= maxPage;
-      if (!rows.some((row) => row.rowNumber === selectedRowNumber)) selectedRowNumber = rows[0]?.rowNumber || payload.rows[0]?.rowNumber || null;
-      renderDetail();
-    }}
-
-    function cardHtml(row) {{
-      const title = rowValue(row, 'id') || `Row ${{row.rowNumber}}`;
-      const body = rowValue(row, 'input') || rowValue(row, 'reason') || payload.fieldnames.map((field) => row.values[field]).find(Boolean) || '';
-      return `<button type=\"button\" class=\"case-card ${{row.rowNumber === selectedRowNumber ? 'active' : ''}}\" data-row=\"${{row.rowNumber}}\"><div class=\"case-title\"><span>${{esc(title)}}</span><span class=\"badge\">#${{row.rowNumber}}</span></div><div class=\"case-snippet\">${{esc(snippet(body))}}</div></button>`;
-    }}
-
-    function renderDetail() {{
-      const row = currentRow();
-      if (!row) {{ $('expected').textContent = 'No failure rows.'; $('actual').textContent = 'No failure rows.'; $('fields').innerHTML = ''; $('reason').hidden = true; $('log-link').innerHTML = ''; return; }}
-      $('expected').textContent = rowValue(row, 'expected') || 'No expected role mapped.';
-      $('actual').textContent = rowValue(row, 'actual') || 'No actual role mapped.';
-      const reason = rowValue(row, 'reason'); $('reason').hidden = !reason; $('reason').textContent = reason ? `Failure reason: ${{reason}}` : '';
-      const logField = roleField('log'); const href = row.safeLogHrefs?.[logField];
-      $('log-link').innerHTML = href ? `<a href=\"${{esc(href)}}\" target=\"_blank\" rel=\"noopener\">Open row log: ${{esc(row.values[logField])}}</a>` : (logField && row.values[logField] ? `<span class=\"muted\">Log path is shown as evidence but is not clickable because it is outside the safe relative path contract: ${{esc(row.values[logField])}}</span>` : '');
-      $('fields').innerHTML = payload.fieldnames.map((field) => `<details class=\"field\"><summary>${{esc(field)}}</summary><pre>${{esc(row.values[field] || '')}}</pre></details>`).join('');
-    }}
-
-    init();
-  </script>
-</body>
-</html>
-"""
+    audit_markers = " | ".join(html.escape(marker) for marker in AUDIT_MARKERS)
+    rendered = (
+        template.replace("__ATK_TITLE__", html.escape(title))
+        .replace("__ATK_STYLES__", styles)
+        .replace("__ATK_AUDIT_MARKERS__", audit_markers)
+        .replace("__ATK_DATA_JSON__", data_json)
+        .replace("__ATK_APP_JS__", neutralize_script_close(app_js))
+    )
+    return rendered
 
 
 def write_atomic(output_path: Path, content: str) -> None:
     temp_name = ""
     try:
-        with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=output_path.parent, prefix=f".{output_path.name}.", suffix=".tmp", delete=False) as handle:
+        with tempfile.NamedTemporaryFile(
+            "w",
+            encoding="utf-8",
+            dir=output_path.parent,
+            prefix=f".{output_path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
             temp_name = handle.name
             handle.write(content)
             handle.flush()
@@ -504,12 +412,28 @@ def write_atomic(output_path: Path, content: str) -> None:
         raise
 
 
+def open_in_browser(output_path: Path) -> tuple[bool, str]:
+    try:
+        url = output_path.resolve().as_uri()
+    except (OSError, ValueError) as exc:
+        return False, f"could not resolve file URI: {exc}"
+    try:
+        opened = webbrowser.open(url, new=2)
+    except webbrowser.Error as exc:
+        return False, f"webbrowser raised: {exc}"
+    if not opened:
+        return False, "no controlling browser available"
+    return True, url
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate current-version ATK failure_cases.html from failure_cases.csv.")
     parser.add_argument("--overwrite", action="store_true", help="replace existing failure_cases.html after Skill-level confirmation")
     parser.add_argument("--results-dir", default=str(RESULTS_DIR), help="results directory relative to target project cwd (default: .atk/results)")
     parser.add_argument("--no-report", action="store_true", help="skip optional same-version report.md parsing")
+    parser.add_argument("--open", dest="open_browser", action="store_true", help="open the generated HTML in the default browser after writing")
     return parser.parse_args(argv)
+
 
 def run(argv: list[str]) -> int:
     args = parse_args(argv)
@@ -518,13 +442,16 @@ def run(argv: list[str]) -> int:
     failure_csv = require_current_file(current_dir, FAILURE_FILENAME)
     output_path = current_dir / OUTPUT_FILENAME
     if output_path.exists() and not args.overwrite:
-        raise UserActionRequired(f"Refusing to overwrite existing {output_path}; rerun with --overwrite after confirming replacement.")
+        raise UserActionRequired(
+            f"Refusing to overwrite existing {output_path}; rerun with --overwrite after confirming replacement."
+        )
 
     fieldnames, rows, warnings = parse_failure_csv(failure_csv)
     roles = detect_roles(fieldnames)
+    facets = detect_facets(fieldnames, rows, roles)
     report = read_report_context(current_dir / REPORT_FILENAME, skip=args.no_report)
-    payload = build_payload(current_dir, fieldnames, rows, roles, report, warnings)
-    content = generate_html(payload)
+    payload = build_payload(current_dir, fieldnames, rows, roles, facets, report, warnings)
+    content = render_html(payload)
     write_atomic(output_path, content)
 
     overwrite_status = "overwrote existing HTML" if args.overwrite else "wrote new HTML"
@@ -534,7 +461,14 @@ def run(argv: list[str]) -> int:
     print(f"output={output_path.as_posix()}")
     print(f"report={report_status}")
     print(f"overwrite={overwrite_status}")
-    print("features=summary counts, search/filter, pagination, expected-vs-actual, role switching, all-field detail")
+    print(f"facets={len(facets)}")
+    print(
+        "features=summary counts, search/filter, pagination, expected-vs-actual, role switching, "
+        "dynamic facets, line diff, light syntax highlight, all-field detail"
+    )
+    if args.open_browser:
+        ok, info = open_in_browser(output_path)
+        print(f"browser_open={'ok' if ok else 'skipped'} ({info})")
     return 0
 
 

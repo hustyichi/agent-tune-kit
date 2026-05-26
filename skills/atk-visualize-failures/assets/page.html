@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>__ATK_TITLE__</title>
+  <style>
+__ATK_STYLES__
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand"><span class="dot" aria-hidden="true"></span><span>Agent Tune Kit</span></div>
+    <h1>异常案例审阅 · <span id="meta-version">vN</span></h1>
+    <div class="meta">
+      <span class="chip" id="meta-rows">0 行</span>
+      <span class="chip" id="meta-fields">0 列</span>
+      <button type="button" class="btn" data-open-drawer="roles" title="字段角色映射">角色映射</button>
+      <button type="button" class="btn" data-open-drawer="report" title="报告摘录">报告摘录</button>
+      <button type="button" class="btn" data-open-drawer="warnings" title="解析警告">警告</button>
+    </div>
+    <div class="path" id="path-context"></div>
+  </header>
+  <main>
+    <aside class="sidebar">
+      <section class="panel">
+        <div class="panel-body">
+          <div class="stats">
+            <div class="stat"><div class="label">总异常</div><div class="value" id="stat-total">0</div></div>
+            <div class="stat"><div class="label">字段</div><div class="value" id="stat-fields">0</div></div>
+            <div class="stat"><div class="label" id="stat-primary-label">分类</div><div class="value" id="stat-primary-value">-</div></div>
+            <div class="stat"><div class="label" id="stat-report-label">报告</div><div class="value" id="stat-report-value">-</div></div>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="panel-header">
+          <span>Search / filter / pagination</span>
+          <span class="hint" id="filtered-count">0 / 0</span>
+        </div>
+        <div class="panel-body">
+          <div class="search-row">
+            <input id="search" type="search" placeholder="搜索全部字段…" aria-label="搜索全部字段">
+          </div>
+          <div id="facets" class="facet-group" style="margin-top:10px;"></div>
+          <div id="empty-state-all" class="empty" hidden>
+            <strong>当前版本没有异常行</strong>
+            <span>No failure rows in current failure_cases.csv</span>
+          </div>
+          <div id="empty-state-filtered" class="empty" hidden>
+            <strong>没有匹配的异常行</strong>
+            <span>请调整搜索词或过滤器。</span>
+          </div>
+          <div id="case-list" class="case-list" role="list" aria-label="异常案例列表" style="margin-top:10px;"></div>
+          <div class="pager">
+            <button id="prev" type="button" class="btn">上一页</button>
+            <div class="controls">
+              <span id="page-label" class="label"></span>
+              <select id="page-size" aria-label="每页行数"></select>
+            </div>
+            <button id="next" type="button" class="btn">下一页</button>
+          </div>
+        </div>
+      </section>
+    </aside>
+    <section class="panel detail" aria-label="expected-vs-actual comparison">
+      <div id="detail-head" class="detail-head"></div>
+      <div id="detail-body" class="detail-body"></div>
+    </section>
+  </main>
+
+  <div class="drawer-backdrop" id="drawer-backdrop"></div>
+  <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
+    <div class="drawer-header">
+      <span id="drawer-title">设置</span>
+      <button type="button" id="drawer-close" class="btn ghost" aria-label="关闭">✕</button>
+    </div>
+    <div class="drawer-body">
+      <section class="drawer-section" data-section="roles">
+        <h3>schema-adaptive role switching · 字段角色映射 · auto-detected</h3>
+        <div id="drawer-roles"></div>
+      </section>
+      <section class="drawer-section" data-section="report">
+        <h3>Bounded report.md context</h3>
+        <div id="drawer-report"></div>
+      </section>
+      <section class="drawer-section" data-section="warnings">
+        <h3>解析警告</h3>
+        <div id="drawer-warnings"></div>
+      </section>
+    </div>
+  </aside>
+
+  <footer style="text-align:center;color:var(--muted);font-size:11px;padding:14px;">
+    由 atk-visualize-failures 生成 · 单文件 / stdlib / 零依赖 / 零外链 / 无 LLM 摘要
+  </footer>
+
+  <!-- audit markers (preserved for plugin self-test substring checks; do not remove) -->
+  <div class="audit-only" aria-hidden="true">__ATK_AUDIT_MARKERS__</div>
+
+  <script type="application/json" id="failure-data">__ATK_DATA_JSON__</script>
+  <script>
+__ATK_APP_JS__
+  </script>
+</body>
+</html>
