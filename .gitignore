@@ -36,5 +36,4 @@ node_modules/
 .pnpm-store/
 
 # Agent tune kit generated outputs
-.atk/results/
-.atk/**/*.log
+.atk/
