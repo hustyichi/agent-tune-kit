@@ -120,6 +120,14 @@ UV_NO_CONFIG=1 uv run python scripts/publish-release.py --repository pypi --publ
 
 The publish script checks whether the current `project.name` + `project.version` already exists before uploading. If it exists, bump the version in `pyproject.toml`, `.codex-plugin/plugin.json`, and `src/agent_tune_kit/__init__.py` first. Never commit or paste PyPI tokens.
 
+For the fixed production PyPI path, you can run the zero-argument wrapper:
+
+```sh
+scripts/publish-pypi.sh
+```
+
+It is equivalent to `UV_NO_CONFIG=1 uv run python scripts/publish-release.py --repository pypi --publish`, but checks that `UV_PUBLISH_TOKEN` is set first.
+
 ## Minimal tuning loop
 
 Run these steps in **your Agent repository**, not in this Agent Tune Kit repository.

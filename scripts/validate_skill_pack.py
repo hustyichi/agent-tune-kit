@@ -35,6 +35,7 @@ REQUIRED_FILES = [
     "scripts/install_plugin.py",
     "scripts/check-release.py",
     "scripts/publish-release.py",
+    "scripts/publish-pypi.sh",
     "pyproject.toml",
     "src/agent_tune_kit/__init__.py",
     "src/agent_tune_kit/cli.py",
@@ -149,6 +150,11 @@ PER_FILE_PHRASES = {
         "--check-url",
         "dry-run: OK",
         "publish-release: OK",
+    ],
+    "scripts/publish-pypi.sh": [
+        "UV_PUBLISH_TOKEN",
+        "UV_NO_CONFIG=1",
+        "scripts/publish-release.py --repository pypi --publish",
     ],
     "pyproject.toml": [
         'name = "agent-tune-kit"',

@@ -120,6 +120,14 @@ UV_NO_CONFIG=1 uv run python scripts/publish-release.py --repository pypi --publ
 
 脚本会在上传前检查当前 `project.name` + `project.version` 是否已存在；如果已存在，请先 bump `pyproject.toml`、`.codex-plugin/plugin.json` 和 `src/agent_tune_kit/__init__.py` 中的版本。不要把 PyPI token 写入仓库或聊天记录。
 
+如果只发布正式 PyPI，也可以直接运行固定参数脚本：
+
+```sh
+scripts/publish-pypi.sh
+```
+
+它等价于 `UV_NO_CONFIG=1 uv run python scripts/publish-release.py --repository pypi --publish`，但会先检查 `UV_PUBLISH_TOKEN` 是否已设置。
+
 ## 最小调优闭环
 
 下面这些步骤在**你的 Agent 项目**里完成，不是在本仓库里完成。
