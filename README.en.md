@@ -2,6 +2,8 @@
 
 English | [简体中文](README.md)
 
+[![PyPI](https://img.shields.io/pypi/v/agent-tune-kit.svg)](https://pypi.org/project/agent-tune-kit/)
+
 Agent Tune Kit is a **local Codex plugin** that helps you evaluate and improve the quality of your own local Agent.
 
 If you already have a working Agent but are not sure where it fails, why it fails, or what to tune next, this project lets Codex help you run a complete loop: batch test the Agent, find failure cases, write an analysis report, tune the Agent, and verify the next run.
