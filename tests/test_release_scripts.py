@@ -27,7 +27,7 @@ class ReleaseScriptTests(unittest.TestCase):
         check_release = load_script("check-release.py")
         identity = check_release.read_project_identity()
         self.assertEqual(identity.name, "agent-tune-kit")
-        self.assertEqual(identity.version, "0.3.6")
+        self.assertEqual(identity.version, "0.3.7")
         check_release.assert_versions_aligned(identity)
 
     def test_publish_targets_and_commands_are_safe_by_default(self) -> None:
