@@ -88,6 +88,38 @@ If the plugin is enabled in `/plugins` but `$atk-status` still does not appear i
 
 If your environment cannot use local plugins, do not split-copy individual `skills/*` directories; this repository now treats the local Codex plugin install path as the only recommended entry point.
 
+## Maintainer release to PyPI
+
+The release scripts follow the two-step release gate/publish shape used by `agent-tune-cli`: default mode is a dry run, and uploads only happen with an explicit `--publish`.
+
+Run the full local release gate first. It checks version alignment, static validation, tests, `uv build --no-sources`, archive contents, and packaged `atk` smoke installs outside the repository:
+
+```sh
+UV_NO_CONFIG=1 uv run python scripts/check-release.py
+```
+
+Prepare clean `dist/` artifacts without uploading:
+
+```sh
+UV_NO_CONFIG=1 uv run python scripts/publish-release.py
+```
+
+Publish to TestPyPI first:
+
+```sh
+export UV_PUBLISH_TOKEN='pypi-your-testpypi-token'
+UV_NO_CONFIG=1 uv run python scripts/publish-release.py --repository testpypi --publish
+```
+
+After TestPyPI install validation, publish to PyPI:
+
+```sh
+export UV_PUBLISH_TOKEN='pypi-your-pypi-token'
+UV_NO_CONFIG=1 uv run python scripts/publish-release.py --repository pypi --publish
+```
+
+The publish script checks whether the current `project.name` + `project.version` already exists before uploading. If it exists, bump the version in `pyproject.toml`, `.codex-plugin/plugin.json`, and `src/agent_tune_kit/__init__.py` first. Never commit or paste PyPI tokens.
+
 ## Minimal tuning loop
 
 Run these steps in **your Agent repository**, not in this Agent Tune Kit repository.

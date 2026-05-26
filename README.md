@@ -88,6 +88,38 @@ uv run atk install
 
 如果你不能使用本地插件，请先不要拆分复制单个 `skills/*` 目录；本仓库当前以本地 Codex 插件安装路径作为唯一推荐入口。
 
+## 维护者发布到 PyPI
+
+发布脚本参考 `agent-tune-cli` 的 release gate/publish 两段式设计：默认只做 dry run，只有显式加 `--publish` 才会上传。
+
+先跑完整本地发布门禁；它会校验版本一致、运行静态校验和测试、用 `uv build --no-sources` 构建 wheel/sdist，并在仓库外安装构建产物后执行 `atk` smoke：
+
+```sh
+UV_NO_CONFIG=1 uv run python scripts/check-release.py
+```
+
+准备正式发布前，先生成干净的 `dist/` 产物但不上传：
+
+```sh
+UV_NO_CONFIG=1 uv run python scripts/publish-release.py
+```
+
+建议先发 TestPyPI：
+
+```sh
+export UV_PUBLISH_TOKEN='pypi-你的-testpypi-token'
+UV_NO_CONFIG=1 uv run python scripts/publish-release.py --repository testpypi --publish
+```
+
+确认 TestPyPI 包可安装后，再发正式 PyPI：
+
+```sh
+export UV_PUBLISH_TOKEN='pypi-你的-pypi-token'
+UV_NO_CONFIG=1 uv run python scripts/publish-release.py --repository pypi --publish
+```
+
+脚本会在上传前检查当前 `project.name` + `project.version` 是否已存在；如果已存在，请先 bump `pyproject.toml`、`.codex-plugin/plugin.json` 和 `src/agent_tune_kit/__init__.py` 中的版本。不要把 PyPI token 写入仓库或聊天记录。
+
 ## 最小调优闭环
 
 下面这些步骤在**你的 Agent 项目**里完成，不是在本仓库里完成。
