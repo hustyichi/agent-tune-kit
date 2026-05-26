@@ -848,6 +848,15 @@ def run_rollback(args: argparse.Namespace) -> int:
     return 0
 
 
+def version_text() -> str:
+    return f"{PACKAGE_NAME} {package_version()}"
+
+
+def run_version(args: argparse.Namespace) -> int:
+    print(version_text())
+    return 0
+
+
 def add_common_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--force", action="store_true", default=argparse.SUPPRESS, help="allow replacement when paired with confirmation; noninteractive destructive replacement also requires --yes")
     parser.add_argument("--yes", action="store_true", default=argparse.SUPPRESS, help="answer yes for noninteractive operations; destructive replacement also requires --force")
@@ -865,7 +874,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     add_common_flags(common)
     parser = argparse.ArgumentParser(description="Register Agent Tune Kit as a local Codex plugin.")
     add_common_flags(parser)
+    parser.add_argument("--version", action="version", version=version_text(), help="print package version and exit")
     subparsers = parser.add_subparsers(dest="command", required=True)
+    subparsers.add_parser("version", help="print package version and exit")
     subparsers.add_parser("preview", parents=[common], help="preview planned marketplace/plugin-store changes without writing")
     subparsers.add_parser("install", parents=[common], help="install locally, then run smoke/status by default")
     subparsers.add_parser("status", parents=[common], help="print read-only local install status and Codex UI boundary guidance")
@@ -897,6 +908,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv or sys.argv[1:])
     try:
+        if args.command == "version":
+            return run_version(args)
         if args.command == "preview":
             return run_preview(args)
         if args.command == "install":

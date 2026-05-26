@@ -69,11 +69,19 @@ class InstallPluginCliTests(unittest.TestCase):
         self.assertIn("preview", help_result.stdout)
         self.assertIn("status", help_result.stdout)
         self.assertIn("rollback", help_result.stdout)
+        self.assertIn("version", help_result.stdout)
         self.assertNotIn("--dry-run", help_result.stdout)
         self.assertNotIn("--apply", help_result.stdout)
         rollback_help = run_cli("rollback", "--help")
         self.assertEqual(rollback_help.returncode, 0)
         self.assertIn("--backup", rollback_help.stdout)
+
+    def test_version_flag_and_subcommand_print_package_version(self) -> None:
+        for args in [("--version",), ("version",)]:
+            result = run_cli(*args)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout.strip(), "agent-tune-kit 0.3.7")
+            self.assertEqual(result.stderr, "")
 
     def test_script_wrapper_delegates_to_atk_cli(self) -> None:
         result = run_script("--help")
