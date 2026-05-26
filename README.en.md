@@ -28,8 +28,6 @@ You need:
 - A local Agent project that Codex can inspect and edit.
 - An evaluation dataset, preferably in CSV format. Column names do not need to follow a strict schema; Codex will infer inputs and expected results where possible.
 
-Create a git checkpoint before tuning so you can compare or roll back Agent changes.
-
 ## Install
 
 One-command install:
