@@ -21,16 +21,15 @@ Use it if you have:
 
 You need:
 
-- Codex with local plugin or Skill support.
-- Python 3.
+- Codex.
 - A local Agent project that Codex can inspect and edit.
-- A simple evaluation dataset, preferably CSV. Column names do not need to follow a strict schema; Codex will infer inputs and expected results where possible.
+- An evaluation dataset, preferably in CSV format. Column names do not need to follow a strict schema; Codex will infer inputs and expected results where possible.
 
 Create a git checkpoint before tuning so you can compare or roll back Agent changes.
 
 ## Install
 
-Normal users do not need to clone this repository. Run:
+One-command install:
 
 ```sh
 uvx --from agent-tune-kit atk install

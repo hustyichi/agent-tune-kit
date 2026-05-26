@@ -21,16 +21,15 @@ Agent Tune Kit 是一个**本地 Codex 插件**，用于评测和调优你自己
 
 你需要：
 
-- 支持本地插件或 Skill 的 Codex 环境。
-- Python 3。
+- Codex。
 - 一个 Codex 能读取和修改的本地 Agent 项目。
-- 一份简单评估数据，推荐 CSV。字段名不必严格固定，Codex 会根据数据内容判断输入和期望结果。
+- 一份评估数据集，建议优先使用 CSV 格式。字段名不必严格固定，Codex 会根据数据内容判断输入和期望结果。
 
 建议在调优前提交一次 git checkpoint，方便对比或回滚你的 Agent 改动。
 
 ## 安装
 
-普通用户不需要 clone 本仓库，直接运行：
+一键运行：
 
 ```sh
 uvx --from agent-tune-kit atk install
