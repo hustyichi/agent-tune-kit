@@ -4,299 +4,206 @@ English | [简体中文](README.md)
 
 [![PyPI](https://img.shields.io/pypi/v/agent-tune-kit.svg)](https://pypi.org/project/agent-tune-kit/)
 
-Agent Tune Kit is a **local Codex plugin** that helps you evaluate and improve the quality of your own local Agent.
+Agent Tune Kit is a **local Codex plugin** for evaluating and tuning your own local Agent.
 
-If you already have a working Agent but are not sure where it fails, why it fails, or what to tune next, this project lets Codex help you run a complete loop: batch test the Agent, find failure cases, write an analysis report, tune the Agent, and verify the next run.
+If you already have a working Agent but do not know where it fails, why it fails, or what to change next, Agent Tune Kit helps you run the full loop: batch test the Agent, find failure cases, generate a report, let Codex tune the Agent, and verify the next run.
 
-Its main advantage is a **low-friction start**. You do not need to design a complex evaluation schema or expose a universal Agent interface first. Bring a local Agent project and a small evaluation dataset; Codex reads the code and data samples, then generates the project-specific runner and tuning workflow.
+## Who It Is For
 
-## Who it is for
+Use it if you have:
 
-Use this if you have:
-
-- a local Agent, chatbot, tool-using Agent, or RAG Agent;
-- a few test questions, sample inputs, expected answers, or human-judgable results;
-- a need to quickly find weak spots and let Codex help tune prompts, code, parameters, or tool configuration;
-- a desire to keep each tuning loop traceable with result files and reports.
-
-You do not need a full evaluation platform to start. For the first validation, 5 to 20 CSV rows are enough.
+- A local Agent, chatbot, tool-using Agent, or RAG Agent.
+- A small evaluation dataset, preferably CSV; 5 to 20 rows are enough to start.
+- Inputs, expected answers, or human-checkable results.
+- A desire to let Codex help locate weak spots and tune prompts, code, parameters, or tool configuration.
 
 ## Prerequisites
 
-You only need:
+You need:
 
-- Codex with local plugin/Skill support.
+- Codex with local plugin or Skill support.
 - Python 3.
 - A local Agent project that Codex can inspect and edit.
-- A simple evaluation dataset, preferably CSV. Column names do not need to follow a strict Schema; Codex will infer inputs and expected results where possible.
+- A simple evaluation dataset, preferably CSV. Column names do not need to follow a strict schema; Codex will infer inputs and expected results where possible.
 
-Create a git checkpoint before tuning if you want an easy rollback path. Agent Tune Kit does not automate Agent tuning rollback; installer rollback only restores local marketplace/plugin-store install state.
+Create a git checkpoint before tuning so you can compare or roll back Agent changes.
 
-## Quickstart: install the plugin
+## Install
 
-No repository clone is needed for normal use. Run the packaged installer directly with uvx:
+Normal users do not need to clone this repository. Run:
 
 ```sh
 uvx --from agent-tune-kit atk install
 ```
 
-For a persistent command, install the tool first, then run `atk`:
+To keep the `atk` command available:
 
 ```sh
 uv tool install agent-tune-kit
 atk install
 ```
 
-If you prefer pipx:
+Or use `pipx`:
 
 ```sh
 pipx install agent-tune-kit
 atk install
 ```
 
-The installer validates the packaged plugin manifest, adds the plugin to the Personal marketplace, writes or updates `~/.agents/plugins/marketplace.json`, copies the packaged payload into `~/plugins/agent-tune-kit`, and runs local smoke/status checks by default. It proves local files and marketplace state only; it does not bypass or modify hidden Codex UI enablement state.
-
-Useful helper commands:
-
-```sh
-atk preview --smoke   # preview only; no writes
-atk status            # read local install status and next steps
-atk rollback --backup <backup-id>  # restore installer-managed local install state only
-```
-
-When an existing marketplace/plugin-store conflict is found, interactive terminals prompt before replacement. Noninteractive replacement requires `--yes --force`; destructive replacement creates a backup first and prints a rollback command. The installer supports explicit subcommands only and does not keep old entry points; use `preview` for no-write preview.
-
-Contributor checkout path, for editing this repository itself:
-
-```sh
-git clone git@github.com:hustyichi/agent-tune-kit.git
-cd agent-tune-kit
-uv sync
-uv run atk install
-# or: python3 scripts/install_plugin.py install
-```
-
-After install, Agent Tune Kit should be visible/available in `/plugins`.
-
-You still need to enable it in Codex:
+After installation, open the plugin list in Codex:
 
 ```text
 /plugins
 ```
 
-Select `Agent Tune Kit` in the plugin list and follow the UI prompt to install/enable it. After you enable it in the UI, `$atk-status` and the other Skill commands should appear in autocomplete.
+Select and enable `Agent Tune Kit`. If `$atk-status` and other completions do not appear immediately after enabling, restart Codex or reopen the current project session.
 
-If the plugin is enabled in `/plugins` but `$atk-status` still does not appear in the current session, that is expected: Codex usually loads plugin Skills when a session starts, so newly enabled plugins may not be hot-loaded into an already running session. Restart Codex, or close the current Codex session and reopen this project, then type `$atk-status` again to verify.
+## Minimal Tuning Loop
 
-If your environment cannot use local plugins, do not split-copy individual `skills/*` directories; this repository now treats the local Codex plugin install path as the only recommended entry point.
+Run these commands in **your Agent project**, not in this repository.
 
-## Maintainer release to PyPI
+### 1. Initialize
 
-The release scripts follow the two-step release gate/publish shape used by `agent-tune-cli`: default mode is a dry run, and uploads only happen with an explicit `--publish`.
-
-Run the full local release gate first. It checks version alignment, static validation, tests, `uv build --no-sources`, archive contents, and packaged `atk` smoke installs outside the repository:
-
-```sh
-UV_NO_CONFIG=1 uv run python scripts/check-release.py
-```
-
-Prepare clean `dist/` artifacts without uploading:
-
-```sh
-UV_NO_CONFIG=1 uv run python scripts/publish-release.py
-```
-
-Publish to TestPyPI first:
-
-```sh
-export UV_PUBLISH_TOKEN='pypi-your-testpypi-token'
-UV_NO_CONFIG=1 uv run python scripts/publish-release.py --repository testpypi --publish
-```
-
-After TestPyPI install validation, publish to PyPI:
-
-```sh
-export UV_PUBLISH_TOKEN='pypi-your-pypi-token'
-UV_NO_CONFIG=1 uv run python scripts/publish-release.py --repository pypi --publish
-```
-
-The publish script checks whether the current `project.name` + `project.version` already exists before uploading. If it exists, bump the version in `pyproject.toml`, `.codex-plugin/plugin.json`, and `src/agent_tune_kit/__init__.py` first. Never commit or paste PyPI tokens.
-
-For the fixed production PyPI path, you can run the zero-argument wrapper:
-
-```sh
-scripts/publish-pypi.sh
-```
-
-It is equivalent to `UV_NO_CONFIG=1 uv run python scripts/publish-release.py --repository pypi --publish`, but checks that `UV_PUBLISH_TOKEN` is set first.
-
-## Minimal tuning loop
-
-Run these steps in **your Agent repository**, not in this Agent Tune Kit repository.
-
-### 1. Generate a test runner
-
-Run:
+Tell Codex where your Agent starts and where the evaluation data lives:
 
 ```text
-$atk-init
+$atk-init My Agent entrypoint is scripts/agent.py and the evaluation dataset is data/eval.csv
 ```
 
-Point Codex to your Agent entrypoint and evaluation dataset. Codex generates:
+Codex generates:
 
 ```text
 .atk/runner/eval_runner.py
 ```
 
-The runner keeps your original dataset columns and adds the Agent's actual output as `agent_output`. It also adds `agent_output_log_path`; when trustworthy Python `logging` capture is configured, this column points to row-specific files such as `logs/row_000001.log` for serial or same-process concurrent runs.
-
-`$atk-init` first snapshots the provided dataset into `.atk/datasets/`, and the generated runner reads that project-local copy. If a same-name snapshot already exists with identical content, it is reused; if the name exists with different content, ATK uses readable incrementing names such as `dataset_2.csv` and `dataset_3.csv`.
-
-### 2. Run the Agent on the dataset
-
-Run:
+### 2. Run Evaluation
 
 ```text
 $atk-run
 ```
 
-This writes:
+Results are written to:
 
 ```text
 .atk/results/v1/eval_results.csv
 ```
 
-If row logging is active, the same version also contains `.atk/results/v1/logs/row_*.log`. Row logs are generated for configured same-process Python `logging` capture in serial runs and, when `CONCURRENT_ROW_LOGGING_ENABLED` remains enabled, with `--concurrency > 1`. The runner only writes records emitted while an ATK row context is active; stdout/stderr, subprocess, multiprocess, and post-row background logs remain out of scope. If concurrent row logging is disabled, concurrent runs visibly downgrade to `app.log`/CSV evidence instead of creating row logs.
+### 3. Find Failures
 
-### 3. Find failing cases
-
-For the simplest path, let Codex judge which cases failed:
+Let Codex judge which rows failed:
 
 ```text
 $atk-find-failures
 ```
 
-If you already have a clear rule, first create or update the reusable rule script:
+If you already have a clear rule, create the rule script first and then apply it:
 
 ```text
-$atk-init-failure-rule rule: mark a row as failed when the expected field differs from agent_output
-```
-
-Codex uses the rule you provide in the command to generate the rule script at:
-
-```text
-.atk/runner/failure_rule.py
-```
-
-Then execute that rule script to write the failing cases:
-
-```text
+$atk-init-failure-rule rule: mark a row as failed when expected differs from agent_output
 $atk-find-failures-by-rule
 ```
 
-If `.atk/runner/failure_rule.py` is missing, `$atk-find-failures-by-rule` stops and tells you to run `$atk-init-failure-rule` first.
-
-The failing cases are written to:
+Failure cases are written to:
 
 ```text
 .atk/results/v1/failure_cases.csv
 ```
 
-### 4. Generate the analysis report
-
-Run:
+### 4. Generate Report
 
 ```text
 $atk-report
 ```
 
-Codex writes:
+The report is written to:
 
 ```text
 .atk/results/v1/report.md
 ```
 
-The report summarizes test results, failure cases, likely causes, and recommended tuning priorities.
+It summarizes results, failure cases, likely causes, and recommended tuning priorities.
 
-### 5. Optionally review failures in HTML
-
-Run:
+### 5. Optional: Browse Failures
 
 ```text
 $atk-visualize-failures
 ```
 
-Codex writes:
+This creates a local HTML page:
 
 ```text
 .atk/results/v1/failure_cases.html
 ```
 
-This optional browser can run any time `failure_cases.csv` exists. If same-version `report.md` exists, it is used as best-effort, non-blocking context; missing or unparseable report context does not block the visualization. The Skill uses a fixed plugin-owned stdlib generator script, so output is deterministic and dependency-free while still offering expected-vs-actual review, search/filter/pagination, schema-adaptive role switching, and safe relative log links.
+Use it to search, filter, and manually review failure cases.
 
-### 6. Let Codex tune the Agent
-
-Run:
+### 6. Let Codex Tune the Agent
 
 ```text
 $atk-tune
 ```
 
-Codex edits the Agent based on the report and records the tuning plan in:
+Codex edits your Agent based on the report and records the tuning plan:
 
 ```text
 .atk/results/v1/tuning_plan.md
 ```
 
-## Verify that tuning worked
+## Verify Improvement
 
-After tuning, run the test again:
+After tuning, run another loop:
 
 ```text
 $atk-run
-```
-
-This creates `.atk/results/v2/eval_results.csv`. Then run:
-
-```text
 $atk-find-failures
 $atk-report
 ```
 
-Starting with the second loop, the report reads the previous `tuning_plan.md` and tells you whether the target failures were resolved, partially resolved, unresolved, or impossible to judge.
+New results are written to `.atk/results/v2/`. Starting with the second loop, the report compares against the previous `tuning_plan.md` and tells you whether the target issues were resolved, partially resolved, unresolved, or impossible to judge.
 
-## Expected output
+## Files You Usually Need
 
 ```text
 .atk/
-├── datasets/
-│   └── service_source_codes.csv
 ├── runner/
 │   ├── eval_runner.py
 │   └── failure_rule.py
 └── results/
     ├── v1/
     │   ├── eval_results.csv
-    │   ├── logs/                    # optional row logs
-    │   │   └── row_000001.log
     │   ├── failure_cases.csv
-    │   ├── failure_cases.html       # optional failure browser
+    │   ├── failure_cases.html
     │   ├── report.md
     │   └── tuning_plan.md
     └── v2/
         └── ...
 ```
 
-Most users only need to read `eval_results.csv`, `failure_cases.csv`, optional `failure_cases.html`, `report.md`, and row logs linked from `agent_output_log_path` when available. Version directories are managed automatically.
+Most users only need:
 
-## Available Skills
+- `eval_results.csv`: actual Agent output for each row.
+- `failure_cases.csv`: rows selected as failures.
+- `failure_cases.html`: optional failure review page.
+- `report.md`: analysis and tuning recommendations.
+- `tuning_plan.md`: what Codex changed and why.
 
-- `$atk-status`: inspect progress and recommend the next step.
-- `$atk-init`: generate a test runner for the current Agent.
-- `$atk-run`: run the test runner and create the current result version.
-- `$atk-find-failures`: let Codex identify failing cases.
-- `$atk-init-failure-rule`: create or update `.atk/runner/failure_rule.py`.
-- `$atk-find-failures-by-rule`: execute `.atk/runner/failure_rule.py` to identify failing cases with explicit rules.
+## Common Skills
+
+- `$atk-status`: inspect progress and suggest the next step.
+- `$atk-init`: generate the test runner.
+- `$atk-run`: run evaluation and create a new result version.
+- `$atk-find-failures`: let Codex identify failure cases.
+- `$atk-init-failure-rule`: create or update the failure rule.
+- `$atk-find-failures-by-rule`: apply the rule to identify failures.
 - `$atk-report`: generate analysis and cross-loop validation.
-- `$atk-visualize-failures`: generate optional `.atk/results/vN/failure_cases.html` from current `failure_cases.csv`.
-- `$atk-tune`: tune the Agent and record the tuning plan.
+- `$atk-visualize-failures`: generate the failure review HTML page.
+- `$atk-tune`: tune the Agent based on the report.
+
+## Troubleshooting
+
+- `$atk-status` is missing: confirm the plugin is enabled in `/plugins`, then restart Codex or reopen the project session.
+- You are not sure what to do next: run `$atk-status`.
+- You want to check local install state: run `atk status`.
+- You want to preview install effects first: run `atk preview --smoke`.
+
+For contributor development, clone this repository and run `uv sync` followed by `uv run atk install`.
