@@ -33,6 +33,10 @@ REQUIRED_FILES = [
     "docs/shared-versioning-and-confirmation.md",
     "docs/codex_agent_tuning_prd.md",
     "scripts/install_plugin.py",
+    "pyproject.toml",
+    "src/agent_tune_kit/__init__.py",
+    "src/agent_tune_kit/cli.py",
+    "src/agent_tune_kit/installer.py",
     "README.md",
     "README.en.md",
     "README.zh-CN.md",
@@ -86,10 +90,14 @@ NON_GOALS = [
 PLUGIN_DOC_PHRASES = [
     "local Codex plugin",
     ".codex-plugin/plugin.json",
+    "uvx --from agent-tune-kit atk install",
+    "uv tool install agent-tune-kit",
+    "pipx install agent-tune-kit",
+    "atk install",
+    "atk preview --smoke",
+    "atk status",
+    "atk rollback --backup",
     "scripts/install_plugin.py install",
-    "scripts/install_plugin.py preview --smoke",
-    "scripts/install_plugin.py status",
-    "scripts/install_plugin.py rollback --backup",
     "explicit subcommands only",
     "source.path",
     "./plugins/agent-tune-kit",
@@ -116,20 +124,33 @@ PER_FILE_PHRASES = {
         '"defaultPrompt"',
     ],
     "scripts/install_plugin.py": [
+        "Compatibility wrapper",
+        "atk install",
+        "uvx --from agent-tune-kit atk install",
+        "agent_tune_kit.cli",
+        "authorize_conflicts",
+    ],
+    "pyproject.toml": [
+        'name = "agent-tune-kit"',
+        'atk = "agent_tune_kit.cli:main"',
+        "hatchling",
+        "force-include",
+        "agent_tune_kit/plugin_payload/agent-tune-kit/.codex-plugin",
+        "templates/.atk",
+        "pytest",
+    ],
+    "src/agent_tune_kit/installer.py": [
         "argparse",
-        "install",
-        "preview",
-        "status",
-        "rollback",
-        "--backup",
-        "--backup-root",
-        "--yes",
-        "--no-input",
-        "--force",
-        "--marketplace-path",
-        "--plugin-store",
-        "--copy",
-        "--smoke",
+        "PayloadSource",
+        "package-resource",
+        "dev-root",
+        "importlib.resources",
+        "schema_version",
+        "payload_source_kind",
+        "payload_resource_origin",
+        "install_mode",
+        "agent-tune-kit-install.json",
+        "marker_matches_backup",
         "SOURCE_PATH = f\"./plugins/{PLUGIN_NAME}\"",
         "DEFAULT_BACKUP_ROOT",
         "write_json_atomic",
@@ -137,6 +158,13 @@ PER_FILE_PHRASES = {
         "newer unrelated state",
         "symlink",
         "copy fallback",
+        "smoke-resolved plugin path",
+        "Codex UI boundary",
+        "rollback complete",
+    ],
+    "src/agent_tune_kit/cli.py": [
+        "installer_main",
+        "def main",
     ],
     "skills/atk-status/SKILL.md": [
         "atk-status",
@@ -335,9 +363,10 @@ PER_FILE_PHRASES = {
         "scripts/generate_failure_browser.py",
         "best-effort and non-blocking",
         "local Codex plugin",
+        "atk install",
+        "atk status",
+        "atk rollback --backup <backup-id>",
         "python3 scripts/install_plugin.py install",
-        "python3 scripts/install_plugin.py status",
-        "python3 scripts/install_plugin.py rollback --backup <backup-id>",
     ],
     "docs/skill-template-pack-usage.md": [
         "Local plugin install and smoke",
@@ -352,15 +381,17 @@ PER_FILE_PHRASES = {
         "failure_cases.html",
         "same-version `report.md` is optional best-effort context",
         "scripts/generate_failure_browser.py",
+        "atk install",
+        "atk status",
+        "atk rollback --backup <backup-id>",
         "python3 scripts/install_plugin.py install",
-        "python3 scripts/install_plugin.py status",
-        "python3 scripts/install_plugin.py rollback --backup <backup-id>",
     ],
     "README.md": [
         "本地 Codex 插件",
+        "atk install",
+        "atk status",
+        "atk rollback --backup <backup-id>",
         "python3 scripts/install_plugin.py install",
-        "python3 scripts/install_plugin.py status",
-        "python3 scripts/install_plugin.py rollback --backup <backup-id>",
         "快速开始",
         "使用前准备",
         "atk-status",
@@ -378,9 +409,10 @@ PER_FILE_PHRASES = {
     ],
     "README.en.md": [
         "local Codex plugin",
+        "atk install",
+        "atk status",
+        "atk rollback --backup <backup-id>",
         "python3 scripts/install_plugin.py install",
-        "python3 scripts/install_plugin.py status",
-        "python3 scripts/install_plugin.py rollback --backup <backup-id>",
         "Quickstart",
         "Prerequisites",
         "atk-status",
@@ -398,9 +430,10 @@ PER_FILE_PHRASES = {
     ],
     "README.zh-CN.md": [
         "本地 Codex 插件",
+        "atk install",
+        "atk status",
+        "atk rollback --backup <backup-id>",
         "python3 scripts/install_plugin.py install",
-        "python3 scripts/install_plugin.py status",
-        "python3 scripts/install_plugin.py rollback --backup <backup-id>",
         "快速开始",
         "使用前准备",
         "atk-status",
@@ -508,10 +541,12 @@ def validate_manifest(errors: list[str]) -> None:
 
 
 def validate_installer(errors: list[str]) -> None:
-    text = read_rel("scripts/install_plugin.py") if (ROOT / "scripts/install_plugin.py").exists() else ""
-    require("DEFAULT_MARKETPLACE = Path(\"~/.agents/plugins/marketplace.json\")" in text, "installer must default to personal marketplace", errors)
-    require("DEFAULT_PLUGIN_STORE = Path(\"~/plugins\")" in text, "installer must default to ~/plugins", errors)
-    for phrase in ["AVAILABLE", "ON_INSTALL", "category", "Coding", "atomic", "os.replace", "smoke-resolved plugin path", "Codex UI boundary", "--yes --force", "rollback complete"]:
+    wrapper_text = read_rel("scripts/install_plugin.py") if (ROOT / "scripts/install_plugin.py").exists() else ""
+    text = read_rel("src/agent_tune_kit/installer.py") if (ROOT / "src/agent_tune_kit/installer.py").exists() else ""
+    require("agent_tune_kit.cli" in wrapper_text, "wrapper must delegate to packaged atk CLI", errors)
+    require('DEFAULT_MARKETPLACE = Path("~/.agents/plugins/marketplace.json")' in text, "installer must default to personal marketplace", errors)
+    require('DEFAULT_PLUGIN_STORE = Path("~/plugins")' in text, "installer must default to ~/plugins", errors)
+    for phrase in ["AVAILABLE", "ON_INSTALL", "category", "Coding", "atomic", "os.replace", "smoke-resolved plugin path", "Codex UI boundary", "--yes --force", "rollback complete", "PayloadSource", "package-resource", "schema_version"]:
         require(phrase in text, f"installer missing behavior phrase: {phrase}", errors)
 
 

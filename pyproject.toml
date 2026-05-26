@@ -1,0 +1,75 @@
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agent-tune-kit"
+version = "0.3.6"
+description = "Local Codex plugin for iterative Agent tuning with guided Skills, reusable runner templates, versioned results, and static validation."
+readme = "README.en.md"
+requires-python = ">=3.11"
+license = { text = "UNLICENSED" }
+authors = [
+  { name = "hustyichi", email = "hustyichi@163.com" },
+]
+keywords = ["agent-tune-kit", "codex-skills", "evaluation", "reporting", "local-plugin"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/hustyichi/agent-tune-kit"
+Repository = "https://github.com/hustyichi/agent-tune-kit"
+
+[project.scripts]
+atk = "agent_tune_kit.cli:main"
+
+[tool.hatch.build]
+include = [
+  "src/agent_tune_kit/**",
+  ".codex-plugin/**",
+  "skills/**",
+  "templates/**",
+  "templates/.atk/**",
+  "docs/**",
+  "README.md",
+  "README.en.md",
+  "README.zh-CN.md",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agent_tune_kit"]
+[tool.hatch.build.targets.wheel.force-include]
+".codex-plugin" = "agent_tune_kit/plugin_payload/agent-tune-kit/.codex-plugin"
+"skills" = "agent_tune_kit/plugin_payload/agent-tune-kit/skills"
+"templates" = "agent_tune_kit/plugin_payload/agent-tune-kit/templates"
+"docs" = "agent_tune_kit/plugin_payload/agent-tune-kit/docs"
+"README.md" = "agent_tune_kit/plugin_payload/agent-tune-kit/README.md"
+"README.en.md" = "agent_tune_kit/plugin_payload/agent-tune-kit/README.en.md"
+"README.zh-CN.md" = "agent_tune_kit/plugin_payload/agent-tune-kit/README.zh-CN.md"
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "/pyproject.toml",
+  "/src/agent_tune_kit/**",
+  "/.codex-plugin/**",
+  "/skills/**",
+  "/templates/**",
+  "/templates/.atk/**",
+  "/templates/.atk/runner/eval_runner.py.md",
+  "/templates/.atk/runner/failure_rule.py.md",
+  "/docs/**",
+  "/tests/**",
+  "/scripts/**",
+  "/README.md",
+  "/README.en.md",
+  "/README.zh-CN.md",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.0"]
+
+[tool.hatch.build.targets.sdist.force-include]
+"templates/.atk" = "templates/.atk"

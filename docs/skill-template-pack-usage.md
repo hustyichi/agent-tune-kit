@@ -6,29 +6,39 @@ This pass is a local-product minimum: `.codex-plugin/plugin.json`, personal mark
 
 ## Local plugin install and smoke
 
-Use the main command for normal setup:
+Use the packaged `atk` installer for normal setup; no repository clone is required:
 
 ```sh
-python3 scripts/install_plugin.py install
+uvx --from agent-tune-kit atk install
+```
+
+Persistent alternatives:
+
+```sh
+uv tool install agent-tune-kit
+atk install
+
+pipx install agent-tune-kit
+atk install
 ```
 
 Default behavior:
 
-- validates `.codex-plugin/plugin.json`;
+- validates the packaged `.codex-plugin/plugin.json`;
 - marketplace path: `~/.agents/plugins/marketplace.json`;
 - plugin store: `~/plugins`;
 - marketplace entry name: `agent-tune-kit`;
 - marketplace `source.path`: `./plugins/agent-tune-kit`;
-- default install target: `~/plugins/agent-tune-kit` as a symlink to this repository;
+- package installs copy the bundled payload to `~/plugins/agent-tune-kit`; source-checkout developer installs may symlink the repository;
 - runs local smoke/status checks by default;
 - prints `/plugins` enablement guidance without claiming hidden Codex UI `Installed` state.
 
 Useful commands:
 
 ```sh
-python3 scripts/install_plugin.py preview --smoke
-python3 scripts/install_plugin.py status
-python3 scripts/install_plugin.py rollback --backup <backup-id>
+atk preview --smoke
+atk status
+atk rollback --backup <backup-id>
 ```
 
 Conflict and rollback behavior:
@@ -44,12 +54,12 @@ Conflict and rollback behavior:
 For isolated smoke tests, use temp paths:
 
 ```sh
-python3 scripts/install_plugin.py install \
+atk install \
   --marketplace-path /tmp/agent-tune-marketplace.json \
   --plugin-store /tmp/agent-tune-plugins \
   --backup-root /tmp/agent-tune-backups \
   --yes --force
-python3 scripts/install_plugin.py status \
+atk status \
   --marketplace-path /tmp/agent-tune-marketplace.json \
   --plugin-store /tmp/agent-tune-plugins
 ```
@@ -57,6 +67,28 @@ python3 scripts/install_plugin.py status \
 The installer writes marketplace JSON atomically where practical and reports smoke status. It does not create a public marketplace package and does not mutate hidden Codex UI enablement state.
 
 After install, the plugin should be visible/available in the Personal marketplace. Open `/plugins`, select `Agent Tune Kit`, and enable it there if needed. If `$atk-status` does not appear in autocomplete after enabling the plugin, restart Codex or open a new Codex session for the project. Current Codex sessions may not hot-load Skills from a plugin that was enabled after the session started.
+
+
+## Contributor and maintainer packaging notes
+
+For source checkout development, keep the packaged CLI path first but use the wrapper when you need to test checkout behavior explicitly:
+
+```sh
+uv sync
+uv run atk preview --smoke
+uv run atk install --copy --marketplace-path /tmp/agent-tune-marketplace.json --plugin-store /tmp/agent-tune-plugins --backup-root /tmp/agent-tune-backups --yes --force
+python3 scripts/install_plugin.py install  # contributor wrapper only
+```
+
+Before publishing or TestPyPI verification, run:
+
+```sh
+uv sync
+uv run pytest
+uv build
+```
+
+Then inspect the wheel/sdist for `agent_tune_kit/plugin_payload/agent-tune-kit/.codex-plugin/plugin.json`, install the wheel or sdist into a temporary environment, and run `atk preview`, `atk status`, and `atk install` from outside the repository. TestPyPI publication is a maintainer release step, not part of ordinary local plugin use.
 
 ## Repository layout boundary
 

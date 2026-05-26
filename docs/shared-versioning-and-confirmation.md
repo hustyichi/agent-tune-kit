@@ -20,11 +20,15 @@ Non-goals for this pass:
 ## Plugin loading
 
 - Local plugin manifest: `.codex-plugin/plugin.json` with `skills: "./skills/"`.
-- Personal marketplace installer: `scripts/install_plugin.py`.
+- Packaged installer command: `atk`, exposed by the `agent-tune-kit` Python package.
+- No-clone install command: `uvx --from agent-tune-kit atk install`.
+- Persistent install command: `uv tool install agent-tune-kit` then `atk install`; `pipx install agent-tune-kit` is also supported.
+- Personal marketplace developer wrapper: `scripts/install_plugin.py` for source checkouts only.
 - Default marketplace `source.path`: `./plugins/agent-tune-kit`.
-- Main install command: `python3 scripts/install_plugin.py install`.
-- Status command: `python3 scripts/install_plugin.py status`.
-- Installer rollback command: `python3 scripts/install_plugin.py rollback --backup <backup-id>`.
+- Main install command: `atk install`.
+- Status command: `atk status`.
+- Installer rollback command: `atk rollback --backup <backup-id>`.
+- Contributor fallback: `python3 scripts/install_plugin.py install`, `python3 scripts/install_plugin.py status`, and `python3 scripts/install_plugin.py rollback --backup <backup-id>` remain wrappers around the packaged CLI.
 
 ## Canonical paths
 

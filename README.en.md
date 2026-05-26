@@ -32,30 +32,47 @@ Create a git checkpoint before tuning if you want an easy rollback path. Agent T
 
 ## Quickstart: install the plugin
 
-Clone the repository first, then enter the project directory:
+No repository clone is needed for normal use. Run the packaged installer directly with uvx:
 
 ```sh
-git clone git@github.com:hustyichi/agent-tune-kit.git
-cd agent-tune-kit
+uvx --from agent-tune-kit atk install
 ```
 
-Then run the main install command:
+For a persistent command, install the tool first, then run `atk`:
 
 ```sh
-python3 scripts/install_plugin.py install
+uv tool install agent-tune-kit
+atk install
 ```
 
-The installer validates the manifest, adds the plugin to the Personal marketplace, writes or updates `~/.agents/plugins/marketplace.json`, and runs local smoke/status checks by default. It proves local files and marketplace state only; it does not bypass or modify hidden Codex UI enablement state.
+If you prefer pipx:
+
+```sh
+pipx install agent-tune-kit
+atk install
+```
+
+The installer validates the packaged plugin manifest, adds the plugin to the Personal marketplace, writes or updates `~/.agents/plugins/marketplace.json`, copies the packaged payload into `~/plugins/agent-tune-kit`, and runs local smoke/status checks by default. It proves local files and marketplace state only; it does not bypass or modify hidden Codex UI enablement state.
 
 Useful helper commands:
 
 ```sh
-python3 scripts/install_plugin.py preview --smoke   # preview only; no writes
-python3 scripts/install_plugin.py status            # read local install status and next steps
-python3 scripts/install_plugin.py rollback --backup <backup-id>  # restore installer-managed local install state only
+atk preview --smoke   # preview only; no writes
+atk status            # read local install status and next steps
+atk rollback --backup <backup-id>  # restore installer-managed local install state only
 ```
 
 When an existing marketplace/plugin-store conflict is found, interactive terminals prompt before replacement. Noninteractive replacement requires `--yes --force`; destructive replacement creates a backup first and prints a rollback command. The installer supports explicit subcommands only and does not keep old entry points; use `preview` for no-write preview.
+
+Contributor checkout path, for editing this repository itself:
+
+```sh
+git clone git@github.com:hustyichi/agent-tune-kit.git
+cd agent-tune-kit
+uv sync
+uv run atk install
+# or: python3 scripts/install_plugin.py install
+```
 
 After install, Agent Tune Kit should be visible/available in `/plugins`.
 

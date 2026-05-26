@@ -32,30 +32,47 @@ Agent Tune Kit 是一个**本地 Codex 插件**，帮助你快速完成本地 Ag
 
 ## 快速开始：安装插件
 
-先把仓库拉到本地，并进入项目目录：
+普通用户不需要先 clone 仓库。直接用 uvx 运行已打包的安装器：
 
 ```sh
-git clone git@github.com:hustyichi/agent-tune-kit.git
-cd agent-tune-kit
+uvx --from agent-tune-kit atk install
 ```
 
-然后运行主安装命令：
+如果希望长期保留 `atk` 命令，可以先安装工具：
 
 ```sh
-python3 scripts/install_plugin.py install
+uv tool install agent-tune-kit
+atk install
 ```
 
-安装脚本会先校验 manifest，再把插件加入 Personal marketplace，写入或更新 `~/.agents/plugins/marketplace.json`，并默认执行本地 smoke/status 检查。它只证明本地文件和 marketplace 状态，不会绕过或修改 Codex 隐藏的 UI 启用状态。
+如果你使用 pipx：
+
+```sh
+pipx install agent-tune-kit
+atk install
+```
+
+安装器会先校验打包后的插件 manifest，再把插件加入 Personal marketplace，写入或更新 `~/.agents/plugins/marketplace.json`，把打包 payload 复制到 `~/plugins/agent-tune-kit`，并默认执行本地 smoke/status 检查。它只证明本地文件和 marketplace 状态，不会绕过或修改 Codex 隐藏的 UI 启用状态。
 
 常用辅助命令：
 
 ```sh
-python3 scripts/install_plugin.py preview --smoke   # 只预览，不写入
-python3 scripts/install_plugin.py status            # 查看本地安装状态和下一步提示
-python3 scripts/install_plugin.py rollback --backup <backup-id>  # 只回滚 installer 管理的本地安装状态
+atk preview --smoke   # 只预览，不写入
+atk status            # 查看本地安装状态和下一步提示
+atk rollback --backup <backup-id>  # 只回滚 installer 管理的本地安装状态
 ```
 
 如果安装时遇到已有 marketplace/plugin-store 冲突，交互式终端会先确认；非交互式替换必须显式使用 `--yes --force`，且替换前会创建备份并打印 rollback 命令。安装器只支持显式子命令，不保留旧入口；预览请使用 `preview`。
+
+贡献者本地开发路径如下，仅用于修改本仓库本身：
+
+```sh
+git clone git@github.com:hustyichi/agent-tune-kit.git
+cd agent-tune-kit
+uv sync
+uv run atk install
+# 或：python3 scripts/install_plugin.py install
+```
 
 安装完成后，Agent Tune Kit 应该会在 `/plugins` 里可见/可用。
 
