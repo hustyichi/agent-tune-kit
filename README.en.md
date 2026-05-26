@@ -8,6 +8,10 @@ Agent Tune Kit is a **local Codex plugin** for evaluating and tuning your own lo
 
 If you already have a working Agent but do not know where it fails, why it fails, or what to change next, Agent Tune Kit helps you run the full loop: batch test the Agent, find failure cases, generate a report, let Codex tune the Agent, and verify the next run.
 
+## Architecture
+
+![Agent Tune Kit architecture](docs/assets/arch-en.png)
+
 ## Who It Is For
 
 Use it if you have:

@@ -8,6 +8,10 @@ Agent Tune Kit 是一个**本地 Codex 插件**，用于评测和调优你自己
 
 如果你已经有一个能运行的 Agent，但不知道它在哪些样本上表现不好、原因是什么、下一步该怎么改，Agent Tune Kit 可以帮你把一轮调优闭环跑起来：批量测试、找异常样本、生成报告、让 Codex 调整 Agent，再用下一轮结果验证是否真的变好。
 
+## 架构图
+
+![Agent Tune Kit 架构图](docs/assets/arch.png)
+
 ## 适合谁
 
 适合你，如果你有：
