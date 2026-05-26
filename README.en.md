@@ -161,7 +161,7 @@ $atk-report
 
 New results are written to `.atk/results/v2/`. Starting with the second loop, the report compares against the previous `tuning_plan.md` and tells you whether the target issues were resolved, partially resolved, unresolved, or impossible to judge.
 
-## Files You Usually Need
+## Output Structure
 
 ```text
 .atk/
@@ -179,7 +179,7 @@ New results are written to `.atk/results/v2/`. Starting with the second loop, th
         └── ...
 ```
 
-Most users only need:
+Common output files:
 
 - `eval_results.csv`: actual Agent output for each row.
 - `failure_cases.csv`: rows selected as failures.
@@ -198,12 +198,3 @@ Most users only need:
 - `$atk-report`: generate analysis and cross-loop validation.
 - `$atk-visualize-failures`: generate the failure review HTML page.
 - `$atk-tune`: tune the Agent based on the report.
-
-## Troubleshooting
-
-- `$atk-status` is missing: confirm the plugin is enabled in `/plugins`, then restart Codex or reopen the project session.
-- You are not sure what to do next: run `$atk-status`.
-- You want to check local install state: run `atk status`.
-- You want to preview install effects first: run `atk preview --smoke`.
-
-For contributor development, clone this repository and run `uv sync` followed by `uv run atk install`.

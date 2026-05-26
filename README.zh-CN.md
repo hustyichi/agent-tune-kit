@@ -161,7 +161,7 @@ $atk-report
 
 新结果会写入 `.atk/results/v2/`。从第二轮开始，报告会对比上一轮 `tuning_plan.md`，说明目标问题是已解决、部分解决、未解决，还是无法判断。
 
-## 你通常需要看的文件
+## 输出结构
 
 ```text
 .atk/
@@ -179,7 +179,7 @@ $atk-report
         └── ...
 ```
 
-日常使用重点看：
+常用输出文件：
 
 - `eval_results.csv`：每条样本的实际输出。
 - `failure_cases.csv`：筛选出的异常样本。
@@ -198,12 +198,3 @@ $atk-report
 - `$atk-report`：生成分析报告和跨轮验证结论。
 - `$atk-visualize-failures`：生成异常样本 HTML 浏览页。
 - `$atk-tune`：根据报告调优 Agent。
-
-## 遇到问题时
-
-- 看不到 `$atk-status`：确认已在 `/plugins` 启用插件，然后重启 Codex 或重新打开项目会话。
-- 不知道下一步做什么：运行 `$atk-status`。
-- 想确认安装状态：运行 `atk status`。
-- 想先预览安装影响：运行 `atk preview --smoke`。
-
-贡献者如需本地开发，可 clone 本仓库后运行 `uv sync` 和 `uv run atk install`。
