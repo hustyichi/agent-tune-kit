@@ -12,8 +12,15 @@ This repository packages Agent Tune Kit, a local Codex plugin distributed as a P
 - `uv build --no-sources` builds the package artifact using only declared package inputs.
 - `python scripts/validate_skill_pack.py` validates bundled skill pack structure.
 - `python scripts/check-release.py` runs release sanity checks before publishing.
+- `./scripts/release-version.sh <version> --publish` performs the full reusable release flow: bump versions, lock, test, commit, tag, push, publish, and verify PyPI.
 
 Use `uv run atk --version` or `uv run atk install` for local CLI smoke tests after changing package or installer behavior.
+
+## Natural-Language Release Requests
+
+When a user asks in natural language to upgrade, release, publish, tag, or push a new version, extract the requested `MAJOR.MINOR.PATCH` value and use the release automation directly. For example, "升级到 0.3.9 并发布" maps to `./scripts/release-version.sh 0.3.9 --publish`; "只升级到 0.3.9" maps to `./scripts/release-version.sh 0.3.9`. Do not manually edit the individual version files unless the release script fails and the failure requires a narrow fix.
+
+Use `./scripts/release-version.sh <version> --publish --dry-run` only when the user asks for a preview or when you need to explain the planned commands. The release script intentionally treats the current `validate_skill_pack.py` README/plugin documentation phrase failures as warnings unless strict mode is requested, and publishing reuses `scripts/publish-release.py` with existing PyPI credential support (`UV_PUBLISH_TOKEN`, username/password env vars, or `~/.pypirc`). After a successful natural-language release request, report the created commit, tag, branch push, tag push, and PyPI verification result.
 
 ## Coding Style & Naming Conventions
 

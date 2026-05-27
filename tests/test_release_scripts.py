@@ -144,6 +144,74 @@ class ReleaseScriptTests(unittest.TestCase):
                 if value is not None:
                     os.environ[key] = value
 
+    def test_release_version_updates_all_version_files(self) -> None:
+        release_version = load_script("release-version.py")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / ".codex-plugin").mkdir()
+            (root / "src" / "agent_tune_kit").mkdir(parents=True)
+            (root / "tests").mkdir()
+            (root / "scripts").mkdir()
+
+            (root / "pyproject.toml").write_text('version = "0.3.8"\n', encoding="utf-8")
+            (root / "uv.lock").write_text('version = "0.3.8"\n', encoding="utf-8")
+            (root / ".codex-plugin" / "plugin.json").write_text('"version": "0.3.8"\n', encoding="utf-8")
+            (root / "src" / "agent_tune_kit" / "__init__.py").write_text('__version__ = "0.3.8"\n', encoding="utf-8")
+            (root / "tests" / "test_release_scripts.py").write_text(
+                'self.assertEqual(identity.version, "0.3.8")\nexample_version = "1.2.3"\n',
+                encoding="utf-8",
+            )
+            (root / "tests" / "test_install_plugin.py").write_text('"agent-tune-kit 0.3.8"\n', encoding="utf-8")
+            (root / "scripts" / "validate_skill_pack.py").write_text('\'"version": "0.3.8"\'\n', encoding="utf-8")
+
+            changed = release_version.update_version_files(root, "0.4.0")
+
+            self.assertEqual(
+                changed,
+                [
+                    ".codex-plugin/plugin.json",
+                    "pyproject.toml",
+                    "scripts/validate_skill_pack.py",
+                    "src/agent_tune_kit/__init__.py",
+                    "tests/test_install_plugin.py",
+                    "tests/test_release_scripts.py",
+                    "uv.lock",
+                ],
+            )
+            for path in changed:
+                content = (root / path).read_text(encoding="utf-8")
+                self.assertIn("0.4.0", content)
+                self.assertNotIn("0.3.8", content)
+            self.assertIn(
+                'example_version = "1.2.3"',
+                (root / "tests" / "test_release_scripts.py").read_text(encoding="utf-8"),
+            )
+
+    def test_release_version_plans_full_release_flow(self) -> None:
+        release_version = load_script("release-version.py")
+        commands = release_version.release_commands("0.4.0", publish=True, skip_release_check=True)
+
+        self.assertEqual(commands[0], ["git", "status", "--porcelain"])
+        self.assertIn(["uv", "lock"], commands)
+        self.assertIn(["uv", "run", "pytest"], commands)
+        self.assertIn(["uv", "run", "atk", "--version"], commands)
+        self.assertIn(["git", "tag", "0.4.0"], commands)
+        self.assertIn(["git", "push", "origin", "main"], commands)
+        self.assertIn(["git", "push", "origin", "0.4.0"], commands)
+        self.assertEqual(
+            commands[-1],
+            [
+                "uv",
+                "run",
+                "python",
+                "scripts/publish-release.py",
+                "--repository",
+                "pypi",
+                "--publish",
+                "--skip-release-check",
+            ],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
