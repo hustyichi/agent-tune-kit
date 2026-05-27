@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agent-tune-kit"
-version = "0.3.7"
+version = "0.3.8"
 description = "Local Codex plugin for iterative Agent tuning with guided Skills, reusable runner templates, versioned results, and static validation."
 readme = "README.en.md"
 requires-python = ">=3.11"
