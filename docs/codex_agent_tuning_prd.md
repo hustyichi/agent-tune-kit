@@ -43,7 +43,7 @@
   - **日志采集方案**：由 Skill 在阅读 Agent 源码后自行决定采集方式（例如 stdout 重定向、读取 Agent 写入的日志文件、Hook 日志框架等），并将逻辑固化在生成的 `eval_runner.py` 中；若 Agent 无可识别日志，则不生成 `app.log`
   - **逐行日志方案**：当可识别的日志源是同进程 Python `logging` 时，生成的 runner 可默认使用 stdlib `contextvars` 与 ATK 自有 `logging.Handler` 路由器，为每条源数据行写入 `.atk/results/vN/logs/row_{source_index:06d}.log`，并在 `eval_results.csv` 的 `agent_output_log_path` 中写入相对 POSIX 路径；即使该行没有日志记录，也要创建被引用的空文件。逐行日志只能包含 ATK 行上下文处于活动状态时发出的记录；stdout/stderr、子进程、多进程和行结束后的后台日志不进入逐行日志。若生成的并发逐行日志开关被禁用，`--concurrency > 1` 必须在运行输出中显式降级并使用 `app.log` 作为回退证据。
   - **数据集适配**：以 CSV 为主，列名由 Skill 推断；若数据集为其它格式，由 Skill 自行扩展读取逻辑
-  - **数据集快照命名与去重**：快照文件名优先保留原始文件名以便阅读；若 `.atk/datasets/` 下已有同名文件且内容完全一致，则复用已有快照，不创建重复文件；若同名但内容不同，则使用可读数字后缀（如 `dataset_2.csv`、`dataset_3.csv`）选择第一个未占用文件名，或在已有后缀文件内容一致时复用该文件。内容比较应使用可靠摘要（如 `sha256`），可先用文件大小做快速预筛。
+  - **数据集快照命名与去重**：init 阶段的原始数据集固定快照为 `.atk/datasets/original.csv`，让后续异常集、回归集等语义化数据集可以使用稳定命名。若该文件不存在则复制；若内容完全一致则复用；若已存在但内容不同，则需在覆盖前确认。内容比较应使用可靠摘要（如 `sha256`），可先用文件大小做快速预筛。
   - **`eval_results.csv` 字段约定**：
     - 原则上**完整保留用户输入数据集的所有原始列**（列名、列顺序均不改动），在此基础上追加 Agent 运行产生的列
     - **强约束**：Agent 的实际输出必须写入固定列名 `agent_output`；若 Agent 返回多字段结构化结果，可序列化为 JSON 字符串存入该列，或额外追加 `agent_output_*` 前缀的辅助列
@@ -270,7 +270,7 @@
 ```text
 /.atk/
 ├── datasets/
-│   └── service_source_codes.csv # atk-init 复制的数据集快照
+│   └── original.csv             # atk-init 复制的原始数据集快照
 ├── runner/
 │   ├── eval_runner.py          # 跨版本共享测试脚本
 │   └── failure_rule.py          # 跨版本共享失败判定规则脚本（规则模式使用）

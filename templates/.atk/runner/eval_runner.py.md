@@ -36,7 +36,7 @@ from typing import Any
 RESULTS_DIR = Path(".atk/results")
 RUNNER_DIR = Path(".atk/runner")
 DATASETS_DIR = Path(".atk/datasets")
-DATASET_PATH = DATASETS_DIR / "TODO_AGENT_TUNING_DATASET_SNAPSHOT"
+DATASET_PATH = DATASETS_DIR / "original.csv"
 RESULTS_FILENAME = "eval_results.csv"
 APP_LOG_FILENAME = "app.log"
 PYTHON_LOGGING_CAPTURE_ENABLED = False

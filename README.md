@@ -165,6 +165,8 @@ $atk-report
 
 ```text
 .atk/
+├── datasets/
+│   └── original.csv
 ├── runner/
 │   ├── eval_runner.py
 │   └── failure_rule.py
@@ -198,4 +200,3 @@ $atk-report
 - `$atk-report`：生成分析报告和跨轮验证结论。
 - `$atk-visualize-failures`：生成异常样本 HTML 浏览页。
 - `$atk-tune`：根据报告调优 Agent。
-

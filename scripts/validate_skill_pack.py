@@ -340,7 +340,7 @@ PER_FILE_PHRASES = {
     ],
     "templates/.atk/runner/eval_runner.py.md": [
         "DATASETS_DIR = Path(\".atk/datasets\")",
-        "DATASET_PATH = DATASETS_DIR / \"TODO_AGENT_TUNING_DATASET_SNAPSHOT\"",
+        "DATASET_PATH = DATASETS_DIR / \"original.csv\"",
         "def allocate_next_results_version(results_dir: Path = RESULTS_DIR) -> Path",
         "class AgentExecutionError(RuntimeError)",
         "parser.add_argument(",
@@ -647,7 +647,7 @@ def main() -> int:
     )
     require(
         "DATASETS_DIR = Path(\".atk/datasets\")" in runner_template
-        and "DATASET_PATH = DATASETS_DIR / \"TODO_AGENT_TUNING_DATASET_SNAPSHOT\"" in runner_template,
+        and "DATASET_PATH = DATASETS_DIR / \"original.csv\"" in runner_template,
         "runner template must read the dataset from a .atk/datasets snapshot",
         errors,
     )

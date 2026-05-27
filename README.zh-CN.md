@@ -165,6 +165,8 @@ $atk-report
 
 ```text
 .atk/
+├── datasets/
+│   └── original.csv
 ├── runner/
 │   ├── eval_runner.py
 │   └── failure_rule.py
