@@ -85,16 +85,58 @@ class ReleaseScriptTests(unittest.TestCase):
     def test_publish_requires_explicit_credentials_without_trusted_publishing(self) -> None:
         publish_release = load_script("publish-release.py")
         old = {
-            key: os.environ.pop(key, None) for key in ["UV_PUBLISH_TOKEN", "UV_PUBLISH_USERNAME", "UV_PUBLISH_PASSWORD"]
+            key: os.environ.pop(key, None)
+            for key in ["HOME", "UV_PUBLISH_TOKEN", "UV_PUBLISH_USERNAME", "UV_PUBLISH_PASSWORD"]
         }
         try:
-            with self.assertRaises(publish_release.PublishError):
-                publish_release.require_publish_credentials(trusted_publishing=None)
-            publish_release.require_publish_credentials(trusted_publishing="always")
-            os.environ["UV_PUBLISH_TOKEN"] = "pypi-example"
-            publish_release.require_publish_credentials(trusted_publishing=None)
+            with tempfile.TemporaryDirectory() as tmp:
+                os.environ["HOME"] = tmp
+                with self.assertRaises(publish_release.PublishError):
+                    publish_release.publish_credentials_env(target_name="pypi", trusted_publishing=None)
+                self.assertEqual(
+                    publish_release.publish_credentials_env(target_name="pypi", trusted_publishing="always"),
+                    {},
+                )
+                os.environ["UV_PUBLISH_TOKEN"] = "pypi-example"
+                self.assertEqual(publish_release.publish_credentials_env(target_name="pypi", trusted_publishing=None), {})
         finally:
             for key in ["UV_PUBLISH_TOKEN", "UV_PUBLISH_USERNAME", "UV_PUBLISH_PASSWORD"]:
+                os.environ.pop(key, None)
+            for key, value in old.items():
+                if value is not None:
+                    os.environ[key] = value
+
+    def test_publish_can_use_pypirc_credentials_when_env_credentials_are_missing(self) -> None:
+        publish_release = load_script("publish-release.py")
+        old = {
+            key: os.environ.pop(key, None)
+            for key in ["HOME", "UV_PUBLISH_TOKEN", "UV_PUBLISH_USERNAME", "UV_PUBLISH_PASSWORD"]
+        }
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                home = Path(tmp)
+                (home / ".pypirc").write_text(
+                    "\n".join(
+                        [
+                            "[distutils]",
+                            "index-servers =",
+                            "    pypi",
+                            "",
+                            "[pypi]",
+                            "username = __token__",
+                            "password = pypi-example",
+                        ]
+                    ),
+                    encoding="utf-8",
+                )
+                os.environ["HOME"] = str(home)
+
+                self.assertEqual(
+                    publish_release.publish_credentials_env(target_name="pypi", trusted_publishing=None),
+                    {"UV_PUBLISH_USERNAME": "__token__", "UV_PUBLISH_PASSWORD": "pypi-example"},
+                )
+        finally:
+            for key in ["HOME", "UV_PUBLISH_TOKEN", "UV_PUBLISH_USERNAME", "UV_PUBLISH_PASSWORD"]:
                 os.environ.pop(key, None)
             for key, value in old.items():
                 if value is not None:

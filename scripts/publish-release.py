@@ -9,6 +9,7 @@ available in the environment.
 from __future__ import annotations
 
 import argparse
+import configparser
 import json
 import os
 import shutil
@@ -68,9 +69,18 @@ def release_env() -> dict[str, str]:
     return env
 
 
-def run(command: list[str], *, cwd: Path = REPO_ROOT, timeout: int | None = None) -> None:
+def run(
+    command: list[str],
+    *,
+    cwd: Path = REPO_ROOT,
+    timeout: int | None = None,
+    extra_env: dict[str, str] | None = None,
+) -> None:
     print(f"+ {' '.join(command)}", flush=True)
-    subprocess.run(command, cwd=cwd, env=release_env(), text=True, check=True, timeout=timeout)
+    env = release_env()
+    if extra_env:
+        env.update(extra_env)
+    subprocess.run(command, cwd=cwd, env=env, text=True, check=True, timeout=timeout)
 
 
 def capture(command: list[str], *, cwd: Path = REPO_ROOT) -> str:
@@ -146,17 +156,42 @@ def build_artifacts() -> list[Path]:
     return artifacts
 
 
-def require_publish_credentials(*, trusted_publishing: str | None) -> None:
+def read_pypirc_credentials(target_name: str) -> dict[str, str]:
+    pypirc = Path.home() / ".pypirc"
+    if not pypirc.is_file():
+        return {}
+
+    parser = configparser.ConfigParser()
+    try:
+        parser.read(pypirc, encoding="utf-8")
+    except configparser.Error:
+        return {}
+
+    if not parser.has_section(target_name):
+        return {}
+
+    username = parser.get(target_name, "username", fallback="").strip()
+    password = parser.get(target_name, "password", fallback="").strip()
+    if not username or not password:
+        return {}
+    return {"UV_PUBLISH_USERNAME": username, "UV_PUBLISH_PASSWORD": password}
+
+
+def publish_credentials_env(*, target_name: str, trusted_publishing: str | None) -> dict[str, str]:
     env = os.environ
     if trusted_publishing:
-        return
+        return {}
     if env.get("UV_PUBLISH_TOKEN"):
-        return
+        return {}
     if env.get("UV_PUBLISH_USERNAME") and env.get("UV_PUBLISH_PASSWORD"):
-        return
+        return {}
+    pypirc_credentials = read_pypirc_credentials(target_name)
+    if pypirc_credentials:
+        return pypirc_credentials
     raise PublishError(
         "missing publish credentials: set UV_PUBLISH_TOKEN='pypi-...' "
-        "or pass --trusted-publishing when running in a configured OIDC publisher"
+        "or configure ~/.pypirc for the target repository, or pass --trusted-publishing "
+        "when running in a configured OIDC publisher"
     )
 
 
@@ -261,10 +296,10 @@ def main() -> int:
         )
         return 0
 
-    require_publish_credentials(trusted_publishing=args.trusted_publishing)
+    credential_env = publish_credentials_env(target_name=target.name, trusted_publishing=args.trusted_publishing)
     if not args.skip_availability_check:
         assert_not_already_published(target, identity)
-    run(publish_command(target, artifacts, trusted_publishing=args.trusted_publishing), timeout=180)
+    run(publish_command(target, artifacts, trusted_publishing=args.trusted_publishing), timeout=180, extra_env=credential_env)
     if not args.skip_upload_verify:
         wait_for_published_version(target, identity)
     print("publish-release: OK")
