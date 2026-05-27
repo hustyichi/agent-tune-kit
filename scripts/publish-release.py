@@ -299,7 +299,11 @@ def main() -> int:
     credential_env = publish_credentials_env(target_name=target.name, trusted_publishing=args.trusted_publishing)
     if not args.skip_availability_check:
         assert_not_already_published(target, identity)
-    run(publish_command(target, artifacts, trusted_publishing=args.trusted_publishing), timeout=180, extra_env=credential_env)
+    run(
+        publish_command(target, artifacts, trusted_publishing=args.trusted_publishing),
+        timeout=180,
+        extra_env=credential_env,
+    )
     if not args.skip_upload_verify:
         wait_for_published_version(target, identity)
     print("publish-release: OK")

@@ -98,7 +98,9 @@ class ReleaseScriptTests(unittest.TestCase):
                     {},
                 )
                 os.environ["UV_PUBLISH_TOKEN"] = "pypi-example"
-                self.assertEqual(publish_release.publish_credentials_env(target_name="pypi", trusted_publishing=None), {})
+                self.assertEqual(
+                    publish_release.publish_credentials_env(target_name="pypi", trusted_publishing=None), {}
+                )
         finally:
             for key in ["UV_PUBLISH_TOKEN", "UV_PUBLISH_USERNAME", "UV_PUBLISH_PASSWORD"]:
                 os.environ.pop(key, None)
