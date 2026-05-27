@@ -42,7 +42,15 @@ class GenerateFailureBrowserTests(unittest.TestCase):
             (current / "logs").mkdir(parents=True)
             write_csv(
                 current / "failure_cases.csv",
-                ["case_id", "input", "expected_output", "agent_output", "failure_reason", "agent_output_log_path", "custom_col"],
+                [
+                    "case_id",
+                    "input",
+                    "expected_output",
+                    "agent_output",
+                    "failure_reason",
+                    "agent_output_log_path",
+                    "custom_col",
+                ],
                 [
                     {
                         "case_id": "C-1",
@@ -55,7 +63,9 @@ class GenerateFailureBrowserTests(unittest.TestCase):
                     }
                 ],
             )
-            (current / "report.md").write_text("# Summary\nFailure root cause summary.\n# Tuning priorities\n- Fix arithmetic.\n", encoding="utf-8")
+            (current / "report.md").write_text(
+                "# Summary\nFailure root cause summary.\n# Tuning priorities\n- Fix arithmetic.\n", encoding="utf-8"
+            )
 
             result = run_generator(project)
 
@@ -132,7 +142,16 @@ class GenerateFailureBrowserTests(unittest.TestCase):
             write_csv(
                 current / "failure_cases.csv",
                 ["sample", "question_text", "gold", "model_reply", "why_bad", "opaque_extra"],
-                [{"sample": "S1", "question_text": "Q", "gold": "A", "model_reply": "B", "why_bad": "Mismatch", "opaque_extra": "keep me"}],
+                [
+                    {
+                        "sample": "S1",
+                        "question_text": "Q",
+                        "gold": "A",
+                        "model_reply": "B",
+                        "why_bad": "Mismatch",
+                        "opaque_extra": "keep me",
+                    }
+                ],
             )
 
             result = run_generator(project, "--no-report")
@@ -168,7 +187,9 @@ class GenerateFailureBrowserTests(unittest.TestCase):
                 }
                 for index, path in enumerate(unsafe_paths, start=1)
             ]
-            write_csv(current / "failure_cases.csv", ["id", "expected_output", "agent_output", "agent_output_log_path"], rows)
+            write_csv(
+                current / "failure_cases.csv", ["id", "expected_output", "agent_output", "agent_output_log_path"], rows
+            )
 
             result = run_generator(project)
 
@@ -209,15 +230,26 @@ class GenerateFailureBrowserTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             project = Path(tmp)
             current = project / ".atk" / "results" / "v1"
-            write_csv(current / "failure_cases.csv", ["id", "input", "expected_output", "agent_output"], [{"id": "1", "input": "Q", "expected_output": "A", "agent_output": "B"}])
+            write_csv(
+                current / "failure_cases.csv",
+                ["id", "input", "expected_output", "agent_output"],
+                [{"id": "1", "input": "Q", "expected_output": "A", "agent_output": "B"}],
+            )
             result = run_generator(project)
             self.assertEqual(result.returncode, 0, result.stderr)
             html = (current / "failure_cases.html").read_text(encoding="utf-8")
-            scripts = re.findall(r'<script>(.*?)</script>', html, flags=re.DOTALL)
+            scripts = re.findall(r"<script>(.*?)</script>", html, flags=re.DOTALL)
             self.assertTrue(scripts, "generated HTML should include executable frontend JavaScript")
             js_path = current / "generated.js"
             js_path.write_text("\n".join(scripts), encoding="utf-8")
-            check = subprocess.run([node, "--check", str(js_path)], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False, timeout=10)
+            check = subprocess.run(
+                [node, "--check", str(js_path)],
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+                timeout=10,
+            )
             self.assertEqual(check.returncode, 0, check.stderr)
 
     def test_malformed_unreliable_csv_exits_2_without_overwrite(self) -> None:

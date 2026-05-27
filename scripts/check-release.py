@@ -18,9 +18,9 @@ import tarfile
 import tempfile
 import tomllib
 import zipfile
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_IMPORT = "agent_tune_kit"
@@ -93,6 +93,14 @@ def require_uv() -> str:
     if not uv:
         raise ReleaseCheckError("uv is required for release checks; install uv first")
     return uv
+
+
+def run_static_python_checks() -> None:
+    run(["uv", "run", "ruff", "format", "."])
+    run(["uv", "run", "ruff", "check", "--fix", "."])
+    run(["uv", "run", "ruff", "format", "--check", "."])
+    run(["uv", "run", "ruff", "check", "."])
+    run(["uv", "run", "python", "-m", "py_compile", *PYTHON_FILES], timeout=120)
 
 
 def read_project_identity() -> ProjectIdentity:
@@ -233,7 +241,7 @@ def main() -> int:
     clean_generated_artifacts()
     try:
         run(["uv", "sync"], timeout=180)
-        run(["uv", "run", "python", "-m", "py_compile", *PYTHON_FILES], timeout=120)
+        run_static_python_checks()
         run(["uv", "run", "python", "scripts/validate_skill_pack.py"], timeout=120)
         run(["uv", "run", "pytest", "-q"], timeout=240)
         with tempfile.TemporaryDirectory(prefix="atk-release-check-") as tmp:
@@ -252,4 +260,4 @@ if __name__ == "__main__":
         raise SystemExit(main())
     except (ReleaseCheckError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
         print(f"release-check: FAILED: {error}", file=sys.stderr)
-        raise SystemExit(1)
+        raise SystemExit(1) from None

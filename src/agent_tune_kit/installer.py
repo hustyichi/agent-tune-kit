@@ -9,7 +9,7 @@ import shutil
 import sys
 import tempfile
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from importlib import metadata, resources
 from importlib.resources.abc import Traversable
 from pathlib import Path
@@ -106,7 +106,15 @@ def validate_manifest_payload(root: PayloadRoot) -> dict[str, Any]:
     interface = manifest.get("interface")
     if not isinstance(interface, dict):
         raise InstallError("manifest interface must be an object")
-    for key in ["displayName", "shortDescription", "longDescription", "developerName", "category", "capabilities", "defaultPrompt"]:
+    for key in [
+        "displayName",
+        "shortDescription",
+        "longDescription",
+        "developerName",
+        "category",
+        "capabilities",
+        "defaultPrompt",
+    ]:
         if key not in interface:
             raise InstallError(f"manifest interface missing {key}")
     if len(interface.get("defaultPrompt", [])) > 3:
@@ -375,7 +383,7 @@ def make_backup(
 ) -> tuple[str | None, str | None]:
     if dry_run:
         return None, None
-    backup_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    backup_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     backup_dir = backup_root.expanduser() / backup_id
     suffix = 1
     while backup_dir.exists():
@@ -394,7 +402,7 @@ def make_backup(
     metadata: dict[str, Any] = {
         "schema_version": 2,
         "id": backup_dir.name,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "marketplace_path": str(marketplace_path),
         "plugin_store_target": str(plugin_target),
         "prior_existence": state.exists,
@@ -494,7 +502,9 @@ def ensure_plugin_store(target: Path, *, use_copy: bool, dry_run: bool, payload_
         raise InstallError(f"symlink failed ({exc}); rerun with --copy for explicit copy fallback") from exc
 
 
-def collect_status(marketplace_path: Path, plugin_store: Path, payload_source: PayloadSource | None = None) -> tuple[dict[str, bool], list[str]]:
+def collect_status(
+    marketplace_path: Path, plugin_store: Path, payload_source: PayloadSource | None = None
+) -> tuple[dict[str, bool], list[str]]:
     payload_source = payload_source or resolve_payload_source()
     target = plugin_store.expanduser() / PLUGIN_NAME
     facts: dict[str, bool] = {}
@@ -536,9 +546,13 @@ def collect_status(marketplace_path: Path, plugin_store: Path, payload_source: P
     facts["plugin_store_target_resolved"] = state.exists and target_manifest_ok
     lines.append(f"plugin-store target exists: {'yes' if state.exists else 'no'} ({target})")
     lines.append(f"plugin-store target resolved: {'yes' if target_manifest_ok else 'no'}")
-    lines.append("local availability: should be visible/available in /plugins after Codex UI refresh when marketplace and target checks are yes")
+    lines.append(
+        "local availability: should be visible/available in /plugins after Codex UI refresh when marketplace and target checks are yes"
+    )
     lines.append("Codex UI boundary: installer does not modify or observe hidden Codex UI enablement state")
-    lines.append("next step: open /plugins, enable Agent Tune Kit if needed, then restart/open a new session if $atk-* autocomplete is missing")
+    lines.append(
+        "next step: open /plugins, enable Agent Tune Kit if needed, then restart/open a new session if $atk-* autocomplete is missing"
+    )
     return facts, lines
 
 
@@ -552,7 +566,11 @@ def smoke_check(
 ) -> list[str]:
     payload_source = payload_source or resolve_payload_source()
     target = plugin_store.expanduser() / PLUGIN_NAME
-    manifest = validate_manifest_payload(payload_source.root) if dry_run else validate_manifest(target / ".codex-plugin" / "plugin.json")
+    manifest = (
+        validate_manifest_payload(payload_source.root)
+        if dry_run
+        else validate_manifest(target / ".codex-plugin" / "plugin.json")
+    )
 
     if not dry_run and not target.exists():
         raise InstallError(f"marketplace source path does not resolve to an installed plugin: {target}")
@@ -564,7 +582,11 @@ def smoke_check(
         marketplace_data = load_json(marketplace_path.expanduser())
     else:
         marketplace_data = {"plugins": [marketplace_entry()]}
-    entries = [entry for entry in marketplace_data.get("plugins", []) if isinstance(entry, dict) and entry.get("name") == PLUGIN_NAME]
+    entries = [
+        entry
+        for entry in marketplace_data.get("plugins", [])
+        if isinstance(entry, dict) and entry.get("name") == PLUGIN_NAME
+    ]
     if not entries:
         raise InstallError("marketplace entry missing")
     entry = entries[-1]
@@ -603,8 +625,19 @@ def smoke_check(
             "payload_resource_origin",
             "install_mode",
         ]
-        required_legacy = ["id", "timestamp", "marketplace_path", "plugin_store_target", "prior_target_type", "operation", "repo_root", "plugin_name"]
-        if not all(key in backup_metadata for key in required_new) and not all(key in backup_metadata for key in required_legacy):
+        required_legacy = [
+            "id",
+            "timestamp",
+            "marketplace_path",
+            "plugin_store_target",
+            "prior_target_type",
+            "operation",
+            "repo_root",
+            "plugin_name",
+        ]
+        if not all(key in backup_metadata for key in required_new) and not all(
+            key in backup_metadata for key in required_legacy
+        ):
             missing = [key for key in required_new if key not in backup_metadata]
             raise InstallError(f"backup manifest missing package-era keys: {', '.join(missing)}")
 
@@ -703,7 +736,9 @@ def run_install(args: argparse.Namespace) -> int:
 
     if args.smoke:
         print("smoke:")
-        for line in smoke_check(marketplace_path, plugin_store, dry_run=False, backup_dir=backup_dir, payload_source=payload_source):
+        for line in smoke_check(
+            marketplace_path, plugin_store, dry_run=False, backup_dir=backup_dir, payload_source=payload_source
+        ):
             print(f"- {line}")
 
     print("status:")
@@ -858,15 +893,46 @@ def run_version(args: argparse.Namespace) -> int:
 
 
 def add_common_flags(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--force", action="store_true", default=argparse.SUPPRESS, help="allow replacement when paired with confirmation; noninteractive destructive replacement also requires --yes")
-    parser.add_argument("--yes", action="store_true", default=argparse.SUPPRESS, help="answer yes for noninteractive operations; destructive replacement also requires --force")
-    parser.add_argument("--no-input", action="store_true", default=argparse.SUPPRESS, help="never prompt; fail instead of waiting when confirmation is required")
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        default=argparse.SUPPRESS,
+        help="allow replacement when paired with confirmation; noninteractive destructive replacement also requires --yes",
+    )
+    parser.add_argument(
+        "--yes",
+        action="store_true",
+        default=argparse.SUPPRESS,
+        help="answer yes for noninteractive operations; destructive replacement also requires --force",
+    )
+    parser.add_argument(
+        "--no-input",
+        action="store_true",
+        default=argparse.SUPPRESS,
+        help="never prompt; fail instead of waiting when confirmation is required",
+    )
     parser.add_argument("--marketplace-path", type=Path, default=argparse.SUPPRESS, help="marketplace.json path")
-    parser.add_argument("--plugin-store", type=Path, default=argparse.SUPPRESS, help="directory containing personal plugins")
-    parser.add_argument("--backup-root", type=Path, default=argparse.SUPPRESS, help="directory containing installer backups")
-    parser.add_argument("--copy", action="store_true", default=argparse.SUPPRESS, help="copy the resolved payload instead of creating a developer checkout symlink")
-    parser.add_argument("--smoke", action="store_true", default=argparse.SUPPRESS, help="run manifest, marketplace, status, and path smoke checks")
-    parser.add_argument("--no-smoke", action="store_true", default=argparse.SUPPRESS, help="skip install's default smoke checks")
+    parser.add_argument(
+        "--plugin-store", type=Path, default=argparse.SUPPRESS, help="directory containing personal plugins"
+    )
+    parser.add_argument(
+        "--backup-root", type=Path, default=argparse.SUPPRESS, help="directory containing installer backups"
+    )
+    parser.add_argument(
+        "--copy",
+        action="store_true",
+        default=argparse.SUPPRESS,
+        help="copy the resolved payload instead of creating a developer checkout symlink",
+    )
+    parser.add_argument(
+        "--smoke",
+        action="store_true",
+        default=argparse.SUPPRESS,
+        help="run manifest, marketplace, status, and path smoke checks",
+    )
+    parser.add_argument(
+        "--no-smoke", action="store_true", default=argparse.SUPPRESS, help="skip install's default smoke checks"
+    )
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -877,11 +943,19 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--version", action="version", version=version_text(), help="print package version and exit")
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("version", help="print package version and exit")
-    subparsers.add_parser("preview", parents=[common], help="preview planned marketplace/plugin-store changes without writing")
+    subparsers.add_parser(
+        "preview", parents=[common], help="preview planned marketplace/plugin-store changes without writing"
+    )
     subparsers.add_parser("install", parents=[common], help="install locally, then run smoke/status by default")
-    subparsers.add_parser("status", parents=[common], help="print read-only local install status and Codex UI boundary guidance")
-    rollback = subparsers.add_parser("rollback", parents=[common], help="restore marketplace/plugin-store state from an installer backup")
-    rollback.add_argument("--backup", required=True, help="backup id under --backup-root, or an absolute backup directory")
+    subparsers.add_parser(
+        "status", parents=[common], help="print read-only local install status and Codex UI boundary guidance"
+    )
+    rollback = subparsers.add_parser(
+        "rollback", parents=[common], help="restore marketplace/plugin-store state from an installer backup"
+    )
+    rollback.add_argument(
+        "--backup", required=True, help="backup id under --backup-root, or an absolute backup directory"
+    )
 
     args = parser.parse_args(argv)
     for name, value in {

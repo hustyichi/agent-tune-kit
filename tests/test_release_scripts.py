@@ -4,6 +4,7 @@ import importlib.util
 import os
 import sys
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 
@@ -23,6 +24,41 @@ def load_script(name: str):
 
 
 class ReleaseScriptTests(unittest.TestCase):
+    def test_project_defaults_to_ruff_formatting(self) -> None:
+        pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+
+        self.assertIn("ruff>=0.8", pyproject["dependency-groups"]["dev"])
+        self.assertEqual(pyproject["tool"]["ruff"]["line-length"], 120)
+        self.assertEqual(pyproject["tool"]["ruff"]["format"]["quote-style"], "double")
+        self.assertEqual(pyproject["tool"]["ruff"]["lint"]["select"], ["E", "F", "I", "UP", "B", "SIM"])
+        self.assertEqual(pyproject["tool"]["ruff"]["lint"]["ignore"], ["E501", "UP022"])
+
+    def test_release_gate_runs_ruff_auto_fix_before_validation(self) -> None:
+        check_release = load_script("check-release.py")
+        commands: list[list[str]] = []
+
+        def record(command: list[str], **_: object) -> None:
+            commands.append(command)
+
+        original_run = check_release.run
+        try:
+            check_release.run = record
+            check_release.run_static_python_checks()
+        finally:
+            check_release.run = original_run
+
+        self.assertEqual(
+            commands,
+            [
+                ["uv", "run", "ruff", "format", "."],
+                ["uv", "run", "ruff", "check", "--fix", "."],
+                ["uv", "run", "ruff", "format", "--check", "."],
+                ["uv", "run", "ruff", "check", "."],
+                ["uv", "run", "python", "-m", "py_compile", *check_release.PYTHON_FILES],
+            ],
+        )
+        self.assertFalse(any("--unsafe-fixes" in command for command in commands))
+
     def test_release_identity_versions_are_aligned(self) -> None:
         check_release = load_script("check-release.py")
         identity = check_release.read_project_identity()
@@ -48,7 +84,9 @@ class ReleaseScriptTests(unittest.TestCase):
 
     def test_publish_requires_explicit_credentials_without_trusted_publishing(self) -> None:
         publish_release = load_script("publish-release.py")
-        old = {key: os.environ.pop(key, None) for key in ["UV_PUBLISH_TOKEN", "UV_PUBLISH_USERNAME", "UV_PUBLISH_PASSWORD"]}
+        old = {
+            key: os.environ.pop(key, None) for key in ["UV_PUBLISH_TOKEN", "UV_PUBLISH_USERNAME", "UV_PUBLISH_PASSWORD"]
+        }
         try:
             with self.assertRaises(publish_release.PublishError):
                 publish_release.require_publish_credentials(trusted_publishing=None)

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import csv
-import os
 import re
 import subprocess
 import sys
@@ -9,7 +8,6 @@ import tempfile
 import textwrap
 import unittest
 from pathlib import Path
-
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE_PATH = REPO_ROOT / "templates/.atk/runner/eval_runner.py.md"
@@ -67,7 +65,7 @@ def render_runner(*, concurrent_enabled: bool = True, inject_context_free_log: b
             "        with capture_python_row_logging(enabled=row_logging_enabled):\n            for completed",
             (
                 "        with capture_python_row_logging(enabled=row_logging_enabled):\n"
-                "            logging.getLogger(\"agent_smoke\").info(\"CONTEXT_FREE_DURING_RUN\")\n"
+                '            logging.getLogger("agent_smoke").info("CONTEXT_FREE_DURING_RUN")\n'
                 "            for completed"
             ),
         )
@@ -133,11 +131,14 @@ class RunnerTemplateRowLoggingTests(unittest.TestCase):
 
         self.assertEqual(completed.returncode, 0, completed.stderr)
         results = read_results(temp_dir)
-        self.assertEqual({row["agent_output_log_path"] for row in results}, {
-            "logs/row_000001.log",
-            "logs/row_000002.log",
-            "logs/row_000003.log",
-        })
+        self.assertEqual(
+            {row["agent_output_log_path"] for row in results},
+            {
+                "logs/row_000001.log",
+                "logs/row_000002.log",
+                "logs/row_000003.log",
+            },
+        )
 
         logs = {
             row["token"]: (temp_dir / ".atk/results/v1" / row["agent_output_log_path"]).read_text(encoding="utf-8")

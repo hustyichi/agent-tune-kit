@@ -110,7 +110,9 @@ def assert_not_already_published(target: PublishTarget, identity: ProjectIdentit
     try:
         with urllib.request.urlopen(url, timeout=15) as response:
             if response.status == 200:
-                raise PublishError(f"{identity.name}=={identity.version} already exists on {target.name}; bump the version first")
+                raise PublishError(
+                    f"{identity.name}=={identity.version} already exists on {target.name}; bump the version first"
+                )
             raise PublishError(f"unexpected {target.name} response for {url}: HTTP {response.status}")
     except urllib.error.HTTPError as error:
         if error.code == 404:
@@ -118,7 +120,9 @@ def assert_not_already_published(target: PublishTarget, identity: ProjectIdentit
             return
         raise PublishError(f"unexpected {target.name} response for {url}: HTTP {error.code}") from error
     except urllib.error.URLError as error:
-        raise PublishError(f"could not verify {target.name} availability for {identity.name}=={identity.version}: {error}") from error
+        raise PublishError(
+            f"could not verify {target.name} availability for {identity.name}=={identity.version}: {error}"
+        ) from error
 
 
 def clean_dist() -> None:
@@ -186,7 +190,9 @@ def wait_for_published_version(target: PublishTarget, identity: ProjectIdentity,
         except Exception as error:  # noqa: BLE001 - transient index propagation/network state is reported below.
             last_error = str(error)
         time.sleep(5)
-    raise PublishError(f"upload finished, but {target.name} did not show {identity.name}=={identity.version}: {last_error}")
+    raise PublishError(
+        f"upload finished, but {target.name} did not show {identity.name}=={identity.version}: {last_error}"
+    )
 
 
 def parse_args() -> argparse.Namespace:
@@ -250,7 +256,9 @@ def main() -> int:
         print("Artifacts ready:")
         for artifact in artifacts:
             print(f"- {artifact.relative_to(REPO_ROOT)}")
-        print(f"To publish: UV_PUBLISH_TOKEN='pypi-...' uv run python scripts/publish-release.py --repository {target.name} --publish")
+        print(
+            f"To publish: UV_PUBLISH_TOKEN='pypi-...' uv run python scripts/publish-release.py --repository {target.name} --publish"
+        )
         return 0
 
     require_publish_credentials(trusted_publishing=args.trusted_publishing)
@@ -268,4 +276,4 @@ if __name__ == "__main__":
         raise SystemExit(main())
     except (PublishError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
         print(f"publish-release: FAILED: {error}", file=sys.stderr)
-        raise SystemExit(1)
+        raise SystemExit(1) from None

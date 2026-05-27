@@ -17,6 +17,7 @@ import re
 import sys
 import tempfile
 import webbrowser
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlsplit
@@ -63,7 +64,17 @@ ROLE_CANDIDATES: dict[str, list[str]] = {
     "input": ["input", "query", "question", "prompt", "task", "user_input", "instruction", "source", "base"],
     "expected": ["expected", "expected_output", "reference", "ground_truth", "answer", "label", "target"],
     "actual": ["agent_output", "actual", "actual_output", "output", "response", "prediction", "result"],
-    "reason": ["failure_reason", "failure", "reason", "explanation", "root_cause", "root-cause", "error", "analysis", "agent_output_error_message"],
+    "reason": [
+        "failure_reason",
+        "failure",
+        "reason",
+        "explanation",
+        "root_cause",
+        "root-cause",
+        "error",
+        "analysis",
+        "agent_output_error_message",
+    ],
     "log": ["agent_output_log_path", "log_path", "logs", "log", "trace_path"],
 }
 
@@ -108,9 +119,13 @@ def resolve_current_version(results_dir: Path = RESULTS_DIR) -> Path:
 def require_current_file(current_dir: Path, filename: str) -> Path:
     path = current_dir / filename
     if not path.exists():
-        raise UserActionRequired(f"Current version {current_dir.name} is missing {filename}; fix or rerun the prior step.")
+        raise UserActionRequired(
+            f"Current version {current_dir.name} is missing {filename}; fix or rerun the prior step."
+        )
     if not path.is_file():
-        raise UserActionRequired(f"Current version {current_dir.name} has non-file {filename}; fix or rerun the prior step.")
+        raise UserActionRequired(
+            f"Current version {current_dir.name} has non-file {filename}; fix or rerun the prior step."
+        )
     return path
 
 
@@ -123,19 +138,27 @@ def parse_failure_csv(path: Path) -> tuple[list[str], list[dict[str, str]], list
             if not fieldnames or all(not (name or "").strip() for name in fieldnames):
                 raise UserActionRequired("failure_cases.csv is empty or missing a header; run failure finding again.")
             if any(not (name or "").strip() for name in fieldnames):
-                raise UserActionRequired("failure_cases.csv contains blank header names; preserving columns is uncertain.")
+                raise UserActionRequired(
+                    "failure_cases.csv contains blank header names; preserving columns is uncertain."
+                )
             if len(set(fieldnames)) != len(fieldnames):
-                raise UserActionRequired("failure_cases.csv contains duplicate headers; preserving columns is uncertain.")
+                raise UserActionRequired(
+                    "failure_cases.csv contains duplicate headers; preserving columns is uncertain."
+                )
             rows: list[dict[str, str]] = []
             for row_index, raw_row in enumerate(reader, start=2):
                 if None in raw_row:
                     extra_values = raw_row.pop(None)
                     if extra_values:
-                        warnings.append(f"Row {row_index} had extra values beyond the header; stored in __extra_values.")
+                        warnings.append(
+                            f"Row {row_index} had extra values beyond the header; stored in __extra_values."
+                        )
                         raw_row["__extra_values"] = " | ".join(str(value) for value in extra_values)
                         if "__extra_values" not in fieldnames:
                             fieldnames.append("__extra_values")
-                rows.append({name: "" if raw_row.get(name) is None else str(raw_row.get(name, "")) for name in fieldnames})
+                rows.append(
+                    {name: "" if raw_row.get(name) is None else str(raw_row.get(name, "")) for name in fieldnames}
+                )
     except UnicodeDecodeError as exc:
         raise UserActionRequired(f"Could not parse failure_cases.csv as UTF-8: {exc}") from exc
     except csv.Error as exc:
@@ -177,7 +200,9 @@ def detect_roles(fieldnames: list[str]) -> dict[str, dict[str, str]]:
     return roles
 
 
-def detect_facets(fieldnames: list[str], rows: list[dict[str, str]], roles: dict[str, dict[str, str]]) -> list[dict[str, Any]]:
+def detect_facets(
+    fieldnames: list[str], rows: list[dict[str, str]], roles: dict[str, dict[str, str]]
+) -> list[dict[str, Any]]:
     """Pick low-cardinality columns suitable as faceted filters.
 
     Skip role fields whose meaning is per-row free text (input/expected/actual/reason/id).
@@ -244,7 +269,9 @@ def read_report_context(report_path: Path, *, skip: bool = False) -> dict[str, A
         if stripped.startswith("#"):
             current_heading = stripped.lstrip("#").strip() or current_heading
             if len(excerpts) < REPORT_MAX_EXCERPTS and contains_report_keyword(current_heading):
-                excerpts.append({"heading": current_heading, "text": truncate(current_heading, REPORT_EXCERPT_MAX_CHARS)})
+                excerpts.append(
+                    {"heading": current_heading, "text": truncate(current_heading, REPORT_EXCERPT_MAX_CHARS)}
+                )
             continue
         if contains_report_keyword(stripped):
             excerpts.append({"heading": current_heading, "text": truncate(stripped, REPORT_EXCERPT_MAX_CHARS)})
@@ -252,7 +279,9 @@ def read_report_context(report_path: Path, *, skip: bool = False) -> dict[str, A
             break
 
     if not excerpts and text.strip():
-        excerpts.append({"heading": "Report context", "text": truncate(text.strip().replace("\n", " "), REPORT_EXCERPT_MAX_CHARS)})
+        excerpts.append(
+            {"heading": "Report context", "text": truncate(text.strip().replace("\n", " "), REPORT_EXCERPT_MAX_CHARS)}
+        )
 
     status = "included" if excerpts else "skipped"
     reason = "Included bounded report.md excerpts."
@@ -297,16 +326,16 @@ def safe_log_href(value: str, current_dir: Path) -> str:
         split = urlsplit(candidate)
         if split.scheme or split.netloc or candidate.startswith("/") or candidate.startswith("//"):
             return ""
-        if any(part in {"..", ""} for part in Path(candidate).parts if part != "."):
-            if ".." in Path(candidate).parts:
-                return ""
+        candidate_parts = Path(candidate).parts
+        if any(part in {"..", ""} for part in candidate_parts if part != ".") and ".." in candidate_parts:
+            return ""
 
     current_prefix = current_dir.as_posix().rstrip("/") + "/"
     href = decoded
     if href.startswith("./"):
         href = href[2:]
     if href.startswith(current_prefix):
-        href = href[len(current_prefix):]
+        href = href[len(current_prefix) :]
     parts = Path(href).parts
     if not parts or ".." in parts or any(part == "" for part in parts):
         return ""
@@ -315,7 +344,9 @@ def safe_log_href(value: str, current_dir: Path) -> str:
     return Path(*parts).as_posix()
 
 
-def enrich_rows(rows: list[dict[str, str]], fieldnames: list[str], roles: dict[str, dict[str, str]], current_dir: Path) -> list[dict[str, Any]]:
+def enrich_rows(
+    rows: list[dict[str, str]], fieldnames: list[str], roles: dict[str, dict[str, str]], current_dir: Path
+) -> list[dict[str, Any]]:
     log_field = roles.get("log", {}).get("field", "")
     enriched: list[dict[str, Any]] = []
     for index, row in enumerate(rows, start=1):
@@ -405,10 +436,8 @@ def write_atomic(output_path: Path, content: str) -> None:
         os.replace(temp_name, output_path)
     except OSError:
         if temp_name:
-            try:
+            with suppress(OSError):
                 Path(temp_name).unlink(missing_ok=True)
-            except OSError:
-                pass
         raise
 
 
@@ -427,11 +456,24 @@ def open_in_browser(output_path: Path) -> tuple[bool, str]:
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Generate current-version ATK failure_cases.html from failure_cases.csv.")
-    parser.add_argument("--overwrite", action="store_true", help="replace existing failure_cases.html after Skill-level confirmation")
-    parser.add_argument("--results-dir", default=str(RESULTS_DIR), help="results directory relative to target project cwd (default: .atk/results)")
+    parser = argparse.ArgumentParser(
+        description="Generate current-version ATK failure_cases.html from failure_cases.csv."
+    )
+    parser.add_argument(
+        "--overwrite", action="store_true", help="replace existing failure_cases.html after Skill-level confirmation"
+    )
+    parser.add_argument(
+        "--results-dir",
+        default=str(RESULTS_DIR),
+        help="results directory relative to target project cwd (default: .atk/results)",
+    )
     parser.add_argument("--no-report", action="store_true", help="skip optional same-version report.md parsing")
-    parser.add_argument("--open", dest="open_browser", action="store_true", help="open the generated HTML in the default browser after writing")
+    parser.add_argument(
+        "--open",
+        dest="open_browser",
+        action="store_true",
+        help="open the generated HTML in the default browser after writing",
+    )
     return parser.parse_args(argv)
 
 
@@ -455,7 +497,9 @@ def run(argv: list[str]) -> int:
     write_atomic(output_path, content)
 
     overwrite_status = "overwrote existing HTML" if args.overwrite else "wrote new HTML"
-    report_status = "included" if report.get("status") == "included" else f"skipped ({report.get('reason', 'no context')})"
+    report_status = (
+        "included" if report.get("status") == "included" else f"skipped ({report.get('reason', 'no context')})"
+    )
     print(f"version={current_dir.name}")
     print(f"rows={len(rows)}")
     print(f"output={output_path.as_posix()}")

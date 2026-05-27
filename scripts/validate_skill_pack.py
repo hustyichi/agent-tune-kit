@@ -58,7 +58,7 @@ REQUIRED_SKILL_SECTIONS = [
 ]
 
 GLOBAL_PHRASES = [
-    "RESULTS_DIR = Path(\".atk/results\")",
+    'RESULTS_DIR = Path(".atk/results")',
     "def list_version_dirs(results_dir=RESULTS_DIR)",
     "def resolve_current_version(results_dir=RESULTS_DIR)",
     "def resolve_previous_version(current_dir, results_dir=RESULTS_DIR)",
@@ -177,7 +177,7 @@ PER_FILE_PHRASES = {
         "install_mode",
         "agent-tune-kit-install.json",
         "marker_matches_backup",
-        "SOURCE_PATH = f\"./plugins/{PLUGIN_NAME}\"",
+        'SOURCE_PATH = f"./plugins/{PLUGIN_NAME}"',
         "DEFAULT_BACKUP_ROOT",
         "write_json_atomic",
         "refusing destructive replacement",
@@ -205,7 +205,7 @@ PER_FILE_PHRASES = {
         "atk-report",
         "atk-visualize-failures",
         "atk-tune",
-        "RESULTS_DIR = Path(\".atk/results\")",
+        'RESULTS_DIR = Path(".atk/results")',
         "failure_cases.html",
         "non-blocking review step",
     ],
@@ -229,7 +229,7 @@ PER_FILE_PHRASES = {
         "--concurrency",
         "agent_output_log_path",
         "row-log status: active, downgraded, or unavailable",
-        "RESULTS_DIR = Path(\".atk/results\")",
+        'RESULTS_DIR = Path(".atk/results")',
         "If the runner is missing",
         "next recommended Skill: `atk-find-failures`",
     ],
@@ -240,11 +240,11 @@ PER_FILE_PHRASES = {
         "This Skill only prepares the rule script",
         "does not write `.atk/results/vN/failure_cases.csv`",
         "Tell the user to run `atk-find-failures-by-rule`",
-        "require_current_file(current_dir, \"eval_results.csv\")",
+        'require_current_file(current_dir, "eval_results.csv")',
     ],
     "skills/atk-find-failures-by-rule/SKILL.md": [
         ".atk/runner/failure_rule.py",
-        "require_current_file(current_dir, \"eval_results.csv\")",
+        'require_current_file(current_dir, "eval_results.csv")',
         "This Skill only runs an existing rule script",
         "does not create or update `.atk/runner/failure_rule.py`",
         "run `atk-init-failure-rule` first",
@@ -260,8 +260,8 @@ PER_FILE_PHRASES = {
         "preserving all original `eval_results.csv` columns",
     ],
     "skills/atk-report/SKILL.md": [
-        "require_current_file(current_dir, \"eval_results.csv\")",
-        "require_current_file(current_dir, \"failure_cases.csv\")",
+        'require_current_file(current_dir, "eval_results.csv")',
+        'require_current_file(current_dir, "failure_cases.csv")',
         "resolve_previous_version(current_dir)",
         "已解决",
         "部分解决",
@@ -273,7 +273,7 @@ PER_FILE_PHRASES = {
     ],
     "skills/atk-visualize-failures/SKILL.md": [
         "atk-visualize-failures",
-        "require_current_file(current_dir, \"failure_cases.csv\")",
+        'require_current_file(current_dir, "failure_cases.csv")',
         "failure_cases.html",
         "report.md",
         "best-effort",
@@ -303,9 +303,8 @@ PER_FILE_PHRASES = {
         "LLM summaries",
         "project-local template",
     ],
-
     "skills/atk-visualize-failures/scripts/generate_failure_browser.py": [
-        "RESULTS_DIR = Path(\".atk/results\")",
+        'RESULTS_DIR = Path(".atk/results")',
         "def list_version_dirs(results_dir: Path = RESULTS_DIR)",
         "def resolve_current_version(results_dir: Path = RESULTS_DIR)",
         "def require_current_file(current_dir: Path, filename: str)",
@@ -331,7 +330,7 @@ PER_FILE_PHRASES = {
         "Refusing to overwrite existing",
     ],
     "skills/atk-tune/SKILL.md": [
-        "require_current_file(current_dir, \"report.md\")",
+        'require_current_file(current_dir, "report.md")',
         "## 目标异常清单",
         "## 调优手段",
         "## 关联改动",
@@ -339,8 +338,8 @@ PER_FILE_PHRASES = {
         "never perform automatic rollback",
     ],
     "templates/.atk/runner/eval_runner.py.md": [
-        "DATASETS_DIR = Path(\".atk/datasets\")",
-        "DATASET_PATH = DATASETS_DIR / \"original.csv\"",
+        'DATASETS_DIR = Path(".atk/datasets")',
+        'DATASET_PATH = DATASETS_DIR / "original.csv"',
         "def allocate_next_results_version(results_dir: Path = RESULTS_DIR) -> Path",
         "class AgentExecutionError(RuntimeError)",
         "parser.add_argument(",
@@ -371,10 +370,10 @@ PER_FILE_PHRASES = {
     "templates/.atk/runner/failure_rule.py.md": [
         "def resolve_current_version(results_dir=RESULTS_DIR)",
         "def require_current_file(current_dir, filename)",
-        "FAILURE_FILENAME = \"failure_cases.csv\"",
+        'FAILURE_FILENAME = "failure_cases.csv"',
         "Overwrote {failure_path}",
         "TODO_AGENT_TUNING",
-        "raise UserActionRequired(\"TODO_AGENT_TUNING: implement confirmed failure rule before running.\")",
+        'raise UserActionRequired("TODO_AGENT_TUNING: implement confirmed failure rule before running.")',
     ],
     "docs/shared-versioning-and-confirmation.md": [
         "Current version vs new version creation",
@@ -479,24 +478,24 @@ PER_FILE_PHRASES = {
 
 VERSION_HELPER_SNIPPETS = {
     "templates/.atk/runner/eval_runner.py.md": [
-        "RESULTS_DIR = Path(\".atk/results\")",
+        'RESULTS_DIR = Path(".atk/results")',
         "def list_version_dirs(results_dir: Path = RESULTS_DIR) -> list[tuple[int, Path]]:",
         "if not results_dir.exists():\n        return []",
         "def allocate_next_results_version(results_dir: Path = RESULTS_DIR) -> Path:",
-        "target = results_dir / \"v1\"",
-        "target = results_dir / f\"v{max_n + 1}\" if (current / \"eval_results.csv\").exists() else current",
+        'target = results_dir / "v1"',
+        'target = results_dir / f"v{max_n + 1}" if (current / "eval_results.csv").exists() else current',
     ],
     "templates/.atk/runner/failure_rule.py.md": [
-        "RESULTS_DIR = Path(\".atk/results\")",
+        'RESULTS_DIR = Path(".atk/results")',
         "def list_version_dirs(results_dir=RESULTS_DIR):",
         "if not results_dir.exists():\n        return []",
         "def resolve_current_version(results_dir=RESULTS_DIR):",
         "def require_current_file(current_dir, filename):",
-        "raise UserActionRequired(f\"Current version {current_dir.name} is missing {filename}; fix or rerun the prior step.\")",
+        'raise UserActionRequired(f"Current version {current_dir.name} is missing {filename}; fix or rerun the prior step.")',
     ],
     "docs/shared-versioning-and-confirmation.md": [
-        "RESULTS_DIR = Path(\".atk/results\")",
-        "DATASETS_DIR = Path(\".atk/datasets\")",
+        'RESULTS_DIR = Path(".atk/results")',
+        'DATASETS_DIR = Path(".atk/datasets")',
         "def list_version_dirs(results_dir=RESULTS_DIR):",
         "if not results_dir.exists():\n        return []",
         "def resolve_current_version(results_dir=RESULTS_DIR):",
@@ -530,7 +529,11 @@ def validate_manifest(errors: list[str]) -> None:
         return
 
     require(manifest.get("name") == "agent-tune-kit", "manifest name must be agent-tune-kit", errors)
-    require(bool(re.fullmatch(r"\d+\.\d+\.\d+", str(manifest.get("version", "")))), "manifest version must be strict semver", errors)
+    require(
+        bool(re.fullmatch(r"\d+\.\d+\.\d+", str(manifest.get("version", "")))),
+        "manifest version must be strict semver",
+        errors,
+    )
     require(manifest.get("skills") == "./skills/", "manifest skills must be ./skills/", errors)
     require("hooks" not in manifest, "manifest must not include unsupported hooks field", errors)
     for optional_path_field in ["apps", "mcpServers"]:
@@ -547,13 +550,27 @@ def validate_manifest(errors: list[str]) -> None:
     require(isinstance(interface, dict), "manifest interface must be an object", errors)
     if not isinstance(interface, dict):
         return
-    for key in ["displayName", "shortDescription", "longDescription", "developerName", "category", "capabilities", "defaultPrompt"]:
+    for key in [
+        "displayName",
+        "shortDescription",
+        "longDescription",
+        "developerName",
+        "category",
+        "capabilities",
+        "defaultPrompt",
+    ]:
         require(key in interface, f"manifest interface missing {key}", errors)
     prompts = interface.get("defaultPrompt")
-    require(isinstance(prompts, list) and 1 <= len(prompts) <= 3, "manifest defaultPrompt must contain 1-3 prompts", errors)
+    require(
+        isinstance(prompts, list) and 1 <= len(prompts) <= 3, "manifest defaultPrompt must contain 1-3 prompts", errors
+    )
     if isinstance(prompts, list):
         for prompt in prompts:
-            require(isinstance(prompt, str) and len(prompt) <= 128, f"manifest defaultPrompt too long or non-string: {prompt!r}", errors)
+            require(
+                isinstance(prompt, str) and len(prompt) <= 128,
+                f"manifest defaultPrompt too long or non-string: {prompt!r}",
+                errors,
+            )
     for asset_field in ["composerIcon", "logo"]:
         asset = interface.get(asset_field)
         if asset:
@@ -562,7 +579,11 @@ def validate_manifest(errors: list[str]) -> None:
     require(isinstance(screenshots, list), "manifest screenshots must be an array", errors)
     if isinstance(screenshots, list):
         for screenshot in screenshots:
-            require(str(screenshot).startswith("./assets/") and str(screenshot).endswith(".png"), f"manifest screenshot must be ./assets/*.png: {screenshot}", errors)
+            require(
+                str(screenshot).startswith("./assets/") and str(screenshot).endswith(".png"),
+                f"manifest screenshot must be ./assets/*.png: {screenshot}",
+                errors,
+            )
             require((ROOT / str(screenshot)).exists(), f"manifest screenshot file missing: {screenshot}", errors)
 
 
@@ -570,9 +591,27 @@ def validate_installer(errors: list[str]) -> None:
     wrapper_text = read_rel("scripts/install_plugin.py") if (ROOT / "scripts/install_plugin.py").exists() else ""
     text = read_rel("src/agent_tune_kit/installer.py") if (ROOT / "src/agent_tune_kit/installer.py").exists() else ""
     require("agent_tune_kit.cli" in wrapper_text, "wrapper must delegate to packaged atk CLI", errors)
-    require('DEFAULT_MARKETPLACE = Path("~/.agents/plugins/marketplace.json")' in text, "installer must default to personal marketplace", errors)
+    require(
+        'DEFAULT_MARKETPLACE = Path("~/.agents/plugins/marketplace.json")' in text,
+        "installer must default to personal marketplace",
+        errors,
+    )
     require('DEFAULT_PLUGIN_STORE = Path("~/plugins")' in text, "installer must default to ~/plugins", errors)
-    for phrase in ["AVAILABLE", "ON_INSTALL", "category", "Coding", "atomic", "os.replace", "smoke-resolved plugin path", "Codex UI boundary", "--yes --force", "rollback complete", "PayloadSource", "package-resource", "schema_version"]:
+    for phrase in [
+        "AVAILABLE",
+        "ON_INSTALL",
+        "category",
+        "Coding",
+        "atomic",
+        "os.replace",
+        "smoke-resolved plugin path",
+        "Codex UI boundary",
+        "--yes --force",
+        "rollback complete",
+        "PayloadSource",
+        "package-resource",
+        "schema_version",
+    ]:
         require(phrase in text, f"installer missing behavior phrase: {phrase}", errors)
 
 
@@ -591,9 +630,15 @@ def main() -> int:
         require(text.startswith("---\n"), f"{rel} missing YAML front matter", errors)
         for section in REQUIRED_SKILL_SECTIONS:
             require(section in text, f"{rel} missing section {section}", errors)
-        require("docs/shared-versioning-and-confirmation.md" in text, f"{rel} missing shared version doc reference", errors)
-        require("RESULTS_DIR = Path(\".atk/results\")" in text, f"{rel} missing canonical RESULTS_DIR", errors)
-        require("Failure behavior" in text and "Confirmation triggers" in text, f"{rel} missing precondition/failure behavior", errors)
+        require(
+            "docs/shared-versioning-and-confirmation.md" in text, f"{rel} missing shared version doc reference", errors
+        )
+        require('RESULTS_DIR = Path(".atk/results")' in text, f"{rel} missing canonical RESULTS_DIR", errors)
+        require(
+            "Failure behavior" in text and "Confirmation triggers" in text,
+            f"{rel} missing precondition/failure behavior",
+            errors,
+        )
 
     for phrase in GLOBAL_PHRASES:
         require(phrase in all_text, f"missing global phrase/snippet: {phrase}", errors)
@@ -610,7 +655,14 @@ def main() -> int:
 
     docs_and_readme = "\n".join(
         existing_texts.get(rel, "")
-        for rel in ["README.md", "README.en.md", "README.zh-CN.md", "docs/shared-versioning-and-confirmation.md", "docs/skill-template-pack-usage.md", "docs/codex_agent_tuning_prd.md"]
+        for rel in [
+            "README.md",
+            "README.en.md",
+            "README.zh-CN.md",
+            "docs/shared-versioning-and-confirmation.md",
+            "docs/skill-template-pack-usage.md",
+            "docs/codex_agent_tuning_prd.md",
+        ]
     )
     for phrase in NON_GOALS:
         require(phrase.lower() in docs_and_readme.lower(), f"missing non-goal documentation: {phrase}", errors)
@@ -630,24 +682,23 @@ def main() -> int:
 
     runner_template = existing_texts.get("templates/.atk/runner/eval_runner.py.md", "")
     require(
-        "return list(source_fieldnames) + [\"agent_output\"] + fixed_output_fields + auxiliary_fields"
-        in runner_template,
+        'return list(source_fieldnames) + ["agent_output"] + fixed_output_fields + auxiliary_fields' in runner_template,
         "runner template must append agent_output, fixed status fields, and auxiliary agent_output_* columns after original columns",
         errors,
     )
     require(
-        "\"agent_output\"" in runner_template and "reserved_output_fields" in runner_template,
+        '"agent_output"' in runner_template and "reserved_output_fields" in runner_template,
         "runner template must guard source agent_output conflict",
         errors,
     )
     require(
-        "AGENT_OUTPUT_LOG_PATH_FIELD = \"agent_output_log_path\"" in runner_template,
+        'AGENT_OUTPUT_LOG_PATH_FIELD = "agent_output_log_path"' in runner_template,
         "runner template must define stable agent_output_log_path field",
         errors,
     )
     require(
-        "DATASETS_DIR = Path(\".atk/datasets\")" in runner_template
-        and "DATASET_PATH = DATASETS_DIR / \"original.csv\"" in runner_template,
+        'DATASETS_DIR = Path(".atk/datasets")' in runner_template
+        and 'DATASET_PATH = DATASETS_DIR / "original.csv"' in runner_template,
         "runner template must read the dataset from a .atk/datasets snapshot",
         errors,
     )
@@ -661,27 +712,84 @@ def main() -> int:
         "runner template must expose row-log generated config constants",
         errors,
     )
-    require("contextvars" in runner_template and "ContextVar" in runner_template, "runner template must use contextvars for row attribution", errors)
-    require("class ATKRowLogHandler(logging.Handler)" in runner_template, "runner template must use an ATK-owned stdlib logging.Handler router for row logs", errors)
-    require("log_path.open(\"w\", encoding=\"utf-8\").close()" in runner_template, "runner template must truncate row logs on reused partial versions", errors)
-    require("_ACTIVE_ROW_LOG_CONTEXT.reset(token)" in runner_template, "runner template must reset row logging context tokens in finally", errors)
-    require("row_{source_index:06d}.log" in runner_template, "runner template must use source-row-numbered row log filenames", errors)
+    require(
+        "contextvars" in runner_template and "ContextVar" in runner_template,
+        "runner template must use contextvars for row attribution",
+        errors,
+    )
+    require(
+        "class ATKRowLogHandler(logging.Handler)" in runner_template,
+        "runner template must use an ATK-owned stdlib logging.Handler router for row logs",
+        errors,
+    )
+    require(
+        'log_path.open("w", encoding="utf-8").close()' in runner_template,
+        "runner template must truncate row logs on reused partial versions",
+        errors,
+    )
+    require(
+        "_ACTIVE_ROW_LOG_CONTEXT.reset(token)" in runner_template,
+        "runner template must reset row logging context tokens in finally",
+        errors,
+    )
+    require(
+        "row_{source_index:06d}.log" in runner_template,
+        "runner template must use source-row-numbered row log filenames",
+        errors,
+    )
     require(".as_posix()" in runner_template, "runner template must serialize row-log CSV paths as POSIX paths", errors)
-    require("AGENT_OUTPUT_LOG_PATH_FIELD" in runner_template and "reserved_output_fields" in runner_template, "runner template must guard agent_output_log_path source conflicts", errors)
-    require("ROW_LOGGING_CONCURRENCY_DOWNGRADE_MESSAGE" in runner_template and "sys.__stderr__" in runner_template, "runner template must report concurrency row-log downgrade outside app.log redirect", errors)
-    require("logger.setLevel(ROW_LOG_LEVEL)" in runner_template and "logger.setLevel(previous_levels[logger])" in runner_template, "runner template must restore row logger levels", errors)
-    require("logger.addHandler(row_handler)" in runner_template and "logger.removeHandler(row_handler)" in runner_template, "runner template must install and remove the ATK row handler once per run", errors)
-    require("except Exception as exc" not in runner_template, "runner template must not catch broad Exception and mask configuration failures", errors)
+    require(
+        "AGENT_OUTPUT_LOG_PATH_FIELD" in runner_template and "reserved_output_fields" in runner_template,
+        "runner template must guard agent_output_log_path source conflicts",
+        errors,
+    )
+    require(
+        "ROW_LOGGING_CONCURRENCY_DOWNGRADE_MESSAGE" in runner_template and "sys.__stderr__" in runner_template,
+        "runner template must report concurrency row-log downgrade outside app.log redirect",
+        errors,
+    )
+    require(
+        "logger.setLevel(ROW_LOG_LEVEL)" in runner_template
+        and "logger.setLevel(previous_levels[logger])" in runner_template,
+        "runner template must restore row logger levels",
+        errors,
+    )
+    require(
+        "logger.addHandler(row_handler)" in runner_template and "logger.removeHandler(row_handler)" in runner_template,
+        "runner template must install and remove the ATK row handler once per run",
+        errors,
+    )
+    require(
+        "except Exception as exc" not in runner_template,
+        "runner template must not catch broad Exception and mask configuration failures",
+        errors,
+    )
     require(
         "except UserActionRequired:" in runner_template
         and "# Configuration/TODO/confirmation failures must stop the run" in runner_template,
         "runner template must propagate UserActionRequired before row-error handling",
         errors,
     )
-    require("--limit" in runner_template and "--offset" in runner_template, "runner template must support bounded runs", errors)
-    require("--concurrency" in runner_template and "ThreadPoolExecutor" in runner_template, "runner template must support concurrent runs", errors)
-    require("row_logging_enabled=row_logging_enabled" in runner_template, "concurrent worker path must receive row logging state instead of forcing false", errors)
-    require("writer.writerow(result_row)" in runner_template and "os.fsync(handle.fileno())" in runner_template, "runner template must write and flush results incrementally", errors)
+    require(
+        "--limit" in runner_template and "--offset" in runner_template,
+        "runner template must support bounded runs",
+        errors,
+    )
+    require(
+        "--concurrency" in runner_template and "ThreadPoolExecutor" in runner_template,
+        "runner template must support concurrent runs",
+        errors,
+    )
+    require(
+        "row_logging_enabled=row_logging_enabled" in runner_template,
+        "concurrent worker path must receive row logging state instead of forcing false",
+        errors,
+    )
+    require(
+        "writer.writerow(result_row)" in runner_template and "os.fsync(handle.fileno())" in runner_template,
+        "runner template must write and flush results incrementally",
+        errors,
+    )
 
     init_rules_skill = existing_texts.get("skills/atk-init-failure-rule/SKILL.md", "")
     rules_skill = existing_texts.get("skills/atk-find-failures-by-rule/SKILL.md", "")
@@ -689,11 +797,23 @@ def main() -> int:
     require("atk-init-failure-rule" in init_rules_skill, "rules initializer Skill identity missing", errors)
     require("atk-find-failures-by-rule" in rules_skill, "rules failure-finding Skill identity missing", errors)
     require("atk-find-failures" in llm_skill, "LLM failure-finding Skill identity missing", errors)
-    require("failure_rule.py" in init_rules_skill and "failure_rule.py" in rules_skill, "rules initializer and executor must share failure_rule.py", errors)
-    require("failure_cases.csv" in rules_skill and "failure_cases.csv" in llm_skill, "both failure-finding Skills must write failure_cases.csv", errors)
+    require(
+        "failure_rule.py" in init_rules_skill and "failure_rule.py" in rules_skill,
+        "rules initializer and executor must share failure_rule.py",
+        errors,
+    )
+    require(
+        "failure_cases.csv" in rules_skill and "failure_cases.csv" in llm_skill,
+        "both failure-finding Skills must write failure_cases.csv",
+        errors,
+    )
 
     filter_template = existing_texts.get("templates/.atk/runner/failure_rule.py.md", "")
-    require("Conservative placeholder" not in filter_template, "filter template must not ship a runnable placeholder heuristic", errors)
+    require(
+        "Conservative placeholder" not in filter_template,
+        "filter template must not ship a runnable placeholder heuristic",
+        errors,
+    )
 
     validate_manifest(errors)
     validate_installer(errors)
@@ -706,7 +826,9 @@ def main() -> int:
         return 1
 
     print("Agent Tune Kit validation passed")
-    print(f"Checked {len(REQUIRED_FILES)} files, {len(SKILL_FILES)} Skill templates, plugin manifest, and installer tooling")
+    print(
+        f"Checked {len(REQUIRED_FILES)} files, {len(SKILL_FILES)} Skill templates, plugin manifest, and installer tooling"
+    )
     return 0
 
 

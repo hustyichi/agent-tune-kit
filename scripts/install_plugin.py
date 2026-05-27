@@ -23,6 +23,5 @@ if str(SRC) not in sys.path:
 from agent_tune_kit.cli import main  # noqa: E402
 from agent_tune_kit.installer import authorize_conflicts  # noqa: E402,F401
 
-
 if __name__ == "__main__":
     raise SystemExit(main(sys.argv[1:]))
