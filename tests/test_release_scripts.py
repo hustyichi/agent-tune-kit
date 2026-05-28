@@ -66,6 +66,14 @@ class ReleaseScriptTests(unittest.TestCase):
         self.assertEqual(identity.version, "0.3.8")
         check_release.assert_versions_aligned(identity)
 
+    def test_skill_pack_validation_does_not_phrase_scan_readmes(self) -> None:
+        validate_skill_pack = load_script("validate_skill_pack.py")
+
+        readme_paths = {"README.md", "README.en.md", "README.zh-CN.md"}
+        self.assertTrue(readme_paths.issubset(set(validate_skill_pack.REQUIRED_FILES)))
+        self.assertTrue(readme_paths.isdisjoint(validate_skill_pack.PER_FILE_PHRASES))
+        self.assertNotIn("explicit subcommands only", validate_skill_pack.PLUGIN_DOC_PHRASES)
+
     def test_publish_targets_and_commands_are_safe_by_default(self) -> None:
         publish_release = load_script("publish-release.py")
         pypi = publish_release.target_for("pypi")
