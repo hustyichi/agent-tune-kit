@@ -211,13 +211,14 @@ PER_FILE_PHRASES = {
     "skills/atk-init/SKILL.md": [
         ".atk/runner/eval_runner.py",
         "Preserve all original dataset columns",
+        "atk_id",
         "Append the fixed actual-output column `agent_output`",
         "agent_output_log_path",
         "CONCURRENT_ROW_LOGGING_ENABLED",
         "no version directory is required",
         "ask the user to confirm before writing `eval_runner.py`",
-        "Agent invocation, dataset path/format, log source, Python logger names, or `agent_output` / `agent_output_log_path` column conflict",
-        "Snapshot the input dataset into `.atk/datasets/`",
+        "Agent invocation, dataset path/format, log source, Python logger names, invalid `atk_id`, or `agent_output` / `agent_output_log_path` column conflict",
+        "Write the input dataset into `.atk/datasets/`",
     ],
     "skills/atk-run/SKILL.md": [
         "atk-run",
@@ -339,6 +340,7 @@ PER_FILE_PHRASES = {
     "templates/.atk/runner/eval_runner.py.md": [
         'DATASETS_DIR = Path(".atk/datasets")',
         'DATASET_PATH = DATASETS_DIR / "original.csv"',
+        'ATK_ID_FIELD = "atk_id"',
         "def allocate_next_results_version(results_dir: Path = RESULTS_DIR) -> Path",
         "class AgentExecutionError(RuntimeError)",
         "parser.add_argument(",
@@ -635,7 +637,14 @@ def main() -> int:
     require(
         'DATASETS_DIR = Path(".atk/datasets")' in runner_template
         and 'DATASET_PATH = DATASETS_DIR / "original.csv"' in runner_template,
-        "runner template must read the dataset from a .atk/datasets snapshot",
+        "runner template must read the dataset from a .atk/datasets canonical dataset",
+        errors,
+    )
+    require(
+        'ATK_ID_FIELD = "atk_id"' in runner_template
+        and "Dataset is missing required" in runner_template
+        and "duplicate {ATK_ID_FIELD}" in runner_template,
+        "runner template must require the canonical atk_id dataset column",
         errors,
     )
     require(

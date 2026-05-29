@@ -33,7 +33,7 @@ Non-goals for this pass:
 ## Canonical paths
 
 - Shared runner scripts: `.atk/runner/`
-- Dataset snapshots used by generated runners: `.atk/datasets/`
+- Canonical runnable datasets used by generated runners: `.atk/datasets/`
 - Versioned results: `.atk/results/vN/`
 - Test runner output: `.atk/results/vN/eval_results.csv`
 - Optional run log: `.atk/results/vN/app.log`
@@ -58,20 +58,24 @@ Only `eval_runner.py` creates or reuses result versions:
 - Runners should support `--limit` and `--offset` for bounded smoke runs while preserving the same version allocation rules.
 - Runners should support `--concurrency` for faster batch execution. Concurrent runners must keep CSV writes on one writer path and flush after each completed row; with concurrency greater than 1, output rows may be written in completion order unless the generated runner explicitly preserves dataset order.
 
-## Dataset snapshot rules
+## Dataset canonicalization rules
 
-`atk-init` must copy the user-provided evaluation dataset into `.atk/datasets/` before writing `.atk/runner/eval_runner.py`. The generated runner must read that project-local snapshot, not the original source path, so future source-file moves do not break `atk-run`.
+`atk-init` must write the user-provided evaluation dataset into `.atk/datasets/` as an ATK canonical runnable dataset before writing `.atk/runner/eval_runner.py`. The generated runner must read that project-local dataset, not the original source path, so future source-file moves do not break `atk-run`.
 
 Use a fixed canonical original-dataset slot:
 
-- Always use `.atk/datasets/original.csv` for the init-time source dataset snapshot.
-- If `.atk/datasets/original.csv` does not exist, copy the dataset there.
-- If it exists and the content is identical, reuse it and do not create a duplicate.
-- If it exists with different content, ask before overwriting because future dataset subsets depend on this fixed semantic name.
-- Compare content with a reliable digest such as `sha256`, optionally using file size as a fast precheck.
-- If the dataset cannot be copied or content comparison cannot be completed safely, stop before writing the runner instead of pointing the runner at the external source dataset.
+- Always use `.atk/datasets/original.csv` for the init-time canonical runnable dataset.
+- The canonical dataset must contain a stable ATK identity column named `atk_id`.
+- If the source dataset lacks `atk_id`, append `atk_id` and fill it from the source data row number, starting at `1`.
+- If the source dataset already has `atk_id`, reuse it only when every value is a non-empty, unique positive integer.
+- Preserve all user-provided columns and their relative order; treat `atk_id` as ATK metadata rather than Agent input unless the user explicitly says otherwise.
+- If `.atk/datasets/original.csv` does not exist, write the canonical dataset there.
+- If it exists and the canonical content is identical, reuse it and do not create a duplicate.
+- If it exists with different canonical content, ask before overwriting because future dataset subsets depend on this fixed semantic name.
+- Compare canonical content with a reliable digest such as `sha256`, optionally using file size as a fast precheck.
+- If the canonical dataset cannot be written or content comparison cannot be completed safely, stop before writing the runner instead of pointing the runner at the external source dataset.
 
-Generated runners should define `DATASETS_DIR = Path(".atk/datasets")` and set `DATASET_PATH = DATASETS_DIR / "original.csv"`.
+Generated runners should define `DATASETS_DIR = Path(".atk/datasets")`, set `DATASET_PATH = DATASETS_DIR / "original.csv"`, and require a valid `atk_id` column before executing rows.
 
 ## Canonical version helper pseudocode
 
@@ -156,7 +160,7 @@ Do not ask for confirmation for routine, reversible local file generation when t
 ## Per-Skill preconditions and failure behavior
 
 - `atk-status`: no version directory is required. It inspects `.atk/` state and recommends the next Skill or manual command without bypassing confirmation triggers.
-- `atk-init`: no version directory is required. If Agent invocation, target runtime/import roots, dataset path/format, log source, Python `logging` logger names, existing `.atk/datasets/original.csv` overwrite semantics, or `agent_output` / `agent_output_log_path` column conflict cannot be inferred safely, ask the user to confirm before writing `.atk/runner/eval_runner.py`. Generated runners should support `--limit`/`--offset`/`--concurrency`, write results incrementally, add `agent_output_log_path`, create trustworthy row logs for configured same-process Python logging capture when an ATK row context is active, keep stdout/stderr/subprocess/multiprocess/post-row background logs out of row files, and be import-checked under the inferred project runtime without invoking the Agent.
+- `atk-init`: no version directory is required. If Agent invocation, target runtime/import roots, dataset path/format, `atk_id` creation/validation, log source, Python `logging` logger names, existing `.atk/datasets/original.csv` overwrite semantics, or `agent_output` / `agent_output_log_path` column conflict cannot be inferred safely, ask the user to confirm before writing `.atk/runner/eval_runner.py`. Generated runners should support `--limit`/`--offset`/`--concurrency`, write results incrementally, require valid `atk_id`, add `agent_output_log_path`, create trustworthy row logs for configured same-process Python logging capture when an ATK row context is active, keep stdout/stderr/subprocess/multiprocess/post-row background logs out of row files, and be import-checked under the inferred project runtime without invoking the Agent.
 - `atk-run`: require `.atk/runner/eval_runner.py`; execute it as the short command surface for batch testing using the target repository's Python runtime when available (`uv run python`, `.venv/bin/python`, Poetry, then `python3`). Pass through safe runner flags such as `--limit`, `--offset`, and `--concurrency`. The runner remains the only component that creates or reuses result versions. If the runner fails or no current `eval_results.csv` is produced, report the failure and do not clean up partial version directories. If configured row logging is downgraded under `--concurrency > 1` because concurrent row logging is disabled, report that no `logs/row_*.log` files are expected and suggest serial execution or enabling the generated concurrent row-log flag for same-process Python logging evidence. If a partial `eval_results.csv` exists after interruption/failure, report it explicitly.
 - `atk-init-failure-rule`: require current `vN/eval_results.csv`; if no current version or missing `eval_results.csv`, stop with repair/rerun guidance. If existing `.atk/runner/failure_rule.py` exists, ask whether to reuse or update rule logic. This Skill generates or updates the rule script only; it does not write `failure_cases.csv`.
 - `atk-find-failures-by-rule`: require current `vN/eval_results.csv` and existing `.atk/runner/failure_rule.py`; if the script is missing, stop and tell the user to run `atk-init-failure-rule` first. Execute the script to write current `failure_cases.csv`; if `failure_cases.csv` already exists, confirm before overwriting.

@@ -78,6 +78,7 @@ def run_rendered_runner(
     concurrency: int,
     concurrent_enabled: bool = True,
     inject_context_free_log: bool = False,
+    fieldnames: list[str] | None = None,
 ) -> tuple[subprocess.CompletedProcess[str], Path]:
     temp_dir = Path(tempfile.mkdtemp(prefix="atk-runner-row-logs-"))
     runner_path = temp_dir / ".atk/runner/eval_runner.py"
@@ -88,8 +89,10 @@ def run_rendered_runner(
     )
     dataset_path = temp_dir / ".atk/datasets/original.csv"
     dataset_path.parent.mkdir(parents=True)
+    if fieldnames is None:
+        fieldnames = ["atk_id", "token", "mode"]
     with dataset_path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=["token", "mode"])
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(rows)
     completed = subprocess.run(
@@ -118,12 +121,22 @@ class RunnerTemplateRowLoggingTests(unittest.TestCase):
         self.assertIn('DATASET_PATH = DATASETS_DIR / "original.csv"', rendered)
         self.assertNotIn("TODO_AGENT_TUNING_DATASET_SNAPSHOT", rendered)
 
+    def test_template_requires_canonical_atk_id_column(self) -> None:
+        completed, _ = run_rendered_runner(
+            [{"token": "NO_ATK_ID", "mode": "ok"}],
+            concurrency=1,
+            fieldnames=["token", "mode"],
+        )
+
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("Dataset is missing required atk_id column", completed.stderr)
+
     def test_concurrent_row_logs_do_not_cross_contaminate_or_capture_context_free_records(self) -> None:
         completed, temp_dir = run_rendered_runner(
             [
-                {"token": "ROW_A_UNIQUE", "mode": "slow"},
-                {"token": "ROW_B_UNIQUE", "mode": "ok"},
-                {"token": "ROW_C_UNIQUE", "mode": "background"},
+                {"atk_id": "1", "token": "ROW_A_UNIQUE", "mode": "slow"},
+                {"atk_id": "2", "token": "ROW_B_UNIQUE", "mode": "ok"},
+                {"atk_id": "3", "token": "ROW_C_UNIQUE", "mode": "background"},
             ],
             concurrency=3,
             inject_context_free_log=True,
@@ -154,8 +167,8 @@ class RunnerTemplateRowLoggingTests(unittest.TestCase):
     def test_known_agent_error_keeps_row_log_path_and_error_status(self) -> None:
         completed, temp_dir = run_rendered_runner(
             [
-                {"token": "ERR_ROW_UNIQUE", "mode": "known_error"},
-                {"token": "AFTER_ERROR_UNIQUE", "mode": "ok"},
+                {"atk_id": "1", "token": "ERR_ROW_UNIQUE", "mode": "known_error"},
+                {"atk_id": "2", "token": "AFTER_ERROR_UNIQUE", "mode": "ok"},
             ],
             concurrency=2,
         )
@@ -173,7 +186,7 @@ class RunnerTemplateRowLoggingTests(unittest.TestCase):
 
     def test_disabled_concurrent_row_logging_downgrades_without_row_files(self) -> None:
         completed, temp_dir = run_rendered_runner(
-            [{"token": "NO_ROW_LOG", "mode": "ok"}],
+            [{"atk_id": "1", "token": "NO_ROW_LOG", "mode": "ok"}],
             concurrency=2,
             concurrent_enabled=False,
         )
@@ -186,7 +199,7 @@ class RunnerTemplateRowLoggingTests(unittest.TestCase):
 
     def test_serial_row_logging_still_writes_row_logs(self) -> None:
         completed, temp_dir = run_rendered_runner(
-            [{"token": "SERIAL_ROW_UNIQUE", "mode": "ok"}],
+            [{"atk_id": "1", "token": "SERIAL_ROW_UNIQUE", "mode": "ok"}],
             concurrency=1,
         )
 

@@ -166,7 +166,7 @@ $atk-report
 ```text
 .atk/
 ├── datasets/
-│   └── original.csv
+│   └── original.csv        # ATK 可运行数据集，包含 atk_id
 ├── runner/
 │   ├── eval_runner.py
 │   └── failure_rule.py

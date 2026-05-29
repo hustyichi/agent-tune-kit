@@ -30,7 +30,7 @@
 - **功能**：
   - 用户需要准备需要调优的 Agent 服务以及可以用于评估的数据集
   - 系统需要在项目内维护统一父目录 `.atk/`
-  - 用户提供的数据集需要在生成测试脚本时快照复制到 `.atk/datasets/`
+  - 用户提供的数据集需要在生成测试脚本时规范化写入 `.atk/datasets/`，并保证存在 `atk_id`
   - 所有共享脚本需要存储在 `.atk/runner/`
   - 所有版本化结果需要存储在 `.atk/results/{version}/`
   - 用户不需要手工指定当前调优版本，版本由各模块自动创建或识别
@@ -38,17 +38,17 @@
 ### 2.2 批量测试脚本生成模块（Codex Skill）
 - **功能**：
   - Skill 阅读待调优 Agent 的源码与用户提供的数据集，生成 Python 测试脚本 `eval_runner.py`
-  - Skill 在生成脚本前将用户提供的数据集复制到 `.atk/datasets/`，生成的脚本读取该项目内快照，避免外部数据集移动导致后续执行失败
+  - Skill 在生成脚本前将用户提供的数据集写入 `.atk/datasets/` 作为 ATK 可持续运行数据集，生成的脚本读取该项目内数据集，避免外部数据集移动导致后续执行失败
   - 脚本需要能够：批量读取数据集、调用本地 Agent、记录每条样本的输入/输出/预期结果到 `eval_results.csv`、按需采集 Agent 运行日志到 `app.log`，并在可信场景下写入逐行日志引用 `agent_output_log_path`
   - **日志采集方案**：由 Skill 在阅读 Agent 源码后自行决定采集方式（例如 stdout 重定向、读取 Agent 写入的日志文件、Hook 日志框架等），并将逻辑固化在生成的 `eval_runner.py` 中；若 Agent 无可识别日志，则不生成 `app.log`
   - **逐行日志方案**：当可识别的日志源是同进程 Python `logging` 时，生成的 runner 可默认使用 stdlib `contextvars` 与 ATK 自有 `logging.Handler` 路由器，为每条源数据行写入 `.atk/results/vN/logs/row_{source_index:06d}.log`，并在 `eval_results.csv` 的 `agent_output_log_path` 中写入相对 POSIX 路径；即使该行没有日志记录，也要创建被引用的空文件。逐行日志只能包含 ATK 行上下文处于活动状态时发出的记录；stdout/stderr、子进程、多进程和行结束后的后台日志不进入逐行日志。若生成的并发逐行日志开关被禁用，`--concurrency > 1` 必须在运行输出中显式降级并使用 `app.log` 作为回退证据。
   - **数据集适配**：以 CSV 为主，列名由 Skill 推断；若数据集为其它格式，由 Skill 自行扩展读取逻辑
-  - **数据集快照命名与去重**：init 阶段的原始数据集固定快照为 `.atk/datasets/original.csv`，让后续异常集、回归集等语义化数据集可以使用稳定命名。若该文件不存在则复制；若内容完全一致则复用；若已存在但内容不同，则需在覆盖前确认。内容比较应使用可靠摘要（如 `sha256`），可先用文件大小做快速预筛。
+  - **数据集快照命名与去重**：init 阶段的 ATK 可持续运行数据集固定为 `.atk/datasets/original.csv`，让后续异常集、回归集等语义化数据集可以使用稳定命名。该文件不要求与用户原始文件字节级一致：若源 CSV 缺少 `atk_id`，Skill 需追加 `atk_id` 列，并按源数据行号从 `1` 开始填充；若源 CSV 已有 `atk_id`，仅在其值非空、唯一且为正整数时复用。若该文件不存在则写入规范化后的数据集；若规范化后内容完全一致则复用；若已存在但内容不同，则需在覆盖前确认。内容比较应使用可靠摘要（如 `sha256`），可先用文件大小做快速预筛。
   - **`eval_results.csv` 字段约定**：
-    - 原则上**完整保留用户输入数据集的所有原始列**（列名、列顺序均不改动），在此基础上追加 Agent 运行产生的列
+    - 原则上**完整保留用户输入数据集的所有原始列**（列名、列顺序均不改动）；ATK 数据集必须包含固定列 `atk_id`，当源数据缺失时由 Skill 追加并使用 1-based 源行号填充；在此基础上追加 Agent 运行产生的列
     - **强约束**：Agent 的实际输出必须写入固定列名 `agent_output`；若 Agent 返回多字段结构化结果，可序列化为 JSON 字符串存入该列，或额外追加 `agent_output_*` 前缀的辅助列
     - **逐行日志引用**：固定列 `agent_output_log_path` 用于保存相对当前版本目录的逐行日志路径；无可信逐行日志时该列留空
-    - 其它列（输入、预期结果等）不做命名强约束，下游 Skill 通过原数据集列名自行识别
+    - 其它列（输入、预期结果等）不做命名强约束，下游 Skill 通过原数据集列名自行识别；`atk_id` 是 ATK 元数据，除非用户明确要求，不应传入待测 Agent
     - 若用户原数据集已存在名为 `agent_output` 或 `agent_output_log_path` 的列，Skill 需提示用户并与其确认改名方案后再生成脚本
   - **数据确认机制**：当 Agent 接入方式、数据集字段、日志位置或上述列名冲突无法可靠推断时，Skill 与用户交互确认后再生成脚本
 - **输出**：
@@ -205,7 +205,7 @@
 ## 4. 版本管理要求
 - **统一父目录**：
   - 所有调优相关产物统一放在 `.atk/` 下
-  - `.atk/datasets/` 存放由 `atk-init` 复制的数据集快照
+  - `.atk/datasets/` 存放由 `atk-init` 写入的 ATK 可运行数据集
   - `.atk/runner/` 存放跨版本共享脚本
   - `.atk/results/` 存放按版本隔离的结果
 - **版本命名**：
@@ -231,7 +231,7 @@
   - 跨版本验证结果写入当前版本 `report.md`，不新增独立对比报告文件
   - 当上一版本不存在或缺少 `tuning_plan.md` 时，报告 Skill 退化为单版本报告并说明原因
 - **目录职责**：
-  - `.atk/datasets/`：存放生成 runner 时使用的数据集快照；runner 读取这里的稳定副本，不依赖外部源路径
+  - `.atk/datasets/`：存放生成 runner 时使用的 ATK 可运行数据集；runner 读取这里的稳定副本，不依赖外部源路径
   - `.atk/runner/`：跨版本共享脚本，例如 `eval_runner.py`、`failure_rule.py`
   - `.atk/results/{version}/`：存放该轮调优的测试结果、日志、异常数据、报告与调优计划
 - **兼容要求**：
@@ -270,7 +270,7 @@
 ```text
 /.atk/
 ├── datasets/
-│   └── original.csv             # atk-init 复制的原始数据集快照
+│   └── original.csv             # atk-init 写入的 ATK 可运行数据集（含 atk_id）
 ├── runner/
 │   ├── eval_runner.py          # 跨版本共享测试脚本
 │   └── failure_rule.py          # 跨版本共享失败判定规则脚本（规则模式使用）
