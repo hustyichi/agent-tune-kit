@@ -154,20 +154,27 @@
 - **输入**：
   - 必需：当前版本目录下的 `failure_cases.csv`
   - 可选：同版本 `report.md`，仅提取有界摘要、归因或 3-5 条调优重点作为上下文
+  - 可选（用于跨版本分析，只读、永不修改、缺失不阻塞）：
+    - 历史版本 `v1..v(N-1)/failure_cases.csv` —— 推导每个 case 的跨版本失败/通过状态
+    - 历史版本 `v1..v(N-1)/eval_results.csv` —— 仅流式读取 `atk_id` 列（每文件上限 64 MiB），用于区分四态状态（`passed` / `failed` / `not_tested` / `unknown`），并检测 `atk-run --only-failures` 子集执行
+    - 上一版本 `v(N-1)/tuning_plan.md` —— 仅解析 `## 目标异常清单` 段落（文件上限 256 KiB），用于计算上轮调优目标命中率
 - **输出文件**：
   - 当前版本目录下的 `failure_cases.html`
-  - 不生成 `report_summary.json`、其他 metadata JSON 或依赖文件
+  - 不生成 `report_summary.json`、其他 metadata JSON、sidecar 数据文件或依赖文件
 - **版本目录兼容要求**：
   - 按第 4 章规则识别当前版本（数字最大的 `vN`）
-  - 仅读取当前版本的 `failure_cases.csv` 和可选同版本 `report.md`
-  - 仅向同一版本目录写入 `failure_cases.html`
-  - 用户不需要指定版本号或结果目录
+  - 必须读取：当前版本的 `failure_cases.csv`
+  - 可选读取：同版本 `report.md`；以及历史版本 `v1..v(N-1)` 下的 `failure_cases.csv`、`eval_results.csv`（仅 `atk_id` 列）、`v(N-1)/tuning_plan.md`，全部 best-effort 非阻塞，任意缺失/超限/解析失败均降级处理而不报错
+  - 仅向同一版本目录写入 `failure_cases.html`，不修改任何历史版本目录下的任何文件
+  - 用户不需要指定版本号或结果目录；用户可通过 `--no-history` 显式关闭跨版本读取
 - **HTML 生成要求**：
   - 使用 Python 标准库读取 CSV，保留所有原始列并兼容不同数据集字段
   - 对所有 CSV 与报告派生内容进行 HTML 转义
-  - 使用内嵌 CSS/JS，包含摘要计数、搜索/筛选、分页、expected-vs-actual 对比、长字段展开或详情视图
+  - 使用内嵌 CSS/JS 与内嵌的离线 ECharts 构建（位于 `skills/atk-visualize-failures/assets/vendor/echarts.min.js`，由插件持有，零 CDN、零外链、零运行时依赖），包含摘要计数、搜索/筛选、分页、expected-vs-actual 对比、长字段展开或详情视图
+  - 当存在历史版本数据时，HTML 提供三标签视图（`总览` / `跨版本` / `Case 浏览`）：跨版本趋势（执行数 / 失败数 / 失败率双轴）、按版本演化的失败原因堆叠柱、三态/四态 per-case 状态（`passed` / `failed` / `not_tested` / `unknown`）、上一轮调优目标命中率（resolved / partial / unresolved / indeterminate）、顽固 case 列表（在 2 个及以上历史版本中均失败的 atk_id，表格显示上限 200 行），并在某版本执行样本数显著少于上一版本（< 50%）时显示 subset run 提示条，避免与全量执行版本直接同口径比较
   - 当存在 expected/expected_output、`agent_output`、failure/failure_reason/explanation/root-cause 类字段时优先展示，但不强制要求统一 Schema；前端提供临时角色切换以适配非标准字段
   - 同版本 `report.md` 缺失、格式异常或不可解析时继续生成 HTML，并说明报告上下文被跳过；报告解析是 best-effort 且 non-blocking
+  - 所有跨版本读取均为 best-effort：任意历史文件缺失/超限/损坏/无 `atk_id` 列时，对应视图降级并提示原因，绝不影响 HTML 写入
   - `agent_output_log_path` 等日志路径只在满足安全相对路径约束时生成可点击链接，否则仅作为证据文本展示
 
 ### 2.6 Agent 调优模块（Codex Skill）

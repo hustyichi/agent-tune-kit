@@ -15,59 +15,125 @@ __ATK_STYLES__
     <div class="meta">
       <span class="chip" id="meta-rows">0 行</span>
       <span class="chip" id="meta-fields">0 列</span>
+      <span class="chip" id="meta-history">单版本</span>
       <button type="button" class="btn" data-open-drawer="roles" title="字段角色映射">角色映射</button>
       <button type="button" class="btn" data-open-drawer="report" title="报告摘录">报告摘录</button>
       <button type="button" class="btn" data-open-drawer="warnings" title="解析警告">警告</button>
     </div>
     <div class="path" id="path-context"></div>
+    <nav class="tabs" role="tablist" aria-label="视图切换">
+      <button type="button" class="tab" role="tab" data-tab="overview" aria-selected="false">总览</button>
+      <button type="button" class="tab" role="tab" data-tab="cross" aria-selected="false">跨版本</button>
+      <button type="button" class="tab active" role="tab" data-tab="cases" aria-selected="true">Case 浏览</button>
+    </nav>
   </header>
-  <main>
-    <aside class="sidebar">
-      <section class="panel">
-        <div class="panel-body">
-          <div class="stats">
-            <div class="stat"><div class="label">总异常</div><div class="value" id="stat-total">0</div></div>
-            <div class="stat"><div class="label">字段</div><div class="value" id="stat-fields">0</div></div>
-            <div class="stat"><div class="label" id="stat-primary-label">分类</div><div class="value" id="stat-primary-value">-</div></div>
-            <div class="stat"><div class="label" id="stat-report-label">报告</div><div class="value" id="stat-report-value">-</div></div>
-          </div>
-        </div>
-      </section>
-      <section class="panel">
+
+  <!-- ===== Overview tab ===== -->
+  <section id="tab-overview" class="tab-panel" role="tabpanel" hidden>
+    <div class="kpi-row" id="overview-kpis"></div>
+    <div class="overview-grid">
+      <div class="panel chart-card">
+        <div class="panel-header"><span>失败原因 Top-N</span><span class="hint" id="overview-reason-meta">--</span></div>
+        <div class="chart-body" id="chart-reason-bar"></div>
+      </div>
+      <div class="panel chart-card">
+        <div class="panel-header"><span>主要分类分布</span><span class="hint" id="overview-facet-meta">--</span></div>
+        <div class="chart-body" id="chart-facet-pie"></div>
+      </div>
+      <div class="panel chart-card wide">
+        <div class="panel-header"><span>期望 vs 实际 · 行数差分布</span><span class="hint">正值 = Agent 输出更长，负值 = 过短</span></div>
+        <div class="chart-body" id="chart-line-diff"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Cross-version tab ===== -->
+  <section id="tab-cross" class="tab-panel" role="tabpanel" hidden>
+    <div class="kpi-row" id="cross-kpis"></div>
+    <div class="cross-banner" id="cross-banner" hidden></div>
+    <div class="cross-grid">
+      <div class="panel chart-card wide">
         <div class="panel-header">
-          <span>Search / filter / pagination</span>
-          <span class="hint" id="filtered-count">0 / 0</span>
+          <span>cross-version trend · 执行 / 失败 / 失败率</span>
+          <span class="hint" id="trend-meta">--</span>
         </div>
-        <div class="panel-body">
-          <div class="search-row">
-            <input id="search" type="search" placeholder="搜索全部字段…" aria-label="搜索全部字段">
-          </div>
-          <div id="facets" class="facet-group" style="margin-top:10px;"></div>
-          <div id="empty-state-all" class="empty" hidden>
-            <strong>当前版本没有异常行</strong>
-            <span>No failure rows in current failure_cases.csv</span>
-          </div>
-          <div id="empty-state-filtered" class="empty" hidden>
-            <strong>没有匹配的异常行</strong>
-            <span>请调整搜索词或过滤器。</span>
-          </div>
-          <div id="case-list" class="case-list" role="list" aria-label="异常案例列表" style="margin-top:10px;"></div>
-          <div class="pager">
-            <button id="prev" type="button" class="btn">上一页</button>
-            <div class="controls">
-              <span id="page-label" class="label"></span>
-              <select id="page-size" aria-label="每页行数"></select>
+        <div class="chart-body tall" id="chart-trend"></div>
+      </div>
+      <div class="panel chart-card wide">
+        <div class="panel-header">
+          <span>失败原因按版本演化（堆叠）</span>
+          <span class="hint" id="stack-meta">--</span>
+        </div>
+        <div class="chart-body tall" id="chart-reason-stack"></div>
+      </div>
+      <div class="panel wide">
+        <div class="panel-header">
+          <span>previous-tuning-target hit rate · 上一轮调优目标命中率</span>
+          <span class="hint" id="targets-meta">--</span>
+        </div>
+        <div class="panel-body" id="targets-body"></div>
+      </div>
+      <div class="panel wide">
+        <div class="panel-header">
+          <span>persistent failure cases · 顽固 case</span>
+          <span class="hint" id="persistent-meta">--</span>
+        </div>
+        <div class="panel-body" id="persistent-body"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Cases tab (existing UI) ===== -->
+  <section id="tab-cases" class="tab-panel" role="tabpanel">
+    <main>
+      <aside class="sidebar">
+        <section class="panel">
+          <div class="panel-body">
+            <div class="stats">
+              <div class="stat"><div class="label">总异常</div><div class="value" id="stat-total">0</div></div>
+              <div class="stat"><div class="label">字段</div><div class="value" id="stat-fields">0</div></div>
+              <div class="stat"><div class="label" id="stat-primary-label">分类</div><div class="value" id="stat-primary-value">-</div></div>
+              <div class="stat"><div class="label" id="stat-report-label">报告</div><div class="value" id="stat-report-value">-</div></div>
             </div>
-            <button id="next" type="button" class="btn">下一页</button>
           </div>
-        </div>
+        </section>
+        <section class="panel">
+          <div class="panel-header">
+            <span>Search / filter / pagination</span>
+            <span class="hint" id="filtered-count">0 / 0</span>
+          </div>
+          <div class="panel-body">
+            <div class="search-row">
+              <input id="search" type="search" placeholder="搜索全部字段…" aria-label="搜索全部字段">
+            </div>
+            <div id="cross-filter-bar" class="cross-filter-bar" hidden></div>
+            <div id="facets" class="facet-group" style="margin-top:10px;"></div>
+            <div id="empty-state-all" class="empty" hidden>
+              <strong>当前版本没有异常行</strong>
+              <span>No failure rows in current failure_cases.csv</span>
+            </div>
+            <div id="empty-state-filtered" class="empty" hidden>
+              <strong>没有匹配的异常行</strong>
+              <span>请调整搜索词或过滤器。</span>
+            </div>
+            <div id="case-list" class="case-list" role="list" aria-label="异常案例列表" style="margin-top:10px;"></div>
+            <div class="pager">
+              <button id="prev" type="button" class="btn">上一页</button>
+              <div class="controls">
+                <span id="page-label" class="label"></span>
+                <select id="page-size" aria-label="每页行数"></select>
+              </div>
+              <button id="next" type="button" class="btn">下一页</button>
+            </div>
+          </div>
+        </section>
+      </aside>
+      <section class="panel detail" aria-label="expected-vs-actual comparison">
+        <div id="detail-head" class="detail-head"></div>
+        <div id="detail-body" class="detail-body"></div>
       </section>
-    </aside>
-    <section class="panel detail" aria-label="expected-vs-actual comparison">
-      <div id="detail-head" class="detail-head"></div>
-      <div id="detail-body" class="detail-body"></div>
-    </section>
-  </main>
+    </main>
+  </section>
 
   <div class="drawer-backdrop" id="drawer-backdrop"></div>
   <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
@@ -92,13 +158,16 @@ __ATK_STYLES__
   </aside>
 
   <footer style="text-align:center;color:var(--muted);font-size:11px;padding:14px;">
-    由 atk-visualize-failures 生成 · 单文件 / stdlib / 零依赖 / 零外链 / 无 LLM 摘要
+    由 atk-visualize-failures 生成 · 单文件 / 离线 / 零外链 / bundled offline ECharts / 无 LLM 摘要
   </footer>
 
   <!-- audit markers (preserved for plugin self-test substring checks; do not remove) -->
   <div class="audit-only" aria-hidden="true">__ATK_AUDIT_MARKERS__</div>
 
   <script type="application/json" id="failure-data">__ATK_DATA_JSON__</script>
+  <script>
+__ATK_VENDOR_JS__
+  </script>
   <script>
 __ATK_APP_JS__
   </script>
