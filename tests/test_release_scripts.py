@@ -63,7 +63,7 @@ class ReleaseScriptTests(unittest.TestCase):
         check_release = load_script("check-release.py")
         identity = check_release.read_project_identity()
         self.assertEqual(identity.name, "agent-tune-kit")
-        self.assertEqual(identity.version, "0.3.8")
+        self.assertEqual(identity.version, "0.3.9")
         check_release.assert_versions_aligned(identity)
 
     def test_skill_pack_validation_does_not_phrase_scan_readmes(self) -> None:
@@ -180,7 +180,7 @@ class ReleaseScriptTests(unittest.TestCase):
             (root / ".codex-plugin" / "plugin.json").write_text('"version": "0.3.8"\n', encoding="utf-8")
             (root / "src" / "agent_tune_kit" / "__init__.py").write_text('__version__ = "0.3.8"\n', encoding="utf-8")
             (root / "tests" / "test_release_scripts.py").write_text(
-                'self.assertEqual(identity.version, "0.3.8")\nexample_version = "1.2.3"\n',
+                'self.assertEqual(identity.version, "0.3.9")\nexample_version = "1.2.3"\n',
                 encoding="utf-8",
             )
             (root / "tests" / "test_install_plugin.py").write_text('"agent-tune-kit 0.3.8"\n', encoding="utf-8")
