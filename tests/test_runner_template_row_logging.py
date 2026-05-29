@@ -79,6 +79,8 @@ def run_rendered_runner(
     concurrent_enabled: bool = True,
     inject_context_free_log: bool = False,
     fieldnames: list[str] | None = None,
+    extra_args: list[str] | None = None,
+    prior_failure_rows: list[dict[str, str]] | None = None,
 ) -> tuple[subprocess.CompletedProcess[str], Path]:
     temp_dir = Path(tempfile.mkdtemp(prefix="atk-runner-row-logs-"))
     runner_path = temp_dir / ".atk/runner/eval_runner.py"
@@ -95,8 +97,22 @@ def run_rendered_runner(
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(rows)
+    if prior_failure_rows is not None:
+        version_dir = temp_dir / ".atk/results/v1"
+        version_dir.mkdir(parents=True)
+        result_fieldnames = fieldnames + ["agent_output"]
+        for filename, result_rows in {
+            "eval_results.csv": rows,
+            "failure_cases.csv": prior_failure_rows,
+        }.items():
+            with (version_dir / filename).open("w", newline="", encoding="utf-8") as handle:
+                writer = csv.DictWriter(handle, fieldnames=result_fieldnames, extrasaction="ignore")
+                writer.writeheader()
+                writer.writerows(result_rows)
+    if extra_args is None:
+        extra_args = []
     completed = subprocess.run(
-        [sys.executable, str(runner_path), "--concurrency", str(concurrency), "--no-progress"],
+        [sys.executable, str(runner_path), "--concurrency", str(concurrency), "--no-progress", *extra_args],
         cwd=temp_dir,
         text=True,
         stdout=subprocess.PIPE,
@@ -109,6 +125,12 @@ def run_rendered_runner(
 
 def read_results(temp_dir: Path) -> list[dict[str, str]]:
     results_path = temp_dir / ".atk/results/v1/eval_results.csv"
+    with results_path.open(newline="", encoding="utf-8") as handle:
+        return list(csv.DictReader(handle))
+
+
+def read_version_results(temp_dir: Path, version: str) -> list[dict[str, str]]:
+    results_path = temp_dir / f".atk/results/{version}/eval_results.csv"
     with results_path.open(newline="", encoding="utf-8") as handle:
         return list(csv.DictReader(handle))
 
@@ -130,6 +152,40 @@ class RunnerTemplateRowLoggingTests(unittest.TestCase):
 
         self.assertNotEqual(completed.returncode, 0)
         self.assertIn("Dataset is missing required atk_id column", completed.stderr)
+
+    def test_only_failures_runs_rows_selected_by_previous_failure_atk_ids(self) -> None:
+        completed, temp_dir = run_rendered_runner(
+            [
+                {"atk_id": "1", "token": "PASS_ROW", "mode": "ok"},
+                {"atk_id": "2", "token": "FAIL_ROW_A", "mode": "ok"},
+                {"atk_id": "3", "token": "FAIL_ROW_B", "mode": "ok"},
+            ],
+            concurrency=1,
+            extra_args=["--only-failures"],
+            prior_failure_rows=[
+                {"atk_id": "3", "token": "FAIL_ROW_B", "mode": "ok"},
+                {"atk_id": "2", "token": "FAIL_ROW_A", "mode": "ok"},
+            ],
+        )
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        results = read_version_results(temp_dir, "v2")
+        self.assertEqual([row["atk_id"] for row in results], ["2", "3"])
+        self.assertEqual([row["token"] for row in results], ["FAIL_ROW_A", "FAIL_ROW_B"])
+        self.assertFalse((temp_dir / ".atk/results/v2/logs/row_000001.log").exists())
+        self.assertTrue((temp_dir / ".atk/results/v2/logs/row_000002.log").exists())
+        self.assertTrue((temp_dir / ".atk/results/v2/logs/row_000003.log").exists())
+
+    def test_only_failures_fails_when_previous_failure_id_is_missing_from_dataset(self) -> None:
+        completed, _ = run_rendered_runner(
+            [{"atk_id": "1", "token": "ONLY_ROW", "mode": "ok"}],
+            concurrency=1,
+            extra_args=["--only-failures"],
+            prior_failure_rows=[{"atk_id": "999", "token": "MISSING_ROW", "mode": "ok"}],
+        )
+
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("Failure atk_id values are missing from the canonical dataset: 999", completed.stderr)
 
     def test_concurrent_row_logs_do_not_cross_contaminate_or_capture_context_free_records(self) -> None:
         completed, temp_dir = run_rendered_runner(

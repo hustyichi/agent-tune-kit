@@ -47,6 +47,12 @@ Traceability note: section 2.3 defines manual batch execution, section 4 defines
    <python-runtime> .atk/runner/eval_runner.py --limit 5 --concurrency 4
    ```
 
+   If the user asks to rerun only the previous failure set, pass `--only-failures` through. The runner uses `atk_id` values from the latest prior `failure_cases.csv` to select rows from `.atk/datasets/original.csv`; it does not run `failure_cases.csv` as an input dataset:
+
+   ```sh
+   <python-runtime> .atk/runner/eval_runner.py --only-failures
+   ```
+
 4. Read the runner output and inspect `.atk/results/` to identify the numerically largest `vN` directory.
 5. Confirm whether `eval_results.csv` exists in that version.
 6. Inspect row-log status:
@@ -75,7 +81,7 @@ Ask before running only when:
 - the user explicitly asked for a dry run or inspection only.
 
 Do not ask for a version number.
-Do not ask before passing through safe runner controls such as `--limit`, `--offset`, `--concurrency`, or `--no-progress` when the user requested them.
+Do not ask before passing through safe runner controls such as `--limit`, `--offset`, `--concurrency`, `--only-failures`, or `--no-progress` when the user requested them.
 
 ## Failure behavior
 
@@ -84,6 +90,7 @@ Do not ask before passing through safe runner controls such as `--limit`, `--off
 - If the runner still cannot import the target Agent, report this as an `atk-init` generation/runtime inference problem and recommend regenerating the runner after updating setup rules.
 - If the runner exits non-zero, report the failure output and do not claim a result version was produced unless `eval_results.csv` exists.
 - If `eval_results.csv` is missing from the current version after execution, tell the user the run did not complete and point to the runner output for repair.
+- If `--only-failures` cannot find a prior `failure_cases.csv`, the file lacks `atk_id`, or any failure `atk_id` is absent from `.atk/datasets/original.csv`, report the runner error and do not silently fall back to a full run.
 - If row-level logging was downgraded under `--concurrency > 1` because concurrent row logging is disabled, do not treat missing `logs/row_*.log` files as a failure; report the downgrade and suggest serial execution or enabling the generated concurrent row-log flag when trustworthy same-process Python logging evidence is needed.
 - If `agent_output_log_path` contains non-empty paths but referenced files are missing, report this as a runner generation bug and recommend regenerating or repairing `.atk/runner/eval_runner.py`.
 - If the user interrupts the run, do not clean up the partial version. Inspect whether the current version contains a partial `eval_results.csv` and report the number of rows written if it can be read.
@@ -94,7 +101,7 @@ Do not ask before passing through safe runner controls such as `--limit`, `--off
 After a successful run, summarize:
 
 - command executed;
-- any runner flags used, especially `--limit`, `--offset`, or `--concurrency`;
+- any runner flags used, especially `--limit`, `--offset`, `--concurrency`, or `--only-failures`;
 - current version directory;
 - output path `.atk/results/vN/eval_results.csv`;
 - whether optional `app.log` was produced;

@@ -154,12 +154,12 @@ Codex edits your Agent based on the report and records the tuning plan:
 After tuning, run another loop:
 
 ```text
-$atk-run
+$atk-run --only-failures
 $atk-find-failures
 $atk-report
 ```
 
-New results are written to `.atk/results/v2/`. Starting with the second loop, the report compares against the previous `tuning_plan.md` and tells you whether the target issues were resolved, partially resolved, unresolved, or impossible to judge.
+New results are written to `.atk/results/v2/`. `--only-failures` maps the prior `failure_cases.csv` back to `.atk/datasets/original.csv` by `atk_id` and reruns only those rows. Starting with the second loop, the report compares against the previous `tuning_plan.md` and tells you whether the target issues were resolved, partially resolved, unresolved, or impossible to judge.
 
 ## Output Structure
 

@@ -154,12 +154,12 @@ Codex 会基于报告修改你的 Agent，并记录本轮调优计划：
 调优后再跑一轮：
 
 ```text
-$atk-run
+$atk-run --only-failures
 $atk-find-failures
 $atk-report
 ```
 
-新结果会写入 `.atk/results/v2/`。从第二轮开始，报告会对比上一轮 `tuning_plan.md`，说明目标问题是已解决、部分解决、未解决，还是无法判断。
+新结果会写入 `.atk/results/v2/`。`--only-failures` 会通过 `atk_id` 将上一轮 `failure_cases.csv` 映射回 `.atk/datasets/original.csv`，并只重跑这些行。从第二轮开始，报告会对比上一轮 `tuning_plan.md`，说明目标问题是已解决、部分解决、未解决，还是无法判断。
 
 ## 输出结构
 

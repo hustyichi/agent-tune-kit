@@ -227,6 +227,7 @@ PER_FILE_PHRASES = {
         "uv run python",
         "--limit",
         "--concurrency",
+        "--only-failures",
         "agent_output_log_path",
         "row-log status: active, downgraded, or unavailable",
         'RESULTS_DIR = Path(".atk/results")',
@@ -346,6 +347,7 @@ PER_FILE_PHRASES = {
         "parser.add_argument(",
         "--limit",
         "--concurrency",
+        "--only-failures",
         "ThreadPoolExecutor",
         "os.fsync(handle.fileno())",
         "except UserActionRequired:",
@@ -723,6 +725,14 @@ def main() -> int:
     require(
         "--concurrency" in runner_template and "ThreadPoolExecutor" in runner_template,
         "runner template must support concurrent runs",
+        errors,
+    )
+    require(
+        "--only-failures" in runner_template
+        and "resolve_latest_failure_cases_version" in runner_template
+        and "load_failure_atk_ids" in runner_template
+        and "select_failure_dataset_rows" in runner_template,
+        "runner template must support atk_id-based reruns of prior failure cases",
         errors,
     )
     require(
