@@ -162,7 +162,21 @@ class ReleaseScriptTests(unittest.TestCase):
             (root / "scripts").mkdir()
 
             (root / "pyproject.toml").write_text('version = "0.3.8"\n', encoding="utf-8")
-            (root / "uv.lock").write_text('version = "0.3.8"\n', encoding="utf-8")
+            (root / "uv.lock").write_text(
+                '\n'.join(
+                    [
+                        '[[package]]',
+                        'name = "agent-tune-kit"',
+                        'version = "0.3.8"',
+                        '',
+                        '[[package]]',
+                        'name = "colorama"',
+                        'version = "0.4.6"',
+                        '',
+                    ]
+                ),
+                encoding="utf-8",
+            )
             (root / ".codex-plugin" / "plugin.json").write_text('"version": "0.3.8"\n', encoding="utf-8")
             (root / "src" / "agent_tune_kit" / "__init__.py").write_text('__version__ = "0.3.8"\n', encoding="utf-8")
             (root / "tests" / "test_release_scripts.py").write_text(
@@ -193,6 +207,10 @@ class ReleaseScriptTests(unittest.TestCase):
             self.assertIn(
                 'example_version = "1.2.3"',
                 (root / "tests" / "test_release_scripts.py").read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                'name = "colorama"\nversion = "0.4.6"',
+                (root / "uv.lock").read_text(encoding="utf-8"),
             )
 
     def test_release_version_plans_full_release_flow(self) -> None:

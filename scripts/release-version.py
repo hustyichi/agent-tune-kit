@@ -35,7 +35,9 @@ VERSION_PATTERNS = {
     "tests/test_release_scripts.py": re.compile(
         r'(self\.assertEqual\(identity\.version,\s*")(?<!\d)\d+\.\d+\.\d+(?!\d)("\))'
     ),
-    "uv.lock": re.compile(r'(version\s*=\s*")(?<!\d)\d+\.\d+\.\d+(?!\d)(")'),
+    "uv.lock": re.compile(
+        r'(\[\[package\]\]\nname = "agent-tune-kit"\nversion\s*=\s*")(?<!\d)\d+\.\d+\.\d+(?!\d)(")'
+    ),
 }
 
 
