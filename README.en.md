@@ -28,6 +28,14 @@ You need:
 - A local Agent project that Codex can inspect and edit.
 - An evaluation dataset, preferably in CSV format. Column names do not need to follow a strict schema; Codex will infer inputs and expected results where possible.
 
+If you do not have an Agent project yet and only have an evaluation dataset, start with **ATK new Agent**:
+
+```text
+$atk-new-agent dataset is data/eval.csv
+```
+
+Codex will inspect the dataset, clarify your intent, and generate a small runnable Python Agent project that uses an OpenAI-compatible API. The interview and design notes are written to `.atk/specs/agent_spec.md`. This step does not write `.atk/datasets/original.csv`; canonical runnable dataset creation remains the responsibility of `$atk-init`.
+
 ## Install
 
 One-command install:
@@ -74,6 +82,12 @@ Codex generates:
 
 ```text
 .atk/runner/eval_runner.py
+```
+
+If the Agent was created by ATK new Agent, the next command is usually:
+
+```text
+$atk-init Agent entrypoint is agent.py run_agent and the evaluation dataset is data/eval.csv
 ```
 
 ### 2. Run Evaluation
@@ -192,6 +206,7 @@ Common output files:
 ## Common Skills
 
 - `$atk-status`: inspect progress and suggest the next step.
+- `$atk-new-agent`: create a lightweight OpenAI-compatible Agent when you only have a dataset.
 - `$atk-init`: generate the test runner.
 - `$atk-run`: run evaluation and create a new result version.
 - `$atk-find-failures`: let Codex identify failure cases.

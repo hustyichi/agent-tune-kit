@@ -35,6 +35,31 @@
   - 所有版本化结果需要存储在 `.atk/results/{version}/`
   - 用户不需要手工指定当前调优版本，版本由各模块自动创建或识别
 
+### 2.1.1 ATK new Agent：仅有数据集时初始化 Agent 项目（可选前置 Skill）
+- **适用场景**：
+  - 用户只有评估数据集，还没有可被 `$atk-init` 接入的本地 Agent 项目
+  - 用户希望 Codex 先根据数据集和意图生成一个轻量初始 Agent，再进入现有 ATK 调优闭环
+- **入口**：
+  - Codex Skill：`$atk-new-agent`
+  - 产品名：`ATK new Agent`
+- **功能**：
+  - 读取用户提供的数据集，优先支持 CSV，检查字段名和少量样例
+  - 只向用户询问无法从数据集中可靠推断的人类判断：Agent 目标、输入字段含义、期望输出、非目标、OpenAI-compatible 运行配置和允许 Codex 自主决定的实现细节
+  - 将采访和设计信息写入 `.atk/specs/agent_spec.md`，使用 Markdown，不引入新的严格 JSON Schema
+  - 生成一个最小 uv 管理的 Python Agent 项目，默认文件包括 `agent.py`、`run_agent.py`、`pyproject.toml`、`.env.example`、`README.md`
+  - 生成的 `agent.py` 必须暴露 `run_agent(input_data: dict[str, str]) -> str`，便于后续 `$atk-init` 识别
+  - 初始版本直接使用 OpenAI-compatible API，通过 `OPENAI_API_KEY`、`OPENAI_BASE_URL`、`OPENAI_MODEL` 配置
+  - 缺少必要环境变量时必须给出清晰配置错误，不应静默失败
+- **边界**：
+  - `$atk-new-agent` 是 pre-init scaffold Skill，不参与 `.atk/results/vN` 版本管理
+  - `$atk-new-agent` 可以检查源数据集并记录字段推断，但不得写入 `.atk/datasets/original.csv`
+  - `.atk/datasets/original.csv`、`atk_id` 规范化和 `.atk/runner/eval_runner.py` 仍然只由 `$atk-init` 负责
+  - 第一版不生成 RAG、Web UI、多供应商抽象、复杂单元测试或完整一键调优编排
+- **输出**：
+  - `.atk/specs/agent_spec.md`
+  - 最小可运行 Agent 项目文件
+  - 下一步 `$atk-init` 调用建议，例如：`$atk-init Agent 入口是 agent.py 的 run_agent，评估数据是 data/eval.csv`
+
 ### 2.2 批量测试脚本生成模块（Codex Skill）
 - **功能**：
   - Skill 阅读待调优 Agent 的源码与用户提供的数据集，生成 Python 测试脚本 `eval_runner.py`

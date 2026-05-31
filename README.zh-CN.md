@@ -28,6 +28,14 @@ Agent Tune Kit 是一个**本地 Codex 插件**，用于评测和调优你自己
 - 一个 Codex 能读取和修改的本地 Agent 项目。
 - 一份评估数据集，建议优先使用 CSV 格式。字段名不必严格固定，Codex 会根据数据内容判断输入和期望结果。
 
+如果你还没有 Agent 项目，只有评估数据集，可以先使用 **ATK new Agent**：
+
+```text
+$atk-new-agent 数据集是 data/eval.csv
+```
+
+Codex 会先理解数据集并确认你的意图，然后生成一个轻量、可运行、使用 OpenAI-compatible API 的 Python Agent 项目。采访和设计信息会写入 `.atk/specs/agent_spec.md`。这个步骤不会写 `.atk/datasets/original.csv`；规范化可运行数据集仍由后续 `$atk-init` 负责。
+
 ## 安装
 
 一键运行：
@@ -74,6 +82,12 @@ Codex 会生成测试脚本：
 
 ```text
 .atk/runner/eval_runner.py
+```
+
+如果这个 Agent 是由 ATK new Agent 创建的，通常继续运行：
+
+```text
+$atk-init Agent 入口是 agent.py 的 run_agent，评估数据是 data/eval.csv
 ```
 
 ### 2. 跑评测
@@ -192,6 +206,7 @@ $atk-report
 ## 常用 Skill
 
 - `$atk-status`：检查当前进度并提示下一步。
+- `$atk-new-agent`：当你只有数据集、还没有 Agent 项目时，生成一个轻量 OpenAI-compatible Agent。
 - `$atk-init`：生成测试脚本。
 - `$atk-run`：运行评测并生成新版本结果。
 - `$atk-find-failures`：让 Codex 判断异常样本。

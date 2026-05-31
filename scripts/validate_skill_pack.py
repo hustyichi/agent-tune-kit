@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 REQUIRED_FILES = [
     ".codex-plugin/plugin.json",
     "skills/atk-status/SKILL.md",
+    "skills/atk-new-agent/SKILL.md",
     "skills/atk-init/SKILL.md",
     "skills/atk-run/SKILL.md",
     "skills/atk-init-failure-rule/SKILL.md",
@@ -33,6 +34,11 @@ REQUIRED_FILES = [
     "skills/atk-tune/SKILL.md",
     "templates/.atk/runner/eval_runner.py.md",
     "templates/.atk/runner/failure_rule.py.md",
+    "templates/agent/agent.py.md",
+    "templates/agent/run_agent.py.md",
+    "templates/agent/pyproject.toml.md",
+    "templates/agent/env.example.md",
+    "templates/agent/README.md.md",
     "docs/skill-template-pack-usage.md",
     "docs/shared-versioning-and-confirmation.md",
     "docs/codex_agent_tuning_prd.md",
@@ -50,6 +56,8 @@ REQUIRED_FILES = [
 ]
 
 SKILL_FILES = [path for path in REQUIRED_FILES if path.startswith("skills/") and path.endswith("/SKILL.md")]
+PRE_INIT_SCAFFOLD_SKILL_FILES = {"skills/atk-new-agent/SKILL.md"}
+LIFECYCLE_SKILL_FILES = [path for path in SKILL_FILES if path not in PRE_INIT_SCAFFOLD_SKILL_FILES]
 
 REQUIRED_SKILL_SECTIONS = [
     "## Purpose",
@@ -59,6 +67,16 @@ REQUIRED_SKILL_SECTIONS = [
     "## Shared version rules",
     "## Confirmation triggers",
     "## Failure behavior",
+]
+
+REQUIRED_PRE_INIT_SCAFFOLD_SKILL_SECTIONS = [
+    "## Purpose",
+    "## Inputs",
+    "## Outputs",
+    "## Workflow",
+    "## Confirmation triggers",
+    "## Failure behavior",
+    "## Handoff message",
 ]
 
 GLOBAL_PHRASES = [
@@ -211,6 +229,20 @@ PER_FILE_PHRASES = {
         'RESULTS_DIR = Path(".atk/results")',
         "failure_cases.html",
         "non-blocking review step",
+    ],
+    "skills/atk-new-agent/SKILL.md": [
+        "atk-new-agent",
+        "ATK new Agent",
+        ".atk/specs/agent_spec.md",
+        "templates/agent/",
+        "run_agent(input_data: dict[str, str]) -> str",
+        "OPENAI_API_KEY",
+        "OPENAI_BASE_URL",
+        "OPENAI_MODEL",
+        "uv run python run_agent.py --input hello",
+        "$atk-init Agent 入口是 agent.py 的 run_agent",
+        "Never write `.atk/datasets/original.csv`",
+        "pre-init scaffold",
     ],
     "skills/atk-init/SKILL.md": [
         ".atk/runner/eval_runner.py",
@@ -403,6 +435,39 @@ PER_FILE_PHRASES = {
         "TODO_AGENT_TUNING",
         'raise UserActionRequired("TODO_AGENT_TUNING: implement confirmed failure rule before running.")',
     ],
+    "templates/agent/agent.py.md": [
+        "def run_agent(input_data: dict[str, str]) -> str",
+        "OPENAI_API_KEY",
+        "OPENAI_BASE_URL",
+        "OPENAI_MODEL",
+        "AgentConfigurationError",
+        "Missing {name}",
+        "OpenAI(",
+        "client.chat.completions.create",
+    ],
+    "templates/agent/run_agent.py.md": [
+        "from agent import AgentConfigurationError, run_agent",
+        "parser.add_argument(\"--input\", required=True",
+        "Configuration error:",
+        "json.loads",
+    ],
+    "templates/agent/pyproject.toml.md": [
+        'name = "atk-generated-agent"',
+        "openai>=1.0.0",
+        "python-dotenv>=1.0.0",
+    ],
+    "templates/agent/env.example.md": [
+        "OPENAI_API_KEY=",
+        "OPENAI_BASE_URL=https://api.openai.com/v1",
+        "OPENAI_MODEL=gpt-4.1-mini",
+    ],
+    "templates/agent/README.md.md": [
+        "ATK Generated Agent",
+        "uv sync",
+        "uv run python run_agent.py --input hello",
+        "$atk-init Agent 入口是 agent.py 的 run_agent",
+        "agent.py::run_agent",
+    ],
     "docs/shared-versioning-and-confirmation.md": [
         "Current version vs new version creation",
         "Only `eval_runner.py` creates or reuses result versions",
@@ -593,8 +658,16 @@ def main() -> int:
     for rel in SKILL_FILES:
         text = existing_texts.get(rel, "")
         require(text.startswith("---\n"), f"{rel} missing YAML front matter", errors)
-        for section in REQUIRED_SKILL_SECTIONS:
+        required_sections = (
+            REQUIRED_PRE_INIT_SCAFFOLD_SKILL_SECTIONS
+            if rel in PRE_INIT_SCAFFOLD_SKILL_FILES
+            else REQUIRED_SKILL_SECTIONS
+        )
+        for section in required_sections:
             require(section in text, f"{rel} missing section {section}", errors)
+
+    for rel in LIFECYCLE_SKILL_FILES:
+        text = existing_texts.get(rel, "")
         require(
             "docs/shared-versioning-and-confirmation.md" in text, f"{rel} missing shared version doc reference", errors
         )
@@ -602,6 +675,25 @@ def main() -> int:
         require(
             "Failure behavior" in text and "Confirmation triggers" in text,
             f"{rel} missing precondition/failure behavior",
+            errors,
+        )
+
+    for rel in PRE_INIT_SCAFFOLD_SKILL_FILES:
+        text = existing_texts.get(rel, "")
+        require(".atk/specs/agent_spec.md" in text, f"{rel} missing generated Agent spec path", errors)
+        require(
+            'RESULTS_DIR = Path(".atk/results")' not in text,
+            f"{rel} must not require lifecycle RESULTS_DIR behavior",
+            errors,
+        )
+        require(
+            "docs/shared-versioning-and-confirmation.md" not in text,
+            f"{rel} must not require shared version doc behavior",
+            errors,
+        )
+        require(
+            "Never write `.atk/datasets/original.csv`" in text,
+            f"{rel} must explicitly preserve atk-init canonical dataset ownership",
             errors,
         )
 
