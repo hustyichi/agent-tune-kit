@@ -163,16 +163,16 @@ class ReleaseScriptTests(unittest.TestCase):
 
             (root / "pyproject.toml").write_text('version = "0.3.8"\n', encoding="utf-8")
             (root / "uv.lock").write_text(
-                '\n'.join(
+                "\n".join(
                     [
-                        '[[package]]',
+                        "[[package]]",
                         'name = "agent-tune-kit"',
                         'version = "0.3.8"',
-                        '',
-                        '[[package]]',
+                        "",
+                        "[[package]]",
                         'name = "colorama"',
                         'version = "0.4.6"',
-                        '',
+                        "",
                     ]
                 ),
                 encoding="utf-8",
