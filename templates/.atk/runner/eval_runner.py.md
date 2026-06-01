@@ -38,7 +38,7 @@ from typing import Any
 RESULTS_DIR = Path(".atk/results")
 RUNNER_DIR = Path(".atk/runner")
 DATASETS_DIR = Path(".atk/datasets")
-DATASET_PATH = DATASETS_DIR / "original.csv"
+DATASET_PATH = DATASETS_DIR / "dataset.csv"
 RESULTS_FILENAME = "eval_results.csv"
 FAILURE_FILENAME = "failure_cases.csv"
 APP_LOG_FILENAME = "app.log"

@@ -34,7 +34,7 @@ If you do not have an Agent project yet and only have an evaluation dataset, sta
 $atk-new-agent dataset is data/eval.csv
 ```
 
-Codex will inspect the dataset, clarify your intent, and generate a small runnable Python Agent project that uses an OpenAI-compatible API. The interview and design notes are written to `.atk/specs/agent_spec.md`. This step does not write `.atk/datasets/original.csv`; canonical runnable dataset creation remains the responsibility of `$atk-init`.
+Codex will inspect the dataset, clarify your intent, and generate a small runnable Python Agent project that uses an OpenAI-compatible API. The interview and design notes are written to `.atk/specs/agent_spec.md`. This step does not write `.atk/datasets/dataset.csv`; canonical runnable dataset creation remains the responsibility of `$atk-init`.
 
 ## Install
 
@@ -173,14 +173,14 @@ $atk-find-failures
 $atk-report
 ```
 
-New results are written to `.atk/results/v2/`. `--only-failures` maps the prior `failure_cases.csv` back to `.atk/datasets/original.csv` by `atk_id` and reruns only those rows. Starting with the second loop, the report compares against the previous `tuning_plan.md` and tells you whether the target issues were resolved, partially resolved, unresolved, or impossible to judge.
+New results are written to `.atk/results/v2/`. `--only-failures` maps the prior `failure_cases.csv` back to `.atk/datasets/dataset.csv` by `atk_id` and reruns only those rows. Starting with the second loop, the report compares against the previous `tuning_plan.md` and tells you whether the target issues were resolved, partially resolved, unresolved, or impossible to judge.
 
 ## Output Structure
 
 ```text
 .atk/
 ├── datasets/
-│   └── original.csv        # ATK runnable dataset with atk_id
+│   └── dataset.csv        # ATK runnable dataset with atk_id
 ├── runner/
 │   ├── eval_runner.py
 │   └── failure_rule.py

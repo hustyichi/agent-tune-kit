@@ -89,7 +89,7 @@ def run_rendered_runner(
         render_runner(concurrent_enabled=concurrent_enabled, inject_context_free_log=inject_context_free_log),
         encoding="utf-8",
     )
-    dataset_path = temp_dir / ".atk/datasets/original.csv"
+    dataset_path = temp_dir / ".atk/datasets/dataset.csv"
     dataset_path.parent.mkdir(parents=True)
     if fieldnames is None:
         fieldnames = ["atk_id", "token", "mode"]
@@ -136,11 +136,11 @@ def read_version_results(temp_dir: Path, version: str) -> list[dict[str, str]]:
 
 
 class RunnerTemplateRowLoggingTests(unittest.TestCase):
-    def test_template_reads_fixed_original_dataset_snapshot(self) -> None:
+    def test_template_reads_fixed_dataset_snapshot(self) -> None:
         rendered = render_runner()
 
         self.assertIn('DATASETS_DIR = Path(".atk/datasets")', rendered)
-        self.assertIn('DATASET_PATH = DATASETS_DIR / "original.csv"', rendered)
+        self.assertIn('DATASET_PATH = DATASETS_DIR / "dataset.csv"', rendered)
         self.assertNotIn("TODO_AGENT_TUNING_DATASET_SNAPSHOT", rendered)
 
     def test_template_requires_canonical_atk_id_column(self) -> None:

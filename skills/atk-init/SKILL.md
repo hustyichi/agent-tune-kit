@@ -34,7 +34,7 @@ In the current package layout, this is also reachable from this Skill file as `.
 ## Outputs
 
 - `.atk/runner/eval_runner.py`
-- `.atk/datasets/original.csv` containing the ATK canonical runnable dataset used by the generated runner, including a required `atk_id` column.
+- `.atk/datasets/dataset.csv` containing the ATK canonical runnable dataset used by the generated runner, including a required `atk_id` column.
 - No version directory is required before this Skill runs; no version directory is required for generation.
 - Runtime results are produced later by running `atk-run`, which executes the generated script:
   - `.atk/results/vN/eval_results.csv`
@@ -50,16 +50,16 @@ In the current package layout, this is also reachable from this Skill file as `.
    - inspect logging behavior, Python `logging` logger names, stdout/stderr use, and log file paths;
    - check whether the dataset already has a column named `atk_id`, `agent_output`, or `agent_output_log_path`.
 2. Apply the uncertainty confirmation pattern from `docs/shared-versioning-and-confirmation.md`.
-3. If safe, create `.atk/datasets/` and write the canonical runnable dataset to `.atk/datasets/original.csv` before writing the runner:
+3. If safe, create `.atk/datasets/` and write the canonical runnable dataset to `.atk/datasets/dataset.csv` before writing the runner:
    - for CSV datasets, preserve all user-provided columns and their order;
    - if the source dataset lacks `atk_id`, append an `atk_id` column and fill it with the source data row number, starting at `1`;
    - if the source dataset already has `atk_id`, reuse it only when values are non-empty, unique positive integers;
    - treat `atk_id` as ATK metadata and do not pass it to the target Agent unless the user explicitly requires it;
    - compute a canonical dataset digest such as `sha256` after `atk_id` normalization;
-   - if `.atk/datasets/original.csv` does not exist, write the canonical dataset there;
-   - if `.atk/datasets/original.csv` exists and has identical canonical content, reuse it instead of creating a duplicate;
-   - if `.atk/datasets/original.csv` exists with different canonical content, ask before overwriting because the fixed name is the canonical runnable dataset slot;
-   - keep the runner pointed at `.atk/datasets/original.csv`, not the original external path.
+   - if `.atk/datasets/dataset.csv` does not exist, write the canonical dataset there;
+   - if `.atk/datasets/dataset.csv` exists and has identical canonical content, reuse it instead of creating a duplicate;
+   - if `.atk/datasets/dataset.csv` exists with different canonical content, ask before overwriting because the fixed name is the canonical runnable dataset slot;
+   - keep the runner pointed at `.atk/datasets/dataset.csv`, not the original external path.
 4. If safe, create `.atk/runner/` and write `eval_runner.py` from plugin-root-relative `templates/.atk/runner/eval_runner.py.md`.
 5. Keep the generated script project-local and low dependency. Prefer Python stdlib plus the target project environment.
 6. Verify the generated runner without invoking the Agent when possible:
@@ -71,12 +71,12 @@ In the current package layout, this is also reachable from this Skill file as `.
 ## Required runner behavior
 
 - Preserve all original dataset columns and their order, with the ATK metadata column `atk_id` appended when the source dataset does not already provide it.
-- Require `.atk/datasets/original.csv` to contain `atk_id`; generated runners should stop with repair guidance if that column is missing, empty, duplicated, or not a positive integer.
+- Require `.atk/datasets/dataset.csv` to contain `atk_id`; generated runners should stop with repair guidance if that column is missing, empty, duplicated, or not a positive integer.
 - Append the fixed actual-output column `agent_output`.
 - Append the stable row-log evidence column `agent_output_log_path`. When same-process Python logging capture is configured and active, it must contain a relative POSIX path such as `logs/row_000001.log`; otherwise it should be blank.
 - If Agent output has multiple fields, serialize the primary result as JSON in `agent_output` or add auxiliary `agent_output_*` columns.
 - If the input dataset already contains `agent_output` or `agent_output_log_path`, ask the user to confirm a rename strategy before writing the script.
-- Write the input dataset into `.atk/datasets/` during `atk-init`, specifically `.atk/datasets/original.csv`, as the ATK canonical runnable dataset with `atk_id`. Reuse it when canonical content is identical and ask before overwriting different canonical content. The generated runner must read this fixed `.atk/datasets/` dataset so later source dataset moves do not break `atk-run`.
+- Write the input dataset into `.atk/datasets/` during `atk-init`, specifically `.atk/datasets/dataset.csv`, as the ATK canonical runnable dataset with `atk_id`. Reuse it when canonical content is identical and ask before overwriting different canonical content. The generated runner must read this fixed `.atk/datasets/` dataset so later source dataset moves do not break `atk-run`.
 - Automatically allocate the output version with `allocate_next_results_version()`.
 - Use `RESULTS_DIR = Path(".atk/results")`.
 - Do not require a user-supplied version argument or result path.
@@ -110,7 +110,7 @@ Ask the user before writing `eval_runner.py` if any of these cannot be inferred 
 - Agent invocation, callable signature, required environment, working directory, or async handling;
 - target interpreter/runtime command or import roots needed to load the Agent;
 - dataset path, format, encoding, delimiter, input fields, or expected-result fields;
-- whether an existing `.atk/datasets/original.csv` path should be reused or overwritten when content comparison cannot be completed safely or shows different content;
+- whether an existing `.atk/datasets/dataset.csv` path should be reused or overwritten when content comparison cannot be completed safely or shows different content;
 - log source, Python logger names, or capture method;
 - existing dataset column named `atk_id` with invalid/non-unique values, or existing dataset column named `agent_output` or `agent_output_log_path` and the rename strategy;
 - whether writing `.atk/runner/eval_runner.py` would overwrite a hand-edited runner.
@@ -121,7 +121,7 @@ Do not ask about routine creation of `.atk/runner/` or version-number selection.
 
 - If Agent invocation, dataset path/format, log source, Python logger names, invalid `atk_id`, or `agent_output` / `agent_output_log_path` column conflict cannot be inferred safely, stop and ask the user to confirm before writing `eval_runner.py`.
 - If required source files or dataset are missing, report the missing path and do not create a misleading runner.
-- If the dataset cannot be written into `.atk/datasets/` as canonical `original.csv` with `atk_id`, or duplicate-content comparison cannot be completed safely, report the reason and do not write a runner that points at the external source dataset.
+- If the dataset cannot be written into `.atk/datasets/` as canonical `dataset.csv` with `atk_id`, or duplicate-content comparison cannot be completed safely, report the reason and do not write a runner that points at the external source dataset.
 - If the generated runner cannot import the target Agent under the inferred project runtime, fix the import/runtime inference before handing off.
 - If an existing runner appears hand-edited, summarize the diff/intent and ask before overwrite.
 - Never silently impose a universal Schema on the dataset or Agent.
@@ -130,7 +130,7 @@ Do not ask about routine creation of `.atk/runner/` or version-number selection.
 
 After writing the runner, summarize:
 
-- inferred Agent entrypoint, original dataset path, and fixed `.atk/datasets/original.csv` canonical dataset path;
+- inferred Agent entrypoint, original dataset path, and fixed `.atk/datasets/dataset.csv` canonical dataset path;
 - inferred execution command/runtime, including whether bare `python3` is safe or a project runner such as `uv run python` is required;
 - preserved source columns, required `atk_id` behavior, and appended `agent_output` behavior;
 - appended `agent_output_log_path` behavior, including whether row logs will be active, downgraded, or unavailable;

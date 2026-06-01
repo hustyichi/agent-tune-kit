@@ -19,7 +19,7 @@ def test_atk_new_agent_skill_is_pre_init_scaffold() -> None:
         "name: atk-new-agent",
         "pre-init scaffold",
         ".atk/specs/agent_spec.md",
-        "Never write `.atk/datasets/original.csv`",
+        "Never write `.atk/datasets/dataset.csv`",
         "Risk-triggered confirmation policy",
         "No risk-triggered confirmation needed",
         "do not ask the user to confirm obvious, low-risk, or inspectable facts",

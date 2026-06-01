@@ -250,7 +250,7 @@ PER_FILE_PHRASES = {
         "OPENAI_MODEL",
         "uv run python run_agent.py --input hello",
         "$atk-init Agent 入口是 agent.py 的 run_agent",
-        "Never write `.atk/datasets/original.csv`",
+        "Never write `.atk/datasets/dataset.csv`",
         "pre-init scaffold",
         "Risk-triggered confirmation policy",
         "No risk-triggered confirmation needed",
@@ -412,7 +412,7 @@ PER_FILE_PHRASES = {
     ],
     "templates/.atk/runner/eval_runner.py.md": [
         'DATASETS_DIR = Path(".atk/datasets")',
-        'DATASET_PATH = DATASETS_DIR / "original.csv"',
+        'DATASET_PATH = DATASETS_DIR / "dataset.csv"',
         'ATK_ID_FIELD = "atk_id"',
         "def allocate_next_results_version(results_dir: Path = RESULTS_DIR) -> Path",
         "class AgentExecutionError(RuntimeError)",
@@ -723,7 +723,7 @@ def main() -> int:
             errors,
         )
         require(
-            "Never write `.atk/datasets/original.csv`" in text,
+            "Never write `.atk/datasets/dataset.csv`" in text,
             f"{rel} must explicitly preserve atk-init canonical dataset ownership",
             errors,
         )
@@ -786,7 +786,7 @@ def main() -> int:
     )
     require(
         'DATASETS_DIR = Path(".atk/datasets")' in runner_template
-        and 'DATASET_PATH = DATASETS_DIR / "original.csv"' in runner_template,
+        and 'DATASET_PATH = DATASETS_DIR / "dataset.csv"' in runner_template,
         "runner template must read the dataset from a .atk/datasets canonical dataset",
         errors,
     )

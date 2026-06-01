@@ -52,8 +52,8 @@
   - 缺少必要环境变量时必须给出清晰配置错误，不应静默失败
 - **边界**：
   - `$atk-new-agent` 是 pre-init scaffold Skill，不参与 `.atk/results/vN` 版本管理
-  - `$atk-new-agent` 可以检查源数据集并记录字段推断，但不得写入 `.atk/datasets/original.csv`
-  - `.atk/datasets/original.csv`、`atk_id` 规范化和 `.atk/runner/eval_runner.py` 仍然只由 `$atk-init` 负责
+  - `$atk-new-agent` 可以检查源数据集并记录字段推断，但不得写入 `.atk/datasets/dataset.csv`
+  - `.atk/datasets/dataset.csv`、`atk_id` 规范化和 `.atk/runner/eval_runner.py` 仍然只由 `$atk-init` 负责
   - 第一版不生成 RAG、Web UI、多供应商抽象、复杂单元测试或完整一键调优编排
 - **输出**：
   - `.atk/specs/agent_spec.md`
@@ -68,7 +68,7 @@
   - **日志采集方案**：由 Skill 在阅读 Agent 源码后自行决定采集方式（例如 stdout 重定向、读取 Agent 写入的日志文件、Hook 日志框架等），并将逻辑固化在生成的 `eval_runner.py` 中；若 Agent 无可识别日志，则不生成 `app.log`
   - **逐行日志方案**：当可识别的日志源是同进程 Python `logging` 时，生成的 runner 可默认使用 stdlib `contextvars` 与 ATK 自有 `logging.Handler` 路由器，为每条源数据行写入 `.atk/results/vN/logs/row_{source_index:06d}.log`，并在 `eval_results.csv` 的 `agent_output_log_path` 中写入相对 POSIX 路径；即使该行没有日志记录，也要创建被引用的空文件。逐行日志只能包含 ATK 行上下文处于活动状态时发出的记录；stdout/stderr、子进程、多进程和行结束后的后台日志不进入逐行日志。若生成的并发逐行日志开关被禁用，`--concurrency > 1` 必须在运行输出中显式降级并使用 `app.log` 作为回退证据。
   - **数据集适配**：以 CSV 为主，列名由 Skill 推断；若数据集为其它格式，由 Skill 自行扩展读取逻辑
-  - **数据集快照命名与去重**：init 阶段的 ATK 可持续运行数据集固定为 `.atk/datasets/original.csv`，让后续异常集、回归集等语义化数据集可以使用稳定命名。该文件不要求与用户原始文件字节级一致：若源 CSV 缺少 `atk_id`，Skill 需追加 `atk_id` 列，并按源数据行号从 `1` 开始填充；若源 CSV 已有 `atk_id`，仅在其值非空、唯一且为正整数时复用。若该文件不存在则写入规范化后的数据集；若规范化后内容完全一致则复用；若已存在但内容不同，则需在覆盖前确认。内容比较应使用可靠摘要（如 `sha256`），可先用文件大小做快速预筛。
+  - **数据集快照命名与去重**：init 阶段的 ATK 可持续运行数据集固定为 `.atk/datasets/dataset.csv`，表达这是 ATK 评测流程使用的项目内数据集，便于在不同业务流程中复用。该文件不要求与用户原始文件字节级一致：若源 CSV 缺少 `atk_id`，Skill 需追加 `atk_id` 列，并按源数据行号从 `1` 开始填充；若源 CSV 已有 `atk_id`，仅在其值非空、唯一且为正整数时复用。若该文件不存在则写入规范化后的数据集；若规范化后内容完全一致则复用；若已存在但内容不同，则需在覆盖前确认。内容比较应使用可靠摘要（如 `sha256`），可先用文件大小做快速预筛。
   - **`eval_results.csv` 字段约定**：
     - 原则上**完整保留用户输入数据集的所有原始列**（列名、列顺序均不改动）；ATK 数据集必须包含固定列 `atk_id`，当源数据缺失时由 Skill 追加并使用 1-based 源行号填充；在此基础上追加 Agent 运行产生的列
     - **强约束**：Agent 的实际输出必须写入固定列名 `agent_output`；若 Agent 返回多字段结构化结果，可序列化为 JSON 字符串存入该列，或额外追加 `agent_output_*` 前缀的辅助列
@@ -89,7 +89,7 @@
 - **功能**：
   - 用户触发 `atk-run`，由该 Skill 执行 `.atk/runner/eval_runner.py`
   - 简单机制实现批量测试执行和结果收集
-  - 支持通过 `--only-failures` 仅运行最近一份 `failure_cases.csv` 中出现的 `atk_id` 对应样本；该模式必须回到 `.atk/datasets/original.csv` 按 `atk_id` 筛选原始样本执行，不得直接把 `failure_cases.csv` 当作输入数据集运行
+  - 支持通过 `--only-failures` 仅运行最近一份 `failure_cases.csv` 中出现的 `atk_id` 对应样本；该模式必须回到 `.atk/datasets/dataset.csv` 按 `atk_id` 筛选原始样本执行，不得直接把 `failure_cases.csv` 当作输入数据集运行
   - 仅在「上一轮已有结果」时才新建版本目录；否则直接复用当前最新版本目录重跑
 - **输出**：
   - 结果输出为目标版本目录下的 `eval_results.csv`
@@ -103,7 +103,7 @@
   - 用户不需要指定版本号或结果目录
 - **异常样本回放规则**：
   - `--only-failures` 从数字最大的、且包含 `failure_cases.csv` 的已有版本读取异常 `atk_id`
-  - 若不存在 `failure_cases.csv`、该文件缺少 `atk_id`、异常集为空，或任一异常 `atk_id` 无法在 `.atk/datasets/original.csv` 中找到，脚本必须停止并报错，不能静默退回全量运行
+  - 若不存在 `failure_cases.csv`、该文件缺少 `atk_id`、异常集为空，或任一异常 `atk_id` 无法在 `.atk/datasets/dataset.csv` 中找到，脚本必须停止并报错，不能静默退回全量运行
   - `--limit` / `--offset` 在异常样本筛选完成后再应用，用于对异常子集做有界运行
 
 ### 2.4 异常筛选模块（规则初始化、规则执行与大模型入口）
@@ -307,7 +307,7 @@
 ```text
 /.atk/
 ├── datasets/
-│   └── original.csv             # atk-init 写入的 ATK 可运行数据集（含 atk_id）
+│   └── dataset.csv             # atk-init 写入的 ATK 可运行数据集（含 atk_id）
 ├── runner/
 │   ├── eval_runner.py          # 跨版本共享测试脚本
 │   └── failure_rule.py          # 跨版本共享失败判定规则脚本（规则模式使用）

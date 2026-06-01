@@ -34,7 +34,7 @@ Agent Tune Kit 是一个**本地 Codex 插件**，用于评测和调优你自己
 $atk-new-agent 数据集是 data/eval.csv
 ```
 
-Codex 会先理解数据集并确认你的意图，然后生成一个轻量、可运行、使用 OpenAI-compatible API 的 Python Agent 项目。采访和设计信息会写入 `.atk/specs/agent_spec.md`。这个步骤不会写 `.atk/datasets/original.csv`；规范化可运行数据集仍由后续 `$atk-init` 负责。
+Codex 会先理解数据集并确认你的意图，然后生成一个轻量、可运行、使用 OpenAI-compatible API 的 Python Agent 项目。采访和设计信息会写入 `.atk/specs/agent_spec.md`。这个步骤不会写 `.atk/datasets/dataset.csv`；规范化可运行数据集仍由后续 `$atk-init` 负责。
 
 ## 安装
 
@@ -173,14 +173,14 @@ $atk-find-failures
 $atk-report
 ```
 
-新结果会写入 `.atk/results/v2/`。`--only-failures` 会通过 `atk_id` 将上一轮 `failure_cases.csv` 映射回 `.atk/datasets/original.csv`，并只重跑这些行。从第二轮开始，报告会对比上一轮 `tuning_plan.md`，说明目标问题是已解决、部分解决、未解决，还是无法判断。
+新结果会写入 `.atk/results/v2/`。`--only-failures` 会通过 `atk_id` 将上一轮 `failure_cases.csv` 映射回 `.atk/datasets/dataset.csv`，并只重跑这些行。从第二轮开始，报告会对比上一轮 `tuning_plan.md`，说明目标问题是已解决、部分解决、未解决，还是无法判断。
 
 ## 输出结构
 
 ```text
 .atk/
 ├── datasets/
-│   └── original.csv        # ATK 可运行数据集，包含 atk_id
+│   └── dataset.csv        # ATK 可运行数据集，包含 atk_id
 ├── runner/
 │   ├── eval_runner.py
 │   └── failure_rule.py
