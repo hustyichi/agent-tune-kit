@@ -33,7 +33,8 @@ VERSION_PATTERNS = {
     "src/agent_tune_kit/__init__.py": re.compile(r'(__version__\s*=\s*")(?<!\d)\d+\.\d+\.\d+(?!\d)(")'),
     "tests/test_install_plugin.py": re.compile(r'(agent-tune-kit )(?<!\d)\d+\.\d+\.\d+(?!\d)(")'),
     "tests/test_release_scripts.py": re.compile(
-        r'(self\.assertEqual\(identity\.version,\s*")(?<!\d)\d+\.\d+\.\d+(?!\d)("\))'
+        r'^(\s*self\.assertEqual\(identity\.version,\s*")(?<!\d)\d+\.\d+\.\d+(?!\d)("\))',
+        re.MULTILINE,
     ),
 }
 
@@ -88,7 +89,7 @@ def release_commands(
         ["uv", "lock"],
         ["uv", "run", "pytest"],
         ["uv", "run", "atk", "--version"],
-        ["python", "scripts/validate_skill_pack.py"],
+        ["uv", "run", "python", "scripts/validate_skill_pack.py"],
         ["git", "diff", "--check"],
         ["git", "add", *RELEASE_FILES],
         ["git", "commit", "-m", f"Prepare Agent Tune Kit {version} release"],
@@ -131,7 +132,7 @@ def commit_message(version: str) -> list[str]:
         "-m",
         "Tested: uv run pytest; uv run atk --version; git diff --check",
         "-m",
-        "Not-tested: python scripts/validate_skill_pack.py may report known README/plugin documentation phrase gaps unless strict mode is used.",
+        "Not-tested: uv run python scripts/validate_skill_pack.py may report known README/plugin documentation phrase gaps unless strict mode is used.",
         "-m",
         "Co-authored-by: OmX <omx@oh-my-codex.dev>",
     ]
@@ -195,7 +196,7 @@ def main() -> int:
     if version_output != expected_version_output:
         raise ReleaseVersionError(f"unexpected CLI version output: {version_output!r}")
 
-    skill_pack = run(["python", "scripts/validate_skill_pack.py"], check=False)
+    skill_pack = run(["uv", "run", "python", "scripts/validate_skill_pack.py"], check=False)
     if skill_pack.returncode != 0 and args.strict_skill_pack:
         raise ReleaseVersionError("scripts/validate_skill_pack.py failed in strict mode")
     if skill_pack.returncode != 0:
