@@ -23,8 +23,8 @@ VERSION_FILES = [
     "src/agent_tune_kit/__init__.py",
     "tests/test_install_plugin.py",
     "tests/test_release_scripts.py",
-    "uv.lock",
 ]
+RELEASE_FILES = [*VERSION_FILES, "uv.lock"]
 
 VERSION_PATTERNS = {
     ".codex-plugin/plugin.json": re.compile(r'("version":\s*")(?<!\d)\d+\.\d+\.\d+(?!\d)(")'),
@@ -35,7 +35,6 @@ VERSION_PATTERNS = {
     "tests/test_release_scripts.py": re.compile(
         r'(self\.assertEqual\(identity\.version,\s*")(?<!\d)\d+\.\d+\.\d+(?!\d)("\))'
     ),
-    "uv.lock": re.compile(r'(\[\[package\]\]\nname = "agent-tune-kit"\nversion\s*=\s*")(?<!\d)\d+\.\d+\.\d+(?!\d)(")'),
 }
 
 
@@ -91,7 +90,7 @@ def release_commands(
         ["uv", "run", "atk", "--version"],
         ["python", "scripts/validate_skill_pack.py"],
         ["git", "diff", "--check"],
-        ["git", "add", *VERSION_FILES],
+        ["git", "add", *RELEASE_FILES],
         ["git", "commit", "-m", f"Prepare Agent Tune Kit {version} release"],
         ["git", "tag", version],
         ["git", "push", remote, branch],
@@ -203,7 +202,7 @@ def main() -> int:
         print("warning: scripts/validate_skill_pack.py failed; continuing because strict skill-pack mode is off")
 
     run(["git", "diff", "--check"])
-    run(["git", "add", *VERSION_FILES])
+    run(["git", "add", *RELEASE_FILES])
     run(commit_message(args.version))
     run(["git", "tag", args.version])
     run(["git", "push", args.remote, args.branch])

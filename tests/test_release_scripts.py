@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import re
 import sys
 import tempfile
 import tomllib
@@ -90,6 +91,14 @@ class ReleaseScriptTests(unittest.TestCase):
         self.assertIn("--publish-url", command)
         self.assertIn("https://test.pypi.org/legacy/", command)
 
+    def test_publish_check_url_matches_uv_lock_registry_style(self) -> None:
+        publish_release = load_script("publish-release.py")
+        lock_content = (ROOT / "uv.lock").read_text(encoding="utf-8")
+        match = re.search(r'source = \{ registry = "(https://pypi\.org/simple/?)" \}', lock_content)
+
+        self.assertIsNotNone(match)
+        self.assertEqual(publish_release.target_for("pypi").simple_url, match.group(1))
+
     def test_publish_requires_explicit_credentials_without_trusted_publishing(self) -> None:
         publish_release = load_script("publish-release.py")
         old = {
@@ -152,7 +161,7 @@ class ReleaseScriptTests(unittest.TestCase):
                 if value is not None:
                     os.environ[key] = value
 
-    def test_release_version_updates_all_version_files(self) -> None:
+    def test_release_version_updates_source_version_files_only(self) -> None:
         release_version = load_script("release-version.py")
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -197,7 +206,6 @@ class ReleaseScriptTests(unittest.TestCase):
                     "src/agent_tune_kit/__init__.py",
                     "tests/test_install_plugin.py",
                     "tests/test_release_scripts.py",
-                    "uv.lock",
                 ],
             )
             for path in changed:
@@ -207,6 +215,10 @@ class ReleaseScriptTests(unittest.TestCase):
             self.assertIn(
                 'example_version = "1.2.3"',
                 (root / "tests" / "test_release_scripts.py").read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                'name = "agent-tune-kit"\nversion = "0.3.8"',
+                (root / "uv.lock").read_text(encoding="utf-8"),
             )
             self.assertIn(
                 'name = "colorama"\nversion = "0.4.6"',
@@ -221,6 +233,20 @@ class ReleaseScriptTests(unittest.TestCase):
         self.assertIn(["uv", "lock"], commands)
         self.assertIn(["uv", "run", "pytest"], commands)
         self.assertIn(["uv", "run", "atk", "--version"], commands)
+        self.assertIn(
+            [
+                "git",
+                "add",
+                ".codex-plugin/plugin.json",
+                "pyproject.toml",
+                "scripts/validate_skill_pack.py",
+                "src/agent_tune_kit/__init__.py",
+                "tests/test_install_plugin.py",
+                "tests/test_release_scripts.py",
+                "uv.lock",
+            ],
+            commands,
+        )
         self.assertIn(["git", "tag", "0.4.0"], commands)
         self.assertIn(["git", "push", "origin", "main"], commands)
         self.assertIn(["git", "push", "origin", "0.4.0"], commands)
