@@ -27,6 +27,10 @@ You can also pass a JSON object:
 uv run python run_agent.py --input '{"question":"What should I do next?"}'
 ```
 
+## Observability
+
+`agent.py::run_agent` emits standard Python `logging` records on logger `atk.generated_agent` for each input item start, completion, and exception. When this Agent is connected with `atk-init`, the generated evaluation runner can capture those records into per-row log files referenced by `agent_output_log_path`.
+
 ## ATK Handoff
 
 After confirming the Agent runs, continue with Agent Tune Kit:

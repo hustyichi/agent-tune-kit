@@ -4,6 +4,7 @@ import py_compile
 import shutil
 import subprocess
 import sys
+import types
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -108,6 +109,40 @@ def test_generated_agent_templates_expose_runtime_contract() -> None:
     assert "python-dotenv>=1.0.0" in pyproject_template
     assert "OPENAI_BASE_URL=https://api.openai.com/v1" in env_template
     assert "ATK new Agent normally runs `uv sync`" in read_rel("templates/agent/README.md")
+
+
+def test_generated_agent_emits_observable_logs_for_each_input_item(tmp_path: Path, monkeypatch, caplog) -> None:
+    shutil.copyfile(ROOT / "templates/agent/agent.py", tmp_path / "agent.py")
+    (tmp_path / ".atk/specs").mkdir(parents=True)
+    (tmp_path / ".atk/specs/agent_spec.md").write_text("# Agent Spec\n\n## User Intent\nSmoke test\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_MODEL", "test-model")
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://example.invalid/v1")
+
+    class FakeCompletions:
+        def create(self, **_kwargs):
+            message = types.SimpleNamespace(content="fake output")
+            choice = types.SimpleNamespace(message=message)
+            return types.SimpleNamespace(choices=[choice])
+
+    class FakeOpenAI:
+        def __init__(self, **_kwargs) -> None:
+            self.chat = types.SimpleNamespace(completions=FakeCompletions())
+
+    monkeypatch.setitem(sys.modules, "openai", types.SimpleNamespace(OpenAI=FakeOpenAI))
+    caplog.set_level("INFO", logger="atk.generated_agent")
+
+    import agent
+
+    assert agent.run_agent({"atk_id": "42", "question": "hello"}) == "fake output"
+
+    messages = "\n".join(record.getMessage() for record in caplog.records if record.name == "atk.generated_agent")
+    assert "event=agent_run_start" in messages
+    assert "event=agent_run_complete" in messages
+    assert "atk_id=42" in messages
+    assert "input_fields=atk_id,question" in messages
 
 
 def test_generated_agent_smoke_fails_cleanly_without_credentials(tmp_path: Path) -> None:

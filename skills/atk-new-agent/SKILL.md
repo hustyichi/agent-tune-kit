@@ -88,6 +88,7 @@ In the current package layout, these are also reachable from this Skill file as 
    - use the OpenAI SDK and `python-dotenv`;
    - read `OPENAI_API_KEY`, `OPENAI_BASE_URL`, and `OPENAI_MODEL`;
    - return a single string output;
+   - emit standard Python `logging` records from logger `atk.generated_agent` for each input item start, completion, and exception so `atk-init` row log capture can write observable per-row logs;
    - fail with actionable configuration errors before any network call when required environment is missing.
 8. Prepare the generated Agent environment:
    - if `uv` is available, run `uv sync` from the target repository root after writing `pyproject.toml`;
