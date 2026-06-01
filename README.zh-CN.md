@@ -14,7 +14,7 @@ Agent Tune Kit 是一个**本地 Codex 插件**，用于评测和调优你自己
 
 ## 适合谁
 
-适合你，如果你有：
+适合你，如果你有，或准备让 Codex 帮你补齐：
 
 - 一个本地 Agent、聊天机器人、工具调用 Agent 或 RAG Agent。
 - 一份小型评估数据，推荐 CSV；5 到 20 条样例就能开始。
@@ -51,34 +51,13 @@ atk install
 
 选择并启用 `Agent Tune Kit`。如果刚启用后当前会话里还看不到 `$atk-status` 等自动补全，请重启 Codex，或重新打开当前项目会话。
 
-## 使用前准备
-
-你需要：
-
-- 一个 Codex 能读取和修改的本地 Agent 项目。
-- 一份评估数据集，建议优先使用 CSV 格式。字段名不必严格固定，Codex 会根据数据内容判断输入和期望结果。
-
-如果你还没有评估数据集，可以先使用 **ATK build Dataset** 从业务描述或样例构建一份小而高价值的数据集：
-
-```text
-$atk-build-dataset 我想测试一个客服 Agent，用户会问订单、退款和售后问题，回答要准确，不确定时说明无法确认
-```
-
-Codex 会在信息不足时先问 1 到 3 个问题，确认输入字段、期望输出或验收标准，以及关键业务场景。生成结果直接写入 `.atk/datasets/dataset.csv`，包含 `atk_id`。如果该文件已经存在，Codex 会先确认是否覆盖；第一版不会自动合并、追加或写入候选数据集文件。
-
-如果你还没有 Agent 项目，只有评估数据集，可以先使用 **ATK new Agent**：
-
-```text
-$atk-new-agent 数据集是 data/eval.csv
-```
-
-Codex 会先理解数据集并确认你的意图，然后生成一个轻量、可运行、使用 OpenAI-compatible API 的 Python Agent 项目。采访和设计信息会写入 `.atk/specs/agent_spec.md`。这个步骤不会写 `.atk/datasets/dataset.csv`；如果你还没有数据集，可先用 `$atk-build-dataset` 创建初始数据集。`$atk-init` 仍负责接入 Agent 时的数据集校验/规范化和 runner 生成。
-
 ## 最小调优闭环
 
 下面这些命令都在**你的 Agent 项目**里运行，不是在本仓库里运行。
 
-### 0. 可选：构建数据集
+理想情况下，你已经有一个 Codex 能读取和修改的本地 Agent 项目，以及一份评估数据集。数据集建议优先使用 CSV，字段名不必严格固定，Codex 会根据内容判断输入、期望结果和评测方式。如果其中一项还没有准备好，可以从第 0 步补齐；如果都已经有了，直接从第 1 步初始化开始。
+
+### 0. 可选：补齐数据集或 Agent
 
 如果你只有业务描述、少量样例或验收规则，还没有 CSV，可以先运行：
 
@@ -86,7 +65,15 @@ Codex 会先理解数据集并确认你的意图，然后生成一个轻量、�
 $atk-build-dataset <你的业务描述、样例或规则>
 ```
 
-它会直接创建 `.atk/datasets/dataset.csv`，重点覆盖主流程、边界输入、缺失或含糊信息、拒答/不确定场景、输出格式约束和你描述的业务风险。已有 `dataset.csv` 时会先确认是否覆盖。数据集创建后，如果项目里已有 Agent，下一步是用 `$atk-init` 接入数据集并开始批量评测；如果还没有 Agent，下一步是用 `$atk-new-agent` 先创建 Agent；如果无法确认是否已有 Agent，Codex 会同时提示这两种路径。
+Codex 会在信息不足时先问 1 到 3 个问题，确认输入字段、期望输出或验收标准，以及关键业务场景。生成结果会直接写入 `.atk/datasets/dataset.csv`，包含 `atk_id`；如果该文件已经存在，Codex 会先确认是否覆盖。它重点覆盖主流程、边界输入、缺失或含糊信息、拒答/不确定场景、输出格式约束和你描述的业务风险。
+
+如果你已经有评估数据集，但还没有 Agent 项目，可以先生成一个轻量、可运行、使用 OpenAI-compatible API 的 Python Agent：
+
+```text
+$atk-new-agent 数据集是 data/eval.csv
+```
+
+Codex 会先理解数据集并确认你的意图，生成最小 Agent 项目，并把采访和设计信息写入 `.atk/specs/agent_spec.md`。这个步骤不会写 `.atk/datasets/dataset.csv`；后续仍由 `$atk-init` 负责接入 Agent 时的数据集校验、规范化和 runner 生成。
 
 ### 1. 初始化
 

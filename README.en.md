@@ -14,7 +14,7 @@ If you already have a working Agent but do not know where it fails, why it fails
 
 ## Who It Is For
 
-Use it if you have:
+Use it if you have, or want Codex to help you fill in:
 
 - A local Agent, chatbot, tool-using Agent, or RAG Agent.
 - A small evaluation dataset, preferably CSV; 5 to 20 rows are enough to start.
@@ -51,38 +51,13 @@ After installation, open the plugin list in Codex:
 
 Select and enable `Agent Tune Kit`. If `$atk-status` and other completions do not appear immediately after enabling, restart Codex or reopen the current project session.
 
-## Prerequisites
-
-You need:
-
-- A local Agent project that Codex can inspect and edit.
-- An evaluation dataset, preferably in CSV format. Column names do not need to follow a strict schema; Codex will infer inputs and expected results where possible.
-
-If you do not have an evaluation dataset yet, start with **ATK build Dataset** to create a small, high-value dataset
-from business context or examples:
-
-```text
-$atk-build-dataset I want to test a customer-support Agent. Users ask about orders, refunds, and after-sales support. Answers should be accurate, and uncertainty should be stated clearly.
-```
-
-Codex asks 1-3 questions when information is insufficient, prioritizing input fields, expected output or acceptance
-criteria, and key business scenarios. The result is written directly to `.atk/datasets/dataset.csv` with `atk_id`.
-If that file already exists, Codex asks before overwriting it. The first version does not merge, append, or write a
-candidate dataset file.
-
-If you do not have an Agent project yet and only have an evaluation dataset, start with **ATK new Agent**:
-
-```text
-$atk-new-agent dataset is data/eval.csv
-```
-
-Codex will inspect the dataset, clarify your intent, and generate a small runnable Python Agent project that uses an OpenAI-compatible API. The interview and design notes are written to `.atk/specs/agent_spec.md`. This step does not write `.atk/datasets/dataset.csv`; if you do not have a dataset yet, use `$atk-build-dataset` first. `$atk-init` still owns dataset validation/normalization and runner generation when connecting the Agent.
-
 ## Minimal Tuning Loop
 
 Run these commands in **your Agent project**, not in this repository.
 
-### 0. Optional: Build Dataset
+Ideally, you already have a local Agent project that Codex can inspect and edit, plus an evaluation dataset. CSV is recommended, but column names do not need to follow a strict schema; Codex will infer inputs, expected results, and evaluation shape from the data. If either piece is missing, start with step 0. If both already exist, go straight to step 1.
+
+### 0. Optional: Fill In the Dataset or Agent
 
 If you only have a business description, examples, or acceptance rules, run:
 
@@ -90,11 +65,15 @@ If you only have a business description, examples, or acceptance rules, run:
 $atk-build-dataset <your business description, examples, or rules>
 ```
 
-It creates `.atk/datasets/dataset.csv` directly and focuses on main flow, boundary input, missing or ambiguous
-information, refusal/uncertainty, output format constraints, and business risks you describe. If `dataset.csv`
-already exists, it asks before overwriting. After dataset creation, if the project already has an Agent, the next step
-is `$atk-init` to connect the dataset and start batch evaluation. If there is no Agent yet, the next step is
-`$atk-new-agent` to create one first. If Codex cannot confirm whether an Agent exists, it will mention both paths.
+Codex asks 1-3 questions when information is insufficient, prioritizing input fields, expected output or acceptance criteria, and key business scenarios. The result is written directly to `.atk/datasets/dataset.csv` with `atk_id`; if that file already exists, Codex asks before overwriting it. The dataset focuses on main flow, boundary input, missing or ambiguous information, refusal/uncertainty, output format constraints, and business risks you describe.
+
+If you already have an evaluation dataset but do not have an Agent project yet, generate a small runnable Python Agent that uses an OpenAI-compatible API:
+
+```text
+$atk-new-agent dataset is data/eval.csv
+```
+
+Codex inspects the dataset, clarifies your intent, generates a minimal Agent project, and writes the interview and design notes to `.atk/specs/agent_spec.md`. This step does not write `.atk/datasets/dataset.csv`; `$atk-init` still owns dataset validation, normalization, and runner generation when connecting the Agent.
 
 ### 1. Initialize
 
