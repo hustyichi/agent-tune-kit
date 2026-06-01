@@ -29,10 +29,10 @@ def test_atk_new_agent_skill_is_pre_init_scaffold() -> None:
 
 
 def test_generated_agent_templates_expose_runtime_contract() -> None:
-    agent_template = read_rel("templates/agent/agent.py.md")
-    run_template = read_rel("templates/agent/run_agent.py.md")
-    pyproject_template = read_rel("templates/agent/pyproject.toml.md")
-    env_template = read_rel("templates/agent/env.example.md")
+    agent_template = read_rel("templates/agent/agent.py")
+    run_template = read_rel("templates/agent/run_agent.py")
+    pyproject_template = read_rel("templates/agent/pyproject.toml")
+    env_template = read_rel("templates/agent/.env.example")
 
     for phrase in [
         "def run_agent(input_data: dict[str, str]) -> str",
@@ -49,8 +49,8 @@ def test_generated_agent_templates_expose_runtime_contract() -> None:
 
 
 def test_generated_agent_smoke_fails_cleanly_without_credentials(tmp_path: Path) -> None:
-    shutil.copyfile(ROOT / "templates/agent/agent.py.md", tmp_path / "agent.py")
-    shutil.copyfile(ROOT / "templates/agent/run_agent.py.md", tmp_path / "run_agent.py")
+    shutil.copyfile(ROOT / "templates/agent/agent.py", tmp_path / "agent.py")
+    shutil.copyfile(ROOT / "templates/agent/run_agent.py", tmp_path / "run_agent.py")
     (tmp_path / ".atk/specs").mkdir(parents=True)
     (tmp_path / ".atk/specs/agent_spec.md").write_text("# Agent Spec\n\n## User Intent\nSmoke test\n", encoding="utf-8")
 
@@ -72,8 +72,8 @@ def test_generated_agent_smoke_fails_cleanly_without_credentials(tmp_path: Path)
 
 
 def test_generated_agent_fails_cleanly_when_spec_is_missing(tmp_path: Path) -> None:
-    shutil.copyfile(ROOT / "templates/agent/agent.py.md", tmp_path / "agent.py")
-    shutil.copyfile(ROOT / "templates/agent/run_agent.py.md", tmp_path / "run_agent.py")
+    shutil.copyfile(ROOT / "templates/agent/agent.py", tmp_path / "agent.py")
+    shutil.copyfile(ROOT / "templates/agent/run_agent.py", tmp_path / "run_agent.py")
 
     result = subprocess.run(
         [sys.executable, "run_agent.py", "--input", "hello"],

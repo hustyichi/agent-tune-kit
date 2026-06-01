@@ -34,11 +34,11 @@ REQUIRED_FILES = [
     "skills/atk-tune/SKILL.md",
     "templates/.atk/runner/eval_runner.py.md",
     "templates/.atk/runner/failure_rule.py.md",
-    "templates/agent/agent.py.md",
-    "templates/agent/run_agent.py.md",
-    "templates/agent/pyproject.toml.md",
-    "templates/agent/env.example.md",
-    "templates/agent/README.md.md",
+    "templates/agent/agent.py",
+    "templates/agent/run_agent.py",
+    "templates/agent/pyproject.toml",
+    "templates/agent/.env.example",
+    "templates/agent/README.md",
     "docs/skill-template-pack-usage.md",
     "docs/shared-versioning-and-confirmation.md",
     "docs/codex_agent_tuning_prd.md",
@@ -435,7 +435,7 @@ PER_FILE_PHRASES = {
         "TODO_AGENT_TUNING",
         'raise UserActionRequired("TODO_AGENT_TUNING: implement confirmed failure rule before running.")',
     ],
-    "templates/agent/agent.py.md": [
+    "templates/agent/agent.py": [
         "def run_agent(input_data: dict[str, str]) -> str",
         "OPENAI_API_KEY",
         "OPENAI_BASE_URL",
@@ -445,23 +445,23 @@ PER_FILE_PHRASES = {
         "OpenAI(",
         "client.chat.completions.create",
     ],
-    "templates/agent/run_agent.py.md": [
+    "templates/agent/run_agent.py": [
         "from agent import AgentConfigurationError, run_agent",
         "parser.add_argument(\"--input\", required=True",
         "Configuration error:",
         "json.loads",
     ],
-    "templates/agent/pyproject.toml.md": [
+    "templates/agent/pyproject.toml": [
         'name = "atk-generated-agent"',
         "openai>=1.0.0",
         "python-dotenv>=1.0.0",
     ],
-    "templates/agent/env.example.md": [
+    "templates/agent/.env.example": [
         "OPENAI_API_KEY=",
         "OPENAI_BASE_URL=https://api.openai.com/v1",
         "OPENAI_MODEL=gpt-4.1-mini",
     ],
-    "templates/agent/README.md.md": [
+    "templates/agent/README.md": [
         "ATK Generated Agent",
         "uv sync",
         "uv run python run_agent.py --input hello",

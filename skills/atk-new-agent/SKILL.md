@@ -17,11 +17,11 @@ This Skill does not create result versions and does not write `.atk/datasets/ori
 - Optional natural-language intent, task description, desired Agent behavior, expected output style, or model/runtime preference.
 - User answers for human-judgment decisions that cannot be safely inferred from the dataset.
 - Template files under `templates/agent/`:
-  - `agent.py.md`
-  - `run_agent.py.md`
-  - `pyproject.toml.md`
-  - `env.example.md`
-  - `README.md.md`
+  - `agent.py`
+  - `run_agent.py`
+  - `pyproject.toml`
+  - `.env.example`
+  - `README.md`
 
 ## Outputs
 
@@ -115,4 +115,3 @@ After generation, summarize:
 ```text
 $atk-init Agent 入口是 agent.py 的 run_agent，评估数据是 <dataset-path>
 ```
-
