@@ -283,6 +283,11 @@ PER_FILE_PHRASES = {
         "refusal, uncertainty, or unsupported request",
         "output format constraint",
         "business risk",
+        "if an Agent exists",
+        "initialize batch evaluation",
+        "if no Agent exists",
+        "$atk-new-agent",
+        "if Agent existence is unclear",
         "$atk-init",
     ],
     "skills/atk-init/SKILL.md": [

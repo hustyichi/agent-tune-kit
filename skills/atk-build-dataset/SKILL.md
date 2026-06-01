@@ -70,6 +70,10 @@ small curated sample rather than trying to parse raw production logs.
 7. Keep column names practical and business-specific. For a simple chatbot, `input` and `expected` may be enough.
    For structured tasks, use columns such as `question`, `user_type`, `order_status`, or other names that match the
    user's description.
+8. Determine the next-step handoff based on whether an Agent implementation is already available:
+   - if an Agent exists, tell the user to run `$atk-init` to initialize batch evaluation with the new dataset;
+   - if no Agent exists, tell the user to run `$atk-new-agent` to create an Agent from the dataset first;
+   - if Agent existence cannot be confirmed, explain both possible next steps instead of choosing one.
 
 ## Confirmation triggers
 
@@ -106,4 +110,9 @@ After writing the dataset, summarize:
 - input and expected-output columns;
 - coverage categories included;
 - any assumptions or unfilled domain facts;
-- next command: `$atk-init`, using the newly created `.atk/datasets/dataset.csv` as the evaluation dataset.
+- next step based on Agent availability:
+  - if an Agent exists: run `$atk-init`, using the newly created `.atk/datasets/dataset.csv` to initialize batch
+    evaluation;
+  - if no Agent exists: run `$atk-new-agent` to create an Agent from `.atk/datasets/dataset.csv`, then continue to
+    `$atk-init`;
+  - if Agent existence is unclear: mention both options and ask the user to choose the one that matches their project.

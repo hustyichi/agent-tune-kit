@@ -59,6 +59,11 @@ def test_atk_build_dataset_skill_is_pre_init_dataset_builder() -> None:
         "business risk",
         "ask before overwriting",
         "large-scale default synthetic expansion",
+        "if an Agent exists",
+        "initialize batch evaluation",
+        "if no Agent exists",
+        "$atk-new-agent",
+        "if Agent existence is unclear",
         "$atk-init",
     ]:
         assert phrase in text

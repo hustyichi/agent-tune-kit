@@ -59,7 +59,7 @@
   - `$atk-build-dataset` 可创建初始 canonical dataset；`$atk-init` 仍负责接入 Agent 时的数据集校验/规范化和 runner 生成
 - **输出**：
   - `.atk/datasets/dataset.csv`
-  - 下一步 `$atk-init` 调用建议，例如：`$atk-init Agent 入口是 scripts/agent.py，评估数据是 .atk/datasets/dataset.csv`
+  - 下一步建议需根据 Agent 是否已存在分流：已有 Agent 时提示通过 `$atk-init` 接入新数据集并开始批量评测；没有 Agent 时提示先通过 `$atk-new-agent` 基于数据集创建 Agent；无法确认时同时说明两种可能路径
 
 ### 2.1.1 ATK new Agent：仅有数据集时初始化 Agent 项目（可选前置 Skill）
 - **适用场景**：

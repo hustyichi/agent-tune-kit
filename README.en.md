@@ -92,7 +92,9 @@ $atk-build-dataset <your business description, examples, or rules>
 
 It creates `.atk/datasets/dataset.csv` directly and focuses on main flow, boundary input, missing or ambiguous
 information, refusal/uncertainty, output format constraints, and business risks you describe. If `dataset.csv`
-already exists, it asks before overwriting.
+already exists, it asks before overwriting. After dataset creation, if the project already has an Agent, the next step
+is `$atk-init` to connect the dataset and start batch evaluation. If there is no Agent yet, the next step is
+`$atk-new-agent` to create one first. If Codex cannot confirm whether an Agent exists, it will mention both paths.
 
 ### 1. Initialize
 
