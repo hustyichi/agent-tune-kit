@@ -80,6 +80,22 @@ uv run atk install --copy --marketplace-path /tmp/agent-tune-marketplace.json --
 python3 scripts/install_plugin.py install  # contributor wrapper only
 ```
 
+When iterating on the plugin without bumping `.codex-plugin/plugin.json` version, Codex may keep loading the old same-version cache from `~/.codex/plugins/cache/personal/agent-tune-kit/<version>`. Use the dev refresh install helper to clear the current-version cache and reinstall this checkout with copy mode:
+
+```sh
+scripts/dev-refresh-install.sh
+```
+
+For isolated local checks, pass the same installer path overrides; the script forwards them to `atk install` and `atk status`:
+
+```sh
+CODEX_PERSONAL_PLUGIN_CACHE_ROOT=/tmp/agent-tune-cache \
+  scripts/dev-refresh-install.sh \
+  --marketplace-path /tmp/agent-tune-marketplace.json \
+  --plugin-store /tmp/agent-tune-plugins \
+  --backup-root /tmp/agent-tune-backups
+```
+
 Before publishing or TestPyPI verification, run:
 
 ```sh

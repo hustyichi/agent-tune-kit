@@ -43,6 +43,7 @@ REQUIRED_FILES = [
     "docs/shared-versioning-and-confirmation.md",
     "docs/codex_agent_tuning_prd.md",
     "scripts/install_plugin.py",
+    "scripts/dev-refresh-install.sh",
     "scripts/check-release.py",
     "scripts/publish-release.py",
     "scripts/publish-pypi.sh",
@@ -153,6 +154,14 @@ PER_FILE_PHRASES = {
         "uvx --from agent-tune-kit atk install",
         "agent_tune_kit.cli",
         "authorize_conflicts",
+    ],
+    "scripts/dev-refresh-install.sh": [
+        "Agent Tune Kit dev refresh install",
+        "CODEX_PERSONAL_PLUGIN_CACHE_ROOT",
+        ".codex-plugin/plugin.json",
+        "rm -rf",
+        "uv run atk install --copy --yes --force",
+        "uv run atk status --no-input",
     ],
     "scripts/check-release.py": [
         "Release check target",
