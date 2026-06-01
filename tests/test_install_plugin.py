@@ -415,6 +415,7 @@ class InstallPluginCliTests(unittest.TestCase):
                 names = set(archive.namelist())
                 self.assertIn(hidden_manifest, names)
                 self.assertIn("agent_tune_kit/plugin_payload/agent-tune-kit/skills/atk-status/SKILL.md", names)
+                self.assertIn("agent_tune_kit/plugin_payload/agent-tune-kit/skills/atk-build-dataset/SKILL.md", names)
                 self.assertIn(
                     "agent_tune_kit/plugin_payload/agent-tune-kit/templates/.atk/runner/eval_runner.py.md", names
                 )
@@ -427,6 +428,7 @@ class InstallPluginCliTests(unittest.TestCase):
                 prefix = sdist.name.removesuffix(".tar.gz")
                 self.assertIn(f"{prefix}/.codex-plugin/plugin.json", names)
                 self.assertIn(f"{prefix}/skills/atk-status/SKILL.md", names)
+                self.assertIn(f"{prefix}/skills/atk-build-dataset/SKILL.md", names)
                 self.assertIn(f"{prefix}/templates/.atk/runner/eval_runner.py.md", names)
                 self.assertIn(f"{prefix}/templates/.atk/runner/failure_rule.py.md", names)
 
@@ -495,6 +497,7 @@ class InstallPluginCliTests(unittest.TestCase):
         self.assertFalse(target.is_symlink())
         self.assertTrue((target / ".codex-plugin" / "plugin.json").exists())
         self.assertTrue((target / ".codex-plugin" / "agent-tune-kit-install.json").exists())
+        self.assertTrue((target / "skills" / "atk-build-dataset" / "SKILL.md").exists())
         self.assertTrue((target / "templates" / ".atk" / "runner" / "eval_runner.py.md").exists())
         self.assertTrue((target / "templates" / ".atk" / "runner" / "failure_rule.py.md").exists())
         status = subprocess.run(

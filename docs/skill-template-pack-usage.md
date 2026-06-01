@@ -114,6 +114,7 @@ Do not copy a single `skills/*` directory by itself; keep `skills/`, `templates/
 
 - `.codex-plugin/plugin.json` — local plugin manifest using `skills: "./skills/"`.
 - `skills/atk-status/SKILL.md` — guided router/status Skill that recommends the next step without bypassing confirmation gates.
+- `skills/atk-build-dataset/SKILL.md` — build `.atk/datasets/dataset.csv` from business context, examples, or rules before init.
 - `skills/atk-init/SKILL.md` — generate `.atk/runner/eval_runner.py`.
 - `skills/atk-run/SKILL.md` — run `.atk/runner/eval_runner.py` through a short Skill command and summarize the current results version.
 - `skills/atk-init-failure-rule/SKILL.md` — generate or update `.atk/runner/failure_rule.py` as the reusable failure rule script.
@@ -130,9 +131,9 @@ Do not copy a single `skills/*` directory by itself; keep `skills/`, `templates/
 
 ## Manual 2.2 → 2.6 loop
 
-1. Prepare the local Agent service and evaluation dataset.
+1. Prepare the local Agent service and evaluation dataset. If you only have a business description, examples, or acceptance rules, trigger `atk-build-dataset` first. It asks 1-3 targeted questions when input fields or expected behavior are unclear, then writes `.atk/datasets/dataset.csv` directly with `atk_id`. Existing `dataset.csv` requires overwrite confirmation; the first version does not merge, append, or create a candidate dataset workflow.
 2. Trigger `atk-status` to inspect state and route to the right stage.
-3. Trigger `atk-init` in Codex. The Skill reads the Agent source and dataset, asks only about unsafe ambiguity, writes `.atk/datasets/dataset.csv` as the ATK canonical runnable dataset with a required `atk_id` column, then writes `.atk/runner/eval_runner.py`.
+3. Trigger `atk-init` in Codex. The Skill reads the Agent source and dataset, asks only about unsafe ambiguity, validates/normalizes `.atk/datasets/dataset.csv` as the ATK canonical runnable dataset with a required `atk_id` column, then writes `.atk/runner/eval_runner.py`.
 4. Trigger `atk-run`. It executes `python3 .atk/runner/eval_runner.py`; the runner creates or reuses a version directory and writes `.atk/results/vN/eval_results.csv` plus optional `app.log`. After a failure set exists, `atk-run --only-failures` reruns only rows whose `atk_id` appears in the latest prior `failure_cases.csv`, selecting those rows from `.atk/datasets/dataset.csv` rather than executing the result CSV as input. When same-process Python `logging` row capture is configured, it also creates `.atk/results/vN/logs/row_{source_index:06d}.log` files and records relative POSIX paths in `agent_output_log_path` for serial runs and for `--concurrency > 1` while the generated concurrent row-log flag is enabled. The router only writes records emitted under an active ATK row context; stdout/stderr, subprocess, multiprocess, and post-row background logs remain out of scope. If concurrent row logging is disabled, `--concurrency > 1` visibly downgrades and no row logs are created.
 5. Choose one failure-finding entry:
    - Rule path: trigger `atk-init-failure-rule` to create/update `.atk/runner/failure_rule.py`, then trigger `atk-find-failures-by-rule` to execute it and write `failure_cases.csv`. If the script is missing, `atk-find-failures-by-rule` stops with guidance to run `atk-init-failure-rule` first.

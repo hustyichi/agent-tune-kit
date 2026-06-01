@@ -9,7 +9,7 @@ description: Create a minimal runnable OpenAI-compatible Agent project from a da
 
 Create a minimal runnable Agent project for users who have an evaluation dataset but do not yet have an Agent implementation. This Skill is a pre-init scaffold step: it inspects the source dataset, builds a risk-aware inference brief, asks only for user judgment that would materially change Agent behavior, writes a Markdown design spec to `.atk/specs/agent_spec.md`, generates a small uv-managed Python Agent, and then hands off to `atk-init`.
 
-This Skill does not create result versions and does not write `.atk/datasets/dataset.csv`. The existing `atk-init` Skill remains the only canonical owner of `.atk/datasets/dataset.csv`, `atk_id` normalization, and `.atk/runner/eval_runner.py` generation.
+This Skill does not create result versions and does not write `.atk/datasets/dataset.csv`. If the user still needs a dataset, hand off to `atk-build-dataset`; `atk-init` remains responsible for dataset validation/normalization and `.atk/runner/eval_runner.py` generation when connecting the Agent.
 
 ## Inputs
 
@@ -149,7 +149,7 @@ Do not ask before creating missing directories such as `.atk/specs/`.
 - If overwrite confirmation is required and not provided, stop before writing the conflicting files.
 - If intent, expected output, or non-goals remain materially unclear after focused questioning, write no project files and explain the missing decision.
 - If generated files cannot be compiled or imported, fix the generated files before handing off.
-- Never write `.atk/datasets/dataset.csv`; that path belongs to `atk-init`.
+- Never write `.atk/datasets/dataset.csv`; use `atk-build-dataset` for initial dataset authoring and `atk-init` for validation/normalization plus runner generation.
 - Never silently impose RAG, tool-use, UI, or multi-provider architecture.
 
 ## Handoff message

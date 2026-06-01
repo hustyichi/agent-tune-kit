@@ -24,9 +24,7 @@ class AgentConfigurationError(RuntimeError):
 def _require_env(name: str) -> str:
     value = os.getenv(name, "").strip()
     if not value:
-        raise AgentConfigurationError(
-            f"Missing {name}. Copy .env.example to .env, set {name}, then rerun the Agent."
-        )
+        raise AgentConfigurationError(f"Missing {name}. Copy .env.example to .env, set {name}, then rerun the Agent.")
     return value
 
 

@@ -30,10 +30,36 @@
 - **功能**：
   - 用户需要准备需要调优的 Agent 服务以及可以用于评估的数据集
   - 系统需要在项目内维护统一父目录 `.atk/`
-  - 用户提供的数据集需要在生成测试脚本时规范化写入 `.atk/datasets/`，并保证存在 `atk_id`
+  - 用户可先通过 `$atk-build-dataset` 从业务描述、样例或验收规则构建初始 `.atk/datasets/dataset.csv`
+  - 用户提供或构建的数据集需要在生成测试脚本时由 `$atk-init` 校验/规范化写入 `.atk/datasets/`，并保证存在 `atk_id`
   - 所有共享脚本需要存储在 `.atk/runner/`
   - 所有版本化结果需要存储在 `.atk/results/{version}/`
   - 用户不需要手工指定当前调优版本，版本由各模块自动创建或识别
+
+### 2.1.0 ATK build Dataset：从业务上下文构建评估数据集（可选前置 Skill）
+- **适用场景**：
+  - 用户还没有评估 CSV，只有业务描述、样例、流程规则或验收标准
+  - 用户希望先构建一份小而高价值、可被 `$atk-init` 直接接入的数据集
+- **入口**：
+  - Codex Skill：`$atk-build-dataset`
+  - 产品名：`ATK build Dataset`
+- **功能**：
+  - 接受自然语言业务描述、样例输入/期望输出、流程规则、验收标准、局部表格或小型现有文件
+  - 在信息不足时先问 1 到 3 个关键问题，优先确认 Agent 输入字段、期望输出或验收标准、关键业务场景或风险
+  - 直接写入 `.atk/datasets/dataset.csv`，并保证包含非空、唯一、正整数 `atk_id`
+  - 字段根据业务动态生成，至少包含一个清晰输入列和一个期望输出或验收标准列；可按需加入 `scenario`、`priority`、`notes` 等辅助列，但不把它们作为全局固定 Schema
+  - 默认生成 10 到 30 条高价值样本，重点覆盖主流程、边界输入、缺失或含糊信息、拒答/不确定或不支持请求、输出格式约束，以及用户描述的高优先级业务风险
+  - 当 `.atk/datasets/dataset.csv` 已存在时，必须先询问是否覆盖
+- **边界**：
+  - 第一版不做大规模默认合成扩写
+  - 不创建 `candidate_dataset.csv` 或其它候选数据集文件
+  - 不自动合并或追加已有 `dataset.csv`
+  - 不要求解析生产日志
+  - 当输入字段、期望输出语义、多种互不兼容的 Agent 任务或缺失领域事实会影响生成质量时，必须先向用户确认
+  - `$atk-build-dataset` 可创建初始 canonical dataset；`$atk-init` 仍负责接入 Agent 时的数据集校验/规范化和 runner 生成
+- **输出**：
+  - `.atk/datasets/dataset.csv`
+  - 下一步 `$atk-init` 调用建议，例如：`$atk-init Agent 入口是 scripts/agent.py，评估数据是 .atk/datasets/dataset.csv`
 
 ### 2.1.1 ATK new Agent：仅有数据集时初始化 Agent 项目（可选前置 Skill）
 - **适用场景**：
@@ -53,7 +79,8 @@
 - **边界**：
   - `$atk-new-agent` 是 pre-init scaffold Skill，不参与 `.atk/results/vN` 版本管理
   - `$atk-new-agent` 可以检查源数据集并记录字段推断，但不得写入 `.atk/datasets/dataset.csv`
-  - `.atk/datasets/dataset.csv`、`atk_id` 规范化和 `.atk/runner/eval_runner.py` 仍然只由 `$atk-init` 负责
+  - 如尚无评估数据集，可先使用 `$atk-build-dataset` 写入 `.atk/datasets/dataset.csv`
+  - `$atk-init` 仍然负责接入 Agent 时的 `atk_id` 校验/规范化和 `.atk/runner/eval_runner.py` 生成
   - 第一版不生成 RAG、Web UI、多供应商抽象、复杂单元测试或完整一键调优编排
 - **输出**：
   - `.atk/specs/agent_spec.md`
@@ -242,7 +269,7 @@
 ## 4. 版本管理要求
 - **统一父目录**：
   - 所有调优相关产物统一放在 `.atk/` 下
-  - `.atk/datasets/` 存放由 `atk-init` 写入的 ATK 可运行数据集
+  - `.atk/datasets/` 存放 ATK 可运行数据集；可由 `$atk-build-dataset` 初始创建，并由 `$atk-init` 校验/规范化后供 runner 使用
   - `.atk/runner/` 存放跨版本共享脚本
   - `.atk/results/` 存放按版本隔离的结果
 - **版本命名**：
@@ -307,7 +334,7 @@
 ```text
 /.atk/
 ├── datasets/
-│   └── dataset.csv             # atk-init 写入的 ATK 可运行数据集（含 atk_id）
+│   └── dataset.csv             # ATK 可运行数据集（含 atk_id），可由 atk-build-dataset 创建并由 atk-init 校验/规范化
 ├── runner/
 │   ├── eval_runner.py          # 跨版本共享测试脚本
 │   └── failure_rule.py          # 跨版本共享失败判定规则脚本（规则模式使用）

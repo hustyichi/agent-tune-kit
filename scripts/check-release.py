@@ -29,6 +29,7 @@ PLUGIN_NAME = "agent-tune-kit"
 WHEEL_REQUIRED_PATHS = {
     "agent_tune_kit/plugin_payload/agent-tune-kit/.codex-plugin/plugin.json",
     "agent_tune_kit/plugin_payload/agent-tune-kit/skills/atk-status/SKILL.md",
+    "agent_tune_kit/plugin_payload/agent-tune-kit/skills/atk-build-dataset/SKILL.md",
     "agent_tune_kit/plugin_payload/agent-tune-kit/skills/atk-new-agent/SKILL.md",
     "agent_tune_kit/plugin_payload/agent-tune-kit/templates/.atk/runner/eval_runner.py.md",
     "agent_tune_kit/plugin_payload/agent-tune-kit/templates/.atk/runner/failure_rule.py.md",
@@ -43,6 +44,7 @@ WHEEL_REQUIRED_PATHS = {
 SDIST_REQUIRED_PATHS = {
     ".codex-plugin/plugin.json",
     "skills/atk-status/SKILL.md",
+    "skills/atk-build-dataset/SKILL.md",
     "skills/atk-new-agent/SKILL.md",
     "templates/.atk/runner/eval_runner.py.md",
     "templates/.atk/runner/failure_rule.py.md",
@@ -236,6 +238,7 @@ def smoke_installed_artifact(artifact: Path, work_dir: Path) -> None:
     for required in [
         target / ".codex-plugin" / "plugin.json",
         target / ".codex-plugin" / "agent-tune-kit-install.json",
+        target / "skills" / "atk-build-dataset" / "SKILL.md",
         target / "templates" / ".atk" / "runner" / "eval_runner.py.md",
         target / "templates" / ".atk" / "runner" / "failure_rule.py.md",
     ]:

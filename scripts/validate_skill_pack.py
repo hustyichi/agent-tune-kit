@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 REQUIRED_FILES = [
     ".codex-plugin/plugin.json",
     "skills/atk-status/SKILL.md",
+    "skills/atk-build-dataset/SKILL.md",
     "skills/atk-new-agent/SKILL.md",
     "skills/atk-init/SKILL.md",
     "skills/atk-run/SKILL.md",
@@ -57,8 +58,9 @@ REQUIRED_FILES = [
 ]
 
 SKILL_FILES = [path for path in REQUIRED_FILES if path.startswith("skills/") and path.endswith("/SKILL.md")]
-PRE_INIT_SCAFFOLD_SKILL_FILES = {"skills/atk-new-agent/SKILL.md"}
-LIFECYCLE_SKILL_FILES = [path for path in SKILL_FILES if path not in PRE_INIT_SCAFFOLD_SKILL_FILES]
+PRE_INIT_SKILL_FILES = {"skills/atk-build-dataset/SKILL.md", "skills/atk-new-agent/SKILL.md"}
+AGENT_SCAFFOLD_SKILL_FILES = {"skills/atk-new-agent/SKILL.md"}
+LIFECYCLE_SKILL_FILES = [path for path in SKILL_FILES if path not in PRE_INIT_SKILL_FILES]
 
 REQUIRED_SKILL_SECTIONS = [
     "## Purpose",
@@ -258,6 +260,30 @@ PER_FILE_PHRASES = {
         "do not present default assumptions as user intent",
         "run `uv sync` from the target repository root",
         "`uv sync` status",
+    ],
+    "skills/atk-build-dataset/SKILL.md": [
+        "atk-build-dataset",
+        "pre-init dataset builder",
+        ".atk/datasets/dataset.csv",
+        "unique positive integers",
+        "at least one clear input column",
+        "expected output or acceptance standard",
+        "dynamic business columns",
+        "Do not create `candidate_dataset.csv`",
+        "Do not automatically merge or append",
+        "Production-log parsing is not supported in the first version",
+        "ask 1-3 targeted questions",
+        "input fields are unclear",
+        "expected-output semantics are unclear",
+        "multiple incompatible Agent tasks",
+        "domain facts not provided by the user",
+        "main successful flow",
+        "boundary input",
+        "missing or ambiguous information",
+        "refusal, uncertainty, or unsupported request",
+        "output format constraint",
+        "business risk",
+        "$atk-init",
     ],
     "skills/atk-init/SKILL.md": [
         ".atk/runner/eval_runner.py",
@@ -462,7 +488,7 @@ PER_FILE_PHRASES = {
     ],
     "templates/agent/run_agent.py": [
         "from agent import AgentConfigurationError, run_agent",
-        "parser.add_argument(\"--input\", required=True",
+        'parser.add_argument("--input", required=True',
         "Configuration error:",
         "json.loads",
     ],
@@ -690,9 +716,7 @@ def main() -> int:
         text = existing_texts.get(rel, "")
         require(text.startswith("---\n"), f"{rel} missing YAML front matter", errors)
         required_sections = (
-            REQUIRED_PRE_INIT_SCAFFOLD_SKILL_SECTIONS
-            if rel in PRE_INIT_SCAFFOLD_SKILL_FILES
-            else REQUIRED_SKILL_SECTIONS
+            REQUIRED_PRE_INIT_SCAFFOLD_SKILL_SECTIONS if rel in PRE_INIT_SKILL_FILES else REQUIRED_SKILL_SECTIONS
         )
         for section in required_sections:
             require(section in text, f"{rel} missing section {section}", errors)
@@ -709,9 +733,8 @@ def main() -> int:
             errors,
         )
 
-    for rel in PRE_INIT_SCAFFOLD_SKILL_FILES:
+    for rel in PRE_INIT_SKILL_FILES:
         text = existing_texts.get(rel, "")
-        require(".atk/specs/agent_spec.md" in text, f"{rel} missing generated Agent spec path", errors)
         require(
             'RESULTS_DIR = Path(".atk/results")' not in text,
             f"{rel} must not require lifecycle RESULTS_DIR behavior",
@@ -722,9 +745,13 @@ def main() -> int:
             f"{rel} must not require shared version doc behavior",
             errors,
         )
+
+    for rel in AGENT_SCAFFOLD_SKILL_FILES:
+        text = existing_texts.get(rel, "")
+        require(".atk/specs/agent_spec.md" in text, f"{rel} missing generated Agent spec path", errors)
         require(
             "Never write `.atk/datasets/dataset.csv`" in text,
-            f"{rel} must explicitly preserve atk-init canonical dataset ownership",
+            f"{rel} must explicitly avoid dataset authoring and hand off dataset validation/normalization",
             errors,
         )
 
