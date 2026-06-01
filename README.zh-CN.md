@@ -21,29 +21,6 @@ Agent Tune Kit 是一个**本地 Codex 插件**，用于评测和调优你自己
 - 一些可以判断好坏的输入、期望答案或人工可验收结果。
 - 想让 Codex 协助定位弱点，并调 prompt、代码、参数或工具配置。
 
-## 使用前准备
-
-你需要：
-
-- 一个 Codex 能读取和修改的本地 Agent 项目。
-- 一份评估数据集，建议优先使用 CSV 格式。字段名不必严格固定，Codex 会根据数据内容判断输入和期望结果。
-
-如果你还没有评估数据集，可以先使用 **ATK build Dataset** 从业务描述或样例构建一份小而高价值的数据集：
-
-```text
-$atk-build-dataset 我想测试一个客服 Agent，用户会问订单、退款和售后问题，回答要准确，不确定时说明无法确认
-```
-
-Codex 会在信息不足时先问 1 到 3 个问题，确认输入字段、期望输出或验收标准，以及关键业务场景。生成结果直接写入 `.atk/datasets/dataset.csv`，包含 `atk_id`。如果该文件已经存在，Codex 会先确认是否覆盖；第一版不会自动合并、追加或写入候选数据集文件。
-
-如果你还没有 Agent 项目，只有评估数据集，可以先使用 **ATK new Agent**：
-
-```text
-$atk-new-agent 数据集是 data/eval.csv
-```
-
-Codex 会先理解数据集并确认你的意图，然后生成一个轻量、可运行、使用 OpenAI-compatible API 的 Python Agent 项目。采访和设计信息会写入 `.atk/specs/agent_spec.md`。这个步骤不会写 `.atk/datasets/dataset.csv`；如果你还没有数据集，可先用 `$atk-build-dataset` 创建初始数据集。`$atk-init` 仍负责接入 Agent 时的数据集校验/规范化和 runner 生成。
-
 ## 安装
 
 一键运行：
@@ -73,6 +50,29 @@ atk install
 ```
 
 选择并启用 `Agent Tune Kit`。如果刚启用后当前会话里还看不到 `$atk-status` 等自动补全，请重启 Codex，或重新打开当前项目会话。
+
+## 使用前准备
+
+你需要：
+
+- 一个 Codex 能读取和修改的本地 Agent 项目。
+- 一份评估数据集，建议优先使用 CSV 格式。字段名不必严格固定，Codex 会根据数据内容判断输入和期望结果。
+
+如果你还没有评估数据集，可以先使用 **ATK build Dataset** 从业务描述或样例构建一份小而高价值的数据集：
+
+```text
+$atk-build-dataset 我想测试一个客服 Agent，用户会问订单、退款和售后问题，回答要准确，不确定时说明无法确认
+```
+
+Codex 会在信息不足时先问 1 到 3 个问题，确认输入字段、期望输出或验收标准，以及关键业务场景。生成结果直接写入 `.atk/datasets/dataset.csv`，包含 `atk_id`。如果该文件已经存在，Codex 会先确认是否覆盖；第一版不会自动合并、追加或写入候选数据集文件。
+
+如果你还没有 Agent 项目，只有评估数据集，可以先使用 **ATK new Agent**：
+
+```text
+$atk-new-agent 数据集是 data/eval.csv
+```
+
+Codex 会先理解数据集并确认你的意图，然后生成一个轻量、可运行、使用 OpenAI-compatible API 的 Python Agent 项目。采访和设计信息会写入 `.atk/specs/agent_spec.md`。这个步骤不会写 `.atk/datasets/dataset.csv`；如果你还没有数据集，可先用 `$atk-build-dataset` 创建初始数据集。`$atk-init` 仍负责接入 Agent 时的数据集校验/规范化和 runner 生成。
 
 ## 最小调优闭环
 
