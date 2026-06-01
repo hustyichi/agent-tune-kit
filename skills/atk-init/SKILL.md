@@ -19,7 +19,17 @@ Traceability note: section 2.2 defines runner generation, section 4 defines vers
 - Evaluation dataset path, typically CSV. Other formats may be supported by adapting the generated script. The source dataset is copied into `.atk/datasets/` as an ATK canonical runnable dataset before the runner is written.
 - Optional user instructions about dataset columns, expected outputs, log capture, or Agent runtime.
 - Shared rules in `docs/shared-versioning-and-confirmation.md`.
-- Script template in `templates/.atk/runner/eval_runner.py.md`.
+- Script template in plugin-root-relative `templates/.atk/runner/eval_runner.py.md`.
+
+## Shared asset resolution
+
+Template paths are plugin-root-relative, not relative to this Skill directory. Locate the plugin root by walking upward from this `SKILL.md` until finding `.codex-plugin/plugin.json`, `skills/`, and `templates/`.
+
+Then read this file from that plugin root:
+
+- `templates/.atk/runner/eval_runner.py.md`
+
+In the current package layout, this is also reachable from this Skill file as `../../templates/.atk/runner/eval_runner.py.md`, but plugin-root discovery is the preferred resolution rule.
 
 ## Outputs
 
@@ -50,7 +60,7 @@ Traceability note: section 2.2 defines runner generation, section 4 defines vers
    - if `.atk/datasets/original.csv` exists and has identical canonical content, reuse it instead of creating a duplicate;
    - if `.atk/datasets/original.csv` exists with different canonical content, ask before overwriting because the fixed name is the canonical runnable dataset slot;
    - keep the runner pointed at `.atk/datasets/original.csv`, not the original external path.
-4. If safe, create `.atk/runner/` and write `eval_runner.py` from `templates/.atk/runner/eval_runner.py.md`.
+4. If safe, create `.atk/runner/` and write `eval_runner.py` from plugin-root-relative `templates/.atk/runner/eval_runner.py.md`.
 5. Keep the generated script project-local and low dependency. Prefer Python stdlib plus the target project environment.
 6. Verify the generated runner without invoking the Agent when possible:
    - syntax check with the same interpreter shape expected for execution;

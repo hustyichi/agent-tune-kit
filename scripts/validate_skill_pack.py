@@ -654,6 +654,22 @@ def validate_installer(errors: list[str]) -> None:
         require(phrase in text, f"installer missing behavior phrase: {phrase}", errors)
 
 
+def validate_plugin_root_template_resolution(existing_texts: dict[str, str], errors: list[str]) -> None:
+    required_resolution_phrases = [
+        "plugin-root-relative",
+        "Template paths are plugin-root-relative, not relative to this Skill directory.",
+        "Locate the plugin root by walking upward",
+        ".codex-plugin/plugin.json",
+        "plugin-root discovery is the preferred resolution rule",
+    ]
+    for rel in SKILL_FILES:
+        text = existing_texts.get(rel, "")
+        if "templates/" not in text:
+            continue
+        for phrase in required_resolution_phrases:
+            require(phrase in text, f"{rel} missing plugin-root template resolution phrase: {phrase}", errors)
+
+
 def main() -> int:
     errors: list[str] = []
 
@@ -898,6 +914,7 @@ def main() -> int:
 
     validate_manifest(errors)
     validate_installer(errors)
+    validate_plugin_root_template_resolution(existing_texts, errors)
 
     if errors:
         print("Agent Tune Kit validation FAILED", file=sys.stderr)

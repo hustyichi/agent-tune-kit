@@ -20,7 +20,17 @@ Traceability note: section 2.4 defines rule-based failure-case discovery, sectio
 - User-provided rule description, such as field comparison, thresholds, keyword matches, JSON-path checks, or custom predicates.
 - Optional existing `.atk/runner/failure_rule.py`.
 - Shared rules in `docs/shared-versioning-and-confirmation.md`.
-- Script template in `templates/.atk/runner/failure_rule.py.md`.
+- Script template in plugin-root-relative `templates/.atk/runner/failure_rule.py.md`.
+
+## Shared asset resolution
+
+Template paths are plugin-root-relative, not relative to this Skill directory. Locate the plugin root by walking upward from this `SKILL.md` until finding `.codex-plugin/plugin.json`, `skills/`, and `templates/`.
+
+Then read this file from that plugin root:
+
+- `templates/.atk/runner/failure_rule.py.md`
+
+In the current package layout, this is also reachable from this Skill file as `../../templates/.atk/runner/failure_rule.py.md`, but plugin-root discovery is the preferred resolution rule.
 
 ## Outputs
 
@@ -34,7 +44,7 @@ Traceability note: section 2.4 defines rule-based failure-case discovery, sectio
 3. Inspect `eval_results.csv` headers and sample rows, especially `agent_output` and likely expected-result columns.
 4. If `.atk/runner/failure_rule.py` exists, ask whether to reuse it unchanged or update rule logic.
 5. If rule criteria are unclear, ask the user for a concise rule statement.
-6. Write/update `failure_rule.py` from `templates/.atk/runner/failure_rule.py.md`.
+6. Write/update `failure_rule.py` from plugin-root-relative `templates/.atk/runner/failure_rule.py.md`.
 7. Tell the user to run `atk-find-failures-by-rule` to execute the rule script and write `failure_cases.csv`.
 
 ## Required rule behavior

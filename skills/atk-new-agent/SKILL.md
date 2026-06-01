@@ -16,12 +16,26 @@ This Skill does not create result versions and does not write `.atk/datasets/ori
 - A dataset path, typically CSV.
 - Optional natural-language intent, task description, desired Agent behavior, expected output style, or model/runtime preference.
 - User answers for human-judgment decisions that cannot be safely inferred from the dataset.
-- Template files under `templates/agent/`:
-  - `agent.py`
-  - `run_agent.py`
-  - `pyproject.toml`
-  - `.env.example`
-  - `README.md`
+- Template files under plugin-root-relative `templates/agent/`:
+  - `templates/agent/agent.py`
+  - `templates/agent/run_agent.py`
+  - `templates/agent/pyproject.toml`
+  - `templates/agent/.env.example`
+  - `templates/agent/README.md`
+
+## Shared asset resolution
+
+Template paths are plugin-root-relative, not relative to this Skill directory. Locate the plugin root by walking upward from this `SKILL.md` until finding `.codex-plugin/plugin.json`, `skills/`, and `templates/`.
+
+Then read these files from that plugin root:
+
+- `templates/agent/agent.py`
+- `templates/agent/run_agent.py`
+- `templates/agent/pyproject.toml`
+- `templates/agent/.env.example`
+- `templates/agent/README.md`
+
+In the current package layout, these are also reachable from this Skill file as `../../templates/agent/...`, but plugin-root discovery is the preferred resolution rule.
 
 ## Outputs
 
@@ -58,7 +72,7 @@ This Skill does not create result versions and does not write `.atk/datasets/ori
    - `## OpenAI-Compatible Runtime`
    - `## Initial Implementation Plan`
    - `## ATK Evaluation Handoff`
-4. Generate the minimal project files from `templates/agent/`.
+4. Generate the minimal project files from plugin-root-relative `templates/agent/`.
 5. Keep the generated Agent simple:
    - expose `run_agent(input_data: dict[str, str]) -> str` from `agent.py`;
    - use the OpenAI SDK and `python-dotenv`;
