@@ -252,6 +252,10 @@ PER_FILE_PHRASES = {
         "$atk-init Agent 入口是 agent.py 的 run_agent",
         "Never write `.atk/datasets/original.csv`",
         "pre-init scaffold",
+        "Risk-triggered confirmation policy",
+        "No risk-triggered confirmation needed",
+        "do not ask the user to confirm obvious, low-risk, or inspectable facts",
+        "do not present default assumptions as user intent",
     ],
     "skills/atk-init/SKILL.md": [
         ".atk/runner/eval_runner.py",

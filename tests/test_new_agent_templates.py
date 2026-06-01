@@ -20,6 +20,10 @@ def test_atk_new_agent_skill_is_pre_init_scaffold() -> None:
         "pre-init scaffold",
         ".atk/specs/agent_spec.md",
         "Never write `.atk/datasets/original.csv`",
+        "Risk-triggered confirmation policy",
+        "No risk-triggered confirmation needed",
+        "do not ask the user to confirm obvious, low-risk, or inspectable facts",
+        "do not present default assumptions as user intent",
         "run_agent(input_data: dict[str, str]) -> str",
         "$atk-init Agent 入口是 agent.py 的 run_agent",
     ]:

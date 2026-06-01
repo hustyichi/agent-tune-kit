@@ -7,7 +7,7 @@ description: Create a minimal runnable OpenAI-compatible Agent project from a da
 
 ## Purpose
 
-Create a minimal runnable Agent project for users who have an evaluation dataset but do not yet have an Agent implementation. This Skill is a pre-init scaffold step: it inspects the source dataset, interviews the user for intent and boundaries, writes a Markdown design spec to `.atk/specs/agent_spec.md`, generates a small uv-managed Python Agent, and then hands off to `atk-init`.
+Create a minimal runnable Agent project for users who have an evaluation dataset but do not yet have an Agent implementation. This Skill is a pre-init scaffold step: it inspects the source dataset, builds a risk-aware inference brief, asks only for user judgment that would materially change Agent behavior, writes a Markdown design spec to `.atk/specs/agent_spec.md`, generates a small uv-managed Python Agent, and then hands off to `atk-init`.
 
 This Skill does not create result versions and does not write `.atk/datasets/original.csv`. The existing `atk-init` Skill remains the only canonical owner of `.atk/datasets/original.csv`, `atk_id` normalization, and `.atk/runner/eval_runner.py` generation.
 
@@ -15,7 +15,7 @@ This Skill does not create result versions and does not write `.atk/datasets/ori
 
 - A dataset path, typically CSV.
 - Optional natural-language intent, task description, desired Agent behavior, expected output style, or model/runtime preference.
-- User answers for human-judgment decisions that cannot be safely inferred from the dataset.
+- User answers for high-impact human-judgment decisions that cannot be safely inferred from the dataset.
 - Template files under plugin-root-relative `templates/agent/`:
   - `templates/agent/agent.py`
   - `templates/agent/run_agent.py`
@@ -55,12 +55,17 @@ In the current package layout, these are also reachable from this Skill file as 
    - read CSV headers and a small representative sample;
    - infer likely input fields, expected-output/reference fields, and task type;
    - check whether target output files already exist.
-2. Interview only for user judgment:
+2. Build a risk-aware inference brief before asking anything:
+   - summarize inferred task goal, likely input fields, likely expected-output/reference fields, expected output shape, non-goals, decision boundaries, and runtime assumptions;
+   - classify each inference as one of `dataset-derived`, `user-provided`, or `default assumption`;
+   - identify high-impact uncertainty: any unresolved assumption about task goal, output shape, success criteria, non-goals, decision boundaries, external knowledge, tools, or dependencies that could materially change generated Agent behavior.
+3. Ask only risk-triggered confirmation questions:
    - ask one focused question at a time;
    - do not ask for dataset facts that can be inspected directly;
-   - confirm Agent purpose, target user, expected output style, non-goals, and decision boundaries;
-   - confirm OpenAI-compatible runtime assumptions when they are not already stated.
-3. Write `.atk/specs/agent_spec.md` in Markdown with these exact sections:
+   - do not ask for routine approval to proceed when no high-impact uncertainty exists;
+   - ask only when an answer would materially change Agent purpose, output style, success criteria, non-goals, decision boundaries, external knowledge/tool use, or dependency choices;
+   - if no risk-triggered confirmation is needed, continue automatically and record `No risk-triggered confirmation needed` in the handoff summary.
+4. Write `.atk/specs/agent_spec.md` in Markdown with these exact sections:
    - `# Agent Spec`
    - `## User Intent`
    - `## Dataset Understanding`
@@ -72,18 +77,43 @@ In the current package layout, these are also reachable from this Skill file as 
    - `## OpenAI-Compatible Runtime`
    - `## Initial Implementation Plan`
    - `## ATK Evaluation Handoff`
-4. Generate the minimal project files from plugin-root-relative `templates/agent/`.
-5. Keep the generated Agent simple:
+5. In the spec, make the basis of each major decision explicit:
+   - mark facts that came from inspected dataset headers/sample rows as dataset-derived;
+   - mark decisions answered by the user as user-confirmed;
+   - mark safe defaults as default assumptions;
+   - do not present default assumptions as user intent.
+6. Generate the minimal project files from plugin-root-relative `templates/agent/`.
+7. Keep the generated Agent simple:
    - expose `run_agent(input_data: dict[str, str]) -> str` from `agent.py`;
    - use the OpenAI SDK and `python-dotenv`;
    - read `OPENAI_API_KEY`, `OPENAI_BASE_URL`, and `OPENAI_MODEL`;
    - return a single string output;
    - fail with actionable configuration errors before any network call when required environment is missing.
-6. Verify without requiring credentials or network:
+8. Verify without requiring credentials or network:
    - compile generated Python files when possible;
    - run the CLI far enough to prove imports and argument parsing work;
    - if credentials are missing, treat a clear missing-configuration error as an acceptable MVP smoke result.
-7. Tell the user the next command is `atk-init`, not `atk-run`.
+9. Tell the user the next command is `atk-init`, not `atk-run`.
+
+## Risk-triggered confirmation policy
+
+Default to automatic progress after inspecting the dataset. Do not create a brainstorming-style approval gate and do not ask the user to confirm obvious, low-risk, or inspectable facts.
+
+Ask a concise question only when the missing answer could make the generated Agent meaningfully wrong. High-impact uncertainty includes:
+
+- task goal ambiguity, such as whether the Agent should classify, extract, answer, rewrite, rank, or critique;
+- output shape ambiguity, such as plain text versus JSON, labels only versus explanation plus label, or strict formatting requirements;
+- success criteria ambiguity, such as exact-match behavior, semantic similarity, rubric-like scoring, or using a reference column only as loose guidance;
+- non-goal or boundary ambiguity, such as whether the Agent may use model world knowledge beyond the row, whether it must refuse unsupported claims, or whether it should avoid explanations;
+- external capability ambiguity, such as RAG, web access, tool use, UI behavior, multi-provider abstraction, or dependencies beyond `openai` and `python-dotenv`;
+- multiple plausible input or expected-output fields where choosing the wrong field would change the task.
+
+Do not ask when:
+
+- the answer is directly inspectable from the dataset path, headers, sample rows, existing files, or user prompt;
+- the decision only affects routine file creation, template copying, directory creation, import checks, or missing credential smoke behavior;
+- the default OpenAI-compatible runtime is sufficient and the user did not request another runtime;
+- the only remaining uncertainty is low-impact wording that can be recorded as a default assumption in `.atk/specs/agent_spec.md`.
 
 ## Confirmation triggers
 
@@ -101,6 +131,7 @@ Ask before continuing if:
 - the dataset path cannot be found;
 - the dataset format, encoding, delimiter, headers, or sample rows cannot be inspected safely;
 - input fields or expected-output fields are ambiguous enough that the generated Agent behavior would materially change;
+- task goal, output shape, success criteria, non-goals, or decision boundaries are ambiguous enough that the generated Agent could be meaningfully wrong;
 - the user appears to expect RAG, external tools, web UI, multi-provider abstraction, or full tuning-loop orchestration in the first version;
 - adding dependencies beyond `openai` and `python-dotenv` appears necessary.
 
