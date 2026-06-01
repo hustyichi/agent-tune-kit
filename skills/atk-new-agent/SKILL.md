@@ -89,11 +89,16 @@ In the current package layout, these are also reachable from this Skill file as 
    - read `OPENAI_API_KEY`, `OPENAI_BASE_URL`, and `OPENAI_MODEL`;
    - return a single string output;
    - fail with actionable configuration errors before any network call when required environment is missing.
-8. Verify without requiring credentials or network:
+8. Prepare the generated Agent environment:
+   - if `uv` is available, run `uv sync` from the target repository root after writing `pyproject.toml`;
+   - do not ask before running `uv sync` for the generated Agent because it is the expected non-destructive setup step;
+   - if `uv sync` succeeds, treat the generated virtual environment as ready for `uv run ...`;
+   - if `uv` is missing, dependency resolution fails, or network access is unavailable, keep the generated Agent files and report the environment setup gap clearly; do not treat this as a scaffold-generation failure.
+9. Verify without requiring credentials or network:
    - compile generated Python files when possible;
    - run the CLI far enough to prove imports and argument parsing work;
    - if credentials are missing, treat a clear missing-configuration error as an acceptable MVP smoke result.
-9. Tell the user the next command is `atk-init`, not `atk-run`.
+10. Tell the user the next command is `atk-init`, not `atk-run`.
 
 ## Risk-triggered confirmation policy
 
@@ -112,6 +117,7 @@ Do not ask when:
 
 - the answer is directly inspectable from the dataset path, headers, sample rows, existing files, or user prompt;
 - the decision only affects routine file creation, template copying, directory creation, import checks, or missing credential smoke behavior;
+- the decision only affects running `uv sync` for the generated Agent's expected environment setup;
 - the default OpenAI-compatible runtime is sufficient and the user did not request another runtime;
 - the only remaining uncertainty is low-impact wording that can be recorded as a default assumption in `.atk/specs/agent_spec.md`.
 
@@ -153,6 +159,7 @@ After generation, summarize:
 - dataset path inspected;
 - generated spec path `.atk/specs/agent_spec.md`;
 - generated Agent entrypoint `agent.py::run_agent`;
+- `uv sync` status: succeeded, skipped because `uv` is unavailable, or failed with the actionable setup error;
 - generated runtime command, usually `uv run python run_agent.py --input hello`;
 - whether smoke verification compiled/imported successfully or stopped at an expected missing-configuration error;
 - next command:

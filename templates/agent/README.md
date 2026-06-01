@@ -14,6 +14,8 @@ OPENAI_MODEL=gpt-4.1-mini
 
 ## Run
 
+ATK new Agent normally runs `uv sync` after generating this project. If that setup step was skipped or failed, run it before the first local execution:
+
 ```sh
 uv sync
 uv run python run_agent.py --input hello
@@ -34,4 +36,3 @@ $atk-init Agent 入口是 agent.py 的 run_agent，评估数据是 <dataset-path
 ```
 
 The generated Agent entrypoint is `agent.py::run_agent`.
-

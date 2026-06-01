@@ -24,6 +24,8 @@ def test_atk_new_agent_skill_is_pre_init_scaffold() -> None:
         "No risk-triggered confirmation needed",
         "do not ask the user to confirm obvious, low-risk, or inspectable facts",
         "do not present default assumptions as user intent",
+        "run `uv sync` from the target repository root",
+        "`uv sync` status",
         "run_agent(input_data: dict[str, str]) -> str",
         "$atk-init Agent 入口是 agent.py 的 run_agent",
     ]:
@@ -50,6 +52,7 @@ def test_generated_agent_templates_expose_runtime_contract() -> None:
     assert "openai>=1.0.0" in pyproject_template
     assert "python-dotenv>=1.0.0" in pyproject_template
     assert "OPENAI_BASE_URL=https://api.openai.com/v1" in env_template
+    assert "ATK new Agent normally runs `uv sync`" in read_rel("templates/agent/README.md")
 
 
 def test_generated_agent_smoke_fails_cleanly_without_credentials(tmp_path: Path) -> None:

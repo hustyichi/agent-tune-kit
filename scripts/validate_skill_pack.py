@@ -256,6 +256,8 @@ PER_FILE_PHRASES = {
         "No risk-triggered confirmation needed",
         "do not ask the user to confirm obvious, low-risk, or inspectable facts",
         "do not present default assumptions as user intent",
+        "run `uv sync` from the target repository root",
+        "`uv sync` status",
     ],
     "skills/atk-init/SKILL.md": [
         ".atk/runner/eval_runner.py",
