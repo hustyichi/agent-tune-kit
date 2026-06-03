@@ -78,4 +78,5 @@ After writing the file, summarize:
 - criteria used;
 - count of failure rows written;
 - output path `.atk/results/vN/failure_cases.csv`;
-- any uncertainty or confidence boundary.
+- any uncertainty or confidence boundary;
+- next command: `atk-report` to generate `.atk/results/vN/report.md`.

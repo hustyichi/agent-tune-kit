@@ -80,4 +80,5 @@ After executing the script, summarize:
 - script path `.atk/runner/failure_rule.py`;
 - output path `.atk/results/vN/failure_cases.csv`;
 - overwrite behavior;
-- failure row count if it can be read safely.
+- failure row count if it can be read safely;
+- next command: `atk-report` to generate `.atk/results/vN/report.md`.
