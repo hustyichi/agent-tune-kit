@@ -88,8 +88,9 @@ In the current package layout, this is also reachable from this Skill file as `.
 - Write `eval_results.csv` incrementally row-by-row, flushing after each row, so interrupted long runs leave inspectable partial evidence.
 - Emit visible per-row progress by default, with a `--no-progress` option for quiet runs.
 - Do not clean up partial version directories on crash.
-- Capture `app.log` only when a reliable source is found; otherwise omit it and explain why.
-- Prefer Python stdlib `logging` for row-specific evidence when the Agent uses configured loggers. Generated row-log capture should use ATK-owned context state and stdlib logging routing: create row files when Python logging capture is configured and an ATK row context is active, including same-process `--concurrency > 1` while `CONCURRENT_ROW_LOGGING_ENABLED` remains enabled; create the referenced file even if it remains empty; never include stdout/stderr, subprocess, multiprocess, context-free, or post-row background logs.
+- Prefer Python stdlib `logging` as the first-choice log source when configured Agent loggers can be inferred safely. In that case, generated runners must write run-scoped global logging records to `.atk/results/vN/app.log` and also write row-specific records to `logs/row_*.log` while an ATK row context is active.
+- Use stdout/stderr redirection for `app.log` only as a fallback when no reliable Python `logging` source is available but stdout/stderr is useful. If the Agent writes its own trustworthy log file, copy or read that file into the current version's `app.log`. Omit `app.log` only when no reliable global log source exists, and explain why.
+- Generated row-log capture should use ATK-owned context state and stdlib logging routing: create row files when Python logging capture is configured and an ATK row context is active, including same-process `--concurrency > 1` while `CONCURRENT_ROW_LOGGING_ENABLED` remains enabled; create the referenced file even if it remains empty; never include stdout/stderr, subprocess, multiprocess, context-free, or post-row background logs. Context-free same-process Python logging should still appear in `app.log`.
 - When configured row-log capture is downgraded because `--concurrency > 1` and concurrent row logging is disabled, make that downgrade visible in runner output outside the redirected `app.log`.
 - Add the target repository import roots required by the Agent before importing local modules. For Python `src/` layout projects, generated runners should add `REPO_ROOT / "src"` to `sys.path`; for package-at-root projects, add `REPO_ROOT` when needed.
 - If the target project declares a managed runtime (`uv`, Poetry, pipenv, `.venv`, etc.), record that execution command in the setup summary and generate a runner that can be executed by that runtime. Do not assume bare system `python3` has project dependencies.
@@ -140,7 +141,7 @@ After writing the runner, summarize:
 - appended `agent_output_log_path` behavior, including whether row logs will be active, downgraded, or unavailable;
 - bounded-run flags (`--limit`, `--offset`) and incremental `eval_results.csv` write behavior;
 - concurrency flag (`--concurrency`) and whether output row order is serial order or completion order when concurrency is greater than 1;
-- whether `app.log` will be captured, and whether row-specific Python logging files under `logs/` will be captured;
+- whether `app.log` will be captured, including whether it is sourced from Python `logging`, stdout/stderr fallback, or an existing Agent log file, and whether row-specific Python logging files under `logs/` will be captured;
 - whether a smoke run was executed, which temporary result version it produced, and whether that version was cleaned up;
 - next command to run: `atk-run`;
 - expected next output path `.atk/results/v1/eval_results.csv` when no prior result version exists, otherwise the path selected by the normal runner allocation rule;

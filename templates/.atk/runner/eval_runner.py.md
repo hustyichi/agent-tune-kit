@@ -373,6 +373,33 @@ def capture_python_row_logging(*, enabled: bool) -> Iterator[None]:
 
 
 @contextmanager
+def capture_python_app_logging(version_dir: Path, *, enabled: bool) -> Iterator[None]:
+    """Install one run-scoped app.log handler for configured Python loggers."""
+    if not enabled:
+        yield
+        return
+
+    log_path = version_dir / APP_LOG_FILENAME
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    app_handler = logging.FileHandler(log_path, mode="w", encoding="utf-8")
+    app_handler.setLevel(ROW_LOG_LEVEL)
+    app_handler.setFormatter(logging.Formatter(ROW_LOG_FORMAT))
+    owned_loggers = _configured_row_loggers()
+    previous_levels: dict[logging.Logger, int] = {}
+    try:
+        for logger in owned_loggers:
+            previous_levels[logger] = logger.level
+            logger.setLevel(ROW_LOG_LEVEL)
+            logger.addHandler(app_handler)
+        yield
+    finally:
+        for logger in owned_loggers:
+            logger.removeHandler(app_handler)
+            logger.setLevel(previous_levels[logger])
+        app_handler.close()
+
+
+@contextmanager
 def capture_row_python_logs(
     version_dir: Path,
     source_index: int,
@@ -574,35 +601,40 @@ def run() -> int:
     )
     if PYTHON_LOGGING_CAPTURE_ENABLED and args.concurrency > 1 and not CONCURRENT_ROW_LOGGING_ENABLED:
         print(ROW_LOGGING_CONCURRENCY_DOWNGRADE_MESSAGE, file=sys.__stderr__, flush=True)
-    output_path = run_rows(
-        version_dir,
-        source_fieldnames,
-        selected_rows,
-        total_rows=len(dataset_rows),
-        show_progress=not args.no_progress,
-        concurrency=args.concurrency,
-        row_logging_enabled=row_logging_enabled,
-    )
+    with capture_python_app_logging(version_dir, enabled=PYTHON_LOGGING_CAPTURE_ENABLED):
+        output_path = run_rows(
+            version_dir,
+            source_fieldnames,
+            selected_rows,
+            total_rows=len(dataset_rows),
+            show_progress=not args.no_progress,
+            concurrency=args.concurrency,
+            row_logging_enabled=row_logging_enabled,
+        )
     print(f"Wrote {len(selected_rows)} rows to {output_path}")
     return 0
 
 
 if __name__ == "__main__":
     # TODO_AGENT_TUNING_LOG_CAPTURE:
-    # If the Agent emits useful stdout/stderr logs, keep this redirect block.
+    # If configured Python logging is available, run() writes app.log through logging.
+    # If the Agent emits useful stdout/stderr logs instead, keep this redirect fallback.
     # If the Agent writes its own log file, replace this with explicit copy/read logic.
     # If no reliable log source exists, call sys.exit(run()) directly and omit app.log.
     target_version_dir = allocate_next_results_version()
-    log_path = target_version_dir / APP_LOG_FILENAME
 
     # Reuse the preallocated version directory for this process so log and results align.
     def allocate_next_results_version(results_dir=RESULTS_DIR):  # type: ignore[no-redef]
         target_version_dir.mkdir(parents=True, exist_ok=True)
         return target_version_dir
 
+    if PYTHON_LOGGING_CAPTURE_ENABLED:
+        sys.exit(run())
+
+    log_path = target_version_dir / APP_LOG_FILENAME
     with log_path.open("w", encoding="utf-8") as log_handle:
         with redirect_stdout(log_handle), redirect_stderr(log_handle):
             exit_code = run()
-    print(f"Wrote optional app log to {log_path}")
+    print(f"Wrote optional stdout/stderr app log to {log_path}")
     sys.exit(exit_code)
 ```

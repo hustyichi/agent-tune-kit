@@ -219,6 +219,12 @@ class RunnerTemplateRowLoggingTests(unittest.TestCase):
         self.assertNotIn("ROW_A_UNIQUE", logs["ROW_B_UNIQUE"])
         self.assertNotIn("CONTEXT_FREE_DURING_RUN", "\n".join(logs.values()))
         self.assertNotIn("background ROW_C_UNIQUE", logs["ROW_C_UNIQUE"])
+        app_log = (temp_dir / ".atk/results/v1/app.log").read_text(encoding="utf-8")
+        self.assertIn("ROW_A_UNIQUE", app_log)
+        self.assertIn("ROW_B_UNIQUE", app_log)
+        self.assertIn("ROW_C_UNIQUE", app_log)
+        self.assertIn("CONTEXT_FREE_DURING_RUN", app_log)
+        self.assertIn("background ROW_C_UNIQUE", app_log)
 
     def test_known_agent_error_keeps_row_log_path_and_error_status(self) -> None:
         completed, temp_dir = run_rendered_runner(
@@ -252,6 +258,8 @@ class RunnerTemplateRowLoggingTests(unittest.TestCase):
         self.assertEqual(row["agent_output_log_path"], "")
         self.assertIn("Concurrent row-level Python logging capture is disabled", completed.stderr)
         self.assertFalse((temp_dir / ".atk/results/v1/logs").exists())
+        app_log = (temp_dir / ".atk/results/v1/app.log").read_text(encoding="utf-8")
+        self.assertIn("NO_ROW_LOG", app_log)
 
     def test_serial_row_logging_still_writes_row_logs(self) -> None:
         completed, temp_dir = run_rendered_runner(
@@ -264,6 +272,8 @@ class RunnerTemplateRowLoggingTests(unittest.TestCase):
         self.assertEqual(row["agent_output_log_path"], "logs/row_000001.log")
         log_text = (temp_dir / ".atk/results/v1/logs/row_000001.log").read_text(encoding="utf-8")
         self.assertIn("SERIAL_ROW_UNIQUE", log_text)
+        app_log = (temp_dir / ".atk/results/v1/app.log").read_text(encoding="utf-8")
+        self.assertIn("SERIAL_ROW_UNIQUE", app_log)
 
 
 if __name__ == "__main__":

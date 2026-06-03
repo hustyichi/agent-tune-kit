@@ -850,6 +850,14 @@ def main() -> int:
         errors,
     )
     require(
+        "def capture_python_app_logging" in runner_template
+        and "logging.FileHandler(log_path, mode=\"w\", encoding=\"utf-8\")" in runner_template
+        and "logger.addHandler(app_handler)" in runner_template
+        and "logger.removeHandler(app_handler)" in runner_template,
+        "runner template must write configured Python logging records to global app.log",
+        errors,
+    )
+    require(
         'log_path.open("w", encoding="utf-8").close()' in runner_template,
         "runner template must truncate row logs on reused partial versions",
         errors,
