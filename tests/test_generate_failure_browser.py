@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import csv
+import importlib.util
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import chdir
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "skills" / "atk-visualize-failures" / "scripts" / "generate_failure_browser.py"
@@ -15,7 +18,7 @@ SCRIPT = ROOT / "skills" / "atk-visualize-failures" / "scripts" / "generate_fail
 
 def run_generator(project: Path, *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, str(SCRIPT), *args],
+        [sys.executable, str(SCRIPT), "--no-open", *args],
         cwd=project,
         text=True,
         stdout=subprocess.PIPE,
@@ -23,6 +26,14 @@ def run_generator(project: Path, *args: str) -> subprocess.CompletedProcess[str]
         check=False,
         timeout=10,
     )
+
+
+def load_generator_module():
+    spec = importlib.util.spec_from_file_location("generate_failure_browser", SCRIPT)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def write_csv(path: Path, fieldnames: list[str], rows: list[dict[str, str]]) -> None:
@@ -134,6 +145,23 @@ class GenerateFailureBrowserTests(unittest.TestCase):
             text = (current / "failure_cases.html").read_text(encoding="utf-8")
             self.assertIn("rows=0", result.stdout)
             self.assertIn("No failure rows in current failure_cases.csv", text)
+
+    def test_generator_opens_browser_by_default_and_can_opt_out(self) -> None:
+        module = load_generator_module()
+        self.assertTrue(module.parse_args([]).open_browser)
+        self.assertFalse(module.parse_args(["--no-open"]).open_browser)
+        self.assertTrue(module.parse_args(["--no-open", "--open"]).open_browser)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp)
+            current = project / ".atk" / "results" / "v1"
+            write_csv(current / "failure_cases.csv", ["id", "agent_output"], [{"id": "1", "agent_output": "bad"}])
+
+            with chdir(project), mock.patch.object(module, "open_in_browser", return_value=(True, "file:///fake.html")) as opened:
+                result = module.run([])
+
+            self.assertEqual(result, 0)
+            opened.assert_called_once_with(Path(".atk/results/v1/failure_cases.html"))
 
     def test_nonstandard_fields_can_be_role_switched_and_all_fields_preserved(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

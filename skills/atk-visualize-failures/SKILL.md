@@ -39,10 +39,10 @@ Do not create `report_summary.json`, metadata JSON, sidecar data files, package 
 3. Require the failure CSV with `require_current_file(current_dir, "failure_cases.csv")`. Do not ask the user for a version and do not fall back to an older version when the current file is missing.
 4. Set `output_path = current_dir / "failure_cases.html"` and keep all normal output same-version local.
 5. If `failure_cases.html` already exists and may contain user edits, ask before overwriting that HTML artifact only. After confirmation, rerun the script with `--overwrite`; do not ask about unrelated current-version files.
-6. Invoke the fixed stdlib generator. The Skill must pass `--open` by default so the freshly written HTML is opened in the user's default browser via Python `webbrowser`; omit `--open` only when the user explicitly opts out (for example a headless CI shell):
+6. Invoke the fixed stdlib generator. The generator opens the freshly written HTML in the user's default browser via Python `webbrowser` by default; pass `--no-open` only when the user explicitly opts out (for example a headless CI shell). `--open` remains accepted as an explicit compatibility flag:
 
 ```sh
-python3 <skill-dir>/scripts/generate_failure_browser.py [--overwrite] [--results-dir .atk/results] [--no-report] [--no-history] [--open]
+python3 <skill-dir>/scripts/generate_failure_browser.py [--overwrite] [--results-dir .atk/results] [--no-report] [--no-history] [--open|--no-open]
 ```
 
 Pass `--no-history` only when the user explicitly opts out of cross-version analysis (for example a privacy-restricted environment or when historical directories are known to be untrusted). Historical reads are best-effort and non-blocking — missing or unreadable historical files degrade the cross-version view but never block HTML generation.

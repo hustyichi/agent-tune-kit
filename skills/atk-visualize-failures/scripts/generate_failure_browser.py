@@ -926,7 +926,14 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         "--open",
         dest="open_browser",
         action="store_true",
-        help="open the generated HTML in the default browser after writing",
+        default=True,
+        help="open the generated HTML in the default browser after writing (default)",
+    )
+    parser.add_argument(
+        "--no-open",
+        dest="open_browser",
+        action="store_false",
+        help="do not open the generated HTML after writing; useful for headless CI shells",
     )
     return parser.parse_args(argv)
 
