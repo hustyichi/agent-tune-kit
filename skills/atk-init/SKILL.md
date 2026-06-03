@@ -62,10 +62,12 @@ In the current package layout, this is also reachable from this Skill file as `.
    - keep the runner pointed at `.atk/datasets/dataset.csv`, not the original external path.
 4. If safe, create `.atk/runner/` and write `eval_runner.py` from plugin-root-relative `templates/.atk/runner/eval_runner.py.md`.
 5. Keep the generated script project-local and low dependency. Prefer Python stdlib plus the target project environment.
-6. Verify the generated runner without invoking the Agent when possible:
+6. Verify the generated runner with the lightest check that proves the handoff is usable:
    - syntax check with the same interpreter shape expected for execution;
    - import/load checks for the runner and target Agent entrypoint;
    - dataset load and one-row input-shaping check.
+   - if a smoke execution is needed, run a bounded command such as `.atk/runner/eval_runner.py --limit 1`, record the exact result version that existed before and after the command, then clean up only the result directory created or reused solely for that smoke check.
+   - after smoke cleanup, confirm `.atk/results/` has returned to the pre-smoke version state. Do not remove any pre-existing version that contained user data before the smoke command.
 7. Tell the user the next command is `atk-run`.
 
 ## Required runner behavior
@@ -81,6 +83,7 @@ In the current package layout, this is also reachable from this Skill file as `.
 - Use `RESULTS_DIR = Path(".atk/results")`.
 - Do not require a user-supplied version argument or result path.
 - Support bounded runs with `--limit N` and `--offset N` so users can smoke-test expensive Agents before full execution.
+- Treat bounded smoke runs during `atk-init` as temporary validation artifacts that must be removed before handoff when they were created solely by the init smoke check.
 - Support concurrent runs with `--concurrency N`, defaulting to conservative serial execution when concurrency is not requested.
 - Write `eval_results.csv` incrementally row-by-row, flushing after each row, so interrupted long runs leave inspectable partial evidence.
 - Emit visible per-row progress by default, with a `--no-progress` option for quiet runs.
@@ -123,6 +126,7 @@ Do not ask about routine creation of `.atk/runner/` or version-number selection.
 - If required source files or dataset are missing, report the missing path and do not create a misleading runner.
 - If the dataset cannot be written into `.atk/datasets/` as canonical `dataset.csv` with `atk_id`, or duplicate-content comparison cannot be completed safely, report the reason and do not write a runner that points at the external source dataset.
 - If the generated runner cannot import the target Agent under the inferred project runtime, fix the import/runtime inference before handing off.
+- If a smoke execution during `atk-init` creates or reuses a result directory that cannot be confidently identified as init-owned temporary output, do not delete it; report the version impact explicitly and explain why cleanup was skipped.
 - If an existing runner appears hand-edited, summarize the diff/intent and ask before overwrite.
 - Never silently impose a universal Schema on the dataset or Agent.
 
@@ -137,5 +141,7 @@ After writing the runner, summarize:
 - bounded-run flags (`--limit`, `--offset`) and incremental `eval_results.csv` write behavior;
 - concurrency flag (`--concurrency`) and whether output row order is serial order or completion order when concurrency is greater than 1;
 - whether `app.log` will be captured, and whether row-specific Python logging files under `logs/` will be captured;
+- whether a smoke run was executed, which temporary result version it produced, and whether that version was cleaned up;
 - next command to run: `atk-run`;
-- expected next output path `.atk/results/vN/eval_results.csv`.
+- expected next output path `.atk/results/v1/eval_results.csv` when no prior result version exists, otherwise the path selected by the normal runner allocation rule;
+- do not say a smoke test has already occupied `v1` when the smoke-created version was cleaned up before handoff.
