@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>__ATK_TITLE__</title>
+  <style>
+__ATK_STYLES__
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand"><span class="dot" aria-hidden="true"></span><span>Agent Tune Kit</span></div>
+    <h1>数据集审阅 · <span id="meta-name">dataset.csv</span></h1>
+    <div class="meta">
+      <span class="chip" id="meta-rows">0 行</span>
+      <span class="chip" id="meta-fields">0 列</span>
+      <span class="chip" id="meta-issues">0 问题行</span>
+      <span class="chip review-progress" id="meta-review">未审阅</span>
+      <button type="button" class="btn" data-open-drawer="roles" title="字段角色映射">角色映射</button>
+      <button type="button" class="btn" data-open-drawer="warnings" title="解析警告">警告</button>
+      <button type="button" class="btn primary" id="export-review" title="导出审阅结果 CSV">导出审阅结果</button>
+    </div>
+    <div class="path" id="path-context"></div>
+    <nav class="tabs" role="tablist" aria-label="视图切换">
+      <button type="button" class="tab" role="tab" data-tab="overview" aria-selected="false">总览</button>
+      <button type="button" class="tab active" role="tab" data-tab="rows" aria-selected="true">数据浏览</button>
+    </nav>
+  </header>
+
+  <!-- ===== Overview tab ===== -->
+  <section id="tab-overview" class="tab-panel" role="tabpanel" hidden>
+    <div class="kpi-row" id="overview-kpis"></div>
+    <div class="overview-grid">
+      <div class="panel chart-card">
+        <div class="panel-header"><span>数据质量问题分布</span><span class="hint" id="overview-issue-meta">--</span></div>
+        <div class="chart-body" id="chart-issue-bar"></div>
+      </div>
+      <div class="panel chart-card">
+        <div class="panel-header"><span>主要分类分布</span><span class="hint" id="overview-facet-meta">--</span></div>
+        <div class="chart-body" id="chart-facet-pie"></div>
+      </div>
+      <div class="panel chart-card wide">
+        <div class="panel-header"><span>ground_truth 长度分布</span><span class="hint" id="overview-length-meta">字符数分桶</span></div>
+        <div class="chart-body" id="chart-length-hist"></div>
+      </div>
+      <div class="panel chart-card wide">
+        <div class="panel-header"><span>审阅进度</span><span class="hint" id="overview-review-meta">本地保存（localStorage）</span></div>
+        <div class="chart-body" id="chart-review-pie"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Rows browser tab ===== -->
+  <section id="tab-rows" class="tab-panel" role="tabpanel">
+    <main>
+      <aside class="sidebar">
+        <section class="panel">
+          <div class="panel-body">
+            <div class="stats">
+              <div class="stat"><div class="label">总行数</div><div class="value" id="stat-total">0</div></div>
+              <div class="stat"><div class="label">字段</div><div class="value" id="stat-fields">0</div></div>
+              <div class="stat bad"><div class="label">问题行</div><div class="value" id="stat-issues">0</div></div>
+              <div class="stat ok"><div class="label" id="stat-review-label">已确认</div><div class="value" id="stat-review-value">0</div></div>
+            </div>
+          </div>
+        </section>
+        <section class="panel">
+          <div class="panel-header">
+            <span>Search / filter / pagination</span>
+            <span class="hint" id="filtered-count">0 / 0</span>
+          </div>
+          <div class="panel-body">
+            <div class="search-row">
+              <input id="search" type="search" placeholder="搜索全部字段…" aria-label="搜索全部字段">
+            </div>
+            <div id="quality-bar" class="quality-bar" hidden></div>
+            <div id="facets" class="facet-group" style="margin-top:10px;"></div>
+            <div id="empty-state-all" class="empty" hidden>
+              <strong>数据集为空</strong>
+              <span>No data rows in dataset.csv</span>
+            </div>
+            <div id="empty-state-filtered" class="empty" hidden>
+              <strong>没有匹配的行</strong>
+              <span>请调整搜索词或过滤器。</span>
+            </div>
+            <div id="row-list" class="case-list" role="list" aria-label="数据行列表" style="margin-top:10px;"></div>
+            <div class="pager">
+              <button id="prev" type="button" class="btn">上一页</button>
+              <div class="controls">
+                <span id="page-label" class="label"></span>
+                <select id="page-size" aria-label="每页行数"></select>
+              </div>
+              <button id="next" type="button" class="btn">下一页</button>
+            </div>
+          </div>
+        </section>
+      </aside>
+      <section class="panel detail" aria-label="expected-vs-actual comparison">
+        <div id="detail-head" class="detail-head"></div>
+        <div id="detail-body" class="detail-body"></div>
+      </section>
+    </main>
+  </section>
+
+  <div class="drawer-backdrop" id="drawer-backdrop"></div>
+  <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
+    <div class="drawer-header">
+      <span id="drawer-title">设置</span>
+      <button type="button" id="drawer-close" class="btn ghost" aria-label="关闭">✕</button>
+    </div>
+    <div class="drawer-body">
+      <section class="drawer-section" data-section="roles">
+        <h3>schema-adaptive role switching · 字段角色映射 · auto-detected</h3>
+        <div id="drawer-roles"></div>
+      </section>
+      <section class="drawer-section" data-section="warnings">
+        <h3>解析警告</h3>
+        <div id="drawer-warnings"></div>
+      </section>
+    </div>
+  </aside>
+
+  <footer style="text-align:center;color:var(--muted);font-size:11px;padding:14px;">
+    由 atk-visualize-dataset 生成 · 单文件 / 离线 / 零外链 / bundled offline ECharts / 无 LLM 摘要
+  </footer>
+
+  <!-- audit markers (preserved for plugin self-test substring checks; do not remove) -->
+  <div class="audit-only" aria-hidden="true">__ATK_AUDIT_MARKERS__</div>
+
+  <script type="application/json" id="dataset-data">__ATK_DATA_JSON__</script>
+  <script>
+__ATK_VENDOR_JS__
+  </script>
+  <script>
+__ATK_APP_JS__
+  </script>
+</body>
+</html>

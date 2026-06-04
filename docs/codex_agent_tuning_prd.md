@@ -252,6 +252,28 @@
   - 所有跨版本读取均为 best-effort：任意历史文件缺失/超限/损坏/无 `atk_id` 列时，对应视图降级并提示原因，绝不影响 HTML 写入
   - `agent_output_log_path` 等日志路径只在满足安全相对路径约束时生成可点击链接，否则仅作为证据文本展示
 
+### 2.5.2 数据集可视化与质检（可选 Codex Skill `atk-visualize-dataset`）
+- **功能**：
+  - 从 `.atk/datasets/dataset.csv` 生成便于人工浏览与质检的静态 HTML 浏览器 `.atk/datasets/dataset.html`
+  - 通过插件内固定 Python 标准库脚本生成 HTML，避免模型临场生成可视化、LLM 摘要、项目内模板漂移或额外依赖
+  - 该 Skill 是独立的可选审阅步骤，不并入 `atk-build-dataset` 或 `atk-init`，也不改变数据集构建、校验或评估语义
+  - 重点支持快速确认每行 ground_truth 是否符合预期，并发现 ground_truth 错误、缺失或不合理的样本
+  - 可在 `.atk/datasets/dataset.csv` 存在后随时执行；推荐在 `atk-build-dataset` 之后、`atk-init` 之前用于浏览与质检
+- **输入**：
+  - 必需：`.atk/datasets/dataset.csv`（非版本化，位于 `.atk/datasets/`，不走 `.atk/results/vN`）
+  - 自动识别 `atk_id` 列、输入列与 `expected|ground_truth|answer|label|target` 类期望列；无法识别时降级展示原始列并允许前端临时重映射
+- **输出文件**：
+  - `.atk/datasets/dataset.html`（单文件、离线、自包含）
+  - 不生成 metadata JSON、sidecar 数据文件或依赖文件；审阅结果由前端经 Blob 下载为 `dataset_review.csv`，不写入仓库
+- **HTML 生成要求**：
+  - 使用 Python 标准库读取 CSV，保留所有原始列并兼容不同数据集字段
+  - 对所有 CSV 派生内容进行 HTML 转义，并中和内联 JSON 中的 `</script>` 等风险序列
+  - 使用内嵌 CSS/JS 与内嵌的离线 ECharts 构建（位于 `skills/atk-visualize-dataset/assets/vendor/echarts.min.js`，由插件持有，零 CDN、零外链、零运行时依赖）
+  - 提供两标签视图（`总览` / `数据浏览`）：总览含 KPI 卡（总行/列/问题行及各类问题计数）、ground_truth 长度分布与主要分类分布；数据浏览支持全字段搜索、动态分类 facet 过滤、分页与可展开详情，并突出「输入 vs ground_truth」对照
+  - **数据集质检 lint**：逐行计算并提供过滤标签，包括空 ground_truth、空输入、重复/缺失/非正整数 `atk_id`、冲突样本（相同输入不同 ground_truth）、完全重复样本（输入+ground_truth 相同）、ground_truth 过短/过长（长度离群）
+  - **客户端审阅**：每行详情提供裁决（✅符合预期 / ⚠️存疑 / ❌需修正）与备注，按 `atk_id` 存入 `localStorage`；「导出审阅结果」经 Blob 下载 `dataset_review.csv`（含 atk_id、行号、裁决、备注、检测到的问题），完全离线、无后端；审阅结果回流既有 `$atk-build-dataset` 修复，不新增编辑类 Skill
+  - 数据集为空、表头无法解析或目标文件已存在且未确认覆盖时给出明确提示并安全退出，不破坏已有文件
+
 ### 2.6 Agent 调优模块（Codex Skill）
 - **功能**：
   - 以当前版本目录下的 `report.md` 作为本轮调优依据
@@ -357,7 +379,8 @@
 ```text
 /.atk/
 ├── datasets/
-│   └── dataset.csv             # ATK 可运行数据集（含 atk_id；可选 ground_truth），可由 atk-build-dataset 创建、atk-build-ground-truth 补齐并由 atk-init 校验/规范化
+│   ├── dataset.csv             # ATK 可运行数据集（含 atk_id），可由 atk-build-dataset 创建并由 atk-init 校验/规范化
+│   └── dataset.html            # 数据集可视化与质检页（可选，由 atk-visualize-dataset 生成）
 ├── runner/
 │   ├── eval_runner.py          # 跨版本共享测试脚本
 │   └── failure_rule.py          # 跨版本共享失败判定规则脚本（规则模式使用）

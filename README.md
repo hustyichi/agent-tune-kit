@@ -82,6 +82,19 @@ $atk-build-ground-truth
 ```
 
 Codex 会让你选择一种全局一致的 `ground_truth` 风格：精确答案，或自然语言验收标准。它会在保留原有列和 `atk_id` 的前提下就地更新 `.atk/datasets/dataset.csv`。这是 dataset-only / pre-results 步骤：不会运行 Agent，不会创建 `.atk/results/vN`，也不会写 `failure_cases.csv`。如果已有 `eval_results.csv` 是补齐 ground truth 之前生成的，请先重新运行 `$atk-run` 再找异常样本。
+构建好数据集后，可以选择先浏览和质检它：
+
+```text
+$atk-visualize-dataset
+```
+
+它会把 `.atk/datasets/dataset.csv` 生成一个本地、单文件、离线的 HTML 浏览页：
+
+```text
+.atk/datasets/dataset.html
+```
+
+页面支持搜索、分类过滤、分页查看每一行，突出「输入 vs ground_truth」对照，并对空值、重复/缺失 `atk_id`、冲突样本、长度离群等问题自动打标签，便于快速确认 ground_truth 是否符合预期。你可以在页面里对每行裁决（符合预期 / 存疑 / 需修正）并导出 `dataset_review.csv`，再回到 `$atk-build-dataset` 修复。
 
 ### 1. 初始化
 
@@ -221,6 +234,7 @@ $atk-report
 - `$atk-status`：检查当前进度并提示下一步。
 - `$atk-build-dataset`：从业务描述、样例或规则构建 `.atk/datasets/dataset.csv`。
 - `$atk-build-ground-truth`：为现有 `.atk/datasets/dataset.csv` 补齐规范的 `ground_truth` 列。
+- `$atk-visualize-dataset`：将 `.atk/datasets/dataset.csv` 生成本地 HTML 浏览页，便于快速查看数据并确认 ground_truth 是否符合预期。
 - `$atk-new-agent`：当你只有数据集、还没有 Agent 项目时，生成一个轻量 OpenAI-compatible Agent。
 - `$atk-init`：生成测试脚本。
 - `$atk-run`：运行评测并生成新版本结果。

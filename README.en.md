@@ -82,6 +82,19 @@ $atk-build-ground-truth
 ```
 
 Codex asks you to choose one dataset-wide `ground_truth` style: exact answer or natural-language acceptance criteria. It then updates `.atk/datasets/dataset.csv` in place, preserving existing columns and `atk_id`. This is a dataset-only, pre-results step: it does not run the Agent, create `.atk/results/vN`, or write `failure_cases.csv`. If existing `eval_results.csv` was produced before this enrichment, rerun `$atk-run` before finding failures.
+Once the dataset is built, you can optionally review and quality-check it first:
+
+```text
+$atk-visualize-dataset
+```
+
+It renders `.atk/datasets/dataset.csv` into a local, single-file, offline HTML browser:
+
+```text
+.atk/datasets/dataset.html
+```
+
+The page supports search, category filtering, and paginated row browsing, highlights the input-vs-ground_truth comparison, and auto-flags issues such as empty values, duplicate/missing `atk_id`, conflicting samples, and length outliers, so you can quickly confirm whether each ground_truth matches expectations. You can mark a verdict per row (matches / suspect / needs fix) and export `dataset_review.csv`, then return to `$atk-build-dataset` to fix it.
 
 ### 1. Initialize
 
@@ -221,6 +234,7 @@ Common output files:
 - `$atk-status`: inspect progress and suggest the next step.
 - `$atk-build-dataset`: build `.atk/datasets/dataset.csv` from business context, examples, or rules.
 - `$atk-build-ground-truth`: enrich an existing `.atk/datasets/dataset.csv` with a canonical `ground_truth` column.
+- `$atk-visualize-dataset`: render `.atk/datasets/dataset.csv` into a local HTML browser for quickly reviewing rows and confirming whether each ground_truth matches expectations.
 - `$atk-new-agent`: create a lightweight OpenAI-compatible Agent when you only have a dataset.
 - `$atk-init`: generate the test runner.
 - `$atk-run`: run evaluation and create a new result version.

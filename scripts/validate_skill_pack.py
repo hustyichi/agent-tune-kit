@@ -33,6 +33,12 @@ REQUIRED_FILES = [
     "skills/atk-visualize-failures/assets/styles.css",
     "skills/atk-visualize-failures/assets/app.js",
     "skills/atk-visualize-failures/assets/vendor/echarts.min.js",
+    "skills/atk-visualize-dataset/SKILL.md",
+    "skills/atk-visualize-dataset/scripts/generate_dataset_browser.py",
+    "skills/atk-visualize-dataset/assets/page.html",
+    "skills/atk-visualize-dataset/assets/styles.css",
+    "skills/atk-visualize-dataset/assets/app.js",
+    "skills/atk-visualize-dataset/assets/vendor/echarts.min.js",
     "skills/atk-tune/SKILL.md",
     "templates/.atk/runner/eval_runner.py.md",
     "templates/.atk/runner/failure_rule.py.md",
@@ -63,6 +69,7 @@ PRE_INIT_SKILL_FILES = {"skills/atk-build-dataset/SKILL.md", "skills/atk-new-age
 DATASET_ONLY_PRE_RESULTS_SKILL_FILES = {
     "skills/atk-build-dataset/SKILL.md",
     "skills/atk-build-ground-truth/SKILL.md",
+    "skills/atk-visualize-dataset/SKILL.md",
 }
 NON_LIFECYCLE_SKILL_FILES = PRE_INIT_SKILL_FILES | DATASET_ONLY_PRE_RESULTS_SKILL_FILES
 AGENT_SCAFFOLD_SKILL_FILES = {"skills/atk-new-agent/SKILL.md"}
@@ -463,6 +470,60 @@ PER_FILE_PHRASES = {
         "No vN results directory exists",
         "Refusing to overwrite existing",
     ],
+    "skills/atk-visualize-dataset/SKILL.md": [
+        "atk-visualize-dataset",
+        ".atk/datasets/dataset.csv",
+        ".atk/datasets/dataset.html",
+        "scripts/generate_dataset_browser.py",
+        "csv.DictReader",
+        "html.escape",
+        "--dataset-path",
+        "--overwrite",
+        "input-vs-ground_truth comparison",
+        "ground_truth confirmation",
+        "dataset quality lint",
+        "client-side review export",
+        "dataset_review.csv",
+        "schema-adaptive role switching",
+        "expandable/detail rows",
+        "ground_truth",
+        "atk_id",
+        "bundled offline ECharts",
+        "assets/vendor/echarts.min.js",
+        "Do not create `dataset_summary.json`",
+        "metadata JSON",
+        "Do not write outside the `.atk/datasets/` directory",
+        "never change `atk-build-dataset`",
+        "atk-build-dataset",
+        "atk-init",
+    ],
+    "skills/atk-visualize-dataset/scripts/generate_dataset_browser.py": [
+        'DATASETS_DIR = Path(".atk/datasets")',
+        'DATASET_FILENAME = "dataset.csv"',
+        'OUTPUT_FILENAME = "dataset.html"',
+        "def detect_atk_id_field(",
+        "def compute_issues(",
+        "def detect_roles(",
+        "def detect_facets(",
+        "csv.DictReader",
+        "html.escape",
+        "json.dumps",
+        "ensure_ascii=False",
+        "SNIPPET_MAX_CHARS = 240",
+        "PAGE_SIZES = [25, 50, 100, 250]",
+        "DEFAULT_PAGE_SIZE = 50",
+        "VENDOR_ECHARTS_NAME",
+        "--dataset-path",
+        "--overwrite",
+        "input-vs-ground_truth comparison",
+        "dataset quality lint",
+        "ground_truth confirmation",
+        "client-side review export",
+        "bundled offline ECharts",
+        "os.replace",
+        "Refusing to overwrite existing",
+        "run atk-build-dataset or atk-init first",
+    ],
     "skills/atk-tune/SKILL.md": [
         'require_current_file(current_dir, "report.md")',
         "## 目标异常清单",
@@ -751,9 +812,7 @@ def main() -> int:
         text = existing_texts.get(rel, "")
         require(text.startswith("---\n"), f"{rel} missing YAML front matter", errors)
         required_sections = (
-            REQUIRED_PRE_INIT_SCAFFOLD_SKILL_SECTIONS
-            if rel in NON_LIFECYCLE_SKILL_FILES
-            else REQUIRED_SKILL_SECTIONS
+            REQUIRED_PRE_INIT_SCAFFOLD_SKILL_SECTIONS if rel in NON_LIFECYCLE_SKILL_FILES else REQUIRED_SKILL_SECTIONS
         )
         for section in required_sections:
             require(section in text, f"{rel} missing section {section}", errors)
@@ -883,7 +942,7 @@ def main() -> int:
     )
     require(
         "def capture_python_app_logging" in runner_template
-        and "logging.FileHandler(log_path, mode=\"w\", encoding=\"utf-8\")" in runner_template
+        and 'logging.FileHandler(log_path, mode="w", encoding="utf-8")' in runner_template
         and "logger.addHandler(app_handler)" in runner_template
         and "logger.removeHandler(app_handler)" in runner_template,
         "runner template must write configured Python logging records to global app.log",

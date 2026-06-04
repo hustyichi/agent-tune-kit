@@ -110,6 +110,9 @@ After writing the dataset, summarize:
 - input and expected-output columns;
 - coverage categories included;
 - any assumptions or unfilled domain facts;
+- optional review step: run `$atk-visualize-dataset` to open a local HTML browser of `.atk/datasets/dataset.csv` for
+  quickly inspecting rows, confirming whether each ground_truth matches expectations, and spotting incorrect, missing,
+  or unreasonable ground_truth before initializing evaluation;
 - next step based on Agent availability:
   - if an Agent exists: run `$atk-init`, using the newly created `.atk/datasets/dataset.csv` to initialize batch
     evaluation;
