@@ -31,6 +31,7 @@
   - 用户需要准备需要调优的 Agent 服务以及可以用于评估的数据集
   - 系统需要在项目内维护统一父目录 `.atk/`
   - 用户可先通过 `$atk-build-dataset` 从业务描述、样例或验收规则构建初始 `.atk/datasets/dataset.csv`
+  - 当已有数据集缺少清晰预期结果语义时，用户可通过 `$atk-build-ground-truth` 为现有 `.atk/datasets/dataset.csv` 补齐规范 `ground_truth` 列，以提升后续异常判断稳定性
   - 用户提供或构建的数据集需要在生成测试脚本时由 `$atk-init` 校验/规范化写入 `.atk/datasets/`，并保证存在 `atk_id`
   - 所有共享脚本需要存储在 `.atk/runner/`
   - 所有版本化结果需要存储在 `.atk/results/{version}/`
@@ -61,7 +62,29 @@
   - `.atk/datasets/dataset.csv`
   - 下一步建议需根据 Agent 是否已存在分流：已有 Agent 时提示通过 `$atk-init` 接入新数据集并开始批量评测；没有 Agent 时提示先通过 `$atk-new-agent` 基于数据集创建 Agent；无法确认时同时说明两种可能路径
 
-### 2.1.1 ATK new Agent：仅有数据集时初始化 Agent 项目（可选前置 Skill）
+### 2.1.1 ATK build Ground Truth：为现有数据集补齐统一预期语义（可选前置 Skill）
+- **适用场景**：
+  - 用户已经有 `.atk/datasets/dataset.csv`，但缺少清晰的预期结果、答案或验收标准列
+  - 用户希望在不改变异常筛选 Skill 行为的前提下，提高后续 `$atk-find-failures` 对“Agent 输出 vs 预期结果”的判断稳定性
+- **入口**：
+  - Codex Skill：`$atk-build-ground-truth`
+  - 产品名：`ATK build Ground Truth`
+- **功能**：
+  - 读取现有 `.atk/datasets/dataset.csv`，要求存在非空、唯一、正整数 `atk_id`
+  - 检查 `expected`、`expected_output`、`label`、`answer`、`target`、`acceptance_criteria`、`notes` 以及其它业务列，识别可作为 ground truth 来源的字段
+  - 在生成前要求用户选择一种全局一致的 `ground_truth` 风格：精确答案，或自然语言验收标准；不得在同一数据集中静默混用两种风格
+  - 在保留原有列和相对顺序的基础上补齐规范 `ground_truth` 列；若该列已存在或会语义替换 expected-like 字段，必须展示候选修改摘要并要求用户显式确认
+  - 候选修改摘要应包含受影响行数和代表性示例；大数据集不需要逐行列出全部变更
+- **边界**：
+  - 这是 dataset-only / pre-results Skill；不创建 `.atk/results/vN`，不运行 Agent / `atk-run` / eval runner，不写 `failure_cases.csv`
+  - 第一版不改变 `$atk-find-failures` 行为，也不强制所有 ATK 数据集都必须拥有 `ground_truth`
+  - 不自动挖掘大规模生产日志，不在常规路径创建候选数据集文件，不发明缺失领域事实
+  - 当数据集包含多个互不兼容任务、所需领域事实缺失、已有 expected-like 语义冲突或风格选择不明确时，必须先向用户确认
+- **输出**：
+  - 更新后的 `.atk/datasets/dataset.csv`，保留原有列并包含规范 `ground_truth`
+  - 下一步建议：若现有 `eval_results.csv` 早于本次数据集补齐，提示重新运行 `$atk-run`；若当前评测结果已反映补齐后的数据集，可继续 `$atk-find-failures`
+
+### 2.1.2 ATK new Agent：仅有数据集时初始化 Agent 项目（可选前置 Skill）
 - **适用场景**：
   - 用户只有评估数据集，还没有可被 `$atk-init` 接入的本地 Agent 项目
   - 用户希望 Codex 先根据数据集和意图生成一个轻量初始 Agent，再进入现有 ATK 调优闭环
@@ -141,7 +164,7 @@
 - **写入行为**：规则执行与大模型模式写入的 `failure_cases.csv` 文件名一致；若当前版本目录下已存在该文件，默认覆盖、不做备份或合并，并按各 Skill 的确认规则在覆盖前提示风险
 - **异常定义来源**：
   - 规则模式由用户在 Skill 交互中显式给出
-  - 大模型模式由用户给出自然语言说明，或在用户未指定时由 Skill 基于"Agent 输出 vs 预期结果"自行推断
+  - 大模型模式由用户给出自然语言说明，或在用户未指定时由 Skill 基于"Agent 输出 vs 预期结果"自行推断；当数据集中存在由 `$atk-build-ground-truth` 生成的规范 `ground_truth` 列时，可作为优先的预期语义证据，但第一版不要求改变异常筛选实现行为
 - **数据确认机制**：当 `eval_results.csv` 字段含义不明、缺少预期结果或无法推断异常标准时，Skill 与用户确认后再继续
 - **输出**：
   - 规则初始化生成共享规则脚本 `.atk/runner/failure_rule.py`
@@ -269,7 +292,7 @@
 ## 4. 版本管理要求
 - **统一父目录**：
   - 所有调优相关产物统一放在 `.atk/` 下
-  - `.atk/datasets/` 存放 ATK 可运行数据集；可由 `$atk-build-dataset` 初始创建，并由 `$atk-init` 校验/规范化后供 runner 使用
+  - `.atk/datasets/` 存放 ATK 可运行数据集；可由 `$atk-build-dataset` 初始创建，可由 `$atk-build-ground-truth` 对现有 `dataset.csv` 补齐 `ground_truth`，并由 `$atk-init` 校验/规范化后供 runner 使用
   - `.atk/runner/` 存放跨版本共享脚本
   - `.atk/results/` 存放按版本隔离的结果
 - **版本命名**：
@@ -315,7 +338,7 @@
 ---
 
 ## 5. 使用示例（手工执行）
-1. 完成数据准备：本地待调优的 Agent 服务 + 评估数据集（默认 CSV）
+1. 完成数据准备：本地待调优的 Agent 服务 + 评估数据集（默认 CSV）；如只有业务描述可先执行 `$atk-build-dataset`，如已有数据集但预期语义薄弱可先执行 `$atk-build-ground-truth` 补齐 `ground_truth`
 2. 执行**批量测试脚本生成 Skill**，生成 `.atk/runner/eval_runner.py`；遇到 Agent 接入或字段不确定时按需与用户确认
 3. 执行 `atk-run`，由其运行 `.atk/runner/eval_runner.py`，脚本自动创建 `.atk/results/v1/` 并写入 `eval_results.csv`（及可选 `app.log`）
 4. 执行异常筛选（按需选择规则路径或大模型路径）：
@@ -334,7 +357,7 @@
 ```text
 /.atk/
 ├── datasets/
-│   └── dataset.csv             # ATK 可运行数据集（含 atk_id），可由 atk-build-dataset 创建并由 atk-init 校验/规范化
+│   └── dataset.csv             # ATK 可运行数据集（含 atk_id；可选 ground_truth），可由 atk-build-dataset 创建、atk-build-ground-truth 补齐并由 atk-init 校验/规范化
 ├── runner/
 │   ├── eval_runner.py          # 跨版本共享测试脚本
 │   └── failure_rule.py          # 跨版本共享失败判定规则脚本（规则模式使用）
@@ -359,7 +382,7 @@
 
 ## 7. 产品交付要求
 1. **Codex Skill**：
-   - 模块化 Skill 模板，覆盖：测试脚本生成、异常筛选（规则模式与大模型模式两个独立入口）、归因分析与报告生成、可选异常样本 HTML 可视化、Agent 调优
+   - 模块化 Skill 模板，覆盖：数据集构建、现有数据集 ground truth 补齐、测试脚本生成、异常筛选（规则模式与大模型模式两个独立入口）、归因分析与报告生成、可选异常样本 HTML 可视化、Agent 调优
    - 内置数据不确定性提示机制，遇到无法可靠推断的字段、Agent 接入方式、异常标准或样本对应关系时引导用户确认
    - 所有模块兼容 `.atk/results/{version}/` 结构，按"数字最大的 `vN`"统一识别当前版本
    - 所有模块在常规流程中不要求用户指定版本号

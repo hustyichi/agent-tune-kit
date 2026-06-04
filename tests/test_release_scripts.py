@@ -75,6 +75,26 @@ class ReleaseScriptTests(unittest.TestCase):
         self.assertTrue(readme_paths.isdisjoint(validate_skill_pack.PER_FILE_PHRASES))
         self.assertNotIn("explicit subcommands only", validate_skill_pack.PLUGIN_DOC_PHRASES)
 
+    def test_skill_pack_validation_registers_ground_truth_as_dataset_only_pre_results_skill(self) -> None:
+        validate_skill_pack = load_script("validate_skill_pack.py")
+        path = "skills/atk-build-ground-truth/SKILL.md"
+
+        self.assertIn(path, validate_skill_pack.REQUIRED_FILES)
+        self.assertIn(path, validate_skill_pack.SKILL_FILES)
+        self.assertIn(path, validate_skill_pack.DATASET_ONLY_PRE_RESULTS_SKILL_FILES)
+        self.assertIn(path, validate_skill_pack.NON_LIFECYCLE_SKILL_FILES)
+        self.assertNotIn(path, validate_skill_pack.LIFECYCLE_SKILL_FILES)
+
+        required_phrases = validate_skill_pack.PER_FILE_PHRASES[path]
+        for phrase in [
+            "Do not create `.atk/results/vN`",
+            "Do not run the Agent",
+            "Do not run `$atk-run`",
+            "Do not write `failure_cases.csv`",
+            "Do not change `atk-find-failures` behavior in v1",
+        ]:
+            self.assertIn(phrase, required_phrases)
+
     def test_publish_targets_and_commands_are_safe_by_default(self) -> None:
         publish_release = load_script("publish-release.py")
         pypi = publish_release.target_for("pypi")

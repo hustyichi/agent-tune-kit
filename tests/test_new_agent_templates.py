@@ -90,6 +90,49 @@ def test_atk_build_dataset_skill_is_pre_init_dataset_builder() -> None:
     assert "Never write `.atk/datasets/dataset.csv`" not in text
 
 
+def test_atk_build_ground_truth_skill_is_dataset_enricher() -> None:
+    text = read_rel("skills/atk-build-ground-truth/SKILL.md")
+    for phrase in [
+        "name: atk-build-ground-truth",
+        "existing `.atk/datasets/dataset.csv`",
+        "dataset-only / pre-results",
+        "ground_truth",
+        "valid `atk_id`",
+        "unique positive integers",
+        "exact answer",
+        "natural-language acceptance criteria",
+        "global ground-truth style",
+        "dataset-wide",
+        "candidate modification summary",
+        "affected row counts and representative examples",
+        "overwrite existing `ground_truth`",
+        "semantically replace expected-like fields",
+        "multiple incompatible Agent tasks",
+        "required domain facts are absent",
+        "Do not create `.atk/results/vN`",
+        "Do not run the Agent",
+        "Do not run `$atk-run`",
+        "Do not write `failure_cases.csv`",
+        "Do not change `atk-find-failures` behavior in v1",
+        "eval_results.csv` predates dataset enrichment",
+    ]:
+        assert phrase in text
+    for section in [
+        "## Purpose",
+        "## Inputs",
+        "## Outputs",
+        "## Workflow",
+        "## Confirmation triggers",
+        "## Failure behavior",
+        "## Handoff message",
+    ]:
+        assert section in text
+    assert 'RESULTS_DIR = Path(".atk/results")' not in text
+    assert "docs/shared-versioning-and-confirmation.md" not in text
+    assert ".atk/specs/agent_spec.md" not in text
+    assert "Never write `.atk/datasets/dataset.csv`" not in text
+
+
 def test_generated_agent_templates_expose_runtime_contract() -> None:
     agent_template = read_rel("templates/agent/agent.py")
     run_template = read_rel("templates/agent/run_agent.py")

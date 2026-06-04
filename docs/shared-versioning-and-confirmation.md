@@ -43,6 +43,14 @@ Non-goals for this pass:
 - Report: `.atk/results/vN/report.md`
 - Tuning plan: `.atk/results/vN/tuning_plan.md`
 
+## Dataset-only / pre-results Skills
+
+`atk-build-dataset`, `atk-build-ground-truth`, and `atk-new-agent` run before result-version lifecycle work. They do not create `.atk/results/vN`, do not run the Agent or eval runner, and do not write `failure_cases.csv`.
+
+`atk-build-ground-truth` is narrower than `atk-build-dataset`: it requires an existing `.atk/datasets/dataset.csv` with valid non-empty, unique positive-integer `atk_id` values, preserves all original columns, and appends or updates a canonical `ground_truth` column only after the user has selected one dataset-wide style: exact answer or natural-language acceptance criteria. It is optional; `ground_truth` is canonical when this Skill is used, not a universal requirement for every ATK dataset.
+
+If an existing `eval_results.csv` predates `ground_truth` enrichment, recommend rerunning `atk-run` before failure discovery so downstream `eval_results.csv` reflects the enriched dataset. If the current evaluation already reflects the enriched dataset, the user can continue to `atk-find-failures`.
+
 ## Current version vs new version creation
 
 All non-runner Skills use the current-version rule: the current version is the numerically largest existing `.atk/results/vN` directory where `N` is a positive integer. Do not filter current-version selection by required files. If the current version is missing the required input file for a module, stop and ask the user to repair or rerun that module; never fall back to an older version.
@@ -148,9 +156,11 @@ Ask before proceeding when any of these remain unresolved after inspection:
 - Agent invocation path, callable signature, required environment, or working directory;
 - target project Python runtime or import roots needed to load local Agent code;
 - dataset path, file format, encoding, delimiter, or field semantics;
+- `atk-build-ground-truth` global style choice is missing, would mix exact-answer and natural-language acceptance-criteria styles, or requires domain facts not present in the dataset/context;
 - an existing dataset column named `agent_output` conflicts with the required actual-output column, or `agent_output_log_path` conflicts with the required row-log evidence column;
 - app log source, Python `logging` logger names, or row-log capture method cannot be reliably captured or could alter Agent behavior;
 - failure criteria, expected-result columns, or pass/fail semantics are ambiguous;
+- existing `ground_truth` values or expected-like columns (`expected`, `expected_output`, `label`, `answer`, `target`, `acceptance_criteria`) would be overwritten, normalized, or semantically replaced;
 - current/previous-version sample matching is unreliable;
 - an existing `failure_rule.py` should be reused or updated by `atk-init-failure-rule`;
 - executing `failure_rule.py` would overwrite an existing `failure_cases.csv`;
@@ -161,6 +171,7 @@ Do not ask for confirmation for routine, reversible local file generation when t
 ## Per-Skill preconditions and failure behavior
 
 - `atk-status`: no version directory is required. It inspects `.atk/` state and recommends the next Skill or manual command without bypassing confirmation triggers.
+- `atk-build-ground-truth`: no version directory is required. Require existing `.atk/datasets/dataset.csv` and valid non-empty, unique positive-integer `atk_id`; if missing or invalid, stop with repair guidance to use `atk-build-dataset`/`atk-init` or fix `atk_id`. Inspect headers and representative rows before generating. Ask the user to choose one global `ground_truth` style (exact answer or natural-language acceptance criteria) before writing. Preserve original columns and append `ground_truth` if absent. If existing `ground_truth` or expected-like columns would be overwritten, normalized, or semantically replaced, show a candidate modification summary with affected row counts and representative examples, then ask for explicit confirmation. Do not create `.atk/results/vN`, run the Agent/eval runner, or write `failure_cases.csv`. Recommend rerunning `atk-run` when existing `eval_results.csv` predates enrichment; otherwise recommend `atk-find-failures` when failure discovery is next.
 - `atk-init`: no version directory is required. If Agent invocation, target runtime/import roots, dataset path/format, `atk_id` creation/validation, log source, Python `logging` logger names, existing `.atk/datasets/dataset.csv` overwrite semantics, or `agent_output` / `agent_output_log_path` column conflict cannot be inferred safely, ask the user to confirm before writing `.atk/runner/eval_runner.py`. Generated runners should support `--limit`/`--offset`/`--concurrency`, write results incrementally, require valid `atk_id`, add `agent_output_log_path`, create trustworthy row logs for configured same-process Python logging capture when an ATK row context is active, write same-process Python logging records to global `app.log`, keep stdout/stderr/subprocess/multiprocess/post-row background logs out of row files, and be import-checked under the inferred project runtime. If `atk-init` runs `.atk/runner/eval_runner.py --limit 1` or any other runner smoke command during verification, it must clean up the smoke-created result directory when that directory is confidently init-owned temporary output; if cleanup is unsafe because the directory pre-existed or contains user data, report the version impact instead of deleting it.
 - `atk-run`: require `.atk/runner/eval_runner.py`; execute it as the short command surface for batch testing using the target repository's Python runtime when available (`uv run python`, `.venv/bin/python`, Poetry, then `python3`). Pass through safe runner flags such as `--limit`, `--offset`, `--concurrency`, and `--only-failures`. The runner remains the only component that creates or reuses result versions. If the runner fails or no current `eval_results.csv` is produced, report the failure and do not clean up partial version directories. If `--only-failures` cannot resolve prior failed `atk_id` values back to `.atk/datasets/dataset.csv`, report the error and do not silently run the full dataset. If configured row logging is downgraded under `--concurrency > 1` because concurrent row logging is disabled, report that no `logs/row_*.log` files are expected and suggest serial execution or enabling the generated concurrent row-log flag for same-process Python logging evidence. If a partial `eval_results.csv` exists after interruption/failure, report it explicitly.
 - `atk-init-failure-rule`: require current `vN/eval_results.csv`; if no current version or missing `eval_results.csv`, stop with repair/rerun guidance. If existing `.atk/runner/failure_rule.py` exists, ask whether to reuse or update rule logic. This Skill generates or updates the rule script only; it does not write `failure_cases.csv`.

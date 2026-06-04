@@ -75,6 +75,14 @@ $atk-new-agent 数据集是 data/eval.csv
 
 Codex 会先理解数据集并确认你的意图，生成最小 Agent 项目，并把采访和设计信息写入 `.atk/specs/agent_spec.md`。这个步骤不会写 `.atk/datasets/dataset.csv`；后续仍由 `$atk-init` 负责接入 Agent 时的数据集校验、规范化和 runner 生成。
 
+如果 `.atk/datasets/dataset.csv` 已经存在，但缺少清晰的预期结果语义，导致后续异常判断不稳定，可以在跑评测前先补齐统一的 ground truth：
+
+```text
+$atk-build-ground-truth
+```
+
+Codex 会让你选择一种全局一致的 `ground_truth` 风格：精确答案，或自然语言验收标准。它会在保留原有列和 `atk_id` 的前提下就地更新 `.atk/datasets/dataset.csv`。这是 dataset-only / pre-results 步骤：不会运行 Agent，不会创建 `.atk/results/vN`，也不会写 `failure_cases.csv`。如果已有 `eval_results.csv` 是补齐 ground truth 之前生成的，请先重新运行 `$atk-run` 再找异常样本。
+
 ### 1. 初始化
 
 告诉 Codex 你的 Agent 从哪里启动、评估数据在哪里：
@@ -212,6 +220,7 @@ $atk-report
 
 - `$atk-status`：检查当前进度并提示下一步。
 - `$atk-build-dataset`：从业务描述、样例或规则构建 `.atk/datasets/dataset.csv`。
+- `$atk-build-ground-truth`：为现有 `.atk/datasets/dataset.csv` 补齐规范的 `ground_truth` 列。
 - `$atk-new-agent`：当你只有数据集、还没有 Agent 项目时，生成一个轻量 OpenAI-compatible Agent。
 - `$atk-init`：生成测试脚本。
 - `$atk-run`：运行评测并生成新版本结果。

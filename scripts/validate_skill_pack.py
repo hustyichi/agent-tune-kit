@@ -19,6 +19,7 @@ REQUIRED_FILES = [
     ".codex-plugin/plugin.json",
     "skills/atk-status/SKILL.md",
     "skills/atk-build-dataset/SKILL.md",
+    "skills/atk-build-ground-truth/SKILL.md",
     "skills/atk-new-agent/SKILL.md",
     "skills/atk-init/SKILL.md",
     "skills/atk-run/SKILL.md",
@@ -59,8 +60,13 @@ REQUIRED_FILES = [
 
 SKILL_FILES = [path for path in REQUIRED_FILES if path.startswith("skills/") and path.endswith("/SKILL.md")]
 PRE_INIT_SKILL_FILES = {"skills/atk-build-dataset/SKILL.md", "skills/atk-new-agent/SKILL.md"}
+DATASET_ONLY_PRE_RESULTS_SKILL_FILES = {
+    "skills/atk-build-dataset/SKILL.md",
+    "skills/atk-build-ground-truth/SKILL.md",
+}
+NON_LIFECYCLE_SKILL_FILES = PRE_INIT_SKILL_FILES | DATASET_ONLY_PRE_RESULTS_SKILL_FILES
 AGENT_SCAFFOLD_SKILL_FILES = {"skills/atk-new-agent/SKILL.md"}
-LIFECYCLE_SKILL_FILES = [path for path in SKILL_FILES if path not in PRE_INIT_SKILL_FILES]
+LIFECYCLE_SKILL_FILES = [path for path in SKILL_FILES if path not in NON_LIFECYCLE_SKILL_FILES]
 
 REQUIRED_SKILL_SECTIONS = [
     "## Purpose",
@@ -289,6 +295,30 @@ PER_FILE_PHRASES = {
         "$atk-new-agent",
         "if Agent existence is unclear",
         "$atk-init",
+    ],
+    "skills/atk-build-ground-truth/SKILL.md": [
+        "atk-build-ground-truth",
+        "dataset-only / pre-results",
+        "existing `.atk/datasets/dataset.csv`",
+        "ground_truth",
+        "valid `atk_id`",
+        "unique positive integers",
+        "exact answer",
+        "natural-language acceptance criteria",
+        "global ground-truth style",
+        "dataset-wide",
+        "candidate modification summary",
+        "affected row counts and representative examples",
+        "overwrite existing `ground_truth`",
+        "semantically replace expected-like fields",
+        "multiple incompatible Agent tasks",
+        "required domain facts are absent",
+        "Do not create `.atk/results/vN`",
+        "Do not run the Agent",
+        "Do not run `$atk-run`",
+        "Do not write `failure_cases.csv`",
+        "Do not change `atk-find-failures` behavior in v1",
+        "eval_results.csv` predates dataset enrichment",
     ],
     "skills/atk-init/SKILL.md": [
         ".atk/runner/eval_runner.py",
@@ -721,7 +751,9 @@ def main() -> int:
         text = existing_texts.get(rel, "")
         require(text.startswith("---\n"), f"{rel} missing YAML front matter", errors)
         required_sections = (
-            REQUIRED_PRE_INIT_SCAFFOLD_SKILL_SECTIONS if rel in PRE_INIT_SKILL_FILES else REQUIRED_SKILL_SECTIONS
+            REQUIRED_PRE_INIT_SCAFFOLD_SKILL_SECTIONS
+            if rel in NON_LIFECYCLE_SKILL_FILES
+            else REQUIRED_SKILL_SECTIONS
         )
         for section in required_sections:
             require(section in text, f"{rel} missing section {section}", errors)
@@ -738,7 +770,7 @@ def main() -> int:
             errors,
         )
 
-    for rel in PRE_INIT_SKILL_FILES:
+    for rel in NON_LIFECYCLE_SKILL_FILES:
         text = existing_texts.get(rel, "")
         require(
             'RESULTS_DIR = Path(".atk/results")' not in text,

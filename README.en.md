@@ -75,6 +75,14 @@ $atk-new-agent dataset is data/eval.csv
 
 Codex inspects the dataset, clarifies your intent, generates a minimal Agent project, and writes the interview and design notes to `.atk/specs/agent_spec.md`. This step does not write `.atk/datasets/dataset.csv`; `$atk-init` still owns dataset validation, normalization, and runner generation when connecting the Agent.
 
+If `.atk/datasets/dataset.csv` already exists but the expected-result semantics are missing or too weak for stable failure judgment, enrich the existing dataset before running evaluation:
+
+```text
+$atk-build-ground-truth
+```
+
+Codex asks you to choose one dataset-wide `ground_truth` style: exact answer or natural-language acceptance criteria. It then updates `.atk/datasets/dataset.csv` in place, preserving existing columns and `atk_id`. This is a dataset-only, pre-results step: it does not run the Agent, create `.atk/results/vN`, or write `failure_cases.csv`. If existing `eval_results.csv` was produced before this enrichment, rerun `$atk-run` before finding failures.
+
 ### 1. Initialize
 
 Tell Codex where your Agent starts and where the evaluation data lives:
@@ -212,6 +220,7 @@ Common output files:
 
 - `$atk-status`: inspect progress and suggest the next step.
 - `$atk-build-dataset`: build `.atk/datasets/dataset.csv` from business context, examples, or rules.
+- `$atk-build-ground-truth`: enrich an existing `.atk/datasets/dataset.csv` with a canonical `ground_truth` column.
 - `$atk-new-agent`: create a lightweight OpenAI-compatible Agent when you only have a dataset.
 - `$atk-init`: generate the test runner.
 - `$atk-run`: run evaluation and create a new result version.
