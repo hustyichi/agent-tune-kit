@@ -22,37 +22,10 @@ __ATK_STYLES__
       <button type="button" class="btn primary" id="export-review" title="导出审阅结果 CSV">导出审阅结果</button>
     </div>
     <div class="path" id="path-context"></div>
-    <nav class="tabs" role="tablist" aria-label="视图切换">
-      <button type="button" class="tab" role="tab" data-tab="overview" aria-selected="false">总览</button>
-      <button type="button" class="tab active" role="tab" data-tab="rows" aria-selected="true">数据浏览</button>
-    </nav>
+
   </header>
 
-  <!-- ===== Overview tab ===== -->
-  <section id="tab-overview" class="tab-panel" role="tabpanel" hidden>
-    <div class="kpi-row" id="overview-kpis"></div>
-    <div class="overview-grid">
-      <div class="panel chart-card">
-        <div class="panel-header"><span>数据质量问题分布</span><span class="hint" id="overview-issue-meta">--</span></div>
-        <div class="chart-body" id="chart-issue-bar"></div>
-      </div>
-      <div class="panel chart-card">
-        <div class="panel-header"><span>主要分类分布</span><span class="hint" id="overview-facet-meta">--</span></div>
-        <div class="chart-body" id="chart-facet-pie"></div>
-      </div>
-      <div class="panel chart-card wide">
-        <div class="panel-header"><span>ground_truth 长度分布</span><span class="hint" id="overview-length-meta">字符数分桶</span></div>
-        <div class="chart-body" id="chart-length-hist"></div>
-      </div>
-      <div class="panel chart-card wide">
-        <div class="panel-header"><span>审阅进度</span><span class="hint" id="overview-review-meta">本地保存（localStorage）</span></div>
-        <div class="chart-body" id="chart-review-pie"></div>
-      </div>
-    </div>
-  </section>
 
-  <!-- ===== Rows browser tab ===== -->
-  <section id="tab-rows" class="tab-panel" role="tabpanel">
     <main>
       <aside class="sidebar">
         <section class="panel">
@@ -96,12 +69,11 @@ __ATK_STYLES__
           </div>
         </section>
       </aside>
-      <section class="panel detail" aria-label="expected-vs-actual comparison">
-        <div id="detail-head" class="detail-head"></div>
-        <div id="detail-body" class="detail-body"></div>
+      <section aria-label="expected-vs-actual comparison">
+        <div id="detail-head" class="detail-head" style="border-radius: var(--radius-md); margin-bottom: 20px; overflow: hidden; background: var(--panel); backdrop-filter: blur(12px); border: 1px solid var(--panel-border);"></div>
+        <div id="detail-body"></div>
       </section>
     </main>
-  </section>
 
   <div class="drawer-backdrop" id="drawer-backdrop"></div>
   <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title">

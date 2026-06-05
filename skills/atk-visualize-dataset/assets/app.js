@@ -362,16 +362,54 @@
     }
     head.appendChild(headBadges);
 
-    // input vs ground_truth compare
-    var inputF = inputFields()[0];
+    // NEW LAYOUT: Split Detail
+    var split = el("div", { class: "detail-split" });
+
+    // LEFT: Inputs
+    var inputsCol = el("div", { class: "inputs-col" });
     var gtF = roleField("expected");
-    var io = el("div", { class: "io-grid" });
-    io.appendChild(buildPane("输入", inputF ? row.values[inputF] : "", inputF || "(未识别输入列)"));
+    var idF = roleField("id");
+    
+    var emptyInputsCount = 0;
+    var hasInputs = false;
+    for (var i = 0; i < payload.fieldnames.length; i++) {
+      var f = payload.fieldnames[i];
+      if (f === gtF || f === idF || f === "__extra_values") continue;
+      
+      var val = row.values[f];
+      var isEmpty = !(val || "").trim();
+      if (isEmpty && !state.showEmptyFields) {
+        emptyInputsCount++;
+        continue;
+      }
+      hasInputs = true;
+      inputsCol.appendChild(buildPane(f, val, "INPUT DIMENSION"));
+    }
+    
+    var inputsToolbar = el("div", { class: "fields-toolbar" }, [
+      el("span", { class: "label", text: "多维输入上下文 (Input Context)" }),
+      el("label", { class: "facet-option", style: "flex:0 0 auto;" }, [
+        el("input", {
+          type: "checkbox", checked: state.showEmptyFields ? "checked" : null,
+          onchange: function (ev) { state.showEmptyFields = ev.target.checked; renderDetail(); }
+        }),
+        el("span", { class: "label", text: "显示空字段 (" + emptyInputsCount + "个折叠)" }),
+      ]),
+    ]);
+    if (!hasInputs && emptyInputsCount === 0) {
+      inputsCol.appendChild(el("div", { class: "empty" }, [el("strong", { text: "没有输入字段" })]));
+    } else {
+      inputsCol.insertBefore(inputsToolbar, inputsCol.firstChild);
+    }
+    
+    // RIGHT: Ground Truth & Review
+    var gtCol = el("div", { class: "gt-col" });
+    
     var gtVal = gtF ? row.values[gtF] : "";
     var gtPane = el("div", { class: "pane" }, [
       el("div", { class: "pane-head" }, [
-        el("span", {}, [el("span", { class: "role-tag", text: "ground_truth" })]),
-        el("span", { text: gtF || "(未识别)" }),
+        el("span", {}, [el("span", { class: "role-tag", text: "EXPECTED OUTPUT" })]),
+        el("span", { text: gtF || "(未识别 ground_truth 列)" }),
       ]),
       el("div", { class: "pane-body" }, [
         el("div", { class: "gt-box" + ((gtVal || "").trim() ? "" : " empty") }, [
@@ -380,24 +418,37 @@
         ]),
       ]),
     ]);
-    io.appendChild(gtPane);
-    body.appendChild(io);
+    gtCol.appendChild(gtPane);
+    gtCol.appendChild(buildReviewBox(row));
+    
+    // Metadata block
+    var metaVal = "Row Number: " + row.rowNumber;
+    if (row.atkId) metaVal += "\nATK ID: " + row.atkId;
+    if (row.values["__extra_values"]) metaVal += "\nExtra Values: " + row.values["__extra_values"];
+    var metaPane = el("div", { class: "pane", style: "opacity: 0.8;" }, [
+      el("div", { class: "pane-head" }, [
+        el("span", {}, [el("span", { class: "role-tag", text: "METADATA" })]),
+        el("span", { text: idF || "(未识别 ID 列)" }),
+      ]),
+      el("div", { class: "pane-body" }, [
+        el("pre", { text: metaVal })
+      ]),
+    ]);
+    gtCol.appendChild(metaPane);
 
-    // review box
-    body.appendChild(buildReviewBox(row));
-
-    // all fields detail (preserve all source columns)
-    body.appendChild(buildFieldsBlock(row));
+    split.appendChild(inputsCol);
+    split.appendChild(gtCol);
+    body.appendChild(split);
   }
 
   function buildPane(title, value, sub) {
     return el("div", { class: "pane" }, [
       el("div", { class: "pane-head" }, [
         el("span", {}, [el("span", { class: "role-tag", text: title })]),
-        el("span", { text: sub }),
+        el("span", { text: sub, class: "copy", style: "cursor:pointer; color:var(--brand);", onclick: function(ev){ copyText(value, ev.target); } }),
       ]),
       el("div", { class: "pane-body" }, [
-        el("pre", { class: "", style: "margin:0;padding:10px;white-space:pre-wrap;overflow-wrap:anywhere;", text: (value || "").trim() ? value : "（空）" }),
+        el("pre", { text: (value || "").trim() ? value : "（空）" }),
       ]),
     ]);
   }
@@ -406,8 +457,8 @@
     var box = el("div", { class: "review-box" });
     var verdict = getVerdict(row);
     var title = el("div", { class: "review-title" }, [
-      el("span", { text: "人工审阅 · 该 ground_truth 是否符合预期？" }),
-      el("span", { class: "hint", text: "结果保存在本地浏览器" }),
+      el("span", { text: "人工审阅工具" }),
+      el("span", { class: "hint", text: "本地保存" }),
     ]);
     box.appendChild(title);
     var group = el("div", { class: "verdict-group" });
@@ -419,7 +470,6 @@
           onclick: function () {
             setVerdict(row, vd.key);
             renderDetail(); renderList(); renderMeta(); renderQualityBar();
-            if (state.tab === "overview") renderCharts();
           },
         }, [vd.icon + " " + vd.label]);
         group.appendChild(btn);
@@ -436,52 +486,9 @@
     return box;
   }
 
-  function buildFieldsBlock(row) {
-    var wrap = el("div", {});
-    var toolbar = el("div", { class: "fields-toolbar" }, [
-      el("span", { class: "label", text: "全部字段（保留原始列）" }),
-      el("label", { class: "facet-option", style: "flex:0 0 auto;" }, [
-        el("input", {
-          type: "checkbox", checked: state.showEmptyFields ? "checked" : null,
-          onchange: function (ev) { state.showEmptyFields = ev.target.checked; renderDetail(); }
-        }),
-        el("span", { class: "label", text: "显示空字段" }),
-      ]),
-    ]);
-    wrap.appendChild(toolbar);
-
-    var emptyCount = 0;
-    for (var i = 0; i < payload.fieldnames.length; i++) {
-      var f = payload.fieldnames[i];
-      var v = row.values[f];
-      var isEmpty = !(v || "").trim();
-      if (isEmpty && !state.showEmptyFields) { emptyCount++; continue; }
-      wrap.appendChild(buildField(f, v));
-    }
-    if (emptyCount > 0 && !state.showEmptyFields) {
-      wrap.appendChild(el("div", { class: "note-inline", text: emptyCount + " 个空字段已折叠（勾选“显示空字段”展开）" }));
-    }
-    return wrap;
-  }
-
-  function buildField(name, value) {
-    var v = value == null ? "" : String(value);
-    var det = el("details", { class: "field", open: v.length <= 400 ? "open" : null });
-    var summary = el("summary", {}, [
-      el("span", { class: "name", text: name }),
-      el("span", { class: "meta", text: v.length + " 字符" }),
-      el("span", {
-        class: "copy", text: "复制",
-        onclick: function (ev) { ev.preventDefault(); ev.stopPropagation(); copyText(v, ev.target); }
-      }),
-    ]);
-    det.appendChild(summary);
-    det.appendChild(el("div", { class: "content" }, [el("pre", { text: v })]));
-    return det;
-  }
-
   function copyText(text, node) {
-    function done() { var old = node.textContent; node.textContent = "已复制"; setTimeout(function () { node.textContent = old; }, 1200); }
+    var old = node.textContent;
+    function done() { node.textContent = "已复制"; setTimeout(function () { node.textContent = old; }, 1200); }
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(text).then(done, function () { fallbackCopy(text); done(); });
     } else { fallbackCopy(text); done(); }
@@ -575,145 +582,7 @@
     container.appendChild(box);
   }
 
-  // ---- tabs + charts ----
-  function switchTab(tab) {
-    state.tab = tab;
-    var tabs = document.querySelectorAll(".app-header .tab");
-    for (var i = 0; i < tabs.length; i++) {
-      var active = tabs[i].getAttribute("data-tab") === tab;
-      tabs[i].classList.toggle("active", active);
-      tabs[i].setAttribute("aria-selected", active ? "true" : "false");
-    }
-    $("tab-overview").hidden = tab !== "overview";
-    $("tab-rows").hidden = tab !== "rows";
-    if (tab === "overview") { renderKpis(); renderCharts(); }
-  }
 
-  function renderKpis() {
-    var wrap = $("overview-kpis");
-    wrap.innerHTML = "";
-    var rc = reviewCounts();
-    var kpis = [
-      { label: "总行数", value: payload.rowCount, cls: "brand" },
-      { label: "字段数", value: (payload.fieldnames || []).length, cls: "" },
-      { label: "问题行", value: issueRowCount(), cls: "bad" },
-      { label: "已审阅", value: rc.reviewed, sub: rc.total + " 行中", cls: "good" },
-      { label: "需修正", value: rc.bad, cls: "bad" },
-      { label: "存疑", value: rc.warn, cls: "warn" },
-    ];
-    for (var i = 0; i < kpis.length; i++) {
-      var k = kpis[i];
-      wrap.appendChild(el("div", { class: "kpi " + (k.cls || "") }, [
-        el("div", { class: "label", text: k.label }),
-        el("div", { class: "value", text: String(k.value) }),
-        k.sub ? el("div", { class: "sub", text: k.sub }) : null,
-      ]));
-    }
-  }
-
-  function ensureChart(id) {
-    if (!ECHARTS) return null;
-    if (charts[id]) return charts[id];
-    var node = $(id);
-    if (!node) return null;
-    charts[id] = ECHARTS.init(node);
-    return charts[id];
-  }
-  function emptyChart(id, msg) {
-    var node = $(id);
-    if (node) { node.className = "chart-body empty-chart"; node.textContent = msg; }
-  }
-
-  function renderCharts() {
-    if (!ECHARTS) {
-      emptyChart("chart-issue-bar", "ECharts 未加载");
-      return;
-    }
-    // issue bar
-    var counts = {};
-    for (var i = 0; i < payload.rows.length; i++) {
-      var iss = payload.rows[i].issues || [];
-      for (var j = 0; j < iss.length; j++) counts[iss[j]] = (counts[iss[j]] || 0) + 1;
-    }
-    var icats = [], ivals = [];
-    for (var oi = 0; oi < issueOrder.length; oi++) {
-      var code = issueOrder[oi];
-      if (!counts[code]) continue;
-      icats.push(issueLabels[code] || code); ivals.push(counts[code]);
-    }
-    if (icats.length) {
-      var c1 = ensureChart("chart-issue-bar");
-      c1 && c1.setOption({
-        grid: { left: 110, right: 24, top: 16, bottom: 24 },
-        tooltip: { trigger: "axis" },
-        xAxis: { type: "value", minInterval: 1 },
-        yAxis: { type: "category", data: icats, inverse: true },
-        series: [{ type: "bar", data: ivals, itemStyle: { color: "#b42318" }, barMaxWidth: 22 }],
-      });
-      $("overview-issue-meta").textContent = icats.length + " 类问题";
-    } else { emptyChart("chart-issue-bar", "未检测到质量问题 🎉"); $("overview-issue-meta").textContent = "无"; }
-
-    // facet pie (first facet)
-    if (facets.length) {
-      var facet = facets[0];
-      var pieData = facet.values.map(function (v) { return { name: v.value || "(空)", value: v.count }; });
-      var c2 = ensureChart("chart-facet-pie");
-      c2 && c2.setOption({
-        tooltip: { trigger: "item" },
-        legend: { type: "scroll", bottom: 0, textStyle: { fontSize: 11 } },
-        series: [{ type: "pie", radius: ["38%", "66%"], center: ["50%", "44%"], data: pieData,
-          label: { fontSize: 11 } }],
-      });
-      $("overview-facet-meta").textContent = facet.field;
-    } else { emptyChart("chart-facet-pie", "无可用分类列"); $("overview-facet-meta").textContent = "无"; }
-
-    // gt length histogram
-    var gtF = roleField("expected");
-    if (gtF) {
-      var buckets = [
-        { label: "0", lo: 0, hi: 0 },
-        { label: "1-20", lo: 1, hi: 20 },
-        { label: "21-50", lo: 21, hi: 50 },
-        { label: "51-100", lo: 51, hi: 100 },
-        { label: "101-200", lo: 101, hi: 200 },
-        { label: "201-500", lo: 201, hi: 500 },
-        { label: "500+", lo: 501, hi: Infinity },
-      ];
-      var bvals = buckets.map(function () { return 0; });
-      for (var r = 0; r < payload.rows.length; r++) {
-        var len = (payload.rows[r].values[gtF] || "").length;
-        for (var bk = 0; bk < buckets.length; bk++) {
-          if (len >= buckets[bk].lo && len <= buckets[bk].hi) { bvals[bk]++; break; }
-        }
-      }
-      var c3 = ensureChart("chart-length-hist");
-      c3 && c3.setOption({
-        grid: { left: 40, right: 24, top: 16, bottom: 30 },
-        tooltip: { trigger: "axis" },
-        xAxis: { type: "category", data: buckets.map(function (b) { return b.label; }) },
-        yAxis: { type: "value", minInterval: 1 },
-        series: [{ type: "bar", data: bvals, itemStyle: { color: "#3457d5" }, barMaxWidth: 40 }],
-      });
-    } else { emptyChart("chart-length-hist", "未识别 ground_truth 列"); }
-
-    // review pie
-    var rc = reviewCounts();
-    var unrev = rc.total - rc.reviewed;
-    var rdata = [
-      { name: "符合预期", value: rc.ok, itemStyle: { color: "#067647" } },
-      { name: "存疑", value: rc.warn, itemStyle: { color: "#b45309" } },
-      { name: "需修正", value: rc.bad, itemStyle: { color: "#b42318" } },
-      { name: "待审阅", value: unrev, itemStyle: { color: "#cbd5e1" } },
-    ].filter(function (d) { return d.value > 0; });
-    if (rdata.length) {
-      var c4 = ensureChart("chart-review-pie");
-      c4 && c4.setOption({
-        tooltip: { trigger: "item" },
-        legend: { bottom: 0, textStyle: { fontSize: 11 } },
-        series: [{ type: "pie", radius: ["38%", "66%"], center: ["50%", "44%"], data: rdata, label: { fontSize: 11 } }],
-      });
-    } else { emptyChart("chart-review-pie", "暂无审阅数据"); }
-  }
 
   // ---- page size select ----
   function initPageSizes() {
@@ -743,16 +612,7 @@
         btn.addEventListener("click", function () { openDrawer(btn.getAttribute("data-open-drawer")); });
       })(openers[i]);
     }
-    var tabs = document.querySelectorAll(".app-header .tab");
-    for (var t = 0; t < tabs.length; t++) {
-      (function (tabBtn) {
-        tabBtn.addEventListener("click", function () { switchTab(tabBtn.getAttribute("data-tab")); });
-      })(tabs[t]);
-    }
     document.addEventListener("keydown", function (ev) { if (ev.key === "Escape") closeDrawer(); });
-    window.addEventListener("resize", function () {
-      for (var id in charts) { if (charts[id]) charts[id].resize(); }
-    });
   }
 
   // ---- init ----
