@@ -16,12 +16,17 @@ semantics. Generation is handled by the fixed plugin-owned stdlib script `script
 model-time HTML synthesis, LLM summaries, or a project-local template.
 
 The page shell (HTML/CSS/JS) is shipped as plugin-owned assets under `skills/atk-visualize-dataset/assets/`
-(`page.html`, `styles.css`, `app.js`) plus a bundled offline ECharts build at
-`skills/atk-visualize-dataset/assets/vendor/echarts.min.js`. All four files are inlined into the single output HTML at
-generation time. These assets are plugin-owned, never copied into the user project, and never written outside the
-`.atk/datasets/` directory; the final artifact remains a single self-contained file with zero CDN, zero runtime
-dependencies, no sidecar files, and no per-project asset copies. The bundled ECharts vendor file is the only chart
-library used; the generator does not load chart libraries from any network location.
+(`page.html`, `styles.css`, `app.js`) plus the bundled offline ECharts build retained at
+`skills/atk-visualize-dataset/assets/vendor/echarts.min.js` for the self-contained asset contract. All four files are
+inlined into the single output HTML at generation time. These assets are plugin-owned, never copied into the user
+project, and never written outside the `.atk/datasets/` directory; the final artifact remains a single self-contained
+file with zero CDN, zero runtime dependencies, no sidecar files, no per-project asset copies, and no requirement for the
+reviewer to install Node, React, Vite, or any frontend package.
+
+The visual target is a static, vanilla-JS adaptation of the external `dataset-visualize` experience: prioritize the
+orange/slate product feel, sticky app header, two-tab dataset browsing/field-analysis workflow, polished grid controls,
+and row inspector interactions while omitting browser-upload, Gemini/AI Studio, dataset-editing, and source-level React
+requirements.
 
 ## Inputs
 
@@ -76,21 +81,23 @@ python3 <skill-dir>/scripts/generate_dataset_browser.py [--dataset-path .atk/dat
 11. Surface an **input-vs-ground_truth comparison** in the detail view so reviewers can confirm whether each
     ground_truth matches expectations, with a dedicated ground_truth confirmation panel that highlights empty
     ground_truth.
-12. Compute a **dataset quality lint** per row and expose it as a one-click filter bar plus an overview chart. Detected
+12. Compute a **dataset quality lint** per row and expose it as a one-click quality filter bar and row/field summaries.
+    Detected
     issues include: empty ground_truth, empty input, duplicate or missing/non-positive-integer `atk_id`, conflicting
     samples (same input but different ground_truth), exact duplicate samples, and ground_truth length outliers
     (too short / too long).
-13. Include summary counts, a client-side search/filter control, dynamic categorical facet filters auto-detected from
-    low-cardinality columns, pagination with default page size 50, expandable/detail rows that preserve all source
-    columns with empty-field folding and a copy button, and a Chinese-first UI tuned to the typical reviewer.
+13. Render the migrated static browser shell with a Chinese-first **数据列表 / 字段特征分析** tab structure, orange/slate
+    sticky header, summary cards, client-side search/filter controls, low-cardinality facet filters, column visibility
+    controls, sortable/paginated table browsing with default page size 50, and a slide-in row inspector that preserves
+    all source columns with empty-field folding and copy affordances.
 14. Provide a **client-side review export**: per-row verdict buttons (符合预期 / 存疑 / 需修正) plus a free-text note
     persisted in the reviewer's browser `localStorage` (keyed by `atk_id`), and an export button that downloads
     `dataset_review.csv` (`atk_id`, `row_number`, `verdict`, `note`, `detected_issues`) entirely client-side. This keeps
     the artifact offline and backend-free; the export feeds back into `atk-build-dataset` to fix issues, so no new
     editing Skill is introduced.
-15. Render an overview tab backed by the bundled offline ECharts library: KPI cards (rows / fields / issue rows /
-    review progress), a data-quality issue distribution chart, a primary categorical distribution chart, a ground_truth
-    length distribution histogram, and a review-progress chart.
+15. Render a field-analysis tab using the static payload and vanilla JS: field role mapping, row/field/ground_truth
+    KPI cards, detected issue summaries, categorical facet summaries, and per-field statistics. Do not promise a
+    runtime React app, browser-upload flow, AI Studio integration, or in-browser dataset editing.
 16. Write `dataset.html` atomically where practical, for example by writing a temporary file in the dataset directory
     and replacing the final path.
 17. Do not create a project-local visualization template, `.atk/visualize_config.json`, LLM summaries, sidecar metadata
@@ -124,9 +131,10 @@ After writing the visualization, summarize:
 - dataset path and row count;
 - output path `.atk/datasets/dataset.html`;
 - the number of rows flagged by the dataset quality lint and which issue categories appeared;
-- whether the HTML includes summary counts, search/filter, pagination, input-vs-ground_truth comparison, ground_truth
-  confirmation, schema-adaptive role switching, dynamic categorical facets, dataset quality lint, client-side review
-  export, expandable/detail rows, and the bundled offline ECharts overview;
+- whether the HTML includes the migrated Dataset Visualizer shell, 数据列表 / 字段特征分析 tabs, summary counts,
+  search/filter, column controls, pagination, input-vs-ground_truth comparison, ground_truth confirmation,
+  schema-adaptive role switching, dynamic categorical facets, dataset quality lint, row inspector details,
+  client-side review export, and the self-contained bundled assets;
 - the `browser_open=...` line from stdout so the user knows whether the page was auto-opened (the Skill should pass
   `--open` by default; if the open attempt is skipped, tell the user to open the printed file path manually);
 - the next useful step: review the dataset, export `dataset_review.csv` for any incorrect or unreasonable

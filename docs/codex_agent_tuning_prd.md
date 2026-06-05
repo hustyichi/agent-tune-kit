@@ -268,8 +268,10 @@
 - **HTML 生成要求**：
   - 使用 Python 标准库读取 CSV，保留所有原始列并兼容不同数据集字段
   - 对所有 CSV 派生内容进行 HTML 转义，并中和内联 JSON 中的 `</script>` 等风险序列
-  - 使用内嵌 CSS/JS 与内嵌的离线 ECharts 构建（位于 `skills/atk-visualize-dataset/assets/vendor/echarts.min.js`，由插件持有，零 CDN、零外链、零运行时依赖）
-  - 提供两标签视图（`总览` / `数据浏览`）：总览含 KPI 卡（总行/列/问题行及各类问题计数）、ground_truth 长度分布与主要分类分布；数据浏览支持全字段搜索、动态分类 facet 过滤、分页与可展开详情，并突出「输入 vs ground_truth」对照
+  - 使用插件持有的内嵌 HTML/CSS/JS 与自包含离线资源构建，保留 `skills/atk-visualize-dataset/assets/vendor/echarts.min.js` 的单文件资产内联契约；零 CDN、零外链、零运行时依赖，用户不需要安装 Node、React、Vite 或任何前端依赖
+  - 提供尽可能还原 `dataset-visualize` 视觉与交互的一体化静态页面：橙色/石板色 sticky header、产品化卡片布局，以及两标签视图（`数据列表` / `字段特征分析`）
+  - `数据列表` 支持全字段搜索、动态分类 facet 过滤、字段显示控制、排序、分页、质量标签过滤、详情抽屉，并突出「输入 vs ground_truth」对照
+  - `字段特征分析` 提供字段角色映射、总行/总列/ground_truth/问题样本 KPI、分类分布摘要和逐字段统计；首版以核心视觉还原和静态阅读体验优先，不迁移浏览器上传、Gemini/AI Studio、数据集编辑或源码级 React 要求
   - **数据集质检 lint**：逐行计算并提供过滤标签，包括空 ground_truth、空输入、重复/缺失/非正整数 `atk_id`、冲突样本（相同输入不同 ground_truth）、完全重复样本（输入+ground_truth 相同）、ground_truth 过短/过长（长度离群）
   - **客户端审阅**：每行详情提供裁决（✅符合预期 / ⚠️存疑 / ❌需修正）与备注，按 `atk_id` 存入 `localStorage`；「导出审阅结果」经 Blob 下载 `dataset_review.csv`（含 atk_id、行号、裁决、备注、检测到的问题），完全离线、无后端；审阅结果回流既有 `$atk-build-dataset` 修复，不新增编辑类 Skill
   - 数据集为空、表头无法解析或目标文件已存在且未确认覆盖时给出明确提示并安全退出，不破坏已有文件

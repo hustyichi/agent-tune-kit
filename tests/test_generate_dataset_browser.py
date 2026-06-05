@@ -88,6 +88,106 @@ class GenerateDatasetBrowserTests(unittest.TestCase):
             ]:
                 self.assertIn(phrase, text)
 
+    def test_visual_migration_contract_matches_dataset_visualize_shell(self) -> None:
+        """Lock the first-pass static shell markers mapped from dataset-visualize."""
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp)
+            write_csv(
+                project / ".atk" / "datasets" / "dataset.csv",
+                ["atk_id", "scenario", "input", "ground_truth", "custom_col"],
+                [
+                    {
+                        "atk_id": "1",
+                        "scenario": "main",
+                        "input": "What is 2+2?",
+                        "ground_truth": "4",
+                        "custom_col": "preserved value",
+                    },
+                ],
+            )
+
+            result = run_generator(project)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            text = (project / ".atk" / "datasets" / "dataset.html").read_text(encoding="utf-8")
+            for phrase in [
+                "Dataset Visualizer",
+                "application-root",
+                "export-reviewed-dataset-btn",
+                "导出评测结果",
+                "数据列表",
+                "字段特征分析",
+                "dataset-table-controller",
+                "statistics-dashboard",
+                "stat-card-rows",
+                "stat-card-fields",
+                "stat-card-gt",
+                "inspector-overlay-pane",
+            ]:
+                self.assertIn(phrase, text)
+
+    def test_static_visualization_has_no_user_frontend_dependency_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp)
+            write_csv(
+                project / ".atk" / "datasets" / "dataset.csv",
+                ["atk_id", "input", "expected"],
+                [{"atk_id": "1", "input": "hi", "expected": "hello"}],
+            )
+
+            result = run_generator(project)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            text = (project / ".atk" / "datasets" / "dataset.html").read_text(encoding="utf-8")
+            forbidden_runtime_dependencies = [
+                "fonts.googleapis.com",
+                "cdn.jsdelivr.net",
+                "unpkg.com",
+                "esm.sh",
+                "react-dom",
+                "tailwindcss",
+                "papaparse",
+                "vite/client",
+            ]
+            for phrase in forbidden_runtime_dependencies:
+                self.assertNotIn(phrase, text.lower())
+
+    def test_migrated_frontend_preserves_atk_review_utility_hooks(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp)
+            write_csv(
+                project / ".atk" / "datasets" / "dataset.csv",
+                ["atk_id", "scenario", "input", "ground_truth"],
+                [
+                    {"atk_id": "1", "scenario": "main", "input": "hello", "ground_truth": "hi"},
+                    {"atk_id": "2", "scenario": "edge", "input": "", "ground_truth": ""},
+                ],
+            )
+
+            result = run_generator(project)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            datasets_dir = project / ".atk" / "datasets"
+            self.assertEqual({path.name for path in datasets_dir.iterdir()}, {"dataset.csv", "dataset.html"})
+            text = (datasets_dir / "dataset.html").read_text(encoding="utf-8")
+            for phrase in [
+                "GROUND TRUTH",
+                "dataset quality lint",
+                "quality-bar",
+                "exportReview",
+                "dataset_review.csv",
+                "detected_issues",
+                "review-note",
+                "verdict-btn",
+                "localStorage",
+                "字段角色映射",
+                "No data rows in dataset.csv",
+                '"id:" + row.atkId + ":row:" + row.rowNumber',
+            ]:
+                self.assertIn(phrase, text)
+            self.assertNotIn("dataset_summary.json", text)
+            self.assertNotIn("visualize_config", text)
+
     def test_missing_dataset_exits_2(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             project = Path(tmp)

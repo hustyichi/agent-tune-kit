@@ -94,7 +94,7 @@ It renders `.atk/datasets/dataset.csv` into a local, single-file, offline HTML b
 .atk/datasets/dataset.html
 ```
 
-The page supports search, category filtering, and paginated row browsing, highlights the input-vs-ground_truth comparison, and auto-flags issues such as empty values, duplicate/missing `atk_id`, conflicting samples, and length outliers, so you can quickly confirm whether each ground_truth matches expectations. You can mark a verdict per row (matches / suspect / needs fix) and export `dataset_review.csv`, then return to `$atk-build-dataset` to fix it.
+The page uses a Dataset Visualizer-style offline static interface with Data List / Field Feature Analysis tabs, column visibility controls, search, category filtering, sorting, pagination, and a detail drawer. It highlights the input-vs-ground_truth comparison and auto-flags issues such as empty values, duplicate/missing `atk_id`, conflicting samples, and length outliers, so you can quickly confirm whether each ground_truth matches expectations. You can mark a verdict per row (matches / suspect / needs fix) and export `dataset_review.csv`, then return to `$atk-build-dataset` to fix it; reviewers do not need to install any frontend dependencies.
 
 ### 1. Initialize
 

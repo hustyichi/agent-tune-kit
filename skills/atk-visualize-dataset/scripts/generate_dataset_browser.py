@@ -3,10 +3,11 @@
 
 Reads the non-versioned project dataset ``.atk/datasets/dataset.csv`` and renders a
 single self-contained ``.atk/datasets/dataset.html`` for fast review of the dataset
-content and per-row ground_truth confirmation. The page shell (HTML/CSS/JS) and the
-bundled offline ECharts build live in sibling ``assets/`` as plugin-owned files and are
-inlined at runtime: no project-local template, no sidecar metadata, no external CDN,
-no LLM summary.
+content and per-row ground_truth confirmation. The page shell (HTML/CSS/JS) renders a
+Dataset Visualizer-style static interface with Data List and Field Feature Analysis
+tabs. The shell assets and bundled offline ECharts build live in sibling ``assets/`` as
+plugin-owned files and are inlined at runtime: no project-local template, no sidecar
+metadata, no external CDN, no user-installed frontend dependency, no LLM summary.
 
 This generator never reads or writes ``.atk/results/vN``; the dataset is not versioned.
 """
@@ -495,9 +496,10 @@ def run(argv: list[str]) -> int:
     print(f"facets={len(facets)}")
     print(f"overwrite={overwrite_status}")
     print(
-        "features=summary counts, search/filter, pagination, input-vs-ground_truth, role switching, "
-        "dynamic facets, dataset quality lint, ground_truth confirmation, client-side review export, "
-        "all-field detail, bundled offline ECharts"
+        "features=Dataset Visualizer shell, Data List / Field Feature Analysis tabs, summary counts, "
+        "search/filter, column controls, sorting, pagination, input-vs-ground_truth, role switching, "
+        "dynamic facets, dataset quality lint, ground_truth confirmation, row inspector detail, "
+        "client-side review export, bundled offline ECharts"
     )
     if args.open_browser:
         ok, info = open_in_browser(output_path)

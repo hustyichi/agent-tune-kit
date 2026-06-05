@@ -9,93 +9,163 @@ __ATK_STYLES__
   </style>
 </head>
 <body>
-  <header class="app-header">
-    <div class="brand"><span class="dot" aria-hidden="true"></span><span>Agent Tune Kit</span></div>
-    <h1>数据集审阅 · <span id="meta-name">dataset.csv</span></h1>
-    <div class="meta">
-      <span class="chip" id="meta-rows">0 行</span>
-      <span class="chip" id="meta-fields">0 列</span>
-      <span class="chip" id="meta-issues">0 问题行</span>
-      <span class="chip review-progress" id="meta-review">未审阅</span>
-      <button type="button" class="btn" data-open-drawer="roles" title="字段角色映射">角色映射</button>
-      <button type="button" class="btn" data-open-drawer="warnings" title="解析警告">警告</button>
-      <button type="button" class="btn primary" id="export-review" title="导出审阅结果 CSV">导出审阅结果</button>
-    </div>
-    <div class="path" id="path-context"></div>
+  <div id="application-root" class="app-shell">
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="brand-lockup">
+          <div class="brand-icon" aria-hidden="true">▦</div>
+          <div>
+            <h1>Dataset Visualizer</h1>
+            <div class="dataset-path" id="path-context"></div>
+          </div>
+        </div>
+        <div class="topbar-actions">
+          <span class="metric-pill" id="meta-rows">0 行</span>
+          <span class="metric-pill" id="meta-fields">0 列</span>
+          <span class="metric-pill warning" id="meta-issues">0 问题行</span>
+          <span class="metric-pill" id="meta-review">未审阅</span>
+          <button type="button" class="btn subtle" data-open-drawer="roles">字段映射</button>
+          <button type="button" class="btn subtle" data-open-drawer="warnings">解析警告</button>
+          <button type="button" class="btn primary" id="export-reviewed-dataset-btn">导出评测结果</button>
+        </div>
+      </div>
+    </header>
 
-  </header>
+    <main class="workspace">
+      <section class="tab-strip" aria-label="Dataset views">
+        <div class="tabs">
+          <button type="button" class="tab active" id="tab-grid" data-tab="grid">数据列表</button>
+          <button type="button" class="tab" id="tab-stats" data-tab="stats">字段特征分析</button>
+        </div>
+        <div class="standard-column-note">
+          <span>当前标准列已定位在:</span>
+          <strong id="standard-column">无定位</strong>
+        </div>
+      </section>
 
+      <section class="view active" id="view-grid" data-view="grid">
+        <div id="dataset-table-controller" class="table-controller">
+          <div class="control-card">
+            <div class="search-wrap">
+              <span class="search-icon" aria-hidden="true">⌕</span>
+              <input id="search" type="search" placeholder="在整个数据集搜索..." aria-label="搜索全部字段">
+            </div>
+            <button type="button" class="btn ghost" id="clear-filters-btn">重置所有过滤器</button>
+            <span class="filtered-count" id="filtered-count">0 / 0</span>
+          </div>
 
-    <main>
-      <aside class="sidebar">
-        <section class="panel">
-          <div class="panel-body">
-            <div class="stats">
-              <div class="stat"><div class="label">总行数</div><div class="value" id="stat-total">0</div></div>
-              <div class="stat"><div class="label">字段</div><div class="value" id="stat-fields">0</div></div>
-              <div class="stat bad"><div class="label">问题行</div><div class="value" id="stat-issues">0</div></div>
-              <div class="stat ok"><div class="label" id="stat-review-label">已确认</div><div class="value" id="stat-review-value">0</div></div>
+          <div id="quality-bar" class="quality-bar" hidden></div>
+
+          <div class="field-switcher" id="column-visibility-panel">
+            <span class="field-switcher-title">显示数据字段:</span>
+            <div id="column-chips" class="column-chips"></div>
+          </div>
+
+          <div id="facets" class="facet-group"></div>
+
+          <div id="empty-state-all" class="empty-state" hidden>
+            <strong>暂无数据行</strong>
+            <span>No data rows in dataset.csv</span>
+          </div>
+          <div id="empty-state-filtered" class="empty-state" hidden>
+            <strong>没有匹配的行</strong>
+            <span>请调整搜索词或过滤器。</span>
+          </div>
+
+          <div class="table-frame">
+            <table class="dataset-table" aria-label="数据列表">
+              <thead id="table-head"></thead>
+              <tbody id="table-body"></tbody>
+            </table>
+          </div>
+
+          <div class="pager">
+            <button id="prev" type="button" class="btn">上一页</button>
+            <div class="pager-center">
+              <span id="page-label"></span>
+              <select id="page-size" aria-label="每页行数"></select>
+            </div>
+            <button id="next" type="button" class="btn">下一页</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="view-stats" data-view="stats">
+        <div id="statistics-dashboard" class="stats-dashboard">
+          <div class="stat-grid">
+            <div id="stat-card-rows" class="stat-card">
+              <span class="stat-icon">▤</span>
+              <div><span class="stat-label">总记录条数</span><strong id="stat-total">0</strong></div>
+            </div>
+            <div id="stat-card-fields" class="stat-card">
+              <span class="stat-icon">▥</span>
+              <div><span class="stat-label">总字段数</span><strong id="stat-fields">0</strong></div>
+            </div>
+            <div id="stat-card-gt" class="stat-card">
+              <span class="stat-icon">?</span>
+              <div><span class="stat-label">参考答案覆盖率</span><strong id="stat-gt">N/A</strong></div>
             </div>
           </div>
-        </section>
-        <section class="panel">
-          <div class="panel-header">
-            <span>Search / filter / pagination</span>
-            <span class="hint" id="filtered-count">0 / 0</span>
-          </div>
-          <div class="panel-body">
-            <div class="search-row">
-              <input id="search" type="search" placeholder="搜索全部字段…" aria-label="搜索全部字段">
-            </div>
-            <div id="quality-bar" class="quality-bar" hidden></div>
-            <div id="facets" class="facet-group" style="margin-top:10px;"></div>
-            <div id="empty-state-all" class="empty" hidden>
-              <strong>数据集为空</strong>
-              <span>No data rows in dataset.csv</span>
-            </div>
-            <div id="empty-state-filtered" class="empty" hidden>
-              <strong>没有匹配的行</strong>
-              <span>请调整搜索词或过滤器。</span>
-            </div>
-            <div id="row-list" class="case-list" role="list" aria-label="数据行列表" style="margin-top:10px;"></div>
-            <div class="pager">
-              <button id="prev" type="button" class="btn">上一页</button>
-              <div class="controls">
-                <span id="page-label" class="label"></span>
-                <select id="page-size" aria-label="每页行数"></select>
+
+          <div class="stats-layout">
+            <aside class="field-catalog">
+              <div class="section-heading">
+                <span>数据列特征分析</span>
+                <strong id="field-count">0</strong>
               </div>
-              <button id="next" type="button" class="btn">下一页</button>
-            </div>
+              <div class="search-wrap compact">
+                <span class="search-icon" aria-hidden="true">⌕</span>
+                <input id="column-search" type="search" placeholder="搜索数据字段名..." aria-label="搜索字段">
+              </div>
+              <div id="column-list" class="column-list"></div>
+            </aside>
+            <section class="field-detail">
+              <div id="selected-column-detail" class="field-detail-card"></div>
+              <div id="length-histogram" class="histogram-card"></div>
+            </section>
           </div>
-        </section>
-      </aside>
-      <section aria-label="expected-vs-actual comparison">
-        <div id="detail-head" class="detail-head" style="border-radius: var(--radius-md); margin-bottom: 20px; overflow: hidden; background: var(--panel); backdrop-filter: blur(12px); border: 1px solid var(--panel-border);"></div>
-        <div id="detail-body"></div>
+        </div>
       </section>
     </main>
 
-  <div class="drawer-backdrop" id="drawer-backdrop"></div>
-  <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
-    <div class="drawer-header">
-      <span id="drawer-title">设置</span>
-      <button type="button" id="drawer-close" class="btn ghost" aria-label="关闭">✕</button>
+    <div id="inspector-overlay-pane" class="inspector-overlay" hidden>
+      <aside class="inspector-panel" role="dialog" aria-modal="true" aria-labelledby="inspector-title">
+        <div class="inspector-header">
+          <div class="inspector-title-wrap">
+            <span id="inspector-row-badge" class="row-badge">#</span>
+            <div>
+              <h2 id="inspector-title">数据集详情</h2>
+              <p id="inspector-subtitle"></p>
+            </div>
+          </div>
+          <button type="button" id="inspector-close" class="icon-btn" aria-label="关闭">×</button>
+        </div>
+        <div id="inspector-body" class="inspector-body"></div>
+      </aside>
     </div>
-    <div class="drawer-body">
-      <section class="drawer-section" data-section="roles">
-        <h3>schema-adaptive role switching · 字段角色映射 · auto-detected</h3>
-        <div id="drawer-roles"></div>
-      </section>
-      <section class="drawer-section" data-section="warnings">
-        <h3>解析警告</h3>
-        <div id="drawer-warnings"></div>
-      </section>
-    </div>
-  </aside>
 
-  <footer style="text-align:center;color:var(--muted);font-size:11px;padding:14px;">
-    由 atk-visualize-dataset 生成 · 单文件 / 离线 / 零外链 / bundled offline ECharts / 无 LLM 摘要
-  </footer>
+    <div class="drawer-backdrop" id="drawer-backdrop"></div>
+    <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
+      <div class="drawer-header">
+        <span id="drawer-title">设置</span>
+        <button type="button" id="drawer-close" class="btn ghost" aria-label="关闭">×</button>
+      </div>
+      <div class="drawer-body">
+        <section class="drawer-section" data-section="roles">
+          <h3>schema-adaptive role switching · 字段角色映射 · auto-detected</h3>
+          <div id="drawer-roles"></div>
+        </section>
+        <section class="drawer-section" data-section="warnings">
+          <h3>解析警告</h3>
+          <div id="drawer-warnings"></div>
+        </section>
+      </div>
+    </aside>
+
+    <footer class="footer-note">
+      由 atk-visualize-dataset 生成 · 单文件 / 离线 / 零外链 / bundled offline ECharts / 无 LLM 摘要
+    </footer>
+  </div>
 
   <!-- audit markers (preserved for plugin self-test substring checks; do not remove) -->
   <div class="audit-only" aria-hidden="true">__ATK_AUDIT_MARKERS__</div>

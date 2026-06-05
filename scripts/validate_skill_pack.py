@@ -485,7 +485,7 @@ PER_FILE_PHRASES = {
         "client-side review export",
         "dataset_review.csv",
         "schema-adaptive role switching",
-        "expandable/detail rows",
+        "row inspector details",
         "ground_truth",
         "atk_id",
         "bundled offline ECharts",
