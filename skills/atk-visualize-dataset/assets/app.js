@@ -492,9 +492,7 @@
       el("div", { class: "gt-text", text: gtValue.trim() ? gtValue : "该行缺少期望结果，请补充。" }),
     ]));
     right.appendChild(buildReviewBox(row));
-    var meta = "Row Number: " + row.rowNumber;
-    if (row.atkId) meta += "\nATK ID: " + row.atkId;
-    right.appendChild(buildFieldPane("METADATA", meta, idField || "未识别 ID 列"));
+
     container.appendChild(left);
     container.appendChild(right);
   }
