@@ -671,6 +671,21 @@
     return banner;
   }
 
+  function buildLogCard(logContent) {
+    var card = el("div", { class: "log-card" }, [
+      el("div", { class: "log-card-header" }, [
+        el("span", { class: "log-card-icon", text: ">_" }),
+        el("span", { class: "log-card-title", text: "AGENT 本次执行日志 (AGENT CONSOLE LOGS)" })
+      ]),
+      el("div", { class: "log-card-body" }, [
+        el("pre", {}, [
+          el("code", { text: logContent })
+        ])
+      ])
+    ]);
+    return card;
+  }
+
   function renderInspectorBody(row) {
     var container = $("inspector-body");
     if (!container) return;
@@ -683,6 +698,7 @@
     var expectedField = roleField("expected");
     var actualField = roleField("actual");
     var reasonField = roleField("reason");
+    var logField = roleField("log");
 
     var abnormalField = getAbnormalField();
     var abnormalValue = abnormalField ? normalizeText(row.values[abnormalField]).trim().toLowerCase() : "";
@@ -698,8 +714,15 @@
       right.appendChild(comparisonCard);
     }
 
+    if (row.logContent) {
+      var logCard = buildLogCard(row.logContent);
+      if (logCard) {
+        right.appendChild(logCard);
+      }
+    }
+
     fields.forEach(function (field) {
-      if (field === expectedField || field === actualField || field === reasonField) return;
+      if (field === expectedField || field === actualField || field === reasonField || field === logField) return;
 
       var value = normalizeText(row.values[field]);
       if (!value.trim() && !state.showEmptyFields) {

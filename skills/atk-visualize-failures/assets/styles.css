@@ -999,3 +999,47 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, 
   color: #166534;
   font-weight: 500;
 }
+
+/* Monospace Log Card styling inside inspector panel */
+.log-card {
+  background: #090d16;
+  border: 1px solid #1e293b;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-xs);
+  padding: 16px;
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+}
+.log-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #cbd5e1;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+.log-card-icon {
+  color: #38bdf8; /* light blue for code symbol */
+}
+.log-card-body {
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  background: #020617;
+  overflow: hidden;
+}
+.log-card-body pre {
+  margin: 0;
+  padding: 14px;
+  overflow: auto;
+  max-height: 320px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: #4ade80; /* matrix green */
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+}

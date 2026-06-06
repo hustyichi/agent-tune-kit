@@ -62,6 +62,7 @@ class GenerateFailureBrowserTests(unittest.TestCase):
             current = project / ".atk" / "results" / "v2"
             (project / ".atk" / "results" / "v1").mkdir(parents=True)
             (current / "logs").mkdir(parents=True)
+            (current / "logs" / "row_000001.log").write_text("[INIT] case verification started", encoding="utf-8")
             write_csv(
                 current / "failure_cases.csv",
                 [
@@ -112,6 +113,8 @@ class GenerateFailureBrowserTests(unittest.TestCase):
                 "preserved evidence",
                 "logs/row_000001.log",
                 '"defaultPageSize":50',
+                "logContent",
+                "case verification started",
             ]:
                 self.assertIn(phrase, text)
 

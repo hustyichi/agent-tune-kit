@@ -828,12 +828,27 @@ def enrich_rows(
     enriched: list[dict[str, Any]] = []
     for index, row in enumerate(rows, start=1):
         safe_links: dict[str, str] = {}
+        log_content = ""
         for field in fieldnames:
             if field == log_field or "log" in normalize_name(field):
                 href = safe_log_href(row.get(field, ""), current_dir)
                 if href:
                     safe_links[field] = href
-        enriched.append({"rowNumber": index, "values": row, "safeLogHrefs": safe_links})
+                    log_file_path = current_dir / href
+                    if log_file_path.is_file():
+                        try:
+                            content, truncated = _safe_read_text(log_file_path, 65536)
+                            if truncated:
+                                content += "\n... [LOG TRUNCATED - OVER 64KB] ..."
+                            log_content = content
+                        except Exception:
+                            log_content = ""
+        enriched.append({
+            "rowNumber": index,
+            "values": row,
+            "safeLogHrefs": safe_links,
+            "logContent": log_content
+        })
     return enriched
 
 
