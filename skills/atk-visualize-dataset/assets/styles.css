@@ -624,12 +624,7 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, 
   font-size: 12px;
 }
 .note-inline { color: var(--muted); font-size: 13px; }
-.footer-note {
-  padding: 14px;
-  text-align: center;
-  color: var(--muted);
-  font-size: 11px;
-}
+
 .audit-only {
   position: absolute;
   left: -9999px;

@@ -79,7 +79,6 @@ class GenerateDatasetBrowserTests(unittest.TestCase):
                 "ground_truth confirmation",
                 "client-side review export",
                 "schema-adaptive role switching",
-                "bundled offline ECharts",
                 "custom_col",
                 "preserved value",
                 '"defaultPageSize":50',
