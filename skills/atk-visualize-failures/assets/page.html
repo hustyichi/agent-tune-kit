@@ -73,20 +73,32 @@ __ATK_STYLES__
             <span>请调整搜索词或过滤器。</span>
           </div>
 
-          <div class="table-frame">
-            <table class="dataset-table" aria-label="数据列表">
-              <thead id="table-head"></thead>
-              <tbody id="table-body"></tbody>
-            </table>
-          </div>
-
-          <div class="pager">
-            <button id="prev" type="button" class="btn">上一页</button>
-            <div class="pager-center">
-              <span id="page-label"></span>
-              <select id="page-size" aria-label="每页行数"></select>
+          <div class="table-card">
+            <div class="table-frame">
+              <table class="dataset-table" aria-label="数据列表">
+                <thead id="table-head"></thead>
+                <tbody id="table-body"></tbody>
+              </table>
             </div>
-            <button id="next" type="button" class="btn">下一页</button>
+
+            <div class="pager">
+              <div class="pager-left">
+                <span id="pager-info"></span>
+              </div>
+              <div class="pager-right">
+                <div class="pager-select-wrap">
+                  <span class="pager-select-label">每页显示:</span>
+                  <select id="page-size" aria-label="每页行数"></select>
+                </div>
+                <div class="pager-nav">
+                  <button id="first" type="button" class="pager-btn" title="首页">&lt;&lt;</button>
+                  <button id="prev" type="button" class="pager-btn" title="上一页">&lt;</button>
+                  <span id="page-label" class="pager-label"></span>
+                  <button id="next" type="button" class="pager-btn" title="下一页">&gt;</button>
+                  <button id="last" type="button" class="pager-btn" title="尾页">&gt;&gt;</button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>

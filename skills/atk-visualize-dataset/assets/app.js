@@ -440,9 +440,20 @@
       });
       body.appendChild(tr);
     });
-    $("page-label").textContent = "第 " + (state.page + 1) + " / " + pages + " 页";
-    $("prev").disabled = state.page <= 0;
-    $("next").disabled = state.page >= pages - 1;
+    var pagerInfo = $("pager-info");
+    if (pagerInfo) {
+      var startRow = rows.length ? (state.page * state.pageSize + 1) : 0;
+      var endRow = Math.min(rows.length, (state.page + 1) * state.pageSize);
+      pagerInfo.textContent = "显示为 " + startRow + " 至 " + endRow + " / 共 " + rows.length + " 条结果";
+    }
+    var pageLabel = $("page-label");
+    if (pageLabel) {
+      pageLabel.textContent = (state.page + 1) + " / " + pages + " 页";
+    }
+    if ($("first")) $("first").disabled = state.page <= 0;
+    if ($("prev")) $("prev").disabled = state.page <= 0;
+    if ($("next")) $("next").disabled = state.page >= pages - 1;
+    if ($("last")) $("last").disabled = state.page >= pages - 1;
   }
 
   function buildRowBadges(row) {
@@ -863,7 +874,7 @@
     var select = $("page-size");
     select.innerHTML = "";
     (config.pageSizes || [25, 50, 100, 250]).forEach(function (size) {
-      var option = el("option", { value: String(size), text: size + " / 页" });
+      var option = el("option", { value: String(size), text: size + " 条" });
       if (size === state.pageSize) option.selected = true;
       select.appendChild(option);
     });
@@ -893,8 +904,15 @@
       renderColumnList();
     });
     $("clear-filters-btn").addEventListener("click", resetFilters);
-    $("prev").addEventListener("click", function () { state.page -= 1; renderTable(); });
-    $("next").addEventListener("click", function () { state.page += 1; renderTable(); });
+    if ($("first")) $("first").addEventListener("click", function () { state.page = 0; renderTable(); });
+    if ($("prev")) $("prev").addEventListener("click", function () { state.page -= 1; renderTable(); });
+    if ($("next")) $("next").addEventListener("click", function () { state.page += 1; renderTable(); });
+    if ($("last")) $("last").addEventListener("click", function () {
+      var rows = sortedRows();
+      var pages = Math.max(1, Math.ceil(rows.length / state.pageSize));
+      state.page = pages - 1;
+      renderTable();
+    });
     $("page-size").addEventListener("change", function (ev) {
       state.pageSize = parseInt(ev.target.value, 10) || config.defaultPageSize;
       state.page = 0;
