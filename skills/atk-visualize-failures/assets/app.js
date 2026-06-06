@@ -190,9 +190,10 @@
     var out = {};
     var fieldnames = payload.fieldnames || [];
     var important = [roleField("id"), roleField("input"), roleField("expected"), roleField("actual"), roleField("reason"), roleField("log")];
+    var abnormalField = getAbnormalField();
     for (var i = 0; i < fieldnames.length; i++) {
       var field = fieldnames[i];
-      out[field] = i < 6 || important.indexOf(field) >= 0;
+      out[field] = i < 6 || important.indexOf(field) >= 0 || field === abnormalField;
     }
     return out;
   }
