@@ -266,10 +266,14 @@
       });
     }
     var reviews = reviewCounts();
-    $("meta-rows").textContent = payload.rowCount + " 行";
-    $("meta-fields").textContent = (payload.fieldnames || []).length + " 列";
-    $("meta-issues").textContent = issueRowCount() + " 问题行";
-    $("meta-review").textContent = reviews.reviewed ? ("已审 " + reviews.reviewed + "/" + reviews.total) : "未审阅";
+    var elRows = $("meta-rows");
+    if (elRows) elRows.textContent = payload.rowCount + " 行";
+    var elFields = $("meta-fields");
+    if (elFields) elFields.textContent = (payload.fieldnames || []).length + " 列";
+    var elIssues = $("meta-issues");
+    if (elIssues) elIssues.textContent = issueRowCount() + " 问题行";
+    var elReview = $("meta-review");
+    if (elReview) elReview.textContent = reviews.reviewed ? ("已审 " + reviews.reviewed + "/" + reviews.total) : "未审阅";
     $("path-context").textContent = (payload.datasetPath || "dataset.csv") + " → " + (payload.output || "dataset.html");
     $("standard-column").textContent = gt || "无定位";
     $("stat-total").textContent = payload.rowCount;
