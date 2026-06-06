@@ -66,6 +66,83 @@
     return String(value == null ? "" : value);
   }
 
+  function escapeHtml(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (ch) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch];
+    });
+  }
+
+  function isCodeLike(value) {
+    if (!value) return false;
+    var s = String(value);
+    if (s.indexOf("\n") < 0) return false;
+    if (/[{};()]/.test(s)) return true;
+    if (/^[ \t]{2,}\S/m.test(s)) return true;
+    return false;
+  }
+
+  var KEYWORDS = (
+    "function|return|if|else|for|while|do|switch|case|default|break|continue|" +
+    "try|catch|finally|throw|new|delete|typeof|instanceof|in|of|" +
+    "const|let|var|class|extends|implements|interface|enum|export|import|from|as|" +
+    "public|private|protected|static|final|abstract|void|true|false|null|undefined|" +
+    "this|super|async|await|yield|module|package|namespace"
+  );
+  var KW_RE = new RegExp("\\b(" + KEYWORDS + ")\\b", "g");
+
+  function highlightCode(value) {
+    var s = escapeHtml(value);
+    s = s.replace(/(`(?:[^`\\]|\\.)*`|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g, function (m) {
+      return '<span class="tok-str">' + m + '</span>';
+    });
+    s = s.replace(/\/\*[\s\S]*?\*\//g, function (m) {
+      return '<span class="tok-com">' + m + '</span>';
+    });
+    s = s.replace(/(^|[^:])\/\/[^\n]*/g, function (m, p1) {
+      return p1 + '<span class="tok-com">' + m.slice(p1.length) + '</span>';
+    });
+    s = s.replace(/\b(\d+(?:\.\d+)?)\b/g, '<span class="tok-num">$1</span>');
+    s = s.replace(KW_RE, '<span class="tok-kw">$1</span>');
+    return s;
+  }
+
+  function formatJsonToHtml(val, indent) {
+    indent = indent || "";
+    var nextIndent = indent + "  ";
+    if (val === null) {
+      return '<span class="tok-kw">null</span>';
+    }
+    if (typeof val === "boolean") {
+      return '<span class="tok-kw">' + val + '</span>';
+    }
+    if (typeof val === "number") {
+      return '<span class="tok-num">' + val + '</span>';
+    }
+    if (typeof val === "string") {
+      return '<span class="tok-str">' + escapeHtml(JSON.stringify(val)) + '</span>';
+    }
+    if (Array.isArray(val)) {
+      if (val.length === 0) return '[]';
+      var items = [];
+      for (var i = 0; i < val.length; i++) {
+        items.push(nextIndent + formatJsonToHtml(val[i], nextIndent));
+      }
+      return '[\n' + items.join(',\n') + '\n' + indent + ']';
+    }
+    if (typeof val === "object") {
+      var keys = Object.keys(val);
+      if (keys.length === 0) return '{}';
+      var pairs = [];
+      for (var j = 0; j < keys.length; j++) {
+        var k = keys[j];
+        var kHtml = '<span class="tok-key">' + escapeHtml(JSON.stringify(k)) + '</span>';
+        pairs.push(nextIndent + kHtml + ': ' + formatJsonToHtml(val[k], nextIndent));
+      }
+      return '{\n' + pairs.join(',\n') + '\n' + indent + '}';
+    }
+    return escapeHtml(String(val));
+  }
+
   function truncate(value, maxChars) {
     var text = normalizeText(value).replace(/\s+/g, " ").trim();
     if (text.length <= maxChars) return text;
@@ -431,12 +508,37 @@
     ]), left.firstChild);
 
     var gtValue = gtField ? normalizeText(row.values[gtField]) : "";
+    var gtContentEl = el("div", { class: "gt-text" });
+    if (!gtValue.trim()) {
+      gtContentEl.textContent = "该行缺少期望结果，请补充。";
+    } else {
+      var parsed = null;
+      var isJson = false;
+      var gtTrimmed = gtValue.trim();
+      try {
+        if (gtTrimmed.indexOf("{") === 0 || gtTrimmed.indexOf("[") === 0) {
+          parsed = JSON.parse(gtTrimmed);
+          if (parsed && typeof parsed === "object") {
+            isJson = true;
+          }
+        }
+      } catch (e) {}
+
+      if (isJson) {
+        gtContentEl.innerHTML = formatJsonToHtml(parsed, "");
+      } else if (isCodeLike(gtTrimmed)) {
+        gtContentEl.innerHTML = highlightCode(gtValue);
+      } else {
+        gtContentEl.textContent = gtValue;
+      }
+    }
+
     right.appendChild(el("div", { class: "field-pane gt-box" + (gtValue.trim() ? "" : " empty") }, [
       el("div", { class: "field-pane-head" }, [
         el("span", { text: gtValue.trim() ? "GROUND TRUTH" : "GROUND TRUTH 为空" }),
         el("span", { text: gtField || "未识别 ground_truth 列" }),
       ]),
-      el("div", { class: "gt-text", text: gtValue.trim() ? gtValue : "该行缺少期望结果，请补充。" }),
+      gtContentEl,
     ]));
     right.appendChild(buildReviewBox(row));
 
@@ -445,17 +547,84 @@
   }
 
   function buildFieldPane(title, value, subtitle) {
-    return el("div", { class: "field-pane" }, [
+    var valStr = normalizeText(value).trim();
+    if (!valStr) {
+      return el("div", { class: "field-pane" }, [
+        el("div", { class: "field-pane-head" }, [
+          el("span", { text: title }),
+        ]),
+        el("pre", { text: "（空）" }),
+      ]);
+    }
+
+    var parsed = null;
+    var isJson = false;
+    try {
+      if (valStr.indexOf("{") === 0 || valStr.indexOf("[") === 0) {
+        parsed = JSON.parse(valStr);
+        if (parsed && typeof parsed === "object") {
+          isJson = true;
+        }
+      }
+    } catch (e) {}
+
+    var copyBtn = el("span", {
+      class: "copy",
+      text: "复制",
+      onclick: function (ev) { copyText(value, ev.target); },
+    });
+
+    var pane = el("div", { class: "field-pane" }, [
       el("div", { class: "field-pane-head" }, [
         el("span", { text: title }),
-        el("span", {
+        copyBtn,
+      ])
+    ]);
+
+    if (isJson) {
+      var jsonHtml = formatJsonToHtml(parsed, "");
+      var preEl = el("pre", { class: "json-pre" });
+      preEl.innerHTML = jsonHtml;
+      pane.appendChild(preEl);
+
+      var codeBlocks = [];
+      if (!Array.isArray(parsed)) {
+        for (var k in parsed) {
+          if (parsed.hasOwnProperty(k) && typeof parsed[k] === "string" && isCodeLike(parsed[k])) {
+            codeBlocks.push({ key: k, value: parsed[k] });
+          }
+        }
+      }
+
+      codeBlocks.forEach(function (block) {
+        var subCopyBtn = el("span", {
           class: "copy",
           text: "复制",
-          onclick: function (ev) { copyText(value, ev.target); },
-        }),
-      ]),
-      el("pre", { text: normalizeText(value).trim() ? value : "（空）" }),
-    ]);
+        });
+        subCopyBtn.onclick = function (ev) { copyText(block.value, subCopyBtn); };
+
+        var subPane = el("div", { class: "sub-code-pane" }, [
+          el("div", { class: "sub-code-pane-head" }, [
+            el("span", { text: "代码段 (" + block.key + ")" }),
+            subCopyBtn,
+          ]),
+          el("pre", { class: "code-pre" }, [
+            el("code", { html: highlightCode(block.value) })
+          ])
+        ]);
+        pane.appendChild(subPane);
+      });
+
+    } else if (isCodeLike(valStr)) {
+      var preEl = el("pre", { class: "code-pre" });
+      preEl.innerHTML = highlightCode(valStr);
+      pane.appendChild(preEl);
+    } else {
+      var preEl = el("pre", { text: valStr });
+      pane.appendChild(preEl);
+    }
+
+    return pane;
   }
 
   function buildReviewBox(row) {

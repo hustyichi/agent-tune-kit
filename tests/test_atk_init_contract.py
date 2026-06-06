@@ -19,8 +19,12 @@ def test_atk_init_contract_cleans_runner_smoke_results() -> None:
 def test_atk_init_handoff_keeps_first_real_run_on_v1_when_no_prior_results() -> None:
     skill_text = (ROOT / "skills/atk-init/SKILL.md").read_text(encoding="utf-8")
 
-    assert "expected next output path `.atk/results/v1/eval_results.csv` when no prior result version exists" in skill_text
-    assert "do not say a smoke test has already occupied `v1` when the smoke-created version was cleaned up" in skill_text
+    assert (
+        "expected next output path `.atk/results/v1/eval_results.csv` when no prior result version exists" in skill_text
+    )
+    assert (
+        "do not say a smoke test has already occupied `v1` when the smoke-created version was cleaned up" in skill_text
+    )
 
 
 def test_failure_finding_handoffs_route_to_report() -> None:

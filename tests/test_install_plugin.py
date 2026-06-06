@@ -416,7 +416,9 @@ class InstallPluginCliTests(unittest.TestCase):
                 self.assertIn(hidden_manifest, names)
                 self.assertIn("agent_tune_kit/plugin_payload/agent-tune-kit/skills/atk-status/SKILL.md", names)
                 self.assertIn("agent_tune_kit/plugin_payload/agent-tune-kit/skills/atk-build-dataset/SKILL.md", names)
-                self.assertIn("agent_tune_kit/plugin_payload/agent-tune-kit/skills/atk-build-ground-truth/SKILL.md", names)
+                self.assertIn(
+                    "agent_tune_kit/plugin_payload/agent-tune-kit/skills/atk-build-ground-truth/SKILL.md", names
+                )
                 self.assertIn(
                     "agent_tune_kit/plugin_payload/agent-tune-kit/templates/.atk/runner/eval_runner.py.md", names
                 )

@@ -556,6 +556,7 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, 
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   color: #064e3b;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 }
 .gt-box.empty .gt-text { color: #991b1b; }
 .review-box { padding: 16px; }
@@ -638,4 +639,40 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, 
   .stat-grid, .stats-layout, .inspector-body { grid-template-columns: 1fr; }
   .table-frame { overflow-x: auto; }
   .standard-column-note { padding-bottom: 8px; }
+}
+
+/* Syntax highlighting and sub-code pane styles */
+.tok-kw { color: #7e3ca7 !important; font-weight: 600; }
+.tok-str { color: #0a6f3a !important; }
+.tok-num { color: #0b6bff !important; }
+.tok-com { color: #6b7488 !important; font-style: italic; }
+.tok-key { color: #0366d6 !important; font-weight: 600; }
+
+.sub-code-pane {
+  border-top: 1px solid var(--line);
+  background: var(--panel-soft);
+}
+.sub-code-pane-head {
+  padding: 8px 14px;
+  border-bottom: 1px dashed var(--line);
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+.sub-code-pane-head .copy {
+  color: var(--brand-strong);
+  cursor: pointer;
+}
+.sub-code-pane pre {
+  margin: 0;
+  padding: 12px 14px;
+  max-height: 280px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: transparent;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
 }

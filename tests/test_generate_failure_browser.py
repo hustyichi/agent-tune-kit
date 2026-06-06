@@ -157,7 +157,10 @@ class GenerateFailureBrowserTests(unittest.TestCase):
             current = project / ".atk" / "results" / "v1"
             write_csv(current / "failure_cases.csv", ["id", "agent_output"], [{"id": "1", "agent_output": "bad"}])
 
-            with chdir(project), mock.patch.object(module, "open_in_browser", return_value=(True, "file:///fake.html")) as opened:
+            with (
+                chdir(project),
+                mock.patch.object(module, "open_in_browser", return_value=(True, "file:///fake.html")) as opened,
+            ):
                 result = module.run([])
 
             self.assertEqual(result, 0)
