@@ -114,17 +114,17 @@
 - **功能**：
   - Skill 阅读待调优 Agent 的源码与用户提供的数据集，生成 Python 测试脚本 `eval_runner.py`
   - Skill 在生成脚本前将用户提供的数据集写入 `.atk/datasets/` 作为 ATK 可持续运行数据集，生成的脚本读取该项目内数据集，避免外部数据集移动导致后续执行失败
-  - 脚本需要能够：批量读取数据集、调用本地 Agent、记录每条样本的输入/输出/预期结果到 `eval_results.csv`、按需采集 Agent 运行日志到 `app.log`，并在可信场景下写入逐行日志引用 `agent_output_log_path`
+  - 脚本需要能够：批量读取数据集、调用本地 Agent、记录每条样本的输入/输出/预期结果到 `eval_results.csv`、按需采集 Agent 运行日志到 `app.log`，并在可信场景下写入逐行日志引用 `log_path`
   - **日志采集方案**：由 Skill 在阅读 Agent 源码后自行决定采集方式，并将逻辑固化在生成的 `eval_runner.py` 中；当可识别的日志源是同进程 Python `logging` 时，必须优先用 `logging` 生成当前版本的全局 `app.log`，并同时启用可信逐行日志；只有无法可靠识别 Python `logging` 时，才考虑 stdout/stderr 重定向、读取 Agent 写入的日志文件等全局 `app.log` 来源；若 Agent 无可识别日志，则不生成 `app.log`
-  - **逐行日志方案**：当可识别的日志源是同进程 Python `logging` 时，生成的 runner 可默认使用 stdlib `contextvars` 与 ATK 自有 `logging.Handler` 路由器，为每条源数据行写入 `.atk/results/vN/logs/row_{source_index:06d}.log`，并在 `eval_results.csv` 的 `agent_output_log_path` 中写入相对 POSIX 路径；同一批 Python `logging` 记录也应进入全局 `app.log`。即使该行没有日志记录，也要创建被引用的空文件。逐行日志只能包含 ATK 行上下文处于活动状态时发出的记录；stdout/stderr、子进程、多进程和行结束后的后台日志不进入逐行日志。若生成的并发逐行日志开关被禁用，`--concurrency > 1` 必须在运行输出中显式降级并使用 `app.log` 作为回退证据。
+  - **逐行日志方案**：当可识别的日志源是同进程 Python `logging` 时，生成的 runner 可默认使用 stdlib `contextvars` 与 ATK 自有 `logging.Handler` 路由器，为每条源 data 行写入 `.atk/results/vN/logs/row_{source_index:06d}.log`，并在 `eval_results.csv` 的 `log_path` 中写入相对 POSIX 路径；同一批 Python `logging` 记录也应进入全局 `app.log`。即使该行没有日志记录，也要创建被引用的空文件。逐行日志只能包含 ATK 行上下文处于活动状态时发出的记录；stdout/stderr、子进程、多进程和行结束后的后台日志不进入逐行日志。若生成的并发逐行日志开关被禁用，`--concurrency > 1` 必须在运行输出中显式降级并使用 `app.log` 作为回退证据。
   - **数据集适配**：以 CSV 为主，列名由 Skill 推断；若数据集为其它格式，由 Skill 自行扩展读取逻辑
   - **数据集快照命名与去重**：init 阶段的 ATK 可持续运行数据集固定为 `.atk/datasets/dataset.csv`，表达这是 ATK 评测流程使用的项目内数据集，便于在不同业务流程中复用。该文件不要求与用户原始文件字节级一致：若源 CSV 缺少 `atk_id`，Skill 需追加 `atk_id` 列，并按源数据行号从 `1` 开始填充；若源 CSV 已有 `atk_id`，仅在其值非空、唯一且为正整数时复用。若该文件不存在则写入规范化后的数据集；若规范化后内容完全一致则复用；若已存在但内容不同，则需在覆盖前确认。内容比较应使用可靠摘要（如 `sha256`），可先用文件大小做快速预筛。
   - **`eval_results.csv` 字段约定**：
     - 原则上**完整保留用户输入数据集的所有原始列**（列名、列顺序均不改动）；ATK 数据集必须包含固定列 `atk_id`，当源数据缺失时由 Skill 追加并使用 1-based 源行号填充；在此基础上追加 Agent 运行产生的列
     - **强约束**：Agent 的实际输出必须写入固定列名 `agent_output`；若 Agent 返回多字段结构化结果，可序列化为 JSON 字符串存入该列，或额外追加 `agent_output_*` 前缀的辅助列
-    - **逐行日志引用**：固定列 `agent_output_log_path` 用于保存相对当前版本目录的逐行日志路径；无可信逐行日志时该列留空
+    - **逐行日志引用**：固定列 `log_path` 用于保存相对当前版本目录的逐行日志路径；无可信逐行日志时该列留空
     - 其它列（输入、预期结果等）不做命名强约束，下游 Skill 通过原数据集列名自行识别；`atk_id` 是 ATK 元数据，除非用户明确要求，不应传入待测 Agent
-    - 若用户原数据集已存在名为 `agent_output` 或 `agent_output_log_path` 的列，Skill 需提示用户并与其确认改名方案后再生成脚本
+    - 若用户原数据集已存在名为 `agent_output` 或 `log_path` 的列，Skill 需提示用户并与其确认改名方案后再生成脚本
   - **数据确认机制**：当 Agent 接入方式、数据集字段、日志位置或上述列名冲突无法可靠推断时，Skill 与用户交互确认后再生成脚本
 - **输出**：
   - `.atk/runner/eval_runner.py`
@@ -250,7 +250,7 @@
   - 当存在 expected/expected_output、`agent_output`、failure/failure_reason/explanation/root-cause 类字段时优先展示，但不强制要求统一 Schema；前端提供临时角色切换以适配非标准字段
   - 同版本 `report.md` 缺失、格式异常或不可解析时继续生成 HTML，并说明报告上下文被跳过；报告解析是 best-effort 且 non-blocking
   - 所有跨版本读取均为 best-effort：任意历史文件缺失/超限/损坏/无 `atk_id` 列时，对应视图降级并提示原因，绝不影响 HTML 写入
-  - `agent_output_log_path` 等日志路径只在满足安全相对路径约束时生成可点击链接，否则仅作为证据文本展示
+  - `log_path` 等日志路径只在满足安全相对路径约束时生成可点击链接，否则仅作为证据文本展示
 
 ### 2.5.2 数据集可视化与质检（可选 Codex Skill `atk-visualize-dataset`）
 - **功能**：

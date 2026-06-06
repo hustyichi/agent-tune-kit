@@ -91,6 +91,9 @@ ROLE_CANDIDATES: dict[str, list[str]] = {
         "root-cause",
         "error",
         "analysis",
+        "error_message",
+        "errot_message",
+        "error_type",
         "agent_output_error_message",
     ],
     "log": ["agent_output_log_path", "log_path", "logs", "log", "trace_path"],
@@ -154,7 +157,9 @@ def parse_csv_file(path: Path, filename_for_errors: str) -> tuple[list[str], lis
             reader = csv.DictReader(handle, strict=True)
             fieldnames = list(reader.fieldnames or [])
             if not fieldnames or all(not (name or "").strip() for name in fieldnames):
-                raise UserActionRequired(f"{filename_for_errors} is empty or missing a header; run failure finding again.")
+                raise UserActionRequired(
+                    f"{filename_for_errors} is empty or missing a header; run failure finding again."
+                )
             if any(not (name or "").strip() for name in fieldnames):
                 raise UserActionRequired(
                     f"{filename_for_errors} contains blank header names; preserving columns is uncertain."
@@ -492,7 +497,7 @@ def build_history(
 
     current_failed_ids: set[str] = set()
     current_reason_counts: dict[str, int] = {}
-    
+
     abnormal_field = ""
     for f in current_fieldnames:
         if normalize_name(f) in ("is_abnormal", "abnormal", "is_failure"):

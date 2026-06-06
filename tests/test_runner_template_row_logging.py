@@ -201,7 +201,7 @@ class RunnerTemplateRowLoggingTests(unittest.TestCase):
         self.assertEqual(completed.returncode, 0, completed.stderr)
         results = read_results(temp_dir)
         self.assertEqual(
-            {row["agent_output_log_path"] for row in results},
+            {row["log_path"] for row in results},
             {
                 "logs/row_000001.log",
                 "logs/row_000002.log",
@@ -210,7 +210,7 @@ class RunnerTemplateRowLoggingTests(unittest.TestCase):
         )
 
         logs = {
-            row["token"]: (temp_dir / ".atk/results/v1" / row["agent_output_log_path"]).read_text(encoding="utf-8")
+            row["token"]: (temp_dir / ".atk/results/v1" / row["log_path"]).read_text(encoding="utf-8")
             for row in results
         }
         self.assertIn("ROW_A_UNIQUE", logs["ROW_A_UNIQUE"])
@@ -238,8 +238,8 @@ class RunnerTemplateRowLoggingTests(unittest.TestCase):
         self.assertEqual(completed.returncode, 0, completed.stderr)
         rows = {row["token"]: row for row in read_results(temp_dir)}
         row = rows["ERR_ROW_UNIQUE"]
-        self.assertEqual(row["agent_output_status"], "error")
-        self.assertEqual(row["agent_output_log_path"], "logs/row_000001.log")
+        self.assertEqual(row["output_status"], "error")
+        self.assertEqual(row["log_path"], "logs/row_000001.log")
         log_text = (temp_dir / ".atk/results/v1/logs/row_000001.log").read_text(encoding="utf-8")
         self.assertIn("known-error ERR_ROW_UNIQUE", log_text)
         after_error_log = (temp_dir / ".atk/results/v1/logs/row_000002.log").read_text(encoding="utf-8")
@@ -255,7 +255,7 @@ class RunnerTemplateRowLoggingTests(unittest.TestCase):
 
         self.assertEqual(completed.returncode, 0, completed.stderr)
         [row] = read_results(temp_dir)
-        self.assertEqual(row["agent_output_log_path"], "")
+        self.assertEqual(row["log_path"], "")
         self.assertIn("Concurrent row-level Python logging capture is disabled", completed.stderr)
         self.assertFalse((temp_dir / ".atk/results/v1/logs").exists())
         app_log = (temp_dir / ".atk/results/v1/app.log").read_text(encoding="utf-8")
@@ -269,7 +269,7 @@ class RunnerTemplateRowLoggingTests(unittest.TestCase):
 
         self.assertEqual(completed.returncode, 0, completed.stderr)
         [row] = read_results(temp_dir)
-        self.assertEqual(row["agent_output_log_path"], "logs/row_000001.log")
+        self.assertEqual(row["log_path"], "logs/row_000001.log")
         log_text = (temp_dir / ".atk/results/v1/logs/row_000001.log").read_text(encoding="utf-8")
         self.assertIn("SERIAL_ROW_UNIQUE", log_text)
         app_log = (temp_dir / ".atk/results/v1/app.log").read_text(encoding="utf-8")

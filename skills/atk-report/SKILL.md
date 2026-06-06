@@ -19,14 +19,14 @@ Traceability note: section 2.5 defines report and cross-version validation, sect
 - Required current files:
   - `eval_results.csv`
   - `failure_cases.csv`
-- Optional current files: `app.log` and row logs referenced by `agent_output_log_path`.
+- Optional current files: `app.log` and row logs referenced by `log_path`.
 - Previous version files, when available:
   - `tuning_plan.md`
   - `report.md`
   - `eval_results.csv`
   - `failure_cases.csv`
   - optional `app.log`
-  - optional row logs referenced by `agent_output_log_path`
+  - optional row logs referenced by `log_path`
 - Shared rules in `docs/shared-versioning-and-confirmation.md`.
 
 ## Outputs
@@ -38,7 +38,7 @@ Traceability note: section 2.5 defines report and cross-version validation, sect
 1. Resolve current version with `resolve_current_version()` using `RESULTS_DIR = Path(".atk/results")`.
 2. Require current files with `require_current_file(current_dir, "eval_results.csv")` and `require_current_file(current_dir, "failure_cases.csv")`.
 3. Read optional current `app.log` if present.
-4. Prefer row-specific evidence from `agent_output_log_path` when a failure row references an existing log file; fall back to `app.log` only when row logs are blank, missing, or unavailable.
+4. Prefer row-specific evidence from `log_path` when a failure row references an existing log file; fall back to `app.log` only when row logs are blank, missing, or unavailable.
 5. Resolve previous version with `resolve_previous_version(current_dir)`.
 6. If no previous version exists, generate a single-version report and explain that no previous version can be compared.
 7. If previous version exists but lacks `tuning_plan.md`, degrade to a single-version or lower-confidence report with explicit explanation.
@@ -110,5 +110,5 @@ After writing the report, summarize:
 - counts of total and failure cases;
 - cross-version validation status distribution: `已解决` / `部分解决` / `未解决` / `无法判断`;
 - output path `.atk/results/vN/report.md`;
-- whether failure attribution used row-specific logs from `agent_output_log_path` or fell back to `app.log`;
+- whether failure attribution used row-specific logs from `log_path` or fell back to `app.log`;
 - whether the next step is `atk-tune`.

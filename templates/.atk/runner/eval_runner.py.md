@@ -49,7 +49,7 @@ ROW_LOGGER_NAMES: tuple[str, ...] = ("",)  # Empty string means the root logger.
 ROW_LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
 ROW_LOG_LEVEL = logging.INFO
 ROW_LOGS_DIRNAME = "logs"
-AGENT_OUTPUT_LOG_PATH_FIELD = "agent_output_log_path"
+AGENT_OUTPUT_LOG_PATH_FIELD = "log_path"
 ROW_LOGGING_CONCURRENCY_DOWNGRADE_MESSAGE = (
     "Concurrent row-level Python logging capture is disabled; "
     "no per-row log files will be created for --concurrency > 1."
@@ -439,7 +439,7 @@ def build_result_row(
             agent_input = build_agent_input(row)
             raw_output = call_agent(agent_input)
             output_row["agent_output"] = normalize_agent_output(raw_output)
-            output_row["agent_output_status"] = "ok"
+            output_row["output_status"] = "ok"
         except UserActionRequired:
             # Configuration/TODO/confirmation failures must stop the run; otherwise
             # an invalid runner could create a misleading successful eval_results.csv.
@@ -455,9 +455,9 @@ def build_result_row(
                 },
                 ensure_ascii=False,
             )
-            output_row["agent_output_status"] = "error"
-            output_row["agent_output_error_type"] = type(exc).__name__
-            output_row["agent_output_error_message"] = str(exc)
+            output_row["output_status"] = "error"
+            output_row["error_type"] = type(exc).__name__
+            output_row["error_message"] = str(exc)
     return output_row
 
 
@@ -466,9 +466,9 @@ def get_output_fieldnames(
     rows: list[dict[str, str]],
 ) -> list[str]:
     fixed_output_fields = [
-        "agent_output_status",
-        "agent_output_error_type",
-        "agent_output_error_message",
+        "output_status",
+        "error_type",
+        "error_message",
         AGENT_OUTPUT_LOG_PATH_FIELD,
     ]
     auxiliary_fields = sorted(

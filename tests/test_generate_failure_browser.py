@@ -70,7 +70,7 @@ class GenerateFailureBrowserTests(unittest.TestCase):
                     "expected_output",
                     "agent_output",
                     "failure_reason",
-                    "agent_output_log_path",
+                    "log_path",
                     "custom_col",
                 ],
                 [
@@ -80,7 +80,7 @@ class GenerateFailureBrowserTests(unittest.TestCase):
                         "expected_output": "4",
                         "agent_output": "5",
                         "failure_reason": "wrong arithmetic",
-                        "agent_output_log_path": "logs/row_000001.log",
+                        "log_path": "logs/row_000001.log",
                         "custom_col": "preserved evidence",
                     }
                 ],
@@ -373,13 +373,11 @@ class GenerateFailureBrowserTests(unittest.TestCase):
                     "id": str(index),
                     "expected_output": "safe",
                     "agent_output": "</script><script>alert('x')</script> \u2028 \u2029 <b>bold</b>",
-                    "agent_output_log_path": path,
+                    "log_path": path,
                 }
                 for index, path in enumerate(unsafe_paths, start=1)
             ]
-            write_csv(
-                current / "failure_cases.csv", ["id", "expected_output", "agent_output", "agent_output_log_path"], rows
-            )
+            write_csv(current / "failure_cases.csv", ["id", "expected_output", "agent_output", "log_path"], rows)
 
             result = run_generator(project)
 
@@ -420,7 +418,9 @@ class GenerateFailureBrowserTests(unittest.TestCase):
         module = load_generator_module()
         with tempfile.TemporaryDirectory() as tmp:
             eval_path = Path(tmp) / "eval_results.csv"
-            eval_path.write_text("atk_id,agent_output\nCASE-000,ok\nCASE-PARTIAL-SHOULD-NOT-APPEAR,ok\n", encoding="utf-8")
+            eval_path.write_text(
+                "atk_id,agent_output\nCASE-000,ok\nCASE-PARTIAL-SHOULD-NOT-APPEAR,ok\n", encoding="utf-8"
+            )
             with mock.patch.object(module, "HISTORY_EVAL_MAX_BYTES", 45):
                 result = module._read_version_tested_ids(eval_path)
 
@@ -483,7 +483,7 @@ class GenerateFailureBrowserTests(unittest.TestCase):
         self.assertIn('<span class="tok-kw">return</span>', check.stdout)
         self.assertIn('<span class="tok-num">4</span>', check.stdout)
         self.assertNotIn("<span <span", check.stdout)
-        self.assertNotIn('class</span>=', check.stdout)
+        self.assertNotIn("class</span>=", check.stdout)
 
     def test_code_highlighter_preserves_quoted_text_inside_comments(self) -> None:
         node = shutil.which("node")
@@ -504,7 +504,7 @@ class GenerateFailureBrowserTests(unittest.TestCase):
             "global.document={getElementById(id){return id==='failure-data'?{textContent:JSON.stringify(payload)}:null}};\n"
             + app_js.replace(
                 "  init();\n})();",
-                "  console.log(highlightCode('// \"quoted\"\\n/* \"also quoted\" */'));\n})();",
+                '  console.log(highlightCode(\'// "quoted"\\n/* "also quoted" */\'));\n})();',
             )
         )
         check = subprocess.run(
