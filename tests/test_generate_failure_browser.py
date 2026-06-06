@@ -108,8 +108,6 @@ class GenerateFailureBrowserTests(unittest.TestCase):
                 "statistics-dashboard",
                 "stat-card-abnormal",
                 "inspector-overlay-pane",
-                "schema-adaptive role switching",
-                "auto-detected",
                 "custom_col",
                 "preserved evidence",
                 "logs/row_000001.log",
@@ -153,11 +151,6 @@ class GenerateFailureBrowserTests(unittest.TestCase):
                 "stat-card-fields",
                 "stat-card-abnormal",
                 "inspector-overlay-pane",
-                'data-open-drawer="roles"',
-                'data-open-drawer="report-context"',
-                'data-open-drawer="warnings"',
-                "drawer-report",
-                "Bounded report.md context",
             ]:
                 self.assertIn(phrase, text)
             self.assertRegex(text, r"id=[\"']stat-card-abnormal[\"']")
@@ -417,9 +410,6 @@ class GenerateFailureBrowserTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             text = (current / "failure_cases.html").read_text(encoding="utf-8")
             self.assertIn("Read first 262144 bytes only", text)
-            self.assertIn('data-open-drawer="report-context"', text)
-            self.assertIn("renderDrawerReport", text)
-            self.assertIn("drawer-report", text)
             self.assertIn("Failure root cause summary.", text)
             self.assertNotIn("SENTINEL_AFTER_LIMIT", text)
             self.assertFalse((current / "report_summary.json").exists())

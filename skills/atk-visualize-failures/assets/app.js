@@ -897,98 +897,7 @@
     return buckets.map(function (bucket) { return { label: bucket.min + "-" + bucket.max + " 字", count: bucket.count }; });
   }
 
-  function renderDrawerRoles() {
-    var container = $("drawer-roles");
-    if (!container) return;
-    container.innerHTML = "";
-    ROLE_LIST.forEach(function (role) {
-      var current = roleField(role);
-      var source = (roles[role] && roles[role].source) || "manual";
-      var row = el("div", { class: "role-row" });
-      row.appendChild(el("span", { class: "name", text: ROLE_LABELS[role] }));
-      var select = el("select", {
-        onchange: function (ev) {
-          roles[role] = { field: ev.target.value, source: "manual" };
-          if (ev.target.value) state.visibleColumns[ev.target.value] = true;
-          columnMeta = buildColumnMeta();
-          renderMeta();
-          renderColumnChips();
-          renderTable();
-          renderStats();
-          renderDrawerRoles();
-        },
-      });
-      select.appendChild(el("option", { value: "", text: "（未映射）" }));
-      (payload.fieldnames || []).forEach(function (field) {
-        var opt = el("option", { value: field, text: field });
-        if (field === current) opt.selected = true;
-        select.appendChild(opt);
-      });
-      row.appendChild(select);
-      row.appendChild(el("span", { class: "source", text: source === "auto" ? "auto-detected" : "manual/unmapped" }));
-      container.appendChild(row);
-    });
-  }
 
-  function renderDrawerWarnings() {
-    var container = $("drawer-warnings");
-    if (!container) return;
-    container.innerHTML = "";
-    var warnings = payload.warnings || [];
-    if (!warnings.length) {
-      container.appendChild(el("div", { class: "note-inline", text: "无解析警告。" }));
-      return;
-    }
-    warnings.forEach(function (warning) { container.appendChild(el("div", { class: "warning", text: warning })); });
-  }
-
-  function renderDrawerReport() {
-    var container = $("drawer-report");
-    if (!container) return;
-    container.innerHTML = "";
-    var report = payload.report || { status: "skipped", reason: "report.md context unavailable.", excerpts: [] };
-    container.appendChild(el("div", { class: "note-inline" }, [
-      el("strong", { text: report.status === "included" ? "report.md 已纳入" : "report.md 已跳过" }),
-      el("span", { text: " · " + (report.reason || "No report context.") }),
-    ]));
-    var excerpts = report.excerpts || [];
-    if (!excerpts.length) {
-      container.appendChild(el("div", { class: "empty-state" }, [
-        el("strong", { text: "没有可展示的报告摘录" }),
-        el("span", { text: "报告缺失、被 --no-report 跳过，或没有可提取的有界上下文。" }),
-      ]));
-      return;
-    }
-    excerpts.forEach(function (excerpt) {
-      container.appendChild(el("div", { class: "field-pane" }, [
-        el("div", { class: "field-pane-head" }, [
-          el("span", { text: excerpt.heading || "Report context" }),
-          el("span", { text: "bounded excerpt" }),
-        ]),
-        el("pre", { text: excerpt.text || "" }),
-      ]));
-    });
-  }
-
-  function openDrawer(section) {
-    if (!$("drawer") || !$("drawer-backdrop")) return;
-    $("drawer").classList.add("open");
-    $("drawer-backdrop").classList.add("open");
-    document.querySelectorAll(".drawer-section").forEach(function (node) {
-      node.style.display = node.getAttribute("data-section") === section ? "block" : "none";
-    });
-    var titles = {
-      roles: "字段角色映射",
-      "report-context": "报告上下文",
-      warnings: "解析警告",
-    };
-    setText("drawer-title", titles[section] || "设置");
-  }
-
-  function closeDrawer() {
-    if ($("drawer")) $("drawer").classList.remove("open");
-    if ($("drawer-backdrop")) $("drawer-backdrop").classList.remove("open");
-  }
 
   function initPageSizes() {
     var select = $("page-size");
@@ -1105,15 +1014,9 @@
         renderTabs();
       });
     });
-    document.querySelectorAll("[data-open-drawer]").forEach(function (button) {
-      button.addEventListener("click", function () { openDrawer(button.getAttribute("data-open-drawer")); });
-    });
-    if ($("drawer-close")) $("drawer-close").addEventListener("click", closeDrawer);
-    if ($("drawer-backdrop")) $("drawer-backdrop").addEventListener("click", closeDrawer);
     document.addEventListener("keydown", function (ev) {
       if (ev.key === "Escape") {
         closeInspector();
-        closeDrawer();
       }
     });
   }
@@ -1126,9 +1029,6 @@
     renderStatusFilters();
     renderTable();
     renderStats();
-    renderDrawerRoles();
-    renderDrawerReport();
-    renderDrawerWarnings();
     bindEvents();
   }
 
