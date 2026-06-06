@@ -286,21 +286,7 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, 
 .column-chip.off { color: var(--muted-soft); background: #f8fafc; border-color: var(--line); }
 .column-chip.gt { background: #fffbeb; border-color: #fcd34d; color: #92400e; }
 
-.facet-group { display: flex; flex-wrap: wrap; gap: 10px; }
-.facet {
-  min-width: 220px;
-  padding: 10px;
-  background: white;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-}
-.facet-title { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 12px; font-weight: 800; margin-bottom: 8px; }
-.facet-title .clear { color: var(--brand-strong); cursor: pointer; }
-.facet-options { display: flex; flex-direction: column; gap: 5px; max-height: 150px; overflow: auto; }
-.facet-option { display: flex; align-items: center; gap: 7px; color: var(--text); font-size: 12px; }
-.facet-option input { accent-color: var(--brand); }
-.facet-option .label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.facet-option .count { color: var(--muted-soft); }
+
 
 .table-frame {
   overflow: hidden;

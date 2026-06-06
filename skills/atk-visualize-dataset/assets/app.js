@@ -312,52 +312,6 @@
     });
   }
 
-  function renderFacets() {
-    var container = $("facets");
-    container.innerHTML = "";
-    facets.forEach(function (facet) {
-      var selected = state.activeFacets[facet.field] || [];
-      var box = el("div", { class: "facet" });
-      box.appendChild(el("div", { class: "facet-title" }, [
-        el("span", { text: facet.field }),
-        selected.length ? el("span", {
-          class: "clear",
-          text: "清除",
-          onclick: function () {
-            state.activeFacets[facet.field] = [];
-            state.page = 0;
-            renderFacets();
-            renderTable();
-          },
-        }) : null,
-      ]));
-      var options = el("div", { class: "facet-options" });
-      facet.values.forEach(function (entry) {
-        var checked = selected.indexOf(entry.value) >= 0;
-        options.appendChild(el("label", { class: "facet-option" }, [
-          el("input", {
-            type: "checkbox",
-            checked: checked ? "checked" : null,
-            onchange: function (ev) {
-              var current = state.activeFacets[facet.field] || [];
-              if (ev.target.checked) {
-                if (current.indexOf(entry.value) < 0) current.push(entry.value);
-              } else {
-                current = current.filter(function (value) { return value !== entry.value; });
-              }
-              state.activeFacets[facet.field] = current;
-              state.page = 0;
-              renderTable();
-            },
-          }),
-          el("span", { class: "label", text: entry.value || "(空)" }),
-          el("span", { class: "count", text: String(entry.count) }),
-        ]));
-      });
-      box.appendChild(options);
-      container.appendChild(box);
-    });
-  }
 
   function renderTable() {
     var columns = visibleColumns();
@@ -829,7 +783,6 @@
     renderMeta();
     renderTabs();
     renderColumnChips();
-    renderFacets();
     initPageSizes();
     renderTable();
     renderStats();
