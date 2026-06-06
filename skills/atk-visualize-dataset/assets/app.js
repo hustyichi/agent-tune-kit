@@ -337,7 +337,7 @@
         }, [field + (state.sortColumn === field ? (state.sortDirection === "asc" ? " ↑" : " ↓") : "")]),
       ]));
     });
-    headerRow.appendChild(el("th", { text: "审阅/问题" }));
+    headerRow.appendChild(el("th", { text: "问题" }));
     head.appendChild(headerRow);
 
     var rows = sortedRows();
@@ -372,16 +372,11 @@
 
   function buildRowBadges(row) {
     var out = [];
-    var verdict = getVerdict(row);
-    if (verdict) {
-      var meta = VERDICTS.filter(function (candidate) { return candidate.key === verdict; })[0];
-      out.push(el("span", { class: "badge", text: meta ? meta.label : verdict }));
-    }
     (row.issues || []).slice(0, 3).forEach(function (issue) {
       var warnish = issue === "gt_too_long" || issue === "gt_too_short" || issue === "duplicate";
       out.push(el("span", { class: "badge " + (warnish ? "issue-warn" : "issue"), text: issueLabels[issue] || issue }));
     });
-    if (!out.length) out.push(el("span", { class: "badge", text: "未校验" }));
+    if (!out.length) out.push(el("span", { class: "badge", text: "无问题" }));
     return out;
   }
 
@@ -471,21 +466,6 @@
       el("span", { text: "人工审阅工具" }),
       el("span", { text: "本地保存" }),
     ]));
-    var group = el("div", { class: "verdict-group" });
-    var verdict = getVerdict(row);
-    VERDICTS.forEach(function (vd) {
-      group.appendChild(el("button", {
-        type: "button",
-        class: "verdict-btn" + (verdict === vd.key ? " " + vd.cls : ""),
-        onclick: function () {
-          setVerdict(row, vd.key);
-          renderMeta();
-          renderTable();
-          renderInspectorBody(row);
-        },
-      }, [vd.label]));
-    });
-    box.appendChild(group);
     var note = el("textarea", {
       class: "review-note",
       placeholder: "审阅备注（可选）：记录问题、建议修正方式…",

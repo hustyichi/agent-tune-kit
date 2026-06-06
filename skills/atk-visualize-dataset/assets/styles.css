@@ -548,20 +548,7 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, 
 .gt-box.empty .gt-text { color: #991b1b; }
 .review-box { padding: 16px; }
 .review-title { display: flex; justify-content: space-between; color: var(--text-strong); font-size: 13px; font-weight: 900; margin-bottom: 12px; }
-.verdict-group { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
-.verdict-btn {
-  flex: 1 1 120px;
-  padding: 10px;
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  background: var(--panel-soft);
-  color: var(--text);
-  font-size: 12px;
-  font-weight: 900;
-}
-.verdict-btn.active-ok { background: var(--ok-soft); border-color: var(--ok); color: #065f46; }
-.verdict-btn.active-warn { background: var(--warn-soft); border-color: var(--warn); color: #92400e; }
-.verdict-btn.active-bad { background: var(--bad-soft); border-color: var(--bad); color: #991b1b; }
+
 .review-note {
   width: 100%;
   min-height: 92px;

@@ -174,7 +174,6 @@ class GenerateDatasetBrowserTests(unittest.TestCase):
                 "dataset_review.csv",
                 "detected_issues",
                 "review-note",
-                "verdict-btn",
                 "localStorage",
                 "字段角色映射",
                 "No data rows in dataset.csv",
