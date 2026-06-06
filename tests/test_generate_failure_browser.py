@@ -102,8 +102,6 @@ class GenerateFailureBrowserTests(unittest.TestCase):
                 "Search / filter / pagination",
                 "Agent 评测结果可视化",
                 "application-root",
-                "export-reviewed-dataset-btn",
-                "导出评测结果",
                 "数据列表",
                 "字段特征分析",
                 "dataset-table-controller",
@@ -147,8 +145,6 @@ class GenerateFailureBrowserTests(unittest.TestCase):
             for phrase in [
                 "Agent 评测结果可视化",
                 "application-root",
-                "export-reviewed-dataset-btn",
-                "导出评测结果",
                 "数据列表",
                 "字段特征分析",
                 "dataset-table-controller",

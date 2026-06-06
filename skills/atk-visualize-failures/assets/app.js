@@ -371,7 +371,7 @@
     setText("stat-total", total);
     setText("stat-fields", (payload.fieldnames || []).length);
     setText("stat-abnormal", abnormal);
-    setText("stat-abnormal-rate", "失败率 " + rate + "% · 已审 " + reviewedCount() + "/" + total);
+    setText("stat-abnormal-rate", "失败率 " + rate + "%");
     setText("field-count", (payload.fieldnames || []).length);
   }
 
@@ -636,7 +636,6 @@
     right.insertBefore(el("div", { class: "field-switcher" }, [
       el("span", { class: "field-switcher-title", text: "期望、实际输出与异常判断" }),
     ]), right.firstChild);
-    right.appendChild(buildReviewBox(row));
     container.appendChild(left);
     container.appendChild(right);
   }
@@ -1000,7 +999,6 @@
       state.page = 0;
       renderTable();
     });
-    if ($("export-reviewed-dataset-btn")) $("export-reviewed-dataset-btn").addEventListener("click", exportReview);
     if ($("inspector-close")) $("inspector-close").addEventListener("click", closeInspector);
     if ($("inspector-overlay-pane")) $("inspector-overlay-pane").addEventListener("click", function (ev) {
       if (ev.target === $("inspector-overlay-pane")) closeInspector();
