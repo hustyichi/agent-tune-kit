@@ -905,3 +905,97 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, 
   border-color: #a7f3d0;
   color: #065f46;
 }
+
+/* Status Banner styling inside inspector panel */
+.status-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
+  margin-bottom: 16px;
+}
+.status-banner.normal {
+  border: 1px solid #a7f3d0;
+  background: #f0fdf4;
+}
+.status-banner.abnormal {
+  border: 1px solid #fda4af;
+  background: #fff1f2;
+}
+
+.status-banner-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.status-banner.normal .status-banner-icon {
+  background: #dcfce7;
+  border: 1px solid #bbf7d0;
+}
+.status-banner.abnormal .status-banner-icon {
+  background: #ffe4e6;
+  border: 1px solid #fecdd3;
+}
+
+.status-banner-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.status-banner-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.status-banner-title {
+  font-size: 14px;
+  font-weight: 800;
+}
+.status-banner.normal .status-banner-title {
+  color: #166534;
+}
+.status-banner.abnormal .status-banner-title {
+  color: #9f1239;
+}
+
+.status-banner-badge {
+  font-size: 11px;
+  font-weight: 900;
+  padding: 2px 6px;
+  border-radius: 6px;
+  color: white;
+}
+.status-banner.normal .status-banner-badge {
+  background: #10b981;
+}
+.status-banner.abnormal .status-banner-badge {
+  background: #ef4444;
+}
+
+.status-banner-desc-box {
+  border: 1px solid #fecdd3;
+  background: white;
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.status-banner-desc-label {
+  color: #9f1239;
+  font-weight: 800;
+}
+.status-banner-desc-val {
+  color: #9f1239;
+  font-weight: 500;
+}
+.status-banner-desc-val.text-only {
+  font-size: 13px;
+  color: #166534;
+  font-weight: 500;
+}

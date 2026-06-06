@@ -626,6 +626,51 @@
     return card;
   }
 
+  function buildStatusBanner(row, isAbnormal, reasonField) {
+    var banner = el("div", { class: "status-banner " + (isAbnormal ? "abnormal" : "normal") });
+    
+    var iconContainer = el("div", { class: "status-banner-icon" });
+    if (isAbnormal) {
+      iconContainer.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>';
+    } else {
+      iconContainer.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>';
+    }
+    
+    var content = el("div", { class: "status-banner-content" });
+    var header = el("div", { class: "status-banner-header" });
+    var title = el("span", { class: "status-banner-title" });
+    var badge = el("span", { class: "status-banner-badge" });
+    
+    if (isAbnormal) {
+      title.textContent = "检测到合并异常 (ABNORMAL RUN)";
+      badge.textContent = "FAIL";
+      header.appendChild(title);
+      header.appendChild(badge);
+      content.appendChild(header);
+      
+      var reasonText = reasonField ? normalizeText(row.values[reasonField]) : "";
+      var descBox = el("div", { class: "status-banner-desc-box" });
+      var label = el("strong", { class: "status-banner-desc-label" }, ["异常原因描述："]);
+      var textVal = el("span", { class: "status-banner-desc-val", text: reasonText || "无异常原因描述" });
+      descBox.appendChild(label);
+      descBox.appendChild(textVal);
+      content.appendChild(descBox);
+    } else {
+      title.textContent = "模型对标测试完美通过 (NORMAL RUN)";
+      badge.textContent = "PASS";
+      header.appendChild(title);
+      header.appendChild(badge);
+      content.appendChild(header);
+      
+      var descVal = el("div", { class: "status-banner-desc-val text-only", text: "自动测试比对发现：Agent 输出与 ground_truth 完全符合期望约束或断言条件。" });
+      content.appendChild(descVal);
+    }
+    
+    banner.appendChild(iconContainer);
+    banner.appendChild(content);
+    return banner;
+  }
+
   function renderInspectorBody(row) {
     var container = $("inspector-body");
     if (!container) return;
@@ -637,13 +682,24 @@
 
     var expectedField = roleField("expected");
     var actualField = roleField("actual");
+    var reasonField = roleField("reason");
+
+    var abnormalField = getAbnormalField();
+    var abnormalValue = abnormalField ? normalizeText(row.values[abnormalField]).trim().toLowerCase() : "";
+    var isAbnormal = ["true", "1", "yes", "y", "异常", "失败", "fail", "failed", "bad"].indexOf(abnormalValue) >= 0;
+
+    var statusBanner = buildStatusBanner(row, isAbnormal, reasonField);
+    if (statusBanner) {
+      right.appendChild(statusBanner);
+    }
+
     var comparisonCard = buildComparisonCard(row);
     if (comparisonCard) {
       right.appendChild(comparisonCard);
     }
 
     fields.forEach(function (field) {
-      if (field === expectedField || field === actualField) return;
+      if (field === expectedField || field === actualField || field === reasonField) return;
 
       var value = normalizeText(row.values[field]);
       if (!value.trim() && !state.showEmptyFields) {
