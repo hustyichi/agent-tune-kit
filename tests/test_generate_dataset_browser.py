@@ -77,7 +77,6 @@ class GenerateDatasetBrowserTests(unittest.TestCase):
                 "Search / filter / pagination",
                 "input-vs-ground_truth comparison",
                 "ground_truth confirmation",
-                "dataset quality lint",
                 "client-side review export",
                 "schema-adaptive role switching",
                 "bundled offline ECharts",
@@ -172,8 +171,6 @@ class GenerateDatasetBrowserTests(unittest.TestCase):
             text = (datasets_dir / "dataset.html").read_text(encoding="utf-8")
             for phrase in [
                 "GROUND TRUTH",
-                "dataset quality lint",
-                "quality-bar",
                 "exportReview",
                 "dataset_review.csv",
                 "detected_issues",

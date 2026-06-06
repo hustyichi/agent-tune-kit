@@ -291,41 +291,6 @@
     });
   }
 
-  function renderQualityBar() {
-    var bar = $("quality-bar");
-    bar.innerHTML = "";
-    bar.hidden = false;
-    bar.appendChild(el("span", { class: "label", text: "dataset quality lint" }));
-    var counts = {};
-    var anyIssue = 0;
-    payload.rows.forEach(function (row) {
-      var issues = row.issues || [];
-      if (issues.length) anyIssue += 1;
-      issues.forEach(function (issue) { counts[issue] = (counts[issue] || 0) + 1; });
-    });
-    function chip(code, label, count, disabled) {
-      var button = el("button", {
-        type: "button",
-        class: state.issueFilter === code ? "active" : "",
-        onclick: function () {
-          state.issueFilter = state.issueFilter === code ? "" : code;
-          state.page = 0;
-          renderQualityBar();
-          renderTable();
-        },
-      }, [label, el("span", { class: "count", text: String(count) })]);
-      if (disabled) button.disabled = true;
-      return button;
-    }
-    bar.appendChild(chip("", "全部", payload.rows.length, false));
-    bar.appendChild(chip("any", "有问题", anyIssue, anyIssue === 0));
-    issueOrder.forEach(function (code) {
-      if (counts[code]) bar.appendChild(chip(code, issueLabels[code] || code, counts[code], false));
-    });
-    var rc = reviewCounts();
-    bar.appendChild(chip("reviewed", "已审阅", rc.reviewed, rc.reviewed === 0));
-    bar.appendChild(chip("unreviewed", "待审阅", rc.total - rc.reviewed, rc.total - rc.reviewed === 0));
-  }
 
   function renderColumnChips() {
     var container = $("column-chips");
@@ -563,7 +528,6 @@
         onclick: function () {
           setVerdict(row, vd.key);
           renderMeta();
-          renderQualityBar();
           renderTable();
           renderInspectorBody(row);
         },
@@ -866,7 +830,6 @@
   function init() {
     renderMeta();
     renderTabs();
-    renderQualityBar();
     renderColumnChips();
     renderFacets();
     initPageSizes();

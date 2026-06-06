@@ -212,7 +212,7 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, 
   flex-direction: column;
   gap: 14px;
 }
-.control-card, .field-switcher, .quality-bar, .table-frame, .pager,
+.control-card, .field-switcher, .table-frame, .pager,
 .stat-card, .field-catalog, .field-detail-card, .histogram-card {
   background: white;
   border: 1px solid var(--panel-border);
@@ -285,32 +285,7 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, 
 }
 .column-chip.off { color: var(--muted-soft); background: #f8fafc; border-color: var(--line); }
 .column-chip.gt { background: #fffbeb; border-color: #fcd34d; color: #92400e; }
-.quality-bar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 12px;
-  background: rgba(255, 247, 237, 0.72);
-}
-.quality-bar .label {
-  align-self: center;
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 900;
-  text-transform: uppercase;
-}
-.quality-bar button {
-  border: 1px solid #fed7aa;
-  background: white;
-  border-radius: 999px;
-  padding: 5px 10px;
-  color: #9a3412;
-  font-size: 12px;
-  font-weight: 800;
-}
-.quality-bar button.active { background: var(--brand); border-color: var(--brand); color: white; }
-.quality-bar button:disabled { opacity: 0.42; cursor: not-allowed; }
-.quality-bar .count { opacity: 0.72; margin-left: 4px; }
+
 .facet-group { display: flex; flex-wrap: wrap; gap: 10px; }
 .facet {
   min-width: 220px;
