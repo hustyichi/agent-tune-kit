@@ -33,6 +33,7 @@
     selectedColumnName: (payload.fieldnames || [])[0] || "",
     columnQuery: "",
     showEmptyFields: false,
+    statusFilter: "all",
   };
 
   var $ = function (id) { return document.getElementById(id); };
@@ -310,9 +311,26 @@
     return allRowText(row).indexOf(query.toLowerCase()) >= 0;
   }
 
+  function getAbnormalField() {
+    var abnormalField = "";
+    (payload.fieldnames || []).forEach(function (field) {
+      var norm = field.toLowerCase().replace(/[^a-z0-9]+/g, "_");
+      if (!abnormalField && (norm === "is_abnormal" || norm === "abnormal" || norm === "is_failure")) abnormalField = field;
+    });
+    return abnormalField;
+  }
+
   function filteredRows() {
+    var abnormalField = getAbnormalField();
     return (payload.rows || []).filter(function (row) {
-      return rowMatchesQuery(row, state.query);
+      if (!rowMatchesQuery(row, state.query)) return false;
+      if (state.statusFilter !== "all") {
+        var value = abnormalField ? normalizeText(row.values[abnormalField]).trim().toLowerCase() : "";
+        var isAbnormal = ["true", "1", "yes", "y", "异常", "失败", "fail", "failed", "bad"].indexOf(value) >= 0;
+        if (state.statusFilter === "abnormal" && !isAbnormal) return false;
+        if (state.statusFilter === "normal" && isAbnormal) return false;
+      }
+      return true;
     });
   }
 
@@ -408,6 +426,19 @@
 
   function renderCell(row, field) {
     var value = normalizeText(row.values[field]);
+    var normField = field.toLowerCase().replace(/[^a-z0-9]+/g, "_");
+    if (normField === "is_abnormal" || normField === "abnormal" || normField === "is_failure") {
+      var isAbnormal = ["true", "1", "yes", "y", "异常", "失败", "fail", "failed", "bad"].indexOf(value.toLowerCase()) >= 0;
+      if (isAbnormal) {
+        return el("div", { class: "cell-text" }, [
+          el("span", { class: "badge issue", text: "● 异常" })
+        ]);
+      } else {
+        return el("div", { class: "cell-text" }, [
+          el("span", { class: "badge ok", text: "● 正常" })
+        ]);
+      }
+    }
     var safeHref = row.safeLogHrefs && row.safeLogHrefs[field];
     if (safeHref) {
       return el("div", { class: "cell-text" }, [
@@ -970,13 +1001,78 @@
     });
   }
 
+  function getStatusCounts() {
+    var rows = payload.rows || [];
+    var abnormalField = getAbnormalField();
+    var counts = { all: rows.length, normal: 0, abnormal: 0 };
+    rows.forEach(function (row) {
+      var value = abnormalField ? normalizeText(row.values[abnormalField]).trim().toLowerCase() : "";
+      var isAbnormal = ["true", "1", "yes", "y", "异常", "失败", "fail", "failed", "bad"].indexOf(value) >= 0;
+      if (isAbnormal) counts.abnormal += 1;
+      else counts.normal += 1;
+    });
+    return counts;
+  }
+
+  function renderStatusFilters() {
+    var container = $("status-filter-group");
+    if (!container) return;
+    container.innerHTML = "";
+    var counts = getStatusCounts();
+
+    var allBtn = el("button", {
+      type: "button",
+      class: "status-filter-btn" + (state.statusFilter === "all" ? " active" : ""),
+      onclick: function () {
+        state.statusFilter = "all";
+        state.page = 0;
+        renderStatusFilters();
+        renderTable();
+      }
+    }, ["全部结果 (" + counts.all + ")"]);
+
+    var normalBtn = el("button", {
+      type: "button",
+      class: "status-filter-btn" + (state.statusFilter === "normal" ? " active" : ""),
+      onclick: function () {
+        state.statusFilter = "normal";
+        state.page = 0;
+        renderStatusFilters();
+        renderTable();
+      }
+    }, [
+      el("span", { html: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>' }),
+      "正常 (" + counts.normal + ")"
+    ]);
+
+    var abnormalBtn = el("button", {
+      type: "button",
+      class: "status-filter-btn" + (state.statusFilter === "abnormal" ? " active" : ""),
+      onclick: function () {
+        state.statusFilter = "abnormal";
+        state.page = 0;
+        renderStatusFilters();
+        renderTable();
+      }
+    }, [
+      el("span", { html: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>' }),
+      "异常 (" + counts.abnormal + ")"
+    ]);
+
+    container.appendChild(allBtn);
+    container.appendChild(normalBtn);
+    container.appendChild(abnormalBtn);
+  }
+
   function resetFilters() {
     state.query = "";
     globalSearch = "";
     state.sortColumn = "";
     state.sortDirection = "asc";
     state.page = 0;
+    state.statusFilter = "all";
     if ($("search")) $("search").value = "";
+    renderStatusFilters();
     renderTable();
   }
 
@@ -1027,6 +1123,7 @@
     renderTabs();
     renderColumnChips();
     initPageSizes();
+    renderStatusFilters();
     renderTable();
     renderStats();
     renderDrawerRoles();

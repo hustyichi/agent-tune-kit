@@ -147,21 +147,21 @@ def require_current_file(current_dir: Path, filename: str) -> Path:
     return path
 
 
-def parse_failure_csv(path: Path) -> tuple[list[str], list[dict[str, str]], list[str]]:
+def parse_csv_file(path: Path, filename_for_errors: str) -> tuple[list[str], list[dict[str, str]], list[str]]:
     warnings: list[str] = []
     try:
         with path.open(newline="", encoding="utf-8") as handle:
             reader = csv.DictReader(handle, strict=True)
             fieldnames = list(reader.fieldnames or [])
             if not fieldnames or all(not (name or "").strip() for name in fieldnames):
-                raise UserActionRequired("failure_cases.csv is empty or missing a header; run failure finding again.")
+                raise UserActionRequired(f"{filename_for_errors} is empty or missing a header; run failure finding again.")
             if any(not (name or "").strip() for name in fieldnames):
                 raise UserActionRequired(
-                    "failure_cases.csv contains blank header names; preserving columns is uncertain."
+                    f"{filename_for_errors} contains blank header names; preserving columns is uncertain."
                 )
             if len(set(fieldnames)) != len(fieldnames):
                 raise UserActionRequired(
-                    "failure_cases.csv contains duplicate headers; preserving columns is uncertain."
+                    f"{filename_for_errors} contains duplicate headers; preserving columns is uncertain."
                 )
             rows: list[dict[str, str]] = []
             for row_index, raw_row in enumerate(reader, start=2):
@@ -169,7 +169,7 @@ def parse_failure_csv(path: Path) -> tuple[list[str], list[dict[str, str]], list
                     extra_values = raw_row.pop(None)
                     if extra_values:
                         warnings.append(
-                            f"Row {row_index} had extra values beyond the header; stored in __extra_values."
+                            f"Row {row_index} in {filename_for_errors} had extra values beyond the header; stored in __extra_values."
                         )
                         raw_row["__extra_values"] = " | ".join(str(value) for value in extra_values)
                         if "__extra_values" not in fieldnames:
@@ -178,10 +178,14 @@ def parse_failure_csv(path: Path) -> tuple[list[str], list[dict[str, str]], list
                     {name: "" if raw_row.get(name) is None else str(raw_row.get(name, "")) for name in fieldnames}
                 )
     except UnicodeDecodeError as exc:
-        raise UserActionRequired(f"Could not parse failure_cases.csv as UTF-8: {exc}") from exc
+        raise UserActionRequired(f"Could not parse {filename_for_errors} as UTF-8: {exc}") from exc
     except csv.Error as exc:
-        raise UserActionRequired(f"Could not parse failure_cases.csv reliably: {exc}") from exc
+        raise UserActionRequired(f"Could not parse {filename_for_errors} reliably: {exc}") from exc
     return fieldnames, rows, warnings
+
+
+def parse_failure_csv(path: Path) -> tuple[list[str], list[dict[str, str]], list[str]]:
+    return parse_csv_file(path, "failure_cases.csv")
 
 
 def normalize_name(name: str) -> str:
@@ -488,7 +492,18 @@ def build_history(
 
     current_failed_ids: set[str] = set()
     current_reason_counts: dict[str, int] = {}
+    
+    abnormal_field = ""
+    for f in current_fieldnames:
+        if normalize_name(f) in ("is_abnormal", "abnormal", "is_failure"):
+            abnormal_field = f
+            break
+
     for row in current_rows:
+        if abnormal_field:
+            val = str(row.get(abnormal_field, "")).strip().lower()
+            if val not in ("true", "1", "yes", "y", "异常", "失败", "fail", "failed", "bad"):
+                continue
         if atk_field:
             aid = (row.get(atk_field) or "").strip()
             if aid:
@@ -978,7 +993,71 @@ def run(argv: list[str]) -> int:
             f"Refusing to overwrite existing {output_path}; rerun with --overwrite after confirming replacement."
         )
 
-    fieldnames, rows, warnings = parse_failure_csv(failure_csv)
+    failure_fieldnames, failure_rows, failure_warnings = parse_failure_csv(failure_csv)
+    warnings = list(failure_warnings)
+
+    eval_csv = current_dir / EVAL_FILENAME
+    if eval_csv.is_file():
+        eval_fieldnames, eval_rows, eval_warnings = parse_csv_file(eval_csv, EVAL_FILENAME)
+        warnings.extend(eval_warnings)
+
+        failure_atk_field = detect_atk_id_field(failure_fieldnames)
+        eval_atk_field = detect_atk_id_field(eval_fieldnames)
+
+        if not failure_atk_field:
+            failure_atk_field = detect_roles(failure_fieldnames).get("id", {}).get("field", "")
+        if not eval_atk_field:
+            eval_atk_field = detect_roles(eval_fieldnames).get("id", {}).get("field", "")
+
+        failures_by_id = {}
+        for row in failure_rows:
+            if failure_atk_field:
+                aid = row.get(failure_atk_field, "").strip()
+                if aid:
+                    failures_by_id[aid] = row
+
+        fieldnames = list(eval_fieldnames)
+        for f in failure_fieldnames:
+            if f not in fieldnames:
+                fieldnames.append(f)
+
+        abnormal_field = ""
+        for f in fieldnames:
+            if normalize_name(f) in ("is_abnormal", "abnormal", "is_failure"):
+                abnormal_field = f
+                break
+        if not abnormal_field:
+            abnormal_field = "is_abnormal"
+            fieldnames.append(abnormal_field)
+
+        rows = []
+        for erow in eval_rows:
+            aid = erow.get(eval_atk_field, "").strip() if eval_atk_field else ""
+            mrow = {f: erow.get(f, "") for f in eval_fieldnames}
+            for f in fieldnames:
+                if f not in mrow:
+                    mrow[f] = ""
+
+            if aid and aid in failures_by_id:
+                frow = failures_by_id[aid]
+                for f in failure_fieldnames:
+                    if frow.get(f):
+                        mrow[f] = frow[f]
+                mrow[abnormal_field] = "true"
+            else:
+                mrow[abnormal_field] = "false"
+            rows.append(mrow)
+    else:
+        fieldnames = list(failure_fieldnames)
+        abnormal_field = "is_abnormal"
+        if abnormal_field not in fieldnames:
+            fieldnames.append(abnormal_field)
+        rows = []
+        for row in failure_rows:
+            mrow = dict(row)
+            mrow[abnormal_field] = "true"
+            rows.append(mrow)
+
     roles = detect_roles(fieldnames)
     facets = detect_facets(fieldnames, rows, roles)
     report = read_report_context(current_dir / REPORT_FILENAME, skip=args.no_report)
