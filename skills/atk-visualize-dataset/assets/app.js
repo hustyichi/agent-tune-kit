@@ -337,7 +337,6 @@
         }, [field + (state.sortColumn === field ? (state.sortDirection === "asc" ? " ↑" : " ↓") : "")]),
       ]));
     });
-    headerRow.appendChild(el("th", { text: "问题" }));
     head.appendChild(headerRow);
 
     var rows = sortedRows();
@@ -362,7 +361,6 @@
       columns.forEach(function (field) {
         tr.appendChild(el("td", {}, [el("div", { class: "cell-text", text: normalizeText(row.values[field]) || "（空）" })]));
       });
-      tr.appendChild(el("td", {}, buildRowBadges(row)));
       body.appendChild(tr);
     });
     $("page-label").textContent = "第 " + (state.page + 1) + " / " + pages + " 页";

@@ -183,6 +183,12 @@ class GenerateDatasetBrowserTests(unittest.TestCase):
             self.assertNotIn("dataset_summary.json", text)
             self.assertNotIn("visualize_config", text)
 
+    def test_table_does_not_append_issue_column(self) -> None:
+        app_js = (ROOT / "skills" / "atk-visualize-dataset" / "assets" / "app.js").read_text(encoding="utf-8")
+
+        self.assertNotIn('headerRow.appendChild(el("th", { text: "问题" }));', app_js)
+        self.assertNotIn('tr.appendChild(el("td", {}, buildRowBadges(row)));', app_js)
+
     def test_missing_dataset_exits_2(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             project = Path(tmp)
