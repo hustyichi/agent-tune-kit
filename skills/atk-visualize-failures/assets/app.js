@@ -491,6 +491,105 @@
     return "";
   }
 
+  function renderComparisonPaneContent(value) {
+    var valStr = normalizeText(value).trim();
+    var wrapper = el("div", { class: "comparison-content-inner" });
+    if (!valStr) {
+      wrapper.appendChild(el("pre", { text: "（空）" }));
+      return wrapper;
+    }
+    var parsed = parseJsonValue(valStr);
+    if (parsed) {
+      var preJson = el("pre", { class: "json-pre" });
+      preJson.innerHTML = formatJsonToHtml(parsed, "");
+      wrapper.appendChild(preJson);
+      extractCodeBlocks(parsed).forEach(function (block) {
+        wrapper.appendChild(el("div", { class: "sub-code-pane" }, [
+          el("div", { class: "sub-code-pane-head" }, [
+            el("span", { text: "代码段 (" + block.key + ")" }),
+            el("span", { class: "copy", text: "复制", onclick: function (ev) { copyText(block.value, ev.target); } }),
+          ]),
+          el("pre", { class: "code-pre" }, [el("code", { html: highlightCode(block.value) })]),
+        ]));
+      });
+    } else if (isCodeLike(valStr)) {
+      wrapper.appendChild(el("pre", { class: "code-pre" }, [el("code", { html: highlightCode(valStr) })]));
+    } else {
+      wrapper.appendChild(el("pre", { text: valStr }));
+    }
+    return wrapper;
+  }
+
+  function buildComparisonCard(row) {
+    var expectedField = roleField("expected");
+    var actualField = roleField("actual");
+    if (!expectedField && !actualField) return null;
+
+    var expectedValue = expectedField ? normalizeText(row.values[expectedField]) : "";
+    var actualValue = actualField ? normalizeText(row.values[actualField]) : "";
+
+    var card = el("div", { class: "comparison-card" }, [
+      el("div", { class: "comparison-header" }, [
+        el("div", { class: "comparison-title" }, [
+          el("span", {
+            html: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--brand); margin-right: 4px; vertical-align: middle;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>'
+          }),
+          el("span", { text: "核心输出结果比较 (RESULT COMPARISON)" })
+        ]),
+        el("span", { class: "comparison-subtitle", text: "左右滑轨对照比对" })
+      ])
+    ]);
+
+    var body = el("div", { class: "comparison-body" });
+
+    // Left Column (Agent 输出结果)
+    var agentPane = el("div", { class: "comparison-pane agent-pane" });
+    var agentHead = el("div", { class: "comparison-pane-head" }, [
+      el("span", { class: "comparison-pane-title" }, [
+        el("span", {
+          html: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: #64748b; margin-right: 4px; vertical-align: middle;"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>'
+        }),
+        el("span", { text: "Agent 输出结果" })
+      ]),
+      el("button", {
+        type: "button",
+        class: "copy-btn",
+        text: "复制结果",
+        onclick: function (ev) { copyText(actualValue, ev.target); }
+      })
+    ]);
+    var agentContent = el("div", { class: "comparison-content" });
+    agentContent.appendChild(renderComparisonPaneContent(actualValue));
+    agentPane.appendChild(agentHead);
+    agentPane.appendChild(agentContent);
+
+    // Right Column (标准答案 (Ground Truth))
+    var gtPane = el("div", { class: "comparison-pane gt-pane" });
+    var gtHead = el("div", { class: "comparison-pane-head" }, [
+      el("span", { class: "comparison-pane-title" }, [
+        el("span", {
+          html: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: #d97706; margin-right: 4px; vertical-align: middle;"><circle cx="12" cy="8" r="7"></circle><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline></svg>'
+        }),
+        el("span", { text: "标准答案 (Ground Truth)" })
+      ]),
+      el("button", {
+        type: "button",
+        class: "copy-btn",
+        text: "复制标准答案",
+        onclick: function (ev) { copyText(expectedValue, ev.target); }
+      })
+    ]);
+    var gtContent = el("div", { class: "comparison-content" });
+    gtContent.appendChild(renderComparisonPaneContent(expectedValue));
+    gtPane.appendChild(gtHead);
+    gtPane.appendChild(gtContent);
+
+    body.appendChild(agentPane);
+    body.appendChild(gtPane);
+    card.appendChild(body);
+    return card;
+  }
+
   function renderInspectorBody(row) {
     var container = $("inspector-body");
     if (!container) return;
@@ -499,7 +598,17 @@
     var right = el("div", { class: "inspector-column" });
     var hiddenEmpty = 0;
     var fields = payload.fieldnames || [];
+
+    var expectedField = roleField("expected");
+    var actualField = roleField("actual");
+    var comparisonCard = buildComparisonCard(row);
+    if (comparisonCard) {
+      right.appendChild(comparisonCard);
+    }
+
     fields.forEach(function (field) {
+      if (field === expectedField || field === actualField) return;
+
       var value = normalizeText(row.values[field]);
       if (!value.trim() && !state.showEmptyFields) {
         hiddenEmpty += 1;
