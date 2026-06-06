@@ -692,7 +692,6 @@
     container.innerHTML = "";
     var left = el("div", { class: "inspector-column" });
     var right = el("div", { class: "inspector-column" });
-    var hiddenEmpty = 0;
     var fields = payload.fieldnames || [];
 
     var expectedField = roleField("expected");
@@ -725,32 +724,11 @@
       if (field === expectedField || field === actualField || field === reasonField || field === logField) return;
 
       var value = normalizeText(row.values[field]);
-      if (!value.trim() && !state.showEmptyFields) {
-        hiddenEmpty += 1;
-        return;
-      }
       var role = roleForField(field);
       var pane = buildFieldPane(field, value, role ? ROLE_LABELS[role] : "原始字段");
       if (role === "expected" || role === "actual" || role === "reason") right.appendChild(pane);
       else left.appendChild(pane);
     });
-    left.insertBefore(el("div", { class: "field-switcher" }, [
-      el("span", { class: "field-switcher-title", text: "输入、上下文与原始字段" }),
-      el("label", { class: "facet-option" }, [
-        el("input", {
-          type: "checkbox",
-          checked: state.showEmptyFields ? "checked" : null,
-          onchange: function (ev) {
-            state.showEmptyFields = ev.target.checked;
-            renderInspectorBody(row);
-          },
-        }),
-        el("span", { class: "label", text: "显示空字段 (" + hiddenEmpty + " 个折叠)" }),
-      ]),
-    ]), left.firstChild);
-    right.insertBefore(el("div", { class: "field-switcher" }, [
-      el("span", { class: "field-switcher-title", text: "期望、实际输出与异常判断" }),
-    ]), right.firstChild);
     container.appendChild(left);
     container.appendChild(right);
   }
