@@ -227,7 +227,7 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, 
 }
 .search-wrap {
   position: relative;
-  flex: 1 1 320px;
+  flex: 0 0 320px;
 }
 .search-wrap.compact { flex: 0 0 auto; width: 100%; margin-bottom: 12px; }
 .search-icon {
@@ -874,6 +874,7 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, 
   border-radius: 999px;
   background: var(--panel-soft);
   align-items: center;
+  margin-left: auto;
 }
 .status-filter-btn {
   border: 0;
