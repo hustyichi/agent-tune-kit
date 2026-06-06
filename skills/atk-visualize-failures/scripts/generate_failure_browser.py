@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import csv
 import html
+import io
 import json
 import os
 import re
@@ -39,6 +40,7 @@ FACET_MAX_UNIQUE = 12
 FACET_MIN_UNIQUE = 2
 
 # Bounds for cross-version history reading to avoid runaway memory on huge datasets.
+HISTORY_FAILURE_MAX_BYTES = 64 * 1024 * 1024
 HISTORY_EVAL_MAX_BYTES = 64 * 1024 * 1024
 HISTORY_TUNING_PLAN_MAX_BYTES = 256 * 1024
 HISTORY_PERSISTENT_MIN_FAILS = 2
@@ -49,12 +51,17 @@ ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets"
 PAGE_TEMPLATE_NAME = "page.html"
 STYLES_NAME = "styles.css"
 APP_JS_NAME = "app.js"
-VENDOR_ECHARTS_NAME = "vendor/echarts.min.js"
 
 # Audit markers must remain present verbatim in the generated HTML so the plugin
 # self-tests can verify capability anchors regardless of the localized UI text.
 AUDIT_MARKERS = [
-    "expected-vs-actual comparison",
+    "dataset-visualize shell",
+    "Agent 评测结果可视化",
+    "stat-card-abnormal",
+    "field feature analysis",
+    "JSON/code enhanced inspector",
+    "failure_cases_review.csv export",
+    "expected-vs-actual evidence fields",
     "schema-adaptive role switching",
     "auto-detected",
     "manual/unmapped",
@@ -62,12 +69,7 @@ AUDIT_MARKERS = [
     "Search / filter / pagination",
     "No failure rows in current failure_cases.csv",
     "not clickable because it is outside the safe relative path contract",
-    "cross-version trend",
-    "previous-tuning-target hit rate",
-    "persistent failure cases",
-    "subset run indicator",
-    "three-state per-case status",
-    "bundled offline ECharts",
+    "single-file offline static HTML",
 ]
 
 
@@ -283,6 +285,19 @@ def _safe_read_text(path: Path, max_bytes: int) -> tuple[str, bool]:
     return raw.decode("utf-8", errors="replace"), truncated
 
 
+def _safe_read_csv_text(path: Path, max_bytes: int) -> tuple[str, bool]:
+    """Read bounded CSV text and drop a truncated trailing partial record."""
+    with path.open("rb") as handle:
+        raw = handle.read(max_bytes + 1)
+    truncated = len(raw) > max_bytes
+    if truncated:
+        raw = raw[:max_bytes]
+        if raw and not raw.endswith((b"\n", b"\r")):
+            last_newline = raw.rfind(b"\n")
+            raw = raw[: last_newline + 1] if last_newline >= 0 else b""
+    return raw.decode("utf-8", errors="replace"), truncated
+
+
 def _read_version_failures(failure_path: Path) -> dict[str, Any]:
     """Return atk_id set + reason distribution + raw failure count for a historical version."""
     out: dict[str, Any] = {
@@ -292,9 +307,12 @@ def _read_version_failures(failure_path: Path) -> dict[str, Any]:
         "atkIdField": "",
         "reasonField": "",
         "readable": True,
+        "truncated": False,
     }
     try:
-        with failure_path.open(newline="", encoding="utf-8") as handle:
+        text, truncated = _safe_read_csv_text(failure_path, HISTORY_FAILURE_MAX_BYTES)
+        out["truncated"] = truncated
+        with io.StringIO(text, newline="") as handle:
             reader = csv.DictReader(handle)
             fieldnames = list(reader.fieldnames or [])
             atk_field = detect_atk_id_field(fieldnames)
@@ -319,7 +337,7 @@ def _read_version_failures(failure_path: Path) -> dict[str, Any]:
 
 
 def _read_version_tested_ids(eval_path: Path) -> dict[str, Any]:
-    """Return tested atk_id set for a version by streaming only the atk_id column."""
+    """Return tested atk_id set for a version from a bounded eval_results.csv read."""
     out: dict[str, Any] = {"testedCount": 0, "atkIds": set(), "available": False, "truncated": False}
     if not eval_path.is_file():
         return out
@@ -329,7 +347,9 @@ def _read_version_tested_ids(eval_path: Path) -> dict[str, Any]:
         return out
     out["truncated"] = size > HISTORY_EVAL_MAX_BYTES
     try:
-        with eval_path.open(newline="", encoding="utf-8", errors="replace") as handle:
+        text, truncated = _safe_read_csv_text(eval_path, HISTORY_EVAL_MAX_BYTES)
+        out["truncated"] = out["truncated"] or truncated
+        with io.StringIO(text, newline="") as handle:
             reader = csv.DictReader(handle)
             fieldnames = list(reader.fieldnames or [])
             atk_field = detect_atk_id_field(fieldnames)
@@ -743,12 +763,23 @@ def safe_json_for_html(data: Any) -> str:
 
 def safe_log_href(value: str, current_dir: Path) -> str:
     raw = (value or "").strip()
-    if not raw or "\\" in raw or re.match(r"^[A-Za-z]:", raw):
+    if not raw:
         return ""
-    decoded = unquote(raw)
-    if decoded != raw and ("\\" in decoded or re.match(r"^[A-Za-z]:", decoded)):
-        return ""
-    for candidate in (raw, decoded):
+    decode_stages = [raw]
+    decoded = raw
+    for _ in range(5):
+        next_decoded = unquote(decoded)
+        if next_decoded == decoded:
+            break
+        decode_stages.append(next_decoded)
+        decoded = next_decoded
+    else:
+        if unquote(decoded) != decoded:
+            return ""
+
+    for candidate in decode_stages:
+        if "\\" in candidate or re.match(r"^[A-Za-z]:", candidate):
+            return ""
         split = urlsplit(candidate)
         if split.scheme or split.netloc or candidate.startswith("/") or candidate.startswith("//"):
             return ""
@@ -852,7 +883,6 @@ def render_html(payload: dict[str, Any]) -> str:
     template = load_asset(PAGE_TEMPLATE_NAME)
     styles = load_asset(STYLES_NAME)
     app_js = load_asset(APP_JS_NAME)
-    vendor_js = load_asset(VENDOR_ECHARTS_NAME)
     title = f"ATK Failure Cases — {payload['version']}"
     data_json = safe_json_for_html(payload)
     audit_markers = " | ".join(html.escape(marker) for marker in AUDIT_MARKERS)
@@ -861,7 +891,6 @@ def render_html(payload: dict[str, Any]) -> str:
         .replace("__ATK_STYLES__", styles)
         .replace("__ATK_AUDIT_MARKERS__", audit_markers)
         .replace("__ATK_DATA_JSON__", data_json)
-        .replace("__ATK_VENDOR_JS__", neutralize_script_close(vendor_js))
         .replace("__ATK_APP_JS__", neutralize_script_close(app_js))
     )
     return rendered
@@ -978,10 +1007,9 @@ def run(argv: list[str]) -> int:
     print(f"overwrite={overwrite_status}")
     print(f"facets={len(facets)}")
     print(
-        "features=summary counts, search/filter, pagination, expected-vs-actual, role switching, "
-        "dynamic facets, line diff, light syntax highlight, all-field detail, "
-        "cross-version trend, previous-tuning-target hit rate, persistent failure cases, "
-        "subset run indicator, three-state per-case status, bundled offline ECharts"
+        "features=dataset-visualize shell, stat-card-abnormal, search/filter, pagination, "
+        "field feature analysis, inspector overlay, role switching, JSON/code rendering, "
+        "review export, safe log links, bounded report excerpts"
     )
     if args.open_browser:
         ok, info = open_in_browser(output_path)

@@ -9,165 +9,199 @@ __ATK_STYLES__
   </style>
 </head>
 <body>
-  <header class="app-header">
-    <div class="brand"><span class="dot" aria-hidden="true"></span><span>Agent Tune Kit</span></div>
-    <h1>异常案例审阅 · <span id="meta-version">vN</span></h1>
-    <div class="meta">
-      <span class="chip" id="meta-rows">0 行</span>
-      <span class="chip" id="meta-fields">0 列</span>
-      <span class="chip" id="meta-history">单版本</span>
-      <button type="button" class="btn" data-open-drawer="roles" title="字段角色映射">角色映射</button>
-      <button type="button" class="btn" data-open-drawer="report" title="报告摘录">报告摘录</button>
-      <button type="button" class="btn" data-open-drawer="warnings" title="解析警告">警告</button>
-    </div>
-    <div class="path" id="path-context"></div>
-    <nav class="tabs" role="tablist" aria-label="视图切换">
-      <button type="button" class="tab" role="tab" data-tab="overview" aria-selected="false">总览</button>
-      <button type="button" class="tab" role="tab" data-tab="cross" aria-selected="false">跨版本</button>
-      <button type="button" class="tab active" role="tab" data-tab="cases" aria-selected="true">Case 浏览</button>
-    </nav>
-  </header>
-
-  <!-- ===== Overview tab ===== -->
-  <section id="tab-overview" class="tab-panel" role="tabpanel" hidden>
-    <div class="kpi-row" id="overview-kpis"></div>
-    <div class="overview-grid">
-      <div class="panel chart-card">
-        <div class="panel-header"><span>失败原因 Top-N</span><span class="hint" id="overview-reason-meta">--</span></div>
-        <div class="chart-body" id="chart-reason-bar"></div>
-      </div>
-      <div class="panel chart-card">
-        <div class="panel-header"><span>主要分类分布</span><span class="hint" id="overview-facet-meta">--</span></div>
-        <div class="chart-body" id="chart-facet-pie"></div>
-      </div>
-      <div class="panel chart-card wide">
-        <div class="panel-header"><span>期望 vs 实际 · 行数差分布</span><span class="hint">正值 = Agent 输出更长，负值 = 过短</span></div>
-        <div class="chart-body" id="chart-line-diff"></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ===== Cross-version tab ===== -->
-  <section id="tab-cross" class="tab-panel" role="tabpanel" hidden>
-    <div class="kpi-row" id="cross-kpis"></div>
-    <div class="cross-banner" id="cross-banner" hidden></div>
-    <div class="cross-grid">
-      <div class="panel chart-card wide">
-        <div class="panel-header">
-          <span>cross-version trend · 执行 / 失败 / 失败率</span>
-          <span class="hint" id="trend-meta">--</span>
-        </div>
-        <div class="chart-body tall" id="chart-trend"></div>
-      </div>
-      <div class="panel chart-card wide">
-        <div class="panel-header">
-          <span>失败原因按版本演化（堆叠）</span>
-          <span class="hint" id="stack-meta">--</span>
-        </div>
-        <div class="chart-body tall" id="chart-reason-stack"></div>
-      </div>
-      <div class="panel wide">
-        <div class="panel-header">
-          <span>previous-tuning-target hit rate · 上一轮调优目标命中率</span>
-          <span class="hint" id="targets-meta">--</span>
-        </div>
-        <div class="panel-body" id="targets-body"></div>
-      </div>
-      <div class="panel wide">
-        <div class="panel-header">
-          <span>persistent failure cases · 顽固 case</span>
-          <span class="hint" id="persistent-meta">--</span>
-        </div>
-        <div class="panel-body" id="persistent-body"></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ===== Cases tab (existing UI) ===== -->
-  <section id="tab-cases" class="tab-panel" role="tabpanel">
-    <main>
-      <aside class="sidebar">
-        <section class="panel">
-          <div class="panel-body">
-            <div class="stats">
-              <div class="stat"><div class="label">总异常</div><div class="value" id="stat-total">0</div></div>
-              <div class="stat"><div class="label">字段</div><div class="value" id="stat-fields">0</div></div>
-              <div class="stat"><div class="label" id="stat-primary-label">分类</div><div class="value" id="stat-primary-value">-</div></div>
-              <div class="stat"><div class="label" id="stat-report-label">报告</div><div class="value" id="stat-report-value">-</div></div>
-            </div>
+  <div id="application-root" class="app-shell">
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="brand-lockup">
+          <div class="brand-icon" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+              <polyline points="2 17 12 22 22 17"></polyline>
+              <polyline points="2 12 12 17 22 12"></polyline>
+            </svg>
           </div>
-        </section>
-        <section class="panel">
-          <div class="panel-header">
-            <span>Search / filter / pagination</span>
-            <span class="hint" id="filtered-count">0 / 0</span>
+          <div>
+            <h1>Agent 评测结果可视化</h1>
+            <div class="dataset-path" id="path-context"></div>
           </div>
-          <div class="panel-body">
-            <div class="search-row">
-              <input id="search" type="search" placeholder="搜索全部字段…" aria-label="搜索全部字段">
+        </div>
+        <div class="topbar-actions">
+          <button type="button" class="btn ghost" data-open-drawer="roles">字段映射</button>
+          <button type="button" class="btn ghost" data-open-drawer="report-context">报告上下文</button>
+          <button type="button" class="btn ghost" data-open-drawer="warnings">解析警告</button>
+          <button type="button" class="btn primary" id="export-reviewed-dataset-btn">导出评测结果</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <section class="tab-strip" aria-label="Failure case views">
+        <div class="tabs">
+          <button type="button" class="tab active" id="tab-grid" data-tab="grid">数据列表</button>
+          <button type="button" class="tab" id="tab-stats" data-tab="stats">字段特征分析</button>
+        </div>
+        <div class="standard-column-note">
+          <span>当前标准列已定位在:</span>
+          <strong id="standard-column">无定位</strong>
+        </div>
+      </section>
+
+      <section class="view active" id="view-grid" data-view="grid">
+        <div id="dataset-table-controller" class="table-controller">
+          <div class="control-card">
+            <div class="search-wrap">
+              <span class="search-icon" aria-hidden="true">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+              </span>
+              <input id="search" type="search" placeholder="在评测数据中搜索..." aria-label="搜索全部字段">
             </div>
-            <div id="cross-filter-bar" class="cross-filter-bar" hidden></div>
-            <div id="facets" class="facet-group" style="margin-top:10px;"></div>
-            <div id="empty-state-all" class="empty" hidden>
-              <strong>当前版本没有异常行</strong>
-              <span>No failure rows in current failure_cases.csv</span>
+            <button type="button" class="btn ghost" id="clear-filters-btn">重置所有过滤器</button>
+            <span class="filtered-count" id="filtered-count">0 / 0</span>
+          </div>
+
+          <div class="field-switcher" id="column-visibility-panel">
+            <span class="field-switcher-title">显示数据字段:</span>
+            <div id="column-chips" class="column-chips"></div>
+          </div>
+
+          <div id="empty-state-all" class="empty-state" hidden>
+            <strong>当前版本没有异常行</strong>
+            <span>No failure rows in current failure_cases.csv</span>
+          </div>
+          <div id="empty-state-filtered" class="empty-state" hidden>
+            <strong>没有匹配的行</strong>
+            <span>请调整搜索词或过滤器。</span>
+          </div>
+
+          <div class="table-frame">
+            <table class="dataset-table" aria-label="数据列表">
+              <thead id="table-head"></thead>
+              <tbody id="table-body"></tbody>
+            </table>
+          </div>
+
+          <div class="pager">
+            <button id="prev" type="button" class="btn">上一页</button>
+            <div class="pager-center">
+              <span id="page-label"></span>
+              <select id="page-size" aria-label="每页行数"></select>
             </div>
-            <div id="empty-state-filtered" class="empty" hidden>
-              <strong>没有匹配的异常行</strong>
-              <span>请调整搜索词或过滤器。</span>
+            <button id="next" type="button" class="btn">下一页</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="view-stats" data-view="stats">
+        <div id="statistics-dashboard" class="stats-dashboard">
+          <div class="stat-grid">
+            <div id="stat-card-rows" class="stat-card">
+              <span class="stat-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+                  <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+                  <path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"></path>
+                </svg>
+              </span>
+              <div><span class="stat-label">评估用例总数</span><strong id="stat-total">0</strong></div>
             </div>
-            <div id="case-list" class="case-list" role="list" aria-label="异常案例列表" style="margin-top:10px;"></div>
-            <div class="pager">
-              <button id="prev" type="button" class="btn">上一页</button>
-              <div class="controls">
-                <span id="page-label" class="label"></span>
-                <select id="page-size" aria-label="每页行数"></select>
+            <div id="stat-card-fields" class="stat-card">
+              <span class="stat-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+                  <path d="M9 3v18M15 3v18"></path>
+                </svg>
+              </span>
+              <div><span class="stat-label">总字段数</span><strong id="stat-fields">0</strong></div>
+            </div>
+            <div id="stat-card-abnormal" class="stat-card">
+              <span class="stat-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="8" x2="12" y2="12"></line>
+                  <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+              </span>
+              <div>
+                <span class="stat-label">合并异常用例</span>
+                <strong id="stat-abnormal">0</strong>
+                <span id="stat-abnormal-rate" class="stat-subvalue">失败率 0%</span>
               </div>
-              <button id="next" type="button" class="btn">下一页</button>
             </div>
           </div>
-        </section>
-      </aside>
-      <section class="panel detail" aria-label="expected-vs-actual comparison">
-        <div id="detail-head" class="detail-head"></div>
-        <div id="detail-body" class="detail-body"></div>
+
+          <div class="stats-layout">
+            <aside class="field-catalog">
+              <div class="section-heading">
+                <span>数据列特征分析</span>
+                <strong id="field-count">0</strong>
+              </div>
+              <div class="search-wrap compact">
+                <span class="search-icon" aria-hidden="true">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                  </svg>
+                </span>
+                <input id="column-search" type="search" placeholder="搜索数据字段名..." aria-label="搜索字段">
+              </div>
+              <div id="column-list" class="column-list"></div>
+            </aside>
+            <section class="field-detail">
+              <div id="selected-column-detail" class="field-detail-card"></div>
+              <div id="length-histogram" class="histogram-card"></div>
+            </section>
+          </div>
+        </div>
       </section>
     </main>
-  </section>
 
-  <div class="drawer-backdrop" id="drawer-backdrop"></div>
-  <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
-    <div class="drawer-header">
-      <span id="drawer-title">设置</span>
-      <button type="button" id="drawer-close" class="btn ghost" aria-label="关闭">✕</button>
+    <div id="inspector-overlay-pane" class="inspector-overlay" hidden>
+      <aside class="inspector-panel" role="dialog" aria-modal="true" aria-labelledby="inspector-title">
+        <div class="inspector-header">
+          <div class="inspector-title-wrap">
+            <span id="inspector-row-badge" class="row-badge">#</span>
+            <div>
+              <h2 id="inspector-title">异常数据详情</h2>
+              <p id="inspector-subtitle"></p>
+            </div>
+          </div>
+          <button type="button" id="inspector-close" class="icon-btn" aria-label="关闭">×</button>
+        </div>
+        <div id="inspector-body" class="inspector-body"></div>
+      </aside>
     </div>
-    <div class="drawer-body">
-      <section class="drawer-section" data-section="roles">
-        <h3>schema-adaptive role switching · 字段角色映射 · auto-detected</h3>
-        <div id="drawer-roles"></div>
-      </section>
-      <section class="drawer-section" data-section="report">
-        <h3>Bounded report.md context</h3>
-        <div id="drawer-report"></div>
-      </section>
-      <section class="drawer-section" data-section="warnings">
-        <h3>解析警告</h3>
-        <div id="drawer-warnings"></div>
-      </section>
-    </div>
-  </aside>
 
-  <footer style="text-align:center;color:var(--muted);font-size:11px;padding:14px;">
-    由 atk-visualize-failures 生成 · 单文件 / 离线 / 零外链 / bundled offline ECharts / 无 LLM 摘要
-  </footer>
+    <div class="drawer-backdrop" id="drawer-backdrop"></div>
+    <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
+      <div class="drawer-header">
+        <span id="drawer-title">设置</span>
+        <button type="button" id="drawer-close" class="btn ghost" aria-label="关闭">×</button>
+      </div>
+      <div class="drawer-body">
+        <section class="drawer-section" data-section="roles">
+          <h3>schema-adaptive role switching · 字段角色映射 · auto-detected</h3>
+          <div id="drawer-roles"></div>
+        </section>
+        <section class="drawer-section" data-section="report-context">
+          <h3>Bounded report.md context · 有界报告上下文</h3>
+          <div id="drawer-report"></div>
+        </section>
+        <section class="drawer-section" data-section="warnings">
+          <h3>解析警告</h3>
+          <div id="drawer-warnings"></div>
+        </section>
+      </div>
+    </aside>
+
+  </div>
 
   <!-- audit markers (preserved for plugin self-test substring checks; do not remove) -->
   <div class="audit-only" aria-hidden="true">__ATK_AUDIT_MARKERS__</div>
 
   <script type="application/json" id="failure-data">__ATK_DATA_JSON__</script>
-  <script>
-__ATK_VENDOR_JS__
-  </script>
   <script>
 __ATK_APP_JS__
   </script>
