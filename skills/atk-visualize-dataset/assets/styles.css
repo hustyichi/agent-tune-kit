@@ -894,6 +894,7 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, 
   position: relative;
   flex: 1;
   min-height: 220px;
+  max-height: 280px;
   border-bottom: 2px solid var(--line-strong);
   margin-top: 10px;
   padding: 0 10px;
