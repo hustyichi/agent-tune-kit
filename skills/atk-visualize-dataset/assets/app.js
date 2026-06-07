@@ -503,19 +503,6 @@
       }
       left.appendChild(buildFieldPane(field, value, "输入与上下文参数"));
     });
-    left.insertBefore(el("div", { class: "field-switcher" }, [
-      el("label", { class: "facet-option" }, [
-        el("input", {
-          type: "checkbox",
-          checked: state.showEmptyFields ? "checked" : null,
-          onchange: function (ev) {
-            state.showEmptyFields = ev.target.checked;
-            renderInspectorBody(row);
-          },
-        }),
-        el("span", { class: "label", text: "显示空字段 (" + hiddenEmpty + " 个折叠)" }),
-      ]),
-    ]), left.firstChild);
 
     var gtValue = gtField ? normalizeText(row.values[gtField]) : "";
     var gtContentEl = el("div", { class: "gt-text" });

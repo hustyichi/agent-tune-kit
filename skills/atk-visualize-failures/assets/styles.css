@@ -499,10 +499,17 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, 
 }
 .stats-layout {
   display: grid;
-  grid-template-columns: 360px minmax(0, 1fr);
-  gap: 16px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
 }
-.field-catalog { padding: 16px; height: 430px; overflow: hidden; display: flex; flex-direction: column; }
+.field-catalog {
+  grid-column: span 1;
+  padding: 16px;
+  height: 430px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
 .section-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; color: var(--text-strong); font-size: 13px; font-weight: 900; }
 .section-heading strong { color: var(--muted); background: var(--panel-soft); border-radius: 999px; padding: 2px 9px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .column-list { overflow: auto; display: flex; flex-direction: column; gap: 7px; padding-right: 4px; }
@@ -519,6 +526,7 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, 
 .column-item-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 900; }
 .column-item-meta { display: flex; gap: 8px; margin-top: 4px; color: inherit; opacity: 0.76; font-size: 11px; }
 .field-detail {
+  grid-column: span 2;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 16px;
@@ -708,6 +716,7 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, 
   .topbar-inner, .tab-strip { align-items: flex-start; flex-direction: column; }
   .topbar-actions { justify-content: flex-start; }
   .stat-grid, .stats-layout, .inspector-body { grid-template-columns: 1fr; }
+  .field-catalog, .field-detail { grid-column: auto; }
   .table-frame { overflow-x: auto; }
   .standard-column-note { padding-bottom: 8px; }
 }
