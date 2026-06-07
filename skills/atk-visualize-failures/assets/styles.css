@@ -501,18 +501,20 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, 
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
+  height: calc(100vh - 300px);
+  min-height: 600px;
 }
 .field-catalog {
   grid-column: span 1;
   padding: 16px;
-  height: 430px;
+  height: 100%;
   overflow: hidden;
   display: flex;
   flex-direction: column;
 }
 .section-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; color: var(--text-strong); font-size: 13px; font-weight: 900; }
 .section-heading strong { color: var(--muted); background: var(--panel-soft); border-radius: 999px; padding: 2px 9px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-.column-list { overflow: auto; display: flex; flex-direction: column; gap: 7px; padding-right: 4px; }
+.column-list { overflow: auto; display: flex; flex-direction: column; gap: 7px; padding-right: 4px; flex: 1; min-height: 0; }
 .column-item {
   border: 1px solid transparent;
   border-radius: 9px;
@@ -530,6 +532,7 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, 
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 16px;
+  height: 100%;
 }
 .field-detail-card, .histogram-card { padding: 18px; min-height: 190px; }
 .field-detail-card h3, .histogram-card h3 { margin: 0 0 10px; color: var(--text-strong); font-size: 15px; }
@@ -717,6 +720,9 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, 
   .topbar-actions { justify-content: flex-start; }
   .stat-grid, .stats-layout, .inspector-body { grid-template-columns: 1fr; }
   .field-catalog, .field-detail { grid-column: auto; }
+  .stats-layout { height: auto; min-height: 0; }
+  .field-catalog { height: 430px; }
+  .field-detail-card { height: auto; }
   .table-frame { overflow-x: auto; }
   .standard-column-note { padding-bottom: 8px; }
 }
@@ -1060,6 +1066,9 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, 
   border: 1px solid var(--panel-border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .field-detail-header {
@@ -1161,12 +1170,15 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, 
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
   gap: 24px;
+  flex: 1;
+  min-height: 0;
 }
 
 .field-detail-chart-panel, .field-detail-samples-panel {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  height: 100%;
 }
 
 .panel-title {
@@ -1179,7 +1191,8 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, 
 /* Vertical Bar Chart Styles */
 .chart-container {
   position: relative;
-  height: 220px;
+  flex: 1;
+  min-height: 220px;
   border-bottom: 2px solid var(--line-strong);
   margin-top: 10px;
   padding: 0 10px;
@@ -1287,7 +1300,8 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, 
   flex-direction: column;
   gap: 12px;
   overflow-y: auto;
-  max-height: 260px;
+  flex: 1;
+  min-height: 260px;
   padding-right: 4px;
 }
 
