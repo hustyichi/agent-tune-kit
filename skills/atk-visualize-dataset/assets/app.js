@@ -833,7 +833,8 @@
     
     // Samples Panel (Right Column)
     var samplesContainer = el("div", { class: "samples-container" });
-    meta.sampleValues.forEach(function (value, index) {
+    var displaySamples = meta.sampleValues.slice(0, 3);
+    displaySamples.forEach(function (value, index) {
       var sampleCard = el("div", { class: "sample-item-card" }, [
         el("div", { class: "sample-item-header", text: "样本 #" + (index + 1) }),
         el("div", { class: "sample-item-body", text: value })
@@ -842,7 +843,7 @@
     });
     
     var samplesPanel = el("div", { class: "field-detail-samples-panel" }, [
-      el("h4", { class: "panel-title", text: "样例数据提取 (前 " + meta.sampleValues.length + " 条)" }),
+      el("h4", { class: "panel-title", text: "样例数据提取 (前 " + displaySamples.length + " 条)" }),
       samplesContainer
     ]);
     
