@@ -1034,3 +1034,24 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, 
   word-break: break-all;
 }
 
+.sample-item-body pre {
+  margin: 0;
+  padding: 8px 10px;
+  background: white;
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius-sm);
+  max-height: 200px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
+.sample-item-body .sub-code-pane pre {
+  background: transparent;
+  border: 0;
+  padding: 12px 14px;
+}
+

@@ -1009,9 +1009,11 @@
     var samplesContainer = el("div", { class: "samples-container" });
     var displaySamples = meta.sampleValues.slice(0, 3);
     displaySamples.forEach(function (value, index) {
+      var bodyContainer = el("div", { class: "sample-item-body" });
+      bodyContainer.appendChild(renderValueContent(value));
       var sampleCard = el("div", { class: "sample-item-card" }, [
         el("div", { class: "sample-item-header", text: "样本 #" + (index + 1) }),
-        el("div", { class: "sample-item-body", text: value })
+        bodyContainer
       ]);
       samplesContainer.appendChild(sampleCard);
     });
@@ -1027,6 +1029,36 @@
     detail.appendChild(header);
     detail.appendChild(hr);
     detail.appendChild(body);
+  }
+
+  function renderValueContent(value) {
+    var valStr = normalizeText(value).trim();
+    var container = el("div", { class: "formatted-content-wrap" });
+    if (!valStr) {
+      container.appendChild(el("pre", { text: "（空）" }));
+      return container;
+    }
+
+    var parsed = parseJsonValue(valStr);
+    if (parsed) {
+      var preJson = el("pre", { class: "json-pre" });
+      preJson.innerHTML = formatJsonToHtml(parsed, "");
+      container.appendChild(preJson);
+      extractCodeBlocks(parsed).forEach(function (block) {
+        container.appendChild(el("div", { class: "sub-code-pane" }, [
+          el("div", { class: "sub-code-pane-head" }, [
+            el("span", { text: "代码段 (" + block.key + ")" }),
+            el("span", { class: "copy", text: "复制", onclick: function (ev) { copyText(block.value, ev.target); } }),
+          ]),
+          el("pre", { class: "code-pre" }, [el("code", { html: highlightCode(block.value) })]),
+        ]));
+      });
+    } else if (isCodeLike(valStr)) {
+      container.appendChild(el("pre", { class: "code-pre", html: highlightCode(valStr) }));
+    } else {
+      container.appendChild(el("pre", { text: valStr }));
+    }
+    return container;
   }
 
   function buildFieldKpi(label, value) {

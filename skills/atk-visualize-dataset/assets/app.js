@@ -835,9 +835,11 @@
     var samplesContainer = el("div", { class: "samples-container" });
     var displaySamples = meta.sampleValues.slice(0, 3);
     displaySamples.forEach(function (value, index) {
+      var bodyContainer = el("div", { class: "sample-item-body" });
+      bodyContainer.appendChild(renderValueContent(value));
       var sampleCard = el("div", { class: "sample-item-card" }, [
         el("div", { class: "sample-item-header", text: "样本 #" + (index + 1) }),
-        el("div", { class: "sample-item-body", text: value })
+        bodyContainer
       ]);
       samplesContainer.appendChild(sampleCard);
     });
@@ -853,6 +855,63 @@
     detail.appendChild(header);
     detail.appendChild(hr);
     detail.appendChild(body);
+  }
+
+  function renderValueContent(value) {
+    var valStr = normalizeText(value).trim();
+    var container = el("div", { class: "formatted-content-wrap" });
+    if (!valStr) {
+      container.appendChild(el("pre", { text: "（空）" }));
+      return container;
+    }
+
+    var parsed = null;
+    var isJson = false;
+    try {
+      if (valStr.indexOf("{") === 0 || valStr.indexOf("[") === 0) {
+        parsed = JSON.parse(valStr);
+        if (parsed && typeof parsed === "object") {
+          isJson = true;
+        }
+      }
+    } catch (e) {}
+
+    if (isJson) {
+      var jsonHtml = formatJsonToHtml(parsed, "");
+      var preEl = el("pre", { class: "json-pre" });
+      preEl.innerHTML = jsonHtml;
+      container.appendChild(preEl);
+
+      var codeBlocks = [];
+      if (!Array.isArray(parsed)) {
+        for (var k in parsed) {
+          if (parsed.hasOwnProperty(k) && typeof parsed[k] === "string" && isCodeLike(parsed[k])) {
+            codeBlocks.push({ key: k, value: parsed[k] });
+          }
+        }
+      }
+
+      codeBlocks.forEach(function (block) {
+        var subPane = el("div", { class: "sub-code-pane" }, [
+          el("div", { class: "sub-code-pane-head" }, [
+            el("span", { text: "代码段 (" + block.key + ")" }),
+            el("span", { class: "copy", text: "复制", onclick: function (ev) { copyText(block.value, ev.target); } }),
+          ]),
+          el("pre", { class: "code-pre" }, [
+            el("code", { html: highlightCode(block.value) })
+          ])
+        ]);
+        container.appendChild(subPane);
+      });
+
+    } else if (isCodeLike(valStr)) {
+      var preEl = el("pre", { class: "code-pre" });
+      preEl.innerHTML = highlightCode(valStr);
+      container.appendChild(preEl);
+    } else {
+      container.appendChild(el("pre", { text: valStr }));
+    }
+    return container;
   }
 
   function buildFieldKpi(label, value) {
