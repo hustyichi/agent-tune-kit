@@ -125,6 +125,60 @@
     return s;
   }
 
+  function splitHtmlIntoLines(html) {
+    var lines = [];
+    var currentLine = "";
+    var activeSpans = [];
+    var i = 0;
+    while (i < html.length) {
+      if (html[i] === '<') {
+        var endIdx = html.indexOf('>', i);
+        if (endIdx === -1) {
+          currentLine += html.slice(i);
+          break;
+        }
+        var tag = html.slice(i, endIdx + 1);
+        i = endIdx + 1;
+        if (tag.indexOf('</span') === 0) {
+          activeSpans.pop();
+          currentLine += tag;
+        } else if (tag.indexOf('<span') === 0) {
+          activeSpans.push(tag);
+          currentLine += tag;
+        } else {
+          currentLine += tag;
+        }
+      } else if (html[i] === '\n') {
+        for (var j = activeSpans.length - 1; j >= 0; j--) {
+          currentLine += '</span>';
+        }
+        lines.push(currentLine);
+        currentLine = "";
+        for (var k = 0; k < activeSpans.length; k++) {
+          currentLine += activeSpans[k];
+        }
+        i++;
+      } else {
+        currentLine += html[i];
+        i++;
+      }
+    }
+    for (var j = activeSpans.length - 1; j >= 0; j--) {
+      currentLine += '</span>';
+    }
+    lines.push(currentLine);
+    return lines;
+  }
+
+  function renderCodeHtml(value) {
+    var highlighted = highlightCode(value);
+    var lines = splitHtmlIntoLines(highlighted);
+    var htmlLines = lines.map(function (line) {
+      return '<span class="code-line"><span class="code-line-content">' + (line || " ") + '</span></span>';
+    });
+    return '<code class="code-block-with-lines">' + htmlLines.join('') + '</code>';
+  }
+
   function formatJsonToHtml(val, indent) {
     indent = indent || "";
     var nextIndent = indent + "  ";
@@ -543,7 +597,7 @@
       if (isJson) {
         gtContentEl.innerHTML = formatJsonToHtml(parsed, "");
       } else if (isCodeLike(gtTrimmed)) {
-        gtContentEl.innerHTML = highlightCode(gtValue);
+        gtContentEl.innerHTML = renderCodeHtml(gtValue);
       } else {
         gtContentEl.textContent = gtValue;
       }
@@ -624,16 +678,13 @@
             el("span", { text: "代码段 (" + block.key + ")" }),
             subCopyBtn,
           ]),
-          el("pre", { class: "code-pre" }, [
-            el("code", { html: highlightCode(block.value) })
-          ])
+          el("pre", { class: "code-pre", html: renderCodeHtml(block.value) })
         ]);
         pane.appendChild(subPane);
       });
 
     } else if (isCodeLike(valStr)) {
-      var preEl = el("pre", { class: "code-pre" });
-      preEl.innerHTML = highlightCode(valStr);
+      var preEl = el("pre", { class: "code-pre", html: renderCodeHtml(valStr) });
       pane.appendChild(preEl);
     } else {
       var preEl = el("pre", { text: valStr });
@@ -916,16 +967,13 @@
             el("span", { text: "代码段 (" + block.key + ")" }),
             el("span", { class: "copy", text: "复制", onclick: function (ev) { copyText(block.value, ev.target); } }),
           ]),
-          el("pre", { class: "code-pre" }, [
-            el("code", { html: highlightCode(block.value) })
-          ])
+          el("pre", { class: "code-pre", html: renderCodeHtml(block.value) })
         ]);
         container.appendChild(subPane);
       });
 
     } else if (isCodeLike(valStr)) {
-      var preEl = el("pre", { class: "code-pre" });
-      preEl.innerHTML = highlightCode(valStr);
+      var preEl = el("pre", { class: "code-pre", html: renderCodeHtml(valStr) });
       container.appendChild(preEl);
     } else {
       container.appendChild(el("pre", { text: valStr }));

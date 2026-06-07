@@ -1055,3 +1055,46 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, 
   padding: 12px 14px;
 }
 
+/* Code line numbers and layout styling */
+.code-block-with-lines {
+  display: block;
+  counter-reset: line-number;
+  white-space: inherit;
+  overflow-wrap: inherit;
+  word-break: inherit;
+}
+
+.code-line {
+  display: flex;
+  align-items: flex-start;
+  line-height: 1.5;
+  white-space: inherit;
+  overflow-wrap: inherit;
+  word-break: inherit;
+}
+
+.code-line::before {
+  counter-increment: line-number;
+  content: counter(line-number);
+  display: inline-block;
+  width: 32px;
+  min-width: 32px;
+  text-align: right;
+  margin-right: 12px;
+  color: var(--muted-soft, #94a3b8);
+  user-select: none;
+  -webkit-user-select: none;
+  border-right: 1px solid var(--line-strong, #e2e8f0);
+  padding-right: 8px;
+  opacity: 0.65;
+}
+
+.code-line-content {
+  flex: 1;
+  min-width: 0;
+  white-space: inherit;
+  overflow-wrap: inherit;
+  word-break: inherit;
+}
+
+
