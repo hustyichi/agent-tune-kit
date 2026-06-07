@@ -68,7 +68,7 @@
 
   function escapeHtml(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, function (ch) {
-      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch];
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch] || ch;
     });
   }
 
@@ -91,18 +91,37 @@
   var KW_RE = new RegExp("\\b(" + KEYWORDS + ")\\b", "g");
 
   function highlightCode(value) {
-    var s = escapeHtml(value);
-    s = s.replace(/(`(?:[^`\\]|\\.)*`|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g, function (m) {
-      return '<span class="tok-str">' + m + '</span>';
-    });
+    var tokens = [];
+    function tokenKey(index) {
+      var letters = "";
+      var n = index;
+      do {
+        letters = String.fromCharCode(97 + (n % 26)) + letters;
+        n = Math.floor(n / 26) - 1;
+      } while (n >= 0);
+      return "\u0000TOK" + letters + "END\u0000";
+    }
+    function stash(cls, text) {
+      var key = tokenKey(tokens.length);
+      tokens.push({ key: key, html: '<span class="' + cls + '">' + escapeHtml(text) + '</span>' });
+      return key;
+    }
+    var s = normalizeText(value);
     s = s.replace(/\/\*[\s\S]*?\*\//g, function (m) {
-      return '<span class="tok-com">' + m + '</span>';
+      return stash("tok-com", m);
     });
     s = s.replace(/(^|[^:])\/\/[^\n]*/g, function (m, p1) {
-      return p1 + '<span class="tok-com">' + m.slice(p1.length) + '</span>';
+      return p1 + stash("tok-com", m.slice(p1.length));
     });
-    s = s.replace(/\b(\d+(?:\.\d+)?)\b/g, '<span class="tok-num">$1</span>');
+    s = s.replace(/(`(?:[^`\\]|\\.)*`|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g, function (m) {
+      return stash("tok-str", m);
+    });
+    s = escapeHtml(s);
     s = s.replace(KW_RE, '<span class="tok-kw">$1</span>');
+    s = s.replace(/\b(\d+(?:\.\d+)?)\b/g, '<span class="tok-num">$1</span>');
+    tokens.forEach(function (token) {
+      s = s.split(token.key).join(token.html);
+    });
     return s;
   }
 
