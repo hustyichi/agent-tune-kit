@@ -87,7 +87,7 @@ class InstallPluginCliTests(unittest.TestCase):
         for args in [("--version",), ("version",)]:
             result = run_cli(*args)
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(result.stdout.strip(), "agent-tune-kit 0.4.5")
+            self.assertEqual(result.stdout.strip(), "agent-tune-kit 0.4.6")
             self.assertEqual(result.stderr, "")
 
     def test_script_wrapper_delegates_to_atk_cli(self) -> None:

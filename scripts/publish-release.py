@@ -50,14 +50,14 @@ def target_for(name: str) -> PublishTarget:
         return PublishTarget(
             name="pypi",
             json_base="https://pypi.org/pypi",
-            simple_url="https://pypi.org/simple/",
+            simple_url="https://pypi.org/simple",
             publish_url=None,
         )
     if name == "testpypi":
         return PublishTarget(
             name="testpypi",
             json_base="https://test.pypi.org/pypi",
-            simple_url="https://test.pypi.org/simple/",
+            simple_url="https://test.pypi.org/simple",
             publish_url="https://test.pypi.org/legacy/",
         )
     raise PublishError(f"unknown repository: {name}")

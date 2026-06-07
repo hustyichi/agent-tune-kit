@@ -64,7 +64,7 @@ class ReleaseScriptTests(unittest.TestCase):
         check_release = load_script("check-release.py")
         identity = check_release.read_project_identity()
         self.assertEqual(identity.name, "agent-tune-kit")
-        self.assertEqual(identity.version, "0.4.5")
+        self.assertEqual(identity.version, "0.4.6")
         check_release.assert_versions_aligned(identity)
 
     def test_skill_pack_validation_does_not_phrase_scan_readmes(self) -> None:
@@ -99,15 +99,15 @@ class ReleaseScriptTests(unittest.TestCase):
         publish_release = load_script("publish-release.py")
         pypi = publish_release.target_for("pypi")
         testpypi = publish_release.target_for("testpypi")
-        self.assertEqual(pypi.simple_url, "https://pypi.org/simple/")
+        self.assertEqual(pypi.simple_url, "https://pypi.org/simple")
         self.assertIsNone(pypi.publish_url)
-        self.assertEqual(testpypi.simple_url, "https://test.pypi.org/simple/")
+        self.assertEqual(testpypi.simple_url, "https://test.pypi.org/simple")
         self.assertEqual(testpypi.publish_url, "https://test.pypi.org/legacy/")
 
         with tempfile.TemporaryDirectory() as tmp:
             artifacts = [Path(tmp) / "a.whl", Path(tmp) / "a.tar.gz"]
             command = publish_release.publish_command(testpypi, artifacts, trusted_publishing=None)
-        self.assertEqual(command[:4], ["uv", "publish", "--check-url", "https://test.pypi.org/simple/"])
+        self.assertEqual(command[:4], ["uv", "publish", "--check-url", "https://test.pypi.org/simple"])
         self.assertIn("--publish-url", command)
         self.assertIn("https://test.pypi.org/legacy/", command)
 
