@@ -468,7 +468,7 @@
       var role = roleFields[field] || "";
       var button = el("button", {
         type: "button",
-        class: "column-chip" + (isVisible ? "" : " off") + (role ? " gt" : ""),
+        class: "column-chip" + (isVisible ? "" : " off") + ((role === "expected" || role === "actual") ? " gt" : ""),
         onclick: function () {
           state.visibleColumns[field] = !state.visibleColumns[field];
           renderColumnChips();
