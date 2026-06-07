@@ -504,7 +504,6 @@
       left.appendChild(buildFieldPane(field, value, "输入与上下文参数"));
     });
     left.insertBefore(el("div", { class: "field-switcher" }, [
-      el("span", { class: "field-switcher-title", text: "输入与上下文参数 (Inputs & Metadata)" }),
       el("label", { class: "facet-option" }, [
         el("input", {
           type: "checkbox",
@@ -750,41 +749,122 @@
     renderColumnList();
     var detail = $("selected-column-detail");
     var histogram = $("length-histogram");
+    if (!detail || !histogram) return;
     detail.innerHTML = "";
     histogram.innerHTML = "";
+    histogram.style.display = "none"; // Hide the old separate histogram card
+    
     var meta = columnMetaFor(state.selectedColumnName);
     if (!meta) {
       detail.appendChild(el("div", { class: "empty-state" }, [el("strong", { text: "请选择字段" })]));
       return;
     }
+    
     var isGt = meta.name === roleField("expected");
-    detail.appendChild(el("h3", { text: meta.name }));
-    detail.appendChild(el("span", { class: "badge" + (isGt ? " gt" : ""), text: isGt ? "标准参考列" : meta.type }));
-    detail.appendChild(el("div", { class: "field-kpis" }, [
-      buildFieldKpi("非空", meta.nonEmptyCount + "/" + payload.rows.length),
-      buildFieldKpi("完整度", meta.completionRate + "%"),
-      buildFieldKpi("平均长度", meta.avgLength + " 字"),
-    ]));
-    var samples = el("div", { class: "sample-values" });
-    meta.sampleValues.forEach(function (value) {
-      samples.appendChild(el("span", { class: "badge", text: truncate(value, 80) }));
-    });
-    detail.appendChild(samples);
-
-    histogram.appendChild(el("h3", { text: "字段长度分布" }));
+    var labelText = isGt ? "标准参考列" : meta.type;
+    var badgeClass = "badge" + (isGt ? " gt" : "");
+    var totalRows = payload.rows.length;
+    
+    // Create Header Left
+    var headerLeft = el("div", { class: "field-detail-header-left" }, [
+      el("div", { class: "field-name-row" }, [
+        el("span", { class: "field-icon-wrap", html: '<svg class="field-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>' }),
+        el("span", { class: "field-name", text: meta.name })
+      ]),
+      el("div", { class: "field-meta-row" }, [
+        el("span", { text: "数据类型: " }),
+        el("span", { class: "meta-highlight type-tag", text: labelText }),
+        el("span", { text: " • 填充完整度: " }),
+        el("span", { class: "meta-highlight", text: meta.completionRate + "% (" + meta.nonEmptyCount + "/" + totalRows + ")" })
+      ])
+    ]);
+    
+    // Create Header Right (KPIs)
+    var headerRight = el("div", { class: "field-detail-header-right" }, [
+      el("div", { class: "kpi-col" }, [
+        el("span", { class: "kpi-label", text: "最小长度" }),
+        el("span", { class: "kpi-val" }, [
+          document.createTextNode(meta.minLength + " "),
+          el("span", { class: "unit", text: "字" })
+        ])
+      ]),
+      el("div", { class: "kpi-divider" }),
+      el("div", { class: "kpi-col" }, [
+        el("span", { class: "kpi-label", text: "平均长度" }),
+        el("span", { class: "kpi-val" }, [
+          document.createTextNode(meta.avgLength + " "),
+          el("span", { class: "unit", text: "字" })
+        ])
+      ]),
+      el("div", { class: "kpi-divider" }),
+      el("div", { class: "kpi-col" }, [
+        el("span", { class: "kpi-label", text: "最大长度" }),
+        el("span", { class: "kpi-val" }, [
+          document.createTextNode(meta.maxLength + " "),
+          el("span", { class: "unit", text: "字" })
+        ])
+      ])
+    ]);
+    
+    var header = el("div", { class: "field-detail-header" }, [headerLeft, headerRight]);
+    var hr = el("hr", { class: "field-detail-hr" });
+    
+    // Chart Panel (Left Column)
     var buckets = buildLengthBuckets(meta.name);
-    var max = buckets.reduce(function (m, b) { return Math.max(m, b.count); }, 0) || 1;
-    var bars = el("div", { class: "bars" });
+    var maxCount = buckets.reduce(function (m, b) { return Math.max(m, b.count); }, 0) || 1;
+    
+    var yGrid = el("div", { class: "y-grid-lines" }, [
+      el("div", { class: "grid-line" }),
+      el("div", { class: "grid-line" }),
+      el("div", { class: "grid-line" }),
+      el("div", { class: "grid-line" })
+    ]);
+    
+    var barsContainer = el("div", { class: "bars-container" });
     buckets.forEach(function (bucket) {
-      bars.appendChild(el("div", { class: "bar-row" }, [
-        el("span", { text: bucket.label }),
-        el("span", { class: "bar-track" }, [
-          el("span", { class: "bar-fill", style: "width:" + Math.round((bucket.count / max) * 100) + "%" }),
-        ]),
-        el("span", { text: String(bucket.count) }),
-      ]));
+      var heightPercent = Math.round((bucket.count / maxCount) * 100);
+      var barFill = el("div", {
+        class: "bar-fill-vertical",
+        style: "height: " + heightPercent + "%"
+      });
+      var barTooltip = el("div", { class: "bar-tooltip", text: bucket.count + " 条" });
+      var barWrapper = el("div", { class: "bar-wrapper" }, [barTooltip, barFill]);
+      var barLabel = el("span", { class: "bar-label", text: bucket.label });
+      
+      var barCol = el("div", { class: "bar-col" }, [barWrapper, barLabel]);
+      barsContainer.appendChild(barCol);
     });
-    histogram.appendChild(bars);
+    
+    var chartContainer = el("div", { class: "chart-container" }, [yGrid, barsContainer]);
+    var chartFooter = el("div", { class: "chart-footer", text: "横坐标：单条数据字符数 (分 " + buckets.length + " 个长度区间)" });
+    
+    var chartPanel = el("div", { class: "field-detail-chart-panel" }, [
+      el("h4", { class: "panel-title", text: "文本字数长度分布" }),
+      chartContainer,
+      chartFooter
+    ]);
+    
+    // Samples Panel (Right Column)
+    var samplesContainer = el("div", { class: "samples-container" });
+    meta.sampleValues.forEach(function (value, index) {
+      var sampleCard = el("div", { class: "sample-item-card" }, [
+        el("div", { class: "sample-item-header", text: "样本 #" + (index + 1) }),
+        el("div", { class: "sample-item-body", text: value })
+      ]);
+      samplesContainer.appendChild(sampleCard);
+    });
+    
+    var samplesPanel = el("div", { class: "field-detail-samples-panel" }, [
+      el("h4", { class: "panel-title", text: "样例数据提取 (前 " + meta.sampleValues.length + " 条)" }),
+      samplesContainer
+    ]);
+    
+    // Body Layout
+    var body = el("div", { class: "field-detail-body" }, [chartPanel, samplesPanel]);
+    
+    detail.appendChild(header);
+    detail.appendChild(hr);
+    detail.appendChild(body);
   }
 
   function buildFieldKpi(label, value) {
@@ -796,19 +876,50 @@
 
   function buildLengthBuckets(field) {
     var lengths = payload.rows.map(function (row) { return normalizeText(row.values[field]).length; });
-    var max = lengths.length ? Math.max.apply(Math, lengths) : 0;
-    var step = Math.max(1, Math.ceil(max / 8));
+    if (!lengths.length) return [];
+    var min = Math.min.apply(Math, lengths);
+    var max = Math.max.apply(Math, lengths);
+    
     var buckets = [];
-    for (var i = 0; i < 8; i++) {
-      buckets.push({ min: i * step, max: (i + 1) * step - 1, count: 0 });
+    if (max - min <= 8) {
+      // Create a bucket for each integer length from min to max
+      for (var l = min; l <= max; l++) {
+        buckets.push({ label: String(l), count: 0, min: l, max: l });
+      }
+      lengths.forEach(function (len) {
+        for (var b = 0; b < buckets.length; b++) {
+          if (buckets[b].min === len) {
+            buckets[b].count += 1;
+            break;
+          }
+        }
+      });
+    } else {
+      // Group into 8 buckets
+      var range = max - min + 1;
+      var step = Math.max(1, Math.ceil(range / 8));
+      for (var i = 0; i < 8; i++) {
+        var bMin = min + i * step;
+        var bMax = min + (i + 1) * step - 1;
+        if (i === 7) bMax = max;
+        var label = bMin === bMax ? String(bMin) : (bMin + "-" + bMax);
+        buckets.push({ label: label, count: 0, min: bMin, max: bMax });
+      }
+      lengths.forEach(function (len) {
+        var placed = false;
+        for (var b = 0; b < buckets.length; b++) {
+          if (len >= buckets[b].min && len <= buckets[b].max) {
+            buckets[b].count += 1;
+            placed = true;
+            break;
+          }
+        }
+        if (!placed && buckets.length > 0) {
+          buckets[buckets.length - 1].count += 1;
+        }
+      });
     }
-    lengths.forEach(function (len) {
-      var index = Math.min(7, Math.floor(len / step));
-      buckets[index].count += 1;
-    });
-    return buckets.map(function (bucket) {
-      return { label: bucket.min + "-" + bucket.max + " 字", count: bucket.count };
-    });
+    return buckets;
   }
 
   function openDrawer(section) {
