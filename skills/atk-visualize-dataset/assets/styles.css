@@ -593,7 +593,7 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, 
   overflow: auto;
   padding: 20px;
   display: grid;
-  grid-template-columns: 320px minmax(0, 1fr);
+  grid-template-columns: 460px minmax(0, 1fr);
   gap: 16px;
 }
 .inspector-column { display: flex; flex-direction: column; gap: 14px; }
