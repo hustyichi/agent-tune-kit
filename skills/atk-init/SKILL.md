@@ -76,7 +76,7 @@ In the current package layout, this is also reachable from this Skill file as `.
 - Require `.atk/datasets/dataset.csv` to contain `atk_id`; generated runners should stop with repair guidance if that column is missing, empty, duplicated, or not a positive integer.
 - Append the fixed actual-output column `agent_output`.
 - Append the stable row-log evidence column `log_path`. When same-process Python logging capture is configured and active, it must contain a relative POSIX path such as `logs/row_000001.log`; otherwise it should be blank.
-- If Agent output has multiple fields, serialize the primary result as JSON in `agent_output` or add auxiliary `agent_output_*` columns.
+- If Agent output has multiple fields, serialize the complete structured result as JSON in `agent_output`; do not add auxiliary `agent_output_*` columns.
 - If the input dataset already contains `agent_output` or `log_path`, ask the user to confirm a rename strategy before writing the script.
 - Write the input dataset into `.atk/datasets/` during `atk-init`, specifically `.atk/datasets/dataset.csv`, as the ATK canonical runnable dataset with `atk_id`. Reuse it when canonical content is identical and ask before overwriting different canonical content. The generated runner must read this fixed `.atk/datasets/` dataset so later source dataset moves do not break `atk-run`.
 - Automatically allocate the output version with `allocate_next_results_version()`.

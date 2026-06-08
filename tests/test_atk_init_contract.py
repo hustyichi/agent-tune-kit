@@ -27,6 +27,16 @@ def test_atk_init_handoff_keeps_first_real_run_on_v1_when_no_prior_results() -> 
     )
 
 
+def test_atk_init_contract_keeps_structured_output_in_agent_output_only() -> None:
+    skill_text = (ROOT / "skills/atk-init/SKILL.md").read_text(encoding="utf-8")
+    prd_text = (ROOT / "docs/codex_agent_tuning_prd.md").read_text(encoding="utf-8")
+
+    assert "do not add auxiliary `agent_output_*` columns" in skill_text
+    assert "不得额外追加 `agent_output_*` 前缀的辅助列" in prd_text
+    assert "or add auxiliary `agent_output_*` columns" not in skill_text
+    assert "或额外追加 `agent_output_*` 前缀的辅助列" not in prd_text
+
+
 def test_failure_finding_handoffs_route_to_report() -> None:
     direct_text = (ROOT / "skills/atk-find-failures/SKILL.md").read_text(encoding="utf-8")
     rule_text = (ROOT / "skills/atk-find-failures-by-rule/SKILL.md").read_text(encoding="utf-8")
