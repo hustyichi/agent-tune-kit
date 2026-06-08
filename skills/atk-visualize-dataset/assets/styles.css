@@ -558,7 +558,7 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, 
 }
 .inspector-overlay[hidden] { display: none; }
 .inspector-panel {
-  width: min(1280px, 100vw);
+  width: min(1500px, 90vw);
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -593,7 +593,7 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, 
   overflow: auto;
   padding: 20px;
   display: grid;
-  grid-template-columns: 340px minmax(0, 1fr);
+  grid-template-columns: 320px minmax(0, 1fr);
   gap: 16px;
 }
 .inspector-column { display: flex; flex-direction: column; gap: 14px; }
@@ -713,6 +713,12 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, 
   width: 1px;
   height: 1px;
   overflow: hidden;
+}
+
+@media (max-width: 1024px) {
+  .inspector-panel {
+    width: 100vw;
+  }
 }
 
 @media (max-width: 900px) {
