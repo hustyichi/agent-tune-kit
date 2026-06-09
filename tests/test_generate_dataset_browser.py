@@ -112,7 +112,7 @@ class GenerateDatasetBrowserTests(unittest.TestCase):
                 "Dataset Visualizer",
                 "application-root",
                 "export-reviewed-dataset-btn",
-                "导出评测结果",
+                "导出反馈结果",
                 "数据列表",
                 "字段特征分析",
                 "dataset-table-controller",
@@ -172,7 +172,7 @@ class GenerateDatasetBrowserTests(unittest.TestCase):
                 "GROUND TRUTH",
                 "exportReview",
                 "dataset_review.csv",
-                "detected_issues",
+                "review_feedback",
                 "review-note",
                 "localStorage",
                 "字段角色映射",
@@ -180,6 +180,9 @@ class GenerateDatasetBrowserTests(unittest.TestCase):
                 '"id:" + row.atkId + ":row:" + row.rowNumber',
             ]:
                 self.assertIn(phrase, text)
+            self.assertIn('["atk_id", "row_number", "review_feedback"]', text)
+            self.assertNotIn('["atk_id", "row_number", "verdict", "note", "detected_issues"]', text)
+            self.assertNotIn("reviewFeedback", text)
             self.assertNotIn("dataset_summary.json", text)
             self.assertNotIn("visualize_config", text)
 

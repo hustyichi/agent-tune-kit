@@ -32,12 +32,6 @@
 
   var ROLE_LIST = ["id", "input", "expected"];
   var ROLE_LABELS = { id: "ID", input: "输入", expected: "ground_truth" };
-  var VERDICTS = [
-    { key: "ok", label: "符合预期", cls: "active-ok", dot: "v-ok" },
-    { key: "warn", label: "存疑", cls: "active-warn", dot: "v-warn" },
-    { key: "bad", label: "需修正", cls: "active-bad", dot: "v-bad" },
-  ];
-
   var $ = function (id) { return document.getElementById(id); };
   var el = function (tag, props, children) {
     var node = document.createElement(tag);
@@ -311,32 +305,17 @@
     return (row.atkId != null && row.atkId !== "") ? ("id:" + row.atkId + ":row:" + row.rowNumber) : ("row:" + row.rowNumber);
   }
 
-  function getVerdict(row) {
+  function getFeedback(row) {
     var r = review[rowKey(row)];
-    return r ? r.verdict || "" : "";
+    return r ? r.review_feedback || "" : "";
   }
 
-  function getNote(row) {
-    var r = review[rowKey(row)];
-    return r ? r.note || "" : "";
-  }
-
-  function setVerdict(row, verdict) {
+  function setFeedback(row, feedback) {
     var k = rowKey(row);
     var r = review[k] || {};
-    if (r.verdict === verdict) verdict = "";
-    r.verdict = verdict;
+    r.review_feedback = feedback;
     r.atkId = row.atkId;
-    if (!r.verdict && !r.note) delete review[k]; else review[k] = r;
-    saveReview();
-  }
-
-  function setNote(row, note) {
-    var k = rowKey(row);
-    var r = review[k] || {};
-    r.note = note;
-    r.atkId = row.atkId;
-    if (!r.verdict && !r.note) delete review[k]; else review[k] = r;
+    if (!r.review_feedback) delete review[k]; else review[k] = r;
     saveReview();
   }
 
@@ -362,8 +341,8 @@
     var filter = state.issueFilter;
     if (!filter) return true;
     if (filter === "any") return row.issues && row.issues.length > 0;
-    if (filter === "reviewed") return !!getVerdict(row);
-    if (filter === "unreviewed") return !getVerdict(row);
+    if (filter === "reviewed") return !!getFeedback(row).trim();
+    if (filter === "unreviewed") return !getFeedback(row).trim();
     return row.issues && row.issues.indexOf(filter) >= 0;
   }
 
@@ -390,12 +369,10 @@
   }
 
   function reviewCounts() {
-    var counts = { ok: 0, warn: 0, bad: 0, reviewed: 0, total: payload.rows.length };
+    var counts = { reviewed: 0, total: payload.rows.length };
     payload.rows.forEach(function (row) {
-      var verdict = getVerdict(row);
-      if (counts[verdict] != null) counts[verdict] += 1;
+      if (getFeedback(row).trim()) counts.reviewed += 1;
     });
-    counts.reviewed = counts.ok + counts.warn + counts.bad;
     return counts;
   }
 
@@ -697,19 +674,19 @@
   function buildReviewBox(row) {
     var box = el("div", { class: "review-box" });
     box.appendChild(el("div", { class: "review-title" }, [
-      el("span", { text: "人工审阅工具" }),
+      el("span", { text: "Ground Truth 修正反馈" }),
       el("span", { text: "本地保存" }),
     ]));
-    var note = el("textarea", {
+    var feedback = el("textarea", {
       class: "review-note",
-      placeholder: "审阅备注（可选）：记录问题、建议修正方式…",
+      placeholder: "仅异常项填写：用一句明确反馈描述 ground_truth 应如何调整…",
       oninput: function (ev) {
-        setNote(row, ev.target.value);
+        setFeedback(row, ev.target.value);
         renderMeta();
       },
     });
-    note.value = getNote(row);
-    box.appendChild(note);
+    feedback.value = getFeedback(row);
+    box.appendChild(feedback);
     return box;
   }
 
@@ -745,20 +722,16 @@
   }
 
   function exportReview() {
-    var headers = ["atk_id", "row_number", "verdict", "note", "detected_issues"];
+    var headers = ["atk_id", "row_number", "review_feedback"];
     var lines = [headers.join(",")];
     payload.rows.forEach(function (row) {
       var r = review[rowKey(row)];
-      var verdict = r ? (r.verdict || "") : "";
-      var note = r ? (r.note || "") : "";
-      var issues = (row.issues || []).join("; ");
-      if (!verdict && !note && !issues) return;
+      var feedback = r ? (r.review_feedback || "") : "";
+      if (!feedback.trim()) return;
       lines.push([
         csvCell(row.atkId == null ? "" : row.atkId),
         csvCell(row.rowNumber),
-        csvCell(verdict),
-        csvCell(note),
-        csvCell(issues),
+        csvCell(feedback),
       ].join(","));
     });
     var blob = new Blob(["\ufeff" + lines.join("\r\n")], { type: "text/csv;charset=utf-8;" });

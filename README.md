@@ -95,7 +95,7 @@ $atk-visualize-dataset
 .atk/datasets/dataset.html
 ```
 
-页面采用 Dataset Visualizer 风格的离线静态界面，提供「数据列表 / 字段特征分析」双标签、字段显示控制、搜索、分类过滤、排序分页和详情抽屉，突出输入与检测到的预期结果字段对照，并对空值、重复/缺失 `atk_id`、冲突样本、长度离群等问题自动打标签，便于快速确认预期结果是否符合预期。你可以在页面里对每行裁决（符合预期 / 存疑 / 需修正）并导出 `dataset_review.csv`；如需规范 `ground_truth`，请用明确判定方案运行 `$atk-build-ground-truth`。用户不需要安装任何前端依赖。
+页面采用 Dataset Visualizer 风格的离线静态界面，提供「数据列表 / 字段特征分析」双标签、字段显示控制、搜索、分类过滤、排序分页和详情抽屉，突出输入与检测到的预期结果字段对照，并对空值、重复/缺失 `atk_id`、冲突样本、长度离群等问题自动打标签，便于快速确认预期结果是否符合预期。你可以在页面里为异常数据填写一条明确的 `review_feedback`，并导出只含 `atk_id`、`row_number`、`review_feedback` 的 `dataset_review.csv`；如需规范 `ground_truth`，请用明确判定方案运行 `$atk-build-ground-truth`。用户不需要安装任何前端依赖。
 
 ### 1. 初始化
 

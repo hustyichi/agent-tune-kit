@@ -95,7 +95,7 @@ It renders `.atk/datasets/dataset.csv` into a local, single-file, offline HTML b
 .atk/datasets/dataset.html
 ```
 
-The page uses a Dataset Visualizer-style offline static interface with Data List / Field Feature Analysis tabs, column visibility controls, search, category filtering, sorting, pagination, and a detail drawer. It highlights inputs against detected expected-result fields and auto-flags issues such as empty values, duplicate/missing `atk_id`, conflicting samples, and length outliers, so you can quickly review whether expected results match your intent. You can mark a verdict per row (matches / suspect / needs fix) and export `dataset_review.csv`; use `$atk-build-ground-truth` with an explicit judgment policy when the dataset needs canonical `ground_truth`. Reviewers do not need to install any frontend dependencies.
+The page uses a Dataset Visualizer-style offline static interface with Data List / Field Feature Analysis tabs, column visibility controls, search, category filtering, sorting, pagination, and a detail drawer. It highlights inputs against detected expected-result fields and auto-flags issues such as empty values, duplicate/missing `atk_id`, conflicting samples, and length outliers, so you can quickly review whether expected results match your intent. For anomalous rows, you can write one clear `review_feedback` value and export a minimal `dataset_review.csv` containing only `atk_id`, `row_number`, and `review_feedback`; use `$atk-build-ground-truth` with an explicit judgment policy when the dataset needs canonical `ground_truth`. Reviewers do not need to install any frontend dependencies.
 
 ### 1. Initialize
 

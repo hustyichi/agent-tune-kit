@@ -91,11 +91,14 @@ python3 <skill-dir>/scripts/generate_dataset_browser.py [--dataset-path .atk/dat
     sticky header, summary cards, client-side search/filter controls, low-cardinality facet filters, column visibility
     controls, sortable/paginated table browsing with default page size 50, and a slide-in row inspector that preserves
     all source columns with empty-field folding and copy affordances.
-14. Provide a **client-side review export**: per-row verdict buttons (符合预期 / 存疑 / 需修正) plus a free-text note
-    persisted in the reviewer's browser `localStorage` (keyed by `atk_id`), and an export button that downloads
-    `dataset_review.csv` (`atk_id`, `row_number`, `verdict`, `note`, `detected_issues`) entirely client-side. This keeps
-    the artifact offline and backend-free; use the export to decide whether ordinary dataset rows need regeneration or
-    whether canonical `ground_truth` should be created or corrected through `atk-build-ground-truth`.
+14. Provide a **client-side review export**: one free-text `review_feedback` field per row, persisted in the reviewer's
+    browser `localStorage` (keyed by `atk_id` plus row number), and an export button that downloads
+    `dataset_review.csv` (`atk_id`, `row_number`, `review_feedback`) entirely client-side. Export only rows with
+    non-empty feedback. The feedback should describe how anomalous or unreasonable `ground_truth` should be adjusted,
+    while the original row content remains associated through `atk_id` / `row_number` and is not duplicated in the
+    review CSV. This keeps the artifact offline and backend-free; use the export to decide whether ordinary dataset
+    rows need regeneration or whether canonical `ground_truth` should be created or corrected through
+    `atk-build-ground-truth`.
 15. Render a field-analysis tab using the static payload and vanilla JS: field role mapping, row/field/ground_truth
     KPI cards, detected issue summaries, categorical facet summaries, and per-field statistics. Do not promise a
     runtime React app, browser-upload flow, AI Studio integration, or in-browser dataset editing.
@@ -138,6 +141,6 @@ After writing the visualization, summarize:
   client-side review export, and the self-contained bundled assets;
 - the `browser_open=...` line from stdout so the user knows whether the page was auto-opened (the Skill should pass
   `--open` by default; if the open attempt is skipped, tell the user to open the printed file path manually);
-- the next useful step: review the dataset, export `dataset_review.csv` for any incorrect or unreasonable expected
-  results, run `atk-build-ground-truth` when canonical `ground_truth` needs explicit correction, or proceed to
-  `atk-init` when the dataset looks correct.
+- the next useful step: review the dataset, export `dataset_review.csv` with concise `review_feedback` for any
+  incorrect or unreasonable ground_truth, run `atk-build-ground-truth` when canonical `ground_truth` needs explicit
+  correction, or proceed to `atk-init` when the dataset looks correct.

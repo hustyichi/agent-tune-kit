@@ -354,10 +354,6 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, 
 .badge.issue { background: var(--bad-soft); border-color: #fecaca; color: #b91c1c; }
 .badge.issue-warn { background: var(--warn-soft); border-color: #fde68a; color: #92400e; }
 .badge.gt { background: #fffbeb; border-color: #fcd34d; color: #92400e; }
-.verdict-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
-.v-ok { background: var(--ok); }
-.v-warn { background: var(--warn); }
-.v-bad { background: var(--bad); }
 .pager {
   padding: 10px 16px;
   display: flex;
@@ -1105,4 +1101,3 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, 
   overflow-wrap: inherit;
   word-break: inherit;
 }
-
