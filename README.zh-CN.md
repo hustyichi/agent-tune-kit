@@ -66,6 +66,7 @@ $atk-build-dataset <你的业务描述、样例或规则>
 ```
 
 Codex 会在信息不足时先问 1 到 3 个问题，确认输入字段、期望输出或验收标准，以及关键业务场景。生成结果会直接写入 `.atk/datasets/dataset.csv`，包含 `atk_id`；如果该文件已经存在，Codex 会先确认是否覆盖。它重点覆盖主流程、边界输入、缺失或含糊信息、拒答/不确定场景、输出格式约束和你描述的业务风险。
+`$atk-build-dataset` 默认不会推测 `ground_truth` 列；只有当你明确给出 `ground_truth`、正确答案或“怎样算正确”的判定方案时，它才会写入规范 `ground_truth`。否则请保留为普通预期/验收字段，或在数据集创建后用 `$atk-build-ground-truth` 补齐。
 
 如果你已经有评估数据集，但还没有 Agent 项目，可以先生成一个轻量、可运行、使用 OpenAI-compatible API 的 Python Agent：
 
@@ -94,7 +95,7 @@ $atk-visualize-dataset
 .atk/datasets/dataset.html
 ```
 
-页面采用 Dataset Visualizer 风格的离线静态界面，提供「数据列表 / 字段特征分析」双标签、字段显示控制、搜索、分类过滤、排序分页和详情抽屉，突出「输入 vs ground_truth」对照，并对空值、重复/缺失 `atk_id`、冲突样本、长度离群等问题自动打标签，便于快速确认 ground_truth 是否符合预期。你可以在页面里对每行裁决（符合预期 / 存疑 / 需修正）并导出 `dataset_review.csv`，再回到 `$atk-build-dataset` 修复；用户不需要安装任何前端依赖。
+页面采用 Dataset Visualizer 风格的离线静态界面，提供「数据列表 / 字段特征分析」双标签、字段显示控制、搜索、分类过滤、排序分页和详情抽屉，突出输入与检测到的预期结果字段对照，并对空值、重复/缺失 `atk_id`、冲突样本、长度离群等问题自动打标签，便于快速确认预期结果是否符合预期。你可以在页面里对每行裁决（符合预期 / 存疑 / 需修正）并导出 `dataset_review.csv`；如需规范 `ground_truth`，请用明确判定方案运行 `$atk-build-ground-truth`。用户不需要安装任何前端依赖。
 
 ### 1. 初始化
 

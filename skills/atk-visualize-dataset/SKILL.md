@@ -1,6 +1,6 @@
 ---
 name: atk-visualize-dataset
-description: Generate a dependency-free HTML browser for the ATK dataset to review rows and confirm ground_truth.
+description: Generate a dependency-free HTML browser for the ATK dataset to review rows and expected-result fields.
 ---
 
 # Agent Tuning — Dataset Visualization
@@ -8,8 +8,9 @@ description: Generate a dependency-free HTML browser for the ATK dataset to revi
 ## Purpose
 
 Generate `.atk/datasets/dataset.html` from the non-versioned project dataset `.atk/datasets/dataset.csv` so a
-reviewer can quickly browse the generated dataset, confirm whether each row's ground_truth matches expectations, and
-spot dataset quality problems such as incorrect, unreasonable, or missing ground_truth before tuning. This is an
+reviewer can quickly browse the generated dataset, confirm whether each row's expected-result or ground_truth field
+matches expectations, and spot dataset quality problems such as incorrect, unreasonable, or missing expected results
+before tuning. This is an
 optional, pre-init review Skill that operates only on the dataset stage; it does not read or write `.atk/results/vN`,
 does not participate in result versioning, and does not change `atk-build-dataset`, `atk-init`, or any failure-finding
 semantics. Generation is handled by the fixed plugin-owned stdlib script `scripts/generate_dataset_browser.py`, not by
@@ -93,8 +94,8 @@ python3 <skill-dir>/scripts/generate_dataset_browser.py [--dataset-path .atk/dat
 14. Provide a **client-side review export**: per-row verdict buttons (符合预期 / 存疑 / 需修正) plus a free-text note
     persisted in the reviewer's browser `localStorage` (keyed by `atk_id`), and an export button that downloads
     `dataset_review.csv` (`atk_id`, `row_number`, `verdict`, `note`, `detected_issues`) entirely client-side. This keeps
-    the artifact offline and backend-free; the export feeds back into `atk-build-dataset` to fix issues, so no new
-    editing Skill is introduced.
+    the artifact offline and backend-free; use the export to decide whether ordinary dataset rows need regeneration or
+    whether canonical `ground_truth` should be created or corrected through `atk-build-ground-truth`.
 15. Render a field-analysis tab using the static payload and vanilla JS: field role mapping, row/field/ground_truth
     KPI cards, detected issue summaries, categorical facet summaries, and per-field statistics. Do not promise a
     runtime React app, browser-upload flow, AI Studio integration, or in-browser dataset editing.
@@ -137,5 +138,6 @@ After writing the visualization, summarize:
   client-side review export, and the self-contained bundled assets;
 - the `browser_open=...` line from stdout so the user knows whether the page was auto-opened (the Skill should pass
   `--open` by default; if the open attempt is skipped, tell the user to open the printed file path manually);
-- the next useful step: review the dataset, export `dataset_review.csv` for any incorrect or unreasonable
-  ground_truth, and run `atk-build-dataset` to fix flagged rows, or proceed to `atk-init` when the dataset looks correct.
+- the next useful step: review the dataset, export `dataset_review.csv` for any incorrect or unreasonable expected
+  results, run `atk-build-ground-truth` when canonical `ground_truth` needs explicit correction, or proceed to
+  `atk-init` when the dataset looks correct.

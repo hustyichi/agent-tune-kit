@@ -30,8 +30,15 @@ The CSV must include:
 
 - `atk_id` with non-empty, unique positive integers;
 - at least one clear input column;
-- at least one expected output or acceptance standard column;
+- at least one expected output, acceptance standard, or human-reviewable outcome column when the user provided enough
+  evidence to define one safely;
 - dynamic business columns based on the user's context.
+
+Do not infer or invent a canonical `ground_truth` column by default. Only write `ground_truth` when the user explicitly
+provides `ground_truth`, a correct-result label, exact expected answers, or a clear judgment policy for what counts as
+correct. If the user only provides a business domain or input examples, ask for the missing correct-result semantics or
+write non-canonical helper columns such as `expected`, `acceptance_criteria`, or `notes` only when they are grounded in
+the user's provided facts.
 
 Optional helper columns such as `scenario`, `priority`, and `notes` may be added when they make the dataset easier to
 review. They are not a strict global business schema, and they should not be described as mandatory for every project.
@@ -50,13 +57,14 @@ small curated sample rather than trying to parse raw production logs.
    - Do not silently merge, append, rename, or create a candidate file.
 3. Determine whether the dataset can be built safely:
    - identify the Agent input field or fields;
-   - identify the expected output or acceptance standard;
+   - identify any user-provided expected output, acceptance standard, or correct-result judgment policy;
+   - decide whether a canonical `ground_truth` column is explicitly authorized; if not, do not create one;
    - identify key business scenarios or risks;
    - detect whether the request describes multiple incompatible Agent tasks;
    - detect whether generated examples would require domain facts not provided by the user.
 4. If required meaning is unclear, ask 1-3 targeted questions before writing. Prioritize:
    - input fields are unclear;
-   - expected-output semantics are unclear;
+   - expected-output or correct-result semantics are unclear;
    - key scenarios or risks cannot be inferred safely.
 5. Generate a compact dataset that covers, unless the user narrows scope:
    - main successful flow;
@@ -69,7 +77,7 @@ small curated sample rather than trying to parse raw production logs.
    unique positive integers that should be preserved.
 7. Keep column names practical and business-specific. For a simple chatbot, `input` and `expected` may be enough.
    For structured tasks, use columns such as `question`, `user_type`, `order_status`, or other names that match the
-   user's description.
+   user's description. Use `ground_truth` only when the user explicitly supplied or requested that canonical semantics.
 8. Determine the next-step handoff based on whether an Agent implementation is already available:
    - if an Agent exists, tell the user to run `$atk-init` to initialize batch evaluation with the new dataset;
    - if no Agent exists, tell the user to run `$atk-new-agent` to create an Agent from the dataset first;
@@ -81,7 +89,8 @@ Ask before writing when:
 
 - `.atk/datasets/dataset.csv` already exists and would be overwritten;
 - input fields are unclear;
-- expected-output semantics are unclear;
+- expected-output or correct-result semantics are unclear;
+- a `ground_truth` column would require guessing the correct answer or judgment policy;
 - the user describes multiple incompatible Agent tasks;
 - generated examples would require domain facts not provided by the user;
 - the requested size or coverage conflicts with quality-first dataset construction.
@@ -92,6 +101,9 @@ Do not ask about obvious, low-risk mechanics such as creating `.atk/datasets/` w
 
 - If the user does not provide enough information to identify at least one input column and one expected output or
   acceptance standard, ask a targeted clarification question and do not write a misleading dataset.
+- If a requested or likely `ground_truth` value would require guessing the expected correct result, do not write it.
+  Ask for explicit answers, acceptance criteria, or a judgment policy, or recommend `$atk-build-ground-truth` after the
+  dataset exists.
 - If the user declines overwriting an existing `.atk/datasets/dataset.csv`, leave it unchanged and explain that the
   first version has no automatic merge or append support.
 - If the request depends on unavailable domain facts, ask for those facts or narrow the dataset to examples that can
@@ -108,11 +120,13 @@ After writing the dataset, summarize:
 - output path `.atk/datasets/dataset.csv`;
 - row count and generated `atk_id` behavior;
 - input and expected-output columns;
+- whether `ground_truth` was omitted because no explicit correct-result semantics were provided, or included because
+  the user explicitly supplied the correct-result policy;
 - coverage categories included;
 - any assumptions or unfilled domain facts;
 - optional review step: run `$atk-visualize-dataset` to open a local HTML browser of `.atk/datasets/dataset.csv` for
-  quickly inspecting rows, confirming whether each ground_truth matches expectations, and spotting incorrect, missing,
-  or unreasonable ground_truth before initializing evaluation;
+  quickly inspecting rows and spotting missing or questionable expected-result fields before initializing evaluation;
+  if the dataset needs canonical `ground_truth`, run `$atk-build-ground-truth` with explicit correct-result semantics;
 - next step based on Agent availability:
   - if an Agent exists: run `$atk-init`, using the newly created `.atk/datasets/dataset.csv` to initialize batch
     evaluation;

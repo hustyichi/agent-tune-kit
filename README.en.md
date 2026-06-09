@@ -66,6 +66,7 @@ $atk-build-dataset <your business description, examples, or rules>
 ```
 
 Codex asks 1-3 questions when information is insufficient, prioritizing input fields, expected output or acceptance criteria, and key business scenarios. The result is written directly to `.atk/datasets/dataset.csv` with `atk_id`; if that file already exists, Codex asks before overwriting it. The dataset focuses on main flow, boundary input, missing or ambiguous information, refusal/uncertainty, output format constraints, and business risks you describe.
+`$atk-build-dataset` does not infer a canonical `ground_truth` column by default. It writes `ground_truth` only when you explicitly provide ground truth, correct answers, or a clear judgment policy for what counts as correct. Otherwise, keep ordinary expected/acceptance fields or enrich the dataset later with `$atk-build-ground-truth`.
 
 If you already have an evaluation dataset but do not have an Agent project yet, generate a small runnable Python Agent that uses an OpenAI-compatible API:
 
@@ -94,7 +95,7 @@ It renders `.atk/datasets/dataset.csv` into a local, single-file, offline HTML b
 .atk/datasets/dataset.html
 ```
 
-The page uses a Dataset Visualizer-style offline static interface with Data List / Field Feature Analysis tabs, column visibility controls, search, category filtering, sorting, pagination, and a detail drawer. It highlights the input-vs-ground_truth comparison and auto-flags issues such as empty values, duplicate/missing `atk_id`, conflicting samples, and length outliers, so you can quickly confirm whether each ground_truth matches expectations. You can mark a verdict per row (matches / suspect / needs fix) and export `dataset_review.csv`, then return to `$atk-build-dataset` to fix it; reviewers do not need to install any frontend dependencies.
+The page uses a Dataset Visualizer-style offline static interface with Data List / Field Feature Analysis tabs, column visibility controls, search, category filtering, sorting, pagination, and a detail drawer. It highlights inputs against detected expected-result fields and auto-flags issues such as empty values, duplicate/missing `atk_id`, conflicting samples, and length outliers, so you can quickly review whether expected results match your intent. You can mark a verdict per row (matches / suspect / needs fix) and export `dataset_review.csv`; use `$atk-build-ground-truth` with an explicit judgment policy when the dataset needs canonical `ground_truth`. Reviewers do not need to install any frontend dependencies.
 
 ### 1. Initialize
 
@@ -234,7 +235,7 @@ Common output files:
 - `$atk-status`: inspect progress and suggest the next step.
 - `$atk-build-dataset`: build `.atk/datasets/dataset.csv` from business context, examples, or rules.
 - `$atk-build-ground-truth`: enrich an existing `.atk/datasets/dataset.csv` with a canonical `ground_truth` column.
-- `$atk-visualize-dataset`: render `.atk/datasets/dataset.csv` into a local HTML browser for quickly reviewing rows and confirming whether each ground_truth matches expectations.
+- `$atk-visualize-dataset`: render `.atk/datasets/dataset.csv` into a local HTML browser for quickly reviewing rows and expected-result fields.
 - `$atk-new-agent`: create a lightweight OpenAI-compatible Agent when you only have a dataset.
 - `$atk-init`: generate the test runner.
 - `$atk-run`: run evaluation and create a new result version.
