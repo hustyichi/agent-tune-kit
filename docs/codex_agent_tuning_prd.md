@@ -273,7 +273,7 @@
   - `数据列表` 支持全字段搜索、动态分类 facet 过滤、字段显示控制、排序、分页、质量标签过滤、详情抽屉，并突出「输入 vs ground_truth」对照
   - `字段特征分析` 提供字段角色映射、总行/总列/ground_truth/问题样本 KPI、分类分布摘要和逐字段统计；首版以核心视觉还原和静态阅读体验优先，不迁移浏览器上传、Gemini/AI Studio、数据集编辑或源码级 React 要求
   - **数据集质检 lint**：逐行计算并提供过滤标签，包括空 ground_truth、空输入、重复/缺失/非正整数 `atk_id`、冲突样本（相同输入不同 ground_truth）、完全重复样本（输入+ground_truth 相同）、ground_truth 过短/过长（长度离群）
-  - **客户端审阅**：每行详情提供一个面向 `ground_truth` 修正的自由文本反馈框，按 `atk_id` 和行号存入 `localStorage`；「导出审阅结果」经 Blob 下载 `dataset_review.csv`（仅含 `atk_id`、`row_number`、`review_feedback`，且只导出有反馈的行），完全离线、无后端；原始数据内容通过 `atk_id` / `row_number` 回连 `.atk/datasets/dataset.csv`，不在审阅导出中重复；审阅结果回流既有 `$atk-build-dataset` / `$atk-build-ground-truth` 修复，不新增编辑类 Skill
+  - **客户端审阅**：每行详情提供一个面向 `ground_truth` 修正的自由文本反馈框，按 `atk_id` 和行号存入 `localStorage`；「导出审阅结果」经 Blob 下载 `dataset_review.csv`（仅含 `atk_id`、`row_number`、`review_feedback`，且只导出有反馈的行），完全离线、无后端；原始数据内容通过 `atk_id` / `row_number` 回连 `.atk/datasets/dataset.csv`，不在审阅导出中重复；审阅结果可通过 `$atk-tune-ground-truth` 作为用户对 `ground_truth` 判定的修正意见回写到 `.atk/datasets/dataset.csv`
   - 数据集为空、表头无法解析或目标文件已存在且未确认覆盖时给出明确提示并安全退出，不破坏已有文件
 
 ### 2.6 Agent 调优模块（Codex Skill）

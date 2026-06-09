@@ -419,6 +419,13 @@ class InstallPluginCliTests(unittest.TestCase):
                     "agent_tune_kit/plugin_payload/agent-tune-kit/skills/atk-build-ground-truth/SKILL.md", names
                 )
                 self.assertIn(
+                    "agent_tune_kit/plugin_payload/agent-tune-kit/skills/atk-tune-ground-truth/SKILL.md", names
+                )
+                self.assertIn(
+                    "agent_tune_kit/plugin_payload/agent-tune-kit/skills/atk-tune-ground-truth/scripts/tune_ground_truth.py",
+                    names,
+                )
+                self.assertIn(
                     "agent_tune_kit/plugin_payload/agent-tune-kit/templates/.atk/runner/eval_runner.py.md", names
                 )
                 self.assertIn(
@@ -431,6 +438,8 @@ class InstallPluginCliTests(unittest.TestCase):
                 self.assertIn(f"{prefix}/.codex-plugin/plugin.json", names)
                 self.assertIn(f"{prefix}/skills/atk-build-dataset/SKILL.md", names)
                 self.assertIn(f"{prefix}/skills/atk-build-ground-truth/SKILL.md", names)
+                self.assertIn(f"{prefix}/skills/atk-tune-ground-truth/SKILL.md", names)
+                self.assertIn(f"{prefix}/skills/atk-tune-ground-truth/scripts/tune_ground_truth.py", names)
                 self.assertIn(f"{prefix}/templates/.atk/runner/eval_runner.py.md", names)
                 self.assertIn(f"{prefix}/templates/.atk/runner/failure_rule.py.md", names)
 
@@ -501,6 +510,8 @@ class InstallPluginCliTests(unittest.TestCase):
         self.assertTrue((target / ".codex-plugin" / "agent-tune-kit-install.json").exists())
         self.assertTrue((target / "skills" / "atk-build-dataset" / "SKILL.md").exists())
         self.assertTrue((target / "skills" / "atk-build-ground-truth" / "SKILL.md").exists())
+        self.assertTrue((target / "skills" / "atk-tune-ground-truth" / "SKILL.md").exists())
+        self.assertTrue((target / "skills" / "atk-tune-ground-truth" / "scripts" / "tune_ground_truth.py").exists())
         self.assertTrue((target / "templates" / ".atk" / "runner" / "eval_runner.py.md").exists())
         self.assertTrue((target / "templates" / ".atk" / "runner" / "failure_rule.py.md").exists())
         status = subprocess.run(

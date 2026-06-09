@@ -95,7 +95,7 @@ It renders `.atk/datasets/dataset.csv` into a local, single-file, offline HTML b
 .atk/datasets/dataset.html
 ```
 
-The page uses a Dataset Visualizer-style offline static interface with Data List / Field Feature Analysis tabs, column visibility controls, search, category filtering, sorting, pagination, and a detail drawer. It highlights inputs against detected expected-result fields and auto-flags issues such as empty values, duplicate/missing `atk_id`, conflicting samples, and length outliers, so you can quickly review whether expected results match your intent. For anomalous rows, you can write one clear `review_feedback` value and export a minimal `dataset_review.csv` containing only `atk_id`, `row_number`, and `review_feedback`; use `$atk-build-ground-truth` with an explicit judgment policy when the dataset needs canonical `ground_truth`. Reviewers do not need to install any frontend dependencies.
+The page uses a Dataset Visualizer-style offline static interface with Data List / Field Feature Analysis tabs, column visibility controls, search, category filtering, sorting, pagination, and a detail drawer. It highlights inputs against detected expected-result fields and auto-flags issues such as empty values, duplicate/missing `atk_id`, conflicting samples, and length outliers, so you can quickly review whether expected results match your intent. For anomalous rows, you can write one clear `review_feedback` value and export a minimal `dataset_review.csv` containing only `atk_id`, `row_number`, and `review_feedback`; when that feedback corrects the existing `ground_truth` judgment, run `$atk-tune-ground-truth`. Codex prefers `.atk/datasets/dataset_review.csv`, falls back to the exported file in Downloads, and writes the corrected `ground_truth` values back to `.atk/datasets/dataset.csv`. Reviewers do not need to install any frontend dependencies.
 
 ### 1. Initialize
 
@@ -234,6 +234,7 @@ Common output files:
 
 - `$atk-build-dataset`: build `.atk/datasets/dataset.csv` from business context, examples, or rules.
 - `$atk-build-ground-truth`: enrich an existing `.atk/datasets/dataset.csv` with a canonical `ground_truth` column.
+- `$atk-tune-ground-truth`: correct `.atk/datasets/dataset.csv` `ground_truth` values from user feedback in `dataset_review.csv`.
 - `$atk-visualize-dataset`: render `.atk/datasets/dataset.csv` into a local HTML browser for quickly reviewing rows and expected-result fields.
 - `$atk-new-agent`: create a lightweight OpenAI-compatible Agent when you only have a dataset.
 - `$atk-init`: generate the test runner.

@@ -95,7 +95,7 @@ $atk-visualize-dataset
 .atk/datasets/dataset.html
 ```
 
-页面采用 Dataset Visualizer 风格的离线静态界面，提供「数据列表 / 字段特征分析」双标签、字段显示控制、搜索、分类过滤、排序分页和详情抽屉，突出输入与检测到的预期结果字段对照，并对空值、重复/缺失 `atk_id`、冲突样本、长度离群等问题自动打标签，便于快速确认预期结果是否符合预期。你可以在页面里为异常数据填写一条明确的 `review_feedback`，并导出只含 `atk_id`、`row_number`、`review_feedback` 的 `dataset_review.csv`；如需规范 `ground_truth`，请用明确判定方案运行 `$atk-build-ground-truth`。用户不需要安装任何前端依赖。
+页面采用 Dataset Visualizer 风格的离线静态界面，提供「数据列表 / 字段特征分析」双标签、字段显示控制、搜索、分类过滤、排序分页和详情抽屉，突出输入与检测到的预期结果字段对照，并对空值、重复/缺失 `atk_id`、冲突样本、长度离群等问题自动打标签，便于快速确认预期结果是否符合预期。你可以在页面里为异常数据填写一条明确的 `review_feedback`，并导出只含 `atk_id`、`row_number`、`review_feedback` 的 `dataset_review.csv`；如果这些反馈是对现有 `ground_truth` 判定结果的修正意见，可以运行 `$atk-tune-ground-truth`，Codex 会优先读取 `.atk/datasets/dataset_review.csv`，找不到时从 Downloads 中查找导出文件，并把修正后的 `ground_truth` 写回 `.atk/datasets/dataset.csv`。用户不需要安装任何前端依赖。
 
 ### 1. 初始化
 
@@ -234,6 +234,7 @@ $atk-report
 
 - `$atk-build-dataset`：从业务描述、样例或规则构建 `.atk/datasets/dataset.csv`。
 - `$atk-build-ground-truth`：为现有 `.atk/datasets/dataset.csv` 补齐规范的 `ground_truth` 列。
+- `$atk-tune-ground-truth`：根据 `dataset_review.csv` 中的用户反馈修正 `.atk/datasets/dataset.csv` 里的 `ground_truth`。
 - `$atk-visualize-dataset`：将 `.atk/datasets/dataset.csv` 生成本地 HTML 浏览页，便于快速查看数据并确认 ground_truth 是否符合预期。
 - `$atk-new-agent`：当你只有数据集、还没有 Agent 项目时，生成一个轻量 OpenAI-compatible Agent。
 - `$atk-init`：生成测试脚本。
