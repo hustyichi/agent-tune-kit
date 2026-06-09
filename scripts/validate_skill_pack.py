@@ -17,7 +17,6 @@ ROOT = Path(__file__).resolve().parents[1]
 
 REQUIRED_FILES = [
     ".codex-plugin/plugin.json",
-    "skills/atk-status/SKILL.md",
     "skills/atk-build-dataset/SKILL.md",
     "skills/atk-build-ground-truth/SKILL.md",
     "skills/atk-new-agent/SKILL.md",
@@ -235,23 +234,6 @@ PER_FILE_PHRASES = {
     "src/agent_tune_kit/cli.py": [
         "installer_main",
         "def main",
-    ],
-    "skills/atk-status/SKILL.md": [
-        "atk-status",
-        "router/status guide",
-        "does not bypass existing confirmation triggers",
-        "does not perform full automatic tuning",
-        "atk-init",
-        "atk-run",
-        "atk-init-failure-rule",
-        "atk-find-failures-by-rule",
-        "atk-find-failures",
-        "atk-report",
-        "atk-visualize-failures",
-        "atk-tune",
-        'RESULTS_DIR = Path(".atk/results")',
-        "failure_cases.html",
-        "non-blocking review step",
     ],
     "skills/atk-new-agent/SKILL.md": [
         "atk-new-agent",

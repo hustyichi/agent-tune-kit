@@ -49,7 +49,7 @@ After installation, open the plugin list in Codex:
 /plugins
 ```
 
-Select and enable `Agent Tune Kit`. If `$atk-status` and other completions do not appear immediately after enabling, restart Codex or reopen the current project session.
+Select and enable `Agent Tune Kit`. If `$atk-*` completions do not appear immediately after enabling, restart Codex or reopen the current project session.
 
 ## Minimal Tuning Loop
 
@@ -232,7 +232,6 @@ Common output files:
 
 ## Common Skills
 
-- `$atk-status`: inspect progress and suggest the next step.
 - `$atk-build-dataset`: build `.atk/datasets/dataset.csv` from business context, examples, or rules.
 - `$atk-build-ground-truth`: enrich an existing `.atk/datasets/dataset.csv` with a canonical `ground_truth` column.
 - `$atk-visualize-dataset`: render `.atk/datasets/dataset.csv` into a local HTML browser for quickly reviewing rows and expected-result fields.

@@ -414,7 +414,6 @@ class InstallPluginCliTests(unittest.TestCase):
             with zipfile.ZipFile(wheel) as archive:
                 names = set(archive.namelist())
                 self.assertIn(hidden_manifest, names)
-                self.assertIn("agent_tune_kit/plugin_payload/agent-tune-kit/skills/atk-status/SKILL.md", names)
                 self.assertIn("agent_tune_kit/plugin_payload/agent-tune-kit/skills/atk-build-dataset/SKILL.md", names)
                 self.assertIn(
                     "agent_tune_kit/plugin_payload/agent-tune-kit/skills/atk-build-ground-truth/SKILL.md", names
@@ -430,7 +429,6 @@ class InstallPluginCliTests(unittest.TestCase):
                 names = set(archive.getnames())
                 prefix = sdist.name.removesuffix(".tar.gz")
                 self.assertIn(f"{prefix}/.codex-plugin/plugin.json", names)
-                self.assertIn(f"{prefix}/skills/atk-status/SKILL.md", names)
                 self.assertIn(f"{prefix}/skills/atk-build-dataset/SKILL.md", names)
                 self.assertIn(f"{prefix}/skills/atk-build-ground-truth/SKILL.md", names)
                 self.assertIn(f"{prefix}/templates/.atk/runner/eval_runner.py.md", names)

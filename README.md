@@ -49,7 +49,7 @@ atk install
 /plugins
 ```
 
-选择并启用 `Agent Tune Kit`。如果刚启用后当前会话里还看不到 `$atk-status` 等自动补全，请重启 Codex，或重新打开当前项目会话。
+选择并启用 `Agent Tune Kit`。如果刚启用后当前会话里还看不到 `$atk-*` 自动补全，请重启 Codex，或重新打开当前项目会话。
 
 ## 最小调优闭环
 
@@ -232,7 +232,6 @@ $atk-report
 
 ## 常用 Skill
 
-- `$atk-status`：检查当前进度并提示下一步。
 - `$atk-build-dataset`：从业务描述、样例或规则构建 `.atk/datasets/dataset.csv`。
 - `$atk-build-ground-truth`：为现有 `.atk/datasets/dataset.csv` 补齐规范的 `ground_truth` 列。
 - `$atk-visualize-dataset`：将 `.atk/datasets/dataset.csv` 生成本地 HTML 浏览页，便于快速查看数据并确认 ground_truth 是否符合预期。
