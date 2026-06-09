@@ -117,7 +117,7 @@ $atk-init-failure-rule rule: mark a row as failed when expected differs from age
 $atk-find-failures-by-rule
 ```
 
-## Verify Improvement
+#### Verify Improvement
 
 After tuning, run another loop. The common path is to rerun only the prior failures:
 

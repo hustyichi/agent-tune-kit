@@ -117,7 +117,7 @@ $atk-init-failure-rule 规则：当 expected 字段与 agent_output 字段不一
 $atk-find-failures-by-rule
 ```
 
-## 验证是否变好
+#### 验证是否变好
 
 调优后再跑一轮。常见做法是只重跑上一轮失败样本：
 
