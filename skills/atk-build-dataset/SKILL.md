@@ -30,7 +30,7 @@ The CSV must include:
 
 - `atk_id` with non-empty, unique positive integers;
 - at least one clear input column;
-- at least one expected output, acceptance standard, or human-reviewable outcome column when the user provided enough
+- at least one expected output or acceptance standard, or human-reviewable outcome column when the user provided enough
   evidence to define one safely;
 - dynamic business columns based on the user's context.
 
@@ -64,7 +64,7 @@ small curated sample rather than trying to parse raw production logs.
    - detect whether generated examples would require domain facts not provided by the user.
 4. If required meaning is unclear, ask 1-3 targeted questions before writing. Prioritize:
    - input fields are unclear;
-   - expected-output or correct-result semantics are unclear;
+   - expected-output semantics are unclear; expected-output or correct-result semantics are unclear;
    - key scenarios or risks cannot be inferred safely.
 5. Generate a compact dataset that covers, unless the user narrows scope:
    - main successful flow;
@@ -89,7 +89,7 @@ Ask before writing when:
 
 - `.atk/datasets/dataset.csv` already exists and would be overwritten;
 - input fields are unclear;
-- expected-output or correct-result semantics are unclear;
+- expected-output semantics are unclear; expected-output or correct-result semantics are unclear;
 - a `ground_truth` column would require guessing the correct answer or judgment policy;
 - the user describes multiple incompatible Agent tasks;
 - generated examples would require domain facts not provided by the user;
