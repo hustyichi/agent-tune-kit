@@ -4,9 +4,9 @@ English | [简体中文](README.md)
 
 [![PyPI](https://img.shields.io/pypi/v/agent-tune-kit.svg)](https://pypi.org/project/agent-tune-kit/)
 
-Agent Tune Kit is a **local Codex plugin** for evaluating and tuning your own local Agent.
+Agent Tune Kit is a **local Codex plugin** for moving your local Agent from "it runs" to "it can be evaluated, diagnosed, and iteratively tuned."
 
-If you already have a working Agent but do not know where it fails, why it fails, or what to change next, Agent Tune Kit helps you run the full loop: batch test the Agent, find failure cases, generate a report, let Codex tune the Agent, and verify the next run.
+It focuses on two jobs: first turn evaluation data into a reusable, human-reviewable asset; then connect Agent batch evaluation, failure discovery, reporting, failure review, and Codex-driven tuning into a repeatable loop.
 
 ## Architecture
 
@@ -14,12 +14,21 @@ If you already have a working Agent but do not know where it fails, why it fails
 
 ## Who It Is For
 
-Use it if you have, or want Codex to help you fill in:
+Use it if you already have, or are ready to organize:
 
 - A local Agent, chatbot, tool-using Agent, or RAG Agent.
 - A small evaluation dataset, preferably CSV; 5 to 20 rows are enough to start.
 - Inputs, expected answers, or human-checkable results.
 - A desire to let Codex help locate weak spots and tune prompts, code, parameters, or tool configuration.
+
+## Project Value
+
+Agent Tune Kit is not just a way to run one test. It separates Agent tuning into two clear paths:
+
+- **Dataset Preparation**: generate a dataset from business context, examples, or rules; enrich `ground_truth`; review the dataset in local HTML; and correct expected results from human feedback. The dataset is stored under `.atk/datasets/` and is not tied to a single evaluation run.
+- **Agent Evaluation and Tuning**: connect an existing Agent to a runner, run batch evaluation, find failure cases, generate an analysis report, review failures in local HTML, and let Codex tune the Agent from evidence. Each run writes to `.atk/results/vN/` so you can validate whether later versions actually improve.
+
+This turns Agent tuning from one-off subjective trial and error into an engineering workflow with samples, results, reports, and tuning records.
 
 ## Install
 
@@ -51,148 +60,66 @@ After installation, open the plugin list in Codex:
 
 Select and enable `Agent Tune Kit`. If `$atk-*` completions do not appear immediately after enabling, restart Codex or reopen the current project session.
 
-## Minimal Tuning Loop
+## Two Core Paths
 
 Run these commands in **your Agent project**, not in this repository.
 
-Ideally, you already have a local Agent project that Codex can inspect and edit, plus an evaluation dataset. CSV is recommended, but column names do not need to follow a strict schema; Codex will infer inputs, expected results, and evaluation shape from the data. If either piece is missing, start with step 0. If both already exist, go straight to step 1.
+Ideally, you already have a local Agent project that Codex can inspect and edit, plus an evaluation dataset. CSV is recommended, but column names do not need to follow a strict schema; Codex will infer inputs, expected results, and evaluation shape from the data.
 
-### 0. Optional: Fill In the Dataset or Agent
+### Path A: Dataset Preparation
 
-If you only have a business description, examples, or acceptance rules, run:
+Use this path when you do not yet have reliable evaluation data, or when your existing dataset has weak or unstable expected-result semantics:
 
 ```text
 $atk-build-dataset <your business description, examples, or rules>
-```
-
-Codex asks 1-3 questions when information is insufficient, prioritizing input fields, expected output or acceptance criteria, and key business scenarios. The result is written directly to `.atk/datasets/dataset.csv` with `atk_id`; if that file already exists, Codex asks before overwriting it. The dataset focuses on main flow, boundary input, missing or ambiguous information, refusal/uncertainty, output format constraints, and business risks you describe.
-`$atk-build-dataset` does not infer a canonical `ground_truth` column by default. It writes `ground_truth` only when you explicitly provide ground truth, correct answers, or a clear judgment policy for what counts as correct. Otherwise, keep ordinary expected/acceptance fields or enrich the dataset later with `$atk-build-ground-truth`.
-
-If you already have an evaluation dataset but do not have an Agent project yet, generate a small runnable Python Agent that uses an OpenAI-compatible API:
-
-```text
-$atk-new-agent dataset is data/eval.csv
-```
-
-Codex inspects the dataset, clarifies your intent, generates a minimal Agent project, and writes the interview and design notes to `.atk/specs/agent_spec.md`. This step does not write `.atk/datasets/dataset.csv`; `$atk-init` still owns dataset validation, normalization, and runner generation when connecting the Agent.
-
-If `.atk/datasets/dataset.csv` already exists but the expected-result semantics are missing or too weak for stable failure judgment, enrich the existing dataset before running evaluation:
-
-```text
 $atk-build-ground-truth
-```
-
-Codex asks you to choose one dataset-wide `ground_truth` style: exact answer or natural-language acceptance criteria. It then updates `.atk/datasets/dataset.csv` in place, preserving existing columns and `atk_id`. This is a dataset-only, pre-results step: it does not run the Agent, create `.atk/results/vN`, or write `failure_cases.csv`. If existing `eval_results.csv` was produced before this enrichment, rerun `$atk-run` before finding failures.
-Once the dataset is built, you can optionally review and quality-check it first:
-
-```text
 $atk-visualize-dataset
+$atk-tune-ground-truth
 ```
 
-It renders `.atk/datasets/dataset.csv` into a local, single-file, offline HTML browser:
+This path only touches `.atk/datasets/`. It does not run the Agent or create `.atk/results/vN`.
 
-```text
-.atk/datasets/dataset.html
-```
+| Command | Purpose | Key output |
+| --- | --- | --- |
+| `$atk-build-dataset` | Build a small, high-value evaluation dataset from business context, examples, or rules | `.atk/datasets/dataset.csv` |
+| `$atk-build-ground-truth` | Add dataset-wide consistent `ground_truth` semantics to an existing dataset | Updates `.atk/datasets/dataset.csv` |
+| `$atk-visualize-dataset` | Generate local offline HTML for browsing, searching, filtering, quality-checking, and exporting human feedback | `.atk/datasets/dataset.html`, browser-exported `dataset_review.csv` |
+| `$atk-tune-ground-truth` | Correct `ground_truth` values from `dataset_review.csv` | Updates `.atk/datasets/dataset.csv` |
 
-The page uses a Dataset Visualizer-style offline static interface with Data List / Field Feature Analysis tabs, column visibility controls, search, category filtering, sorting, pagination, and a detail drawer. It highlights inputs against detected expected-result fields and auto-flags issues such as empty values, duplicate/missing `atk_id`, conflicting samples, and length outliers, so you can quickly review whether expected results match your intent. For anomalous rows, you can write one clear `review_feedback` value and export a minimal `dataset_review.csv` containing only `atk_id`, `row_number`, and `review_feedback`; when that feedback corrects the existing `ground_truth` judgment, run `$atk-tune-ground-truth`. Codex prefers `.atk/datasets/dataset_review.csv`, falls back to the exported file in Downloads, and writes the corrected `ground_truth` values back to `.atk/datasets/dataset.csv`. Reviewers do not need to install any frontend dependencies.
+`$atk-build-dataset` writes `.atk/datasets/dataset.csv` with `atk_id`. It does not invent canonical `ground_truth` by default; it writes `ground_truth` only when you explicitly provide correct answers or a judgment policy. Then `$atk-build-ground-truth` can normalize expected-result semantics, `$atk-visualize-dataset` can support human review, and `$atk-tune-ground-truth` can write review feedback back into the dataset.
 
-### 1. Initialize
+### Path B: Agent Evaluation and Tuning
 
-Tell Codex where your Agent starts and where the evaluation data lives:
+Use this loop when you already have a runnable Agent and an evaluation dataset:
 
 ```text
 $atk-init My Agent entrypoint is scripts/agent.py and the evaluation dataset is data/eval.csv
-```
-
-Codex generates:
-
-```text
-.atk/runner/eval_runner.py
-```
-
-If the Agent was created by ATK new Agent, the next command is usually:
-
-```text
-$atk-init Agent entrypoint is agent.py run_agent and the evaluation dataset is data/eval.csv
-```
-
-### 2. Run Evaluation
-
-```text
 $atk-run
-```
-
-Results are written to:
-
-```text
-.atk/results/v1/eval_results.csv
-```
-
-### 3. Find Failures
-
-Let Codex judge which rows failed:
-
-```text
 $atk-find-failures
+$atk-report
+$atk-visualize-failures
+$atk-tune
 ```
 
-If you already have a clear rule, create the rule script first and then apply it:
+| Command | Purpose | Key output |
+| --- | --- | --- |
+| `$atk-init` | Connect an existing Agent and evaluation dataset, generate the runner, and normalize the dataset into ATK's fixed location | `.atk/runner/eval_runner.py`, `.atk/datasets/dataset.csv` |
+| `$atk-run` | Run batch evaluation; the runner creates or reuses the current result version | `.atk/results/vN/eval_results.csv` |
+| `$atk-find-failures` | Let Codex judge failures from the current evaluation results | `.atk/results/vN/failure_cases.csv` |
+| `$atk-report` | Generate the current-loop analysis report and cross-version validation when a prior loop exists | `.atk/results/vN/report.md` |
+| `$atk-visualize-failures` | Generate local offline HTML for searching, filtering, and reviewing failure cases | `.atk/results/vN/failure_cases.html` |
+| `$atk-tune` | Tune prompts, code, parameters, or tool configuration from the report and failure evidence | Agent edits, `.atk/results/vN/tuning_plan.md` |
+
+If you have a stable, programmable failure rule, use this branch instead of `$atk-find-failures`:
 
 ```text
 $atk-init-failure-rule rule: mark a row as failed when expected differs from agent_output
 $atk-find-failures-by-rule
 ```
 
-Failure cases are written to:
-
-```text
-.atk/results/v1/failure_cases.csv
-```
-
-### 4. Generate Report
-
-```text
-$atk-report
-```
-
-The report is written to:
-
-```text
-.atk/results/v1/report.md
-```
-
-It summarizes results, failure cases, likely causes, and recommended tuning priorities.
-
-### 5. Optional: Browse Failures
-
-```text
-$atk-visualize-failures
-```
-
-This creates a local HTML page:
-
-```text
-.atk/results/v1/failure_cases.html
-```
-
-Use it to search, filter, and manually review failure cases.
-
-### 6. Let Codex Tune the Agent
-
-```text
-$atk-tune
-```
-
-Codex edits your Agent based on the report and records the tuning plan:
-
-```text
-.atk/results/v1/tuning_plan.md
-```
-
 ## Verify Improvement
 
-After tuning, run another loop:
+After tuning, run another loop. The common path is to rerun only the prior failures:
 
 ```text
 $atk-run --only-failures
@@ -200,7 +127,7 @@ $atk-find-failures
 $atk-report
 ```
 
-New results are written to `.atk/results/v2/`. `--only-failures` maps the prior `failure_cases.csv` back to `.atk/datasets/dataset.csv` by `atk_id` and reruns only those rows. Starting with the second loop, the report compares against the previous `tuning_plan.md` and tells you whether the target issues were resolved, partially resolved, unresolved, or impossible to judge.
+New results are written to a new `.atk/results/vN/`. `--only-failures` maps the prior `failure_cases.csv` back to `.atk/datasets/dataset.csv` by `atk_id` and reruns only those rows. Starting with the second loop, `$atk-report` compares against the previous `tuning_plan.md` and tells you whether the target issues were resolved, partially resolved, unresolved, or impossible to judge.
 
 ## Output Structure
 
@@ -234,9 +161,8 @@ Common output files:
 
 - `$atk-build-dataset`: build `.atk/datasets/dataset.csv` from business context, examples, or rules.
 - `$atk-build-ground-truth`: enrich an existing `.atk/datasets/dataset.csv` with a canonical `ground_truth` column.
-- `$atk-tune-ground-truth`: correct `.atk/datasets/dataset.csv` `ground_truth` values from user feedback in `dataset_review.csv`.
 - `$atk-visualize-dataset`: render `.atk/datasets/dataset.csv` into a local HTML browser for quickly reviewing rows and expected-result fields.
-- `$atk-new-agent`: create a lightweight OpenAI-compatible Agent when you only have a dataset.
+- `$atk-tune-ground-truth`: correct `.atk/datasets/dataset.csv` `ground_truth` values from user feedback in `dataset_review.csv`.
 - `$atk-init`: generate the test runner.
 - `$atk-run`: run evaluation and create a new result version.
 - `$atk-find-failures`: let Codex identify failure cases.

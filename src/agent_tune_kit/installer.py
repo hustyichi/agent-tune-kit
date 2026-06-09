@@ -24,7 +24,7 @@ DEFAULT_MARKETPLACE = Path("~/.agents/plugins/marketplace.json").expanduser()
 DEFAULT_PLUGIN_STORE = Path("~/plugins").expanduser()
 DEFAULT_BACKUP_ROOT = Path("~/.agents/plugins/backups") / PLUGIN_NAME
 PAYLOAD_PACKAGE_PATH = ("plugin_payload", PLUGIN_NAME)
-DEV_PAYLOAD_NAMES = [".codex-plugin", "skills", "templates", "docs", "README.md", "README.en.md", "README.zh-CN.md"]
+DEV_PAYLOAD_NAMES = [".codex-plugin", "skills", "templates", "docs", "README.md", "README.en.md"]
 COPY_IGNORE_NAMES = {".git", ".omx", "__pycache__", ".DS_Store", "build", "dist", ".venv", "*.egg-info"}
 INSTALL_MARKER = ".codex-plugin/agent-tune-kit-install.json"
 

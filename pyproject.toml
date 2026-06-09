@@ -36,7 +36,6 @@ include = [
   "docs/**",
   "README.md",
   "README.en.md",
-  "README.zh-CN.md",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -48,7 +47,6 @@ packages = ["src/agent_tune_kit"]
 "docs" = "agent_tune_kit/plugin_payload/agent-tune-kit/docs"
 "README.md" = "agent_tune_kit/plugin_payload/agent-tune-kit/README.md"
 "README.en.md" = "agent_tune_kit/plugin_payload/agent-tune-kit/README.en.md"
-"README.zh-CN.md" = "agent_tune_kit/plugin_payload/agent-tune-kit/README.zh-CN.md"
 
 [tool.hatch.build.targets.sdist]
 include = [
@@ -65,7 +63,6 @@ include = [
   "/scripts/**",
   "/README.md",
   "/README.en.md",
-  "/README.zh-CN.md",
 ]
 
 [dependency-groups]

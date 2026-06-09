@@ -70,7 +70,7 @@ class ReleaseScriptTests(unittest.TestCase):
     def test_skill_pack_validation_does_not_phrase_scan_readmes(self) -> None:
         validate_skill_pack = load_script("validate_skill_pack.py")
 
-        readme_paths = {"README.md", "README.en.md", "README.zh-CN.md"}
+        readme_paths = {"README.md", "README.en.md"}
         self.assertTrue(readme_paths.issubset(set(validate_skill_pack.REQUIRED_FILES)))
         self.assertTrue(readme_paths.isdisjoint(validate_skill_pack.PER_FILE_PHRASES))
         self.assertNotIn("explicit subcommands only", validate_skill_pack.PLUGIN_DOC_PHRASES)

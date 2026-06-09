@@ -61,7 +61,6 @@ REQUIRED_FILES = [
     "src/agent_tune_kit/installer.py",
     "README.md",
     "README.en.md",
-    "README.zh-CN.md",
 ]
 
 SKILL_FILES = [path for path in REQUIRED_FILES if path.startswith("skills/") and path.endswith("/SKILL.md")]
@@ -891,7 +890,6 @@ def main() -> int:
         for rel in [
             "README.md",
             "README.en.md",
-            "README.zh-CN.md",
             "docs/shared-versioning-and-confirmation.md",
             "docs/skill-template-pack-usage.md",
             "docs/codex_agent_tuning_prd.md",

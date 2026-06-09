@@ -164,7 +164,7 @@ Run:
 python3 scripts/validate_skill_pack.py
 git diff --check
 find skills templates docs scripts .codex-plugin -maxdepth 4 -type f | sort
-grep -R "agent_output\|ground_truth\|failure_cases.csv\|failure_cases.html\|tuning_plan.md\|目标异常清单\|调优手段\|关联改动\|source.path" skills templates docs README.md README.zh-CN.md .codex-plugin scripts
+grep -R "agent_output\|ground_truth\|failure_cases.csv\|failure_cases.html\|tuning_plan.md\|目标异常清单\|调优手段\|关联改动\|source.path" skills templates docs README.md README.en.md .codex-plugin scripts
 ```
 
 `validate_skill_pack.py` checks required files, required sections, manifest fields, installer behavior, PRD traceability, canonical version helper names and snippets, output paths, non-goal boundaries, dataset-only/pre-results classifications such as `atk-build-ground-truth`, and each Skill's precondition/failure behavior.
