@@ -18,6 +18,8 @@ Traceability note: section 2.4 defines failure-case discovery entries, section 4
 - Current version directory resolved from `.atk/results/vN`.
 - Required current file: `eval_results.csv`.
 - Optional user natural-language failure definition.
+- Optional local private tuning context: `.atk/context.md`, especially `Tuning Objective`, `Agent Behavior Standard`,
+  and `Ground Truth Standard`.
 - Dataset columns preserved in `eval_results.csv`, including required `agent_output`.
 - Shared rules in `docs/shared-versioning-and-confirmation.md`.
 
@@ -30,11 +32,13 @@ Traceability note: section 2.4 defines failure-case discovery entries, section 4
 
 1. Resolve current version with `resolve_current_version()` using `RESULTS_DIR = Path(".atk/results")`.
 2. Require `eval_results.csv` with `require_current_file(current_dir, "eval_results.csv")`.
-3. Inspect headers and samples to identify original input fields, expected-result fields, and `agent_output`.
-4. If the user supplied failure criteria, apply them. Otherwise infer likely failing cases from Agent output versus expected results.
-5. If criteria or expected-result columns are ambiguous, ask the user for judgment before writing.
-6. State that `failure_cases.csv` in the current version will be overwritten.
-7. Write failure rows, preserving all original `eval_results.csv` columns and adding optional explanatory columns only when useful.
+3. Read `.atk/context.md` if it exists. Apply only durable standards and decisions: `Tuning Objective`,
+   `Agent Behavior Standard`, `Ground Truth Standard`, and relevant `Tuning Decisions`.
+4. Inspect headers and samples to identify original input fields, expected-result fields, and `agent_output`.
+5. If the user supplied failure criteria, apply them. Otherwise infer likely failing cases from Agent output versus expected results, using local context standards as tie-breakers when they are relevant.
+6. If criteria, expected-result columns, or local context standards are ambiguous, ask the user for judgment before writing.
+7. State that `failure_cases.csv` in the current version will be overwritten.
+8. Write failure rows, preserving all original `eval_results.csv` columns and adding optional explanatory columns only when useful.
 
 ## Required failure-finding behavior
 
@@ -43,6 +47,7 @@ Traceability note: section 2.4 defines failure-case discovery entries, section 4
 - Preserve all source result columns including `agent_output`.
 - Overwrite `failure_cases.csv`; do not backup or merge. Overwrites are stated before writing.
 - Do not require a universal Schema for expected-result columns.
+- Do not write `.atk/context.md`; this Skill consumes local standards but failure rows belong in `failure_cases.csv`.
 
 ## Shared version rules
 
@@ -60,6 +65,7 @@ Ask before writing when:
 
 - `eval_results.csv` does not clearly identify expected-result columns;
 - failure criteria cannot be inferred from `agent_output` and expected fields;
+- `.atk/context.md` standards conflict with the current user request or result evidence;
 - multiple interpretations would materially change which rows are failures;
 - current `failure_cases.csv` exists and may contain user-edited content.
 
@@ -76,6 +82,7 @@ After writing the file, summarize:
 
 - current version;
 - criteria used;
+- local context standards applied, if `.atk/context.md` existed;
 - count of failure rows written;
 - output path `.atk/results/vN/failure_cases.csv`;
 - any uncertainty or confidence boundary;

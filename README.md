@@ -129,6 +129,12 @@ $atk-report
 
 新结果会写入新的 `.atk/results/vN/`。`--only-failures` 会通过 `atk_id` 将上一轮 `failure_cases.csv` 映射回 `.atk/datasets/dataset.csv`，并只重跑这些行。从第二轮开始，`$atk-report` 会对比上一轮 `tuning_plan.md`，说明目标问题是已解决、部分解决、未解决，还是无法判断。
 
+### 本地调优上下文
+
+ATK 可选读取本地私有的 `.atk/context.md`，用于保存用户沟通后确认的调优目标、Agent 行为标准、`ground_truth` 判定标准、人工反馈和调优决策。它不是数据集元信息或运行日志文件：字段名、行数、版本路径、执行统计等能从 `.atk/datasets/`、`.atk/results/` 或 runner 中恢复的信息不应写入这里。
+
+`$atk-build-ground-truth` 和 `$atk-tune-ground-truth` 会在用户确认 `ground_truth` 标准变化时更新相关标准；`$atk-find-failures`、`$atk-report` 和 `$atk-tune` 会在判断失败、归因和调 Agent 时参考这些标准。缺少 `.atk/context.md` 不会阻塞任何流程。
+
 ## 输出结构
 
 ```text

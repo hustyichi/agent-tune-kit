@@ -22,6 +22,8 @@ unless the feedback itself clearly states that exact desired value.
 - Required existing dataset: `.atk/datasets/dataset.csv`.
 - Required `atk_id` column with non-empty, unique positive integers.
 - Review CSV from `atk-visualize-dataset` with `atk_id`, `row_number`, and `review_feedback`.
+- Optional local private tuning context: `.atk/context.md`, especially `Ground Truth Standard` and prior
+  `Tuning Decisions`.
 - Optional explicit review path, normally unnecessary when the exported file is in `.atk/datasets/` or Downloads.
 
 Review file resolution order:
@@ -37,6 +39,7 @@ against the current `.atk/datasets/dataset.csv`.
 ## Outputs
 
 - Updated `.atk/datasets/dataset.csv` with tuned `ground_truth` values.
+- Optional `.atk/context.md` update when review feedback changes the confirmed `Ground Truth Standard`.
 - Preserve all original columns and relative order where practical.
 - If `ground_truth` is absent, append it after existing columns.
 - No output under `.atk/results/`.
@@ -63,14 +66,16 @@ python3 <skill-dir>/scripts/tune_ground_truth.py --dump-context
 
    Pass `--review-path <path>` only when the user supplied an explicit file path. The helper prints JSON containing the
    dataset rows tied to each non-empty `review_feedback`.
-6. For each reviewed row, use Codex judgment to produce a corrected `ground_truth` by combining:
+6. Read `.atk/context.md` if it exists. Apply only user-confirmed `Ground Truth Standard` and `Tuning Decisions`;
+   ignore dataset metadata, result paths, run logs, or generated statistics if present.
+7. For each reviewed row, use Codex judgment to produce a corrected `ground_truth` by combining:
    - the original dataset row;
    - the existing `ground_truth`, if present;
    - the user's `review_feedback` as a correction or adjustment instruction.
-7. Write a temporary updates CSV with headers `atk_id,ground_truth`. Include only rows where a corrected `ground_truth`
+8. Write a temporary updates CSV with headers `atk_id,ground_truth`. Include only rows where a corrected `ground_truth`
    can be generated from the feedback and row context. Leave ambiguous or under-specified rows out of the updates CSV
    and report them as unresolved.
-8. Apply updates through the helper so path resolution, validation, column preservation, and atomic dataset writeback
+9. Apply updates through the helper so path resolution, validation, column preservation, and atomic dataset writeback
    remain deterministic:
 
 ```sh
@@ -78,10 +83,13 @@ python3 <skill-dir>/scripts/tune_ground_truth.py --updates-path <updates.csv>
 ```
 
    Include `--review-path <path>` if the review file was explicitly selected.
-9. The writeback is automatic once corrected values have been generated. Do not ask for another confirmation merely
+10. The writeback is automatic once corrected values have been generated. Do not ask for another confirmation merely
    because existing `ground_truth` values are updated; the exported `review_feedback` is the user's correction signal
    for this Skill.
-10. Handoff based on result freshness:
+11. If review feedback changes the user-confirmed standard rather than only row values, update the `Ground Truth
+    Standard` section in `.atk/context.md` and append a concise `Tuning Decisions` entry. Do not record routine review
+    row counts, field names, result versions, or generated statistics there.
+12. Handoff based on result freshness:
     - recommend `$atk-visualize-dataset` if the user wants to re-review the tuned dataset;
     - recommend `$atk-run` when no current evaluation exists or when existing `eval_results.csv` predates this
       ground_truth tuning;
@@ -99,6 +107,8 @@ Ask before writing only when:
 - the dataset has invalid `atk_id` values;
 - a corrected `ground_truth` would require domain facts not present in the row, existing `ground_truth`, or
   `review_feedback`.
+- review feedback conflicts with the existing `.atk/context.md` `Ground Truth Standard` and the user has not clearly
+  changed the standard.
 
 Do not ask merely because the review file came from Downloads, because existing `ground_truth` values will be updated,
 or because `ground_truth` must be appended.
@@ -120,6 +130,7 @@ After updating the dataset, summarize:
 
 - dataset path `.atk/datasets/dataset.csv`;
 - review path used, including whether it came from `.atk/datasets/` or Downloads;
+- local context path `.atk/context.md` when a `Ground Truth Standard` was read or updated;
 - number of review rows, updated rows, and unresolved rows;
 - whether `ground_truth` was appended or already existed;
 - a concise sample of representative changes;
@@ -139,3 +150,4 @@ After updating the dataset, summarize:
 - Do not create alternate canonical dataset filenames.
 - Do not add fingerprint validation.
 - Do not copy `review_feedback` directly into `ground_truth` unless it clearly states the exact desired value.
+- Do not use `.atk/context.md` for dataset metadata, result versions, or run logs.

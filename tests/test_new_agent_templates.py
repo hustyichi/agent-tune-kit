@@ -115,6 +115,9 @@ def test_atk_build_ground_truth_skill_is_dataset_enricher() -> None:
         "Do not write `failure_cases.csv`",
         "Do not change `atk-find-failures` behavior in v1",
         "eval_results.csv` predates dataset enrichment",
+        ".atk/context.md",
+        "Ground Truth Standard",
+        "Do not use `.atk/context.md` for dataset metadata",
     ]:
         assert phrase in text
     for section in [
@@ -131,6 +134,39 @@ def test_atk_build_ground_truth_skill_is_dataset_enricher() -> None:
     assert "docs/shared-versioning-and-confirmation.md" not in text
     assert ".atk/specs/agent_spec.md" not in text
     assert "Never write `.atk/datasets/dataset.csv`" not in text
+
+
+def test_local_context_contract_is_private_and_standard_focused() -> None:
+    text = read_rel("docs/local-context.md")
+    shared_text = read_rel("docs/shared-versioning-and-confirmation.md")
+    read_only_skill = read_rel("skills/atk-find-failures/SKILL.md")
+    tune_skill = read_rel("skills/atk-tune/SKILL.md")
+    report_skill = read_rel("skills/atk-report/SKILL.md")
+    tune_gt_skill = read_rel("skills/atk-tune-ground-truth/SKILL.md")
+
+    for phrase in [
+        "`./.atk/context.md` is a local, private tuning-consensus document",
+        "It is not a dataset metadata registry, run log, or team collaboration file.",
+        "## Tuning Objective",
+        "## Agent Behavior Standard",
+        "## Ground Truth Standard",
+        "## User Feedback",
+        "## Tuning Decisions",
+        "dataset path, row count, headers, field types",
+        "result version, latest run path, metrics snapshots",
+        "Missing `.atk/context.md` must never block a Skill.",
+    ]:
+        assert phrase in text
+
+    assert "Local private tuning consensus: `.atk/context.md`" in shared_text
+    assert "must not become a registry for dataset headers, field" in shared_text
+    assert "It should not write `.atk/context.md`." in shared_text
+
+    assert "Do not write `.atk/context.md`" in read_only_skill
+    assert "Do not modify `Ground Truth Standard`" in tune_skill
+    assert "Append to `.atk/context.md` only when" in report_skill
+    assert "changes the confirmed `Ground Truth Standard`" in tune_gt_skill
+    assert "Do not use `.atk/context.md` for dataset metadata" in tune_gt_skill
 
 
 def test_generated_agent_templates_expose_runtime_contract() -> None:

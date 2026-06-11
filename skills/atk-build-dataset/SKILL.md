@@ -20,6 +20,8 @@ standard, and the scenarios most likely to reveal Agent weaknesses.
 - User-provided business context, such as a natural-language description, example inputs and desired outputs, process
   rules, acceptance criteria, partial tables, or a small existing file.
 - Optional user instructions about desired columns, expected output style, scenarios, risks, or dataset size.
+- Optional local private tuning context: `.atk/context.md`, only for user-confirmed objectives, behavior standards, or
+  `ground_truth` standards that should shape dataset examples.
 - Existing target-project files only when needed to understand current `.atk/` state or avoid overwriting data.
 
 ## Outputs
@@ -52,33 +54,37 @@ small curated sample rather than trying to parse raw production logs.
 ## Workflow
 
 1. Inspect the user's request and any referenced small input files.
-2. Check whether `.atk/datasets/dataset.csv` already exists.
+2. If `.atk/context.md` exists, read it as optional tuning guidance. Use only durable standards and decisions from it;
+   do not treat it as a source of dataset headers, field types, row counts, or run history.
+3. Check whether `.atk/datasets/dataset.csv` already exists.
    - If it exists, stop and ask before overwriting.
    - Do not silently merge, append, rename, or create a candidate file.
-3. Determine whether the dataset can be built safely:
+4. Determine whether the dataset can be built safely:
    - identify the Agent input field or fields;
    - identify any user-provided expected output, acceptance standard, or correct-result judgment policy;
    - decide whether a canonical `ground_truth` column is explicitly authorized; if not, do not create one;
    - identify key business scenarios or risks;
    - detect whether the request describes multiple incompatible Agent tasks;
    - detect whether generated examples would require domain facts not provided by the user.
-4. If required meaning is unclear, ask 1-3 targeted questions before writing. Prioritize:
+5. If required meaning is unclear, ask 1-3 targeted questions before writing. Prioritize:
    - input fields are unclear;
    - expected-output semantics are unclear; expected-output or correct-result semantics are unclear;
    - key scenarios or risks cannot be inferred safely.
-5. Generate a compact dataset that covers, unless the user narrows scope:
+6. Generate a compact dataset that covers, unless the user narrows scope:
    - main successful flow;
    - boundary input;
    - missing or ambiguous information;
    - refusal, uncertainty, or unsupported request;
    - output format constraint;
    - business risk when provided by the user.
-6. Write `.atk/datasets/dataset.csv` with stable `atk_id` values starting at `1`, unless the user supplied valid
+7. Write `.atk/datasets/dataset.csv` with stable `atk_id` values starting at `1`, unless the user supplied valid
    unique positive integers that should be preserved.
-7. Keep column names practical and business-specific. For a simple chatbot, `input` and `expected` may be enough.
+8. Keep column names practical and business-specific. For a simple chatbot, `input` and `expected` may be enough.
    For structured tasks, use columns such as `question`, `user_type`, `order_status`, or other names that match the
    user's description. Use `ground_truth` only when the user explicitly supplied or requested that canonical semantics.
-8. Determine the next-step handoff based on whether an Agent implementation is already available:
+9. Do not write `.atk/context.md` from this Skill. If dataset construction reveals a useful standard, mention it as a
+   suggested context note in the handoff instead of silently persisting it.
+10. Determine the next-step handoff based on whether an Agent implementation is already available:
    - if an Agent exists, tell the user to run `$atk-init` to initialize batch evaluation with the new dataset;
    - if no Agent exists, tell the user to run `$atk-new-agent` to create an Agent from the dataset first;
    - if Agent existence cannot be confirmed, explain both possible next steps instead of choosing one.
@@ -122,6 +128,8 @@ After writing the dataset, summarize:
 - input and expected-output columns;
 - whether `ground_truth` was omitted because no explicit correct-result semantics were provided, or included because
   the user explicitly supplied the correct-result policy;
+- local context standards applied, if `.atk/context.md` existed;
+- any suggested context note that the user may want future ground-truth or tuning steps to preserve;
 - coverage categories included;
 - any assumptions or unfilled domain facts;
 - optional review step: run `$atk-visualize-dataset` to open a local HTML browser of `.atk/datasets/dataset.csv` for

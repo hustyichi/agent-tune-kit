@@ -129,6 +129,12 @@ $atk-report
 
 New results are written to a new `.atk/results/vN/`. `--only-failures` maps the prior `failure_cases.csv` back to `.atk/datasets/dataset.csv` by `atk_id` and reruns only those rows. Starting with the second loop, `$atk-report` compares against the previous `tuning_plan.md` and tells you whether the target issues were resolved, partially resolved, unresolved, or impossible to judge.
 
+### Local Tuning Context
+
+ATK can optionally read local private `.atk/context.md` to preserve user-confirmed tuning objectives, Agent behavior standards, `ground_truth` judgment standards, human feedback, and tuning decisions. It is not a dataset metadata or run-log file: field names, row counts, result paths, execution metrics, and other facts recoverable from `.atk/datasets/`, `.atk/results/`, or runner files should not be recorded there.
+
+`$atk-build-ground-truth` and `$atk-tune-ground-truth` update the relevant standard when the user confirms a `ground_truth` standard change. `$atk-find-failures`, `$atk-report`, and `$atk-tune` use those standards when judging failures, attributing causes, and tuning the Agent. Missing `.atk/context.md` never blocks the workflow.
+
 ## Output Structure
 
 ```text

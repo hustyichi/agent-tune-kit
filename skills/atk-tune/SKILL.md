@@ -19,6 +19,8 @@ Traceability note: section 2.6 defines Agent tuning, section 4 defines current-v
 - Required current file: `report.md`.
 - Target Agent source files and configuration.
 - Optional existing test results, abnormal cases, logs, and previous reports for context.
+- Optional local private tuning context: `.atk/context.md`, especially `Tuning Objective`, `Agent Behavior Standard`,
+  `Ground Truth Standard`, and `Tuning Decisions`.
 - Shared rules in `docs/shared-versioning-and-confirmation.md`.
 
 ## Outputs
@@ -30,15 +32,19 @@ Traceability note: section 2.6 defines Agent tuning, section 4 defines current-v
 
 1. Resolve current version with `resolve_current_version()` using `RESULTS_DIR = Path(".atk/results")`.
 2. Require `report.md` with `require_current_file(current_dir, "report.md")`.
-3. Read the report and prioritize unresolved problems,新增问题, and high-confidence root causes.
-4. Inspect relevant Agent implementation files before editing.
-5. Make focused, reviewable changes. Do not ask for item-by-item confirmation unless the action is destructive, credential-gated, or materially scope-changing.
-6. Run the smallest relevant validation available in the target repo.
-7. Write `tuning_plan.md` in the current version directory with exact headings:
+3. Read `.atk/context.md` if it exists. Preserve `Tuning Objective`, `Agent Behavior Standard`,
+   `Ground Truth Standard`, and prior `Tuning Decisions` when choosing Agent changes.
+4. Read the report and prioritize unresolved problems,新增问题, and high-confidence root causes.
+5. Inspect relevant Agent implementation files before editing.
+6. Make focused, reviewable changes. Do not ask for item-by-item confirmation unless the action is destructive, credential-gated, or materially scope-changing.
+7. Do not modify `Ground Truth Standard`; if the evidence shows the standard is wrong or incomplete, record that as a
+   tuning-plan note and route the correction to `$atk-tune-ground-truth`.
+8. Run the smallest relevant validation available in the target repo.
+9. Write `tuning_plan.md` in the current version directory with exact headings:
    - `## 目标异常清单`
    - `## 调优手段`
    - `## 关联改动`
-8. Suggest a user git commit/checkpoint in the final handoff; do not perform automatic rollback or baseline restore.
+10. Suggest a user git commit/checkpoint in the final handoff; do not perform automatic rollback or baseline restore.
 
 ## Required tuning_plan.md structure
 
@@ -73,6 +79,7 @@ Ask only when:
 
 - `report.md` points to destructive, credential-gated, or external-production changes;
 - multiple incompatible tuning directions have similar evidence and choosing one would materially change scope;
+- `.atk/context.md` standards conflict with the report's recommended tuning direction;
 - a file targeted for edit appears unrelated to the Agent or contains user-protected regions;
 - overwriting `tuning_plan.md` would discard user-authored content.
 
@@ -88,6 +95,7 @@ Ask only when:
 After tuning, summarize:
 
 - current version;
+- local context standards applied, if `.atk/context.md` existed;
 - files changed;
 - validation run and result;
 - output path `.atk/results/vN/tuning_plan.md`;

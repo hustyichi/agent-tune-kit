@@ -20,6 +20,7 @@ Traceability note: section 2.5 defines report and cross-version validation, sect
   - `eval_results.csv`
   - `failure_cases.csv`
 - Optional current files: `app.log` and row logs referenced by `log_path`.
+- Optional local private tuning context: `.atk/context.md`.
 - Previous version files, when available:
   - `tuning_plan.md`
   - `report.md`
@@ -32,18 +33,25 @@ Traceability note: section 2.5 defines report and cross-version validation, sect
 ## Outputs
 
 - Current `.atk/results/vN/report.md`.
+- Optional `.atk/context.md` append only for durable user-confirmed feedback or tuning decisions, never routine run
+  summaries.
 
 ## Workflow
 
 1. Resolve current version with `resolve_current_version()` using `RESULTS_DIR = Path(".atk/results")`.
 2. Require current files with `require_current_file(current_dir, "eval_results.csv")` and `require_current_file(current_dir, "failure_cases.csv")`.
-3. Read optional current `app.log` if present.
-4. Prefer row-specific evidence from `log_path` when a failure row references an existing log file; fall back to `app.log` only when row logs are blank, missing, or unavailable.
-5. Resolve previous version with `resolve_previous_version(current_dir)`.
-6. If no previous version exists, generate a single-version report and explain that no previous version can be compared.
-7. If previous version exists but lacks `tuning_plan.md`, degrade to a single-version or lower-confidence report with explicit explanation.
-8. If previous `tuning_plan.md` exists, extract targets from `## 目标异常清单`, compare them with current `eval_results.csv` and `failure_cases.csv`, and classify each target as `已解决`, `部分解决`, `未解决`, or `无法判断`.
-9. Write `report.md` in the current version directory.
+3. Read `.atk/context.md` if it exists. Use it to distinguish Agent behavior failures, `ground_truth` standard
+   conflicts, and dataset-standard repair needs.
+4. Read optional current `app.log` if present.
+5. Prefer row-specific evidence from `log_path` when a failure row references an existing log file; fall back to `app.log` only when row logs are blank, missing, or unavailable.
+6. Resolve previous version with `resolve_previous_version(current_dir)`.
+7. If no previous version exists, generate a single-version report and explain that no previous version can be compared.
+8. If previous version exists but lacks `tuning_plan.md`, degrade to a single-version or lower-confidence report with explicit explanation.
+9. If previous `tuning_plan.md` exists, extract targets from `## 目标异常清单`, compare them with current `eval_results.csv` and `failure_cases.csv`, and classify each target as `已解决`, `部分解决`, `未解决`, or `无法判断`.
+10. Write `report.md` in the current version directory.
+11. Append to `.atk/context.md` only when the report captures durable user-confirmed feedback or tuning decisions that
+    should guide future loops. Do not write dataset headers, row counts, result paths, metrics snapshots, or routine run
+    summaries there.
 
 ## Required report structure
 
@@ -92,6 +100,7 @@ Ask before producing a cross-version judgment when:
 
 - target failures in previous `tuning_plan.md` cannot be reliably matched to current rows;
 - expected-result columns are ambiguous and affect root-cause conclusions;
+- `.atk/context.md` standards conflict with current evidence and the conclusion would materially change;
 - previous artifacts are inconsistent or appear manually edited;
 - overwriting `report.md` might discard user-edited analysis.
 
@@ -107,8 +116,10 @@ Ask before producing a cross-version judgment when:
 After writing the report, summarize:
 
 - current version and previous version used, if any;
+- local context standards applied, if `.atk/context.md` existed;
 - counts of total and failure cases;
 - cross-version validation status distribution: `已解决` / `部分解决` / `未解决` / `无法判断`;
 - output path `.atk/results/vN/report.md`;
 - whether failure attribution used row-specific logs from `log_path` or fell back to `app.log`;
+- whether `.atk/context.md` was updated with durable feedback or decisions;
 - whether the next step is `atk-tune`.
