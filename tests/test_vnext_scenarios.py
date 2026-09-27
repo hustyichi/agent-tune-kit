@@ -151,6 +151,169 @@ def test_ten_case_cumulative_gain_counts_only_new_fixes(tmp_path: Path) -> None:
     )
 
 
+def test_two_independent_issues_build_one_cumulative_checkpoint_chain(tmp_path: Path) -> None:
+    script = (
+        "import json, sys\nfrom pathlib import Path\n"
+        "task = json.loads(Path(sys.argv[1]).read_text())\n"
+        "print('safe' if task == 'safe' else Path(f'rule-{task}.txt').read_text().strip())\n"
+    )
+    rows = [
+        {"id": "a", "input": "a", "usage": "optimization", "source_group_id": "ga"},
+        {"id": "b", "input": "b", "usage": "optimization", "source_group_id": "gb"},
+        {"id": "protect", "input": "safe", "usage": "protection", "source_group_id": "gp"},
+    ]
+    repo, root, dataset, round_data, plan = project(
+        tmp_path,
+        script,
+        rows,
+        issue_ids=["a", "b"],
+        extra_files={"rule-a.txt": "bad", "rule-b.txt": "bad", "contract.md": "a and b must return good.\n"},
+    )
+    paths = ["rule-a.txt", "rule-b.txt"]
+    config = read_json(root / "project.json")
+    config["allowed_paths"] = paths
+    config["protected_paths"] = ["agent.py", "contract.md"]
+    config["components"] = [
+        {"component_id": name, "role": "prompt", "change_role": "variable", "source_path": name} for name in paths
+    ]
+    write_json(root / "project.json", config)
+    plan.update(
+        allowed_paths=paths,
+        protected_paths=["agent.py", "contract.md"],
+        target_case_ids_by_issue={"a": ["a"], "b": ["b"]},
+        budget={"executions": 18, "probes": 0, "candidates": 2},
+    )
+    freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    request = {
+        "dataset_id": dataset["id"],
+        "case_ids": ["a", "b", "protect"],
+        "purpose": "evaluation",
+        "round_id": round_data["id"],
+    }
+    expected = {"a": "good", "b": "good", "protect": "safe"}
+    baseline = run_evaluation(root, {**request, "revision_id": round_data["baseline_revision_id"]})
+    baseline_records = {record["case_id"]: record for record in validate_evidence(root, baseline["id"])[1].values()}
+    assert {case_id: baseline_records[case_id]["output"].strip() for case_id in ("a", "b")} == {
+        "a": "bad",
+        "b": "bad",
+    }
+    issues = []
+    for issue_id in ("a", "b"):
+        path = f"rule-{issue_id}.txt"
+        source = record_source_contract(
+            repo,
+            root,
+            {
+                "source_path": path,
+                "start_line": 1,
+                "end_line": 1,
+                "component_id": path,
+                "source_revision": git(repo, "rev-parse", "HEAD"),
+                "artifact_identity": digest(repo / path),
+                "round_id": round_data["id"],
+            },
+        )
+        observed = {"batch_id": baseline["id"], "evidence_id": baseline_records[issue_id]["id"]}
+        mechanism = {"batch_id": source["id"], "evidence_id": next(iter(validate_evidence(root, source["id"])[2]))}
+        issues.append(
+            {
+                "id": issue_id,
+                "symptom": f"Case {issue_id} returns bad",
+                "hypothesis": f"{path} supplies the wrong value",
+                "competing_explanations": ["the other rule file caused it"],
+                "competing_explanations_addressed": "Agent selects one rule file by the Case input",
+                "checks": [{"status": "completed", "expected": "good", "actual": "bad", "evidence_refs": [observed]}],
+                "evidence_refs": [observed],
+                "mechanism_evidence_refs": [mechanism],
+                "intervention_validation_refs": [],
+                "root_cause_status": "supported",
+                "intervention_layer": "prompt",
+                "responsible_component": path,
+                "case_ids": [issue_id],
+                "priority": "high",
+                "disposition": "local_candidate",
+                "resolution": "open",
+                "next_action": f"correct {path}",
+            }
+        )
+    assert {
+        issue["id"] for issue in store_diagnosis(root, {"round_id": round_data["id"], "issues": issues})["issues"]
+    } == {
+        "a",
+        "b",
+    }
+    parent_commit = round_data["baseline_commit"]
+    parent_assessment = assess(root, baseline, expected)
+    for issue_id in ("a", "b"):
+        path = f"rule-{issue_id}.txt"
+        draft = prepare_candidate(
+            repo, root, {"round_id": round_data["id"], "primary_issue_id": issue_id, "paths": [path]}
+        )
+        assert draft["parent_commit"] == parent_commit
+        (repo / path).write_text("good")
+        sealed = seal_candidate(repo, root, {"round_id": round_data["id"], "candidate_id": draft["id"]})
+        batch = run_evaluation(root, {**request, "revision_id": sealed["revision_id"]})
+        current_assessment = assess(root, batch, expected)
+        validation = compare_and_gate(
+            root,
+            {
+                "round_id": round_data["id"],
+                "mode": "incremental",
+                "issue_id": issue_id,
+                "candidate_id": draft["id"],
+                "left_assessment_id": parent_assessment,
+                "right_assessment_id": current_assessment,
+                "left_commit": parent_commit,
+            },
+        )
+        assert validation["result"] == "pass"
+        assert validation["fixed_case_ids"] == [issue_id]
+        decision = decide_candidate(
+            repo,
+            root,
+            {
+                "round_id": round_data["id"],
+                "candidate_id": draft["id"],
+                "action": "keep",
+                "validation_id": validation["id"],
+                "reason": "independent issue repaired",
+            },
+        )
+        parent_commit = decision["after_commit"]
+        parent_assessment = current_assessment
+    final_left = run_evaluation(root, {**request, "phase": "final", "revision_id": round_data["baseline_revision_id"]})
+    final_right = run_evaluation(
+        root,
+        {
+            **request,
+            "phase": "final",
+            "revision_id": read_json(root / "rounds" / round_data["id"] / "round.json")["current_revision_id"],
+        },
+    )
+    final = compare_and_gate(
+        root,
+        {
+            "round_id": round_data["id"],
+            "mode": "final",
+            "left_assessment_id": assess(root, final_left, expected),
+            "right_assessment_id": assess(root, final_right, expected),
+            "left_commit": round_data["baseline_commit"],
+        },
+    )
+    assert final["result"] == "pass"
+    assert final["fixed_case_ids"] == ["a", "b"]
+    finish_round(
+        repo,
+        root,
+        {
+            "round_id": round_data["id"],
+            "action": "complete",
+            "validation_id": final["id"],
+            "reason": "both issues fixed",
+        },
+    )
+
+
 def test_rollback_withdraws_accepted_suffix_and_requires_fresh_candidate_evidence(tmp_path: Path) -> None:
     script = (
         "import json,sys\nfrom pathlib import Path\n"

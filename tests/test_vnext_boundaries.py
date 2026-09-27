@@ -1167,6 +1167,42 @@ def test_literal_special_path_and_unknown_file_survive_candidate_gate(tmp_path: 
     assert not (repo / special).exists()
 
 
+@pytest.mark.parametrize("action", ["reject", "keep"])
+def test_deleted_literal_path_restores_on_reject_or_rollback(tmp_path: Path, action: str) -> None:
+    special = "obsolete [*] 中文.txt"
+    rows = [{"id": "case", "input": "task", "usage": "optimization", "source_group_id": "group"}]
+    repo, root, _, round_data, plan = project(tmp_path, "print('ok')\n", rows, extra_files={special: "original"})
+    plan["allowed_paths"].append(special)
+    freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    draft = prepare_candidate(
+        repo, root, {"round_id": round_data["id"], "primary_issue_id": "issue", "paths": [special]}
+    )
+    (repo / special).unlink()
+    sealed = seal_candidate(repo, root, {"round_id": round_data["id"], "candidate_id": draft["id"]})
+    assert not read_json(root / "rounds" / round_data["id"] / "candidates" / draft["id"] / "files.json")[special][
+        "exists"
+    ]
+    decide_candidate(
+        repo,
+        root,
+        {
+            "round_id": round_data["id"],
+            "candidate_id": draft["id"],
+            "action": action,
+            "validation_id": _passing_validation(root, round_data, sealed),
+            "reason": "fixture",
+        },
+    )
+    if action == "keep":
+        assert not (repo / special).exists()
+        rollback_to(
+            repo,
+            root,
+            {"round_id": round_data["id"], "target_commit": round_data["baseline_commit"], "reason": "fixture"},
+        )
+    assert (repo / special).read_text() == "original"
+
+
 def test_runner_commit_blocks_evaluation_without_advancing_round(tmp_path: Path) -> None:
     script = (
         "import subprocess\nfrom pathlib import Path\n"
