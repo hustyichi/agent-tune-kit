@@ -8,6 +8,8 @@ Agent Tune Kit 是一个**本地 Codex 插件**，用于把你自己的本地 Ag
 
 它围绕两件事展开：先把评估数据集整理成可复用、可人工校准的资产；再把 Agent 的批量评测、异常发现、报告分析和调优改动串成一个可重复的闭环。
 
+改造设计见 [vNext 正式改造方案](docs/agent-tune-kit-vnext-refactor-plan.md)（2026-09-27，文档 v1.2）。方案采用原工程内串行累积优化、有效候选 Git commit 与检查点回退，取消额外 worktree 和独立候选组合流程；保留根因诊断、组件证据、服务交接与复验契约。这是待实现、待验收的目标设计；下文仍说明当前已交付版本。
+
 ## 架构图
 
 ![Agent Tune Kit 架构图](docs/assets/arch.png)
