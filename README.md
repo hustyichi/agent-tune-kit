@@ -1,6 +1,6 @@
 # Agent Tune Kit
 
-最后更新：2026-09-28。状态：vNext 核心链路、10 Case 合成累积验收、候选替代谱系及补丁引用、轮次冻结／候选草稿／封存／最终决策中断续恢复、中断批次／Git 内容恢复与转换／旧检查点复跑中断恢复／并发边界、Python editable／Node 链接加载及合成服务版本前后核查已在本地验证；Magic Workspace 单 Case 严格加载路径及原生两 Case 批量基线通过；ATK 两 Case 对照的 B0 一例查明为认证失败，接入分类已修正并以单 Case 实测，正式多 Case 收益仍待验收。详见 [实现与验收记录](docs/vnext-implementation-report.md)。
+最后更新：2026-09-28。状态：vNext 核心链路、10 Case 合成累积验收、候选替代谱系及补丁引用、轮次冻结／候选草稿／封存／最终决策中断续恢复、中断批次／Git 内容恢复与转换／旧检查点复跑中断恢复／并发边界、Python editable／Node 链接加载及合成服务版本前后核查已在本地验证；Execution 环境故障状态已对齐方案并阻断未知状态封存；Magic Workspace 单 Case 严格加载路径及原生两 Case 批量基线通过；新版 ATK 正式两 Case 基线均因模型认证失败记录为 `infra_error`，未进入效果对照，正式多 Case 收益仍待验收。详见 [实现与验收记录](docs/vnext-implementation-report.md)。
 
 简体中文 | [English](README.en.md)
 
@@ -34,7 +34,7 @@ uvx --from agent-tune-kit atk install
 
 ## 证据入口与预算
 
-- **本地运行**：项目 `.atk/adapters/runner.py` 用目标项目的 Python 环境按显式尝试列表调用现有 Agent；每次尝试保存一个 Execution，超时会结束该尝试的同进程组子进程。接入方可用 `infrastructure_exit_codes` 声明桥接器的非零退出码，将认证等运行环境故障标为 `infrastructure_error`，允许按冻结额度重试，并阻止它成为有效效果证据。Prompt、代码及业务 Skill 使用同一协议。Skill 的 `available`、`loaded`、`invoked` 状态分开记录；正式加载门禁核对实际绝对路径与指纹，隔离副本还须说明来源，无法证明时不能正常通过。诊断探针可在冻结许可内改用直接工具或项目测试命令；许可限定 argv、脚本指纹、工作目录、超时、Case、调用数和隔离依据，探针结果不参与正式效果对照。
+- **本地运行**：项目 `.atk/adapters/runner.py` 用目标项目的 Python 环境按显式尝试列表调用现有 Agent；每次尝试保存一个 Execution，超时会结束该尝试的同进程组子进程。接入方可用 `infrastructure_exit_codes` 声明桥接器的非零退出码，将认证等运行环境故障标为 `infra_error`，允许按冻结额度重试，并阻止它成为有效效果证据。未知 Execution 状态会使批次成为 `partial`。Prompt、代码及业务 Skill 使用同一协议。Skill 的 `available`、`loaded`、`invoked` 状态分开记录；正式加载门禁核对实际绝对路径与指纹，隔离副本还须说明来源，无法证明时不能正常通过。诊断探针可在冻结许可内改用直接工具或项目测试命令；许可限定 argv、脚本指纹、工作目录、超时、Case、调用数和隔离依据，探针结果不参与正式效果对照。
 - **预算与对照**：冻结轮次按尝试预留最终 B0／累计版本复验额度；授权重试生成关联旧 Execution 的新批次，保留全部尝试而不挑最好一次。冻结计划必须说明确定性或波动性的判断依据；波动或未知场景默认双方最终各执行 3 次，缩至 2 次须说明原因。效率或成本门槛仅在预先冻结且指标齐全时判定。独立 holdout 按来源组和里程碑记录暴露，已暴露的组不能在后续轮次重用。
 - **运行身份**：冻结计划保存项目运行配置指纹，每批使用自己的配置快照。固定远端组件可声明只读 argv 数组 `version_command`、`expected_version` 和可选的 `version_timeout_seconds`；ATK 在批次前后执行并保存实际版本、命令指纹与失败原因。版本不符或批内漂移不能支持正式效果归因。正式对照要求固定组件身份可核验；未知身份或接入配置漂移返回证据不足或阻塞执行。
 - **批量结果导入**：CSV/JSON/JSONL 按保存的字段映射导入，不重新运行 Agent；缺少尝试边界时不伪造 Execution。

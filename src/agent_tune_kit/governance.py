@@ -258,7 +258,7 @@ def _selected_attempt(attempts: list, max_retries: int):
     visited = {current[0]["id"]}
     while len(visited) < len(attempts):
         children = [item for item in attempts if item[0].get("retry_of") == current[0]["id"]]
-        if len(children) != 1 or current[0].get("status") not in {"timeout", "infrastructure_error"}:
+        if len(children) != 1 or current[0].get("status") not in {"timeout", "infra_error"}:
             return None
         current = children[0]
         if current[0]["id"] in visited:
@@ -436,7 +436,7 @@ def _compare_and_gate_locked(root: Path, request: dict) -> dict:
                 row["verdict"]
                 if row["validity"] == "valid"
                 and row["verdict"] in {"pass", "fail"}
-                and execution.get("status") not in {"timeout", "infrastructure_error"}
+                and execution.get("status") not in {"timeout", "infra_error"}
                 else None
             )
         rows.append(
@@ -695,7 +695,7 @@ def _validate_external_fix_locked(root: Path, request: dict) -> dict:
         execution, row, record = selected
         if (
             row["validity"] != "valid"
-            or execution.get("status") in {"timeout", "infrastructure_error"}
+            or execution.get("status") in {"timeout", "infra_error"}
             or row["verdict"] not in {"pass", "fail"}
             or required_loaded - _loaded_component_ids(root, batch, record)
         ):

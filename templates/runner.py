@@ -61,7 +61,7 @@ def run_one(attempt: dict, case: dict, config: dict, output: Path, timeout: int)
                 status = (
                     "completed"
                     if process.returncode == 0
-                    else "infrastructure_error"
+                    else "infra_error"
                     if process.returncode in config.get("infrastructure_exit_codes", [])
                     else "agent_error"
                 )
@@ -73,7 +73,7 @@ def run_one(attempt: dict, case: dict, config: dict, output: Path, timeout: int)
                 status, returncode = "timeout", None
         response, stderr = redact_output(response), redact_output(stderr)
     except OSError as exc:
-        status, response, stderr, returncode = "infrastructure_error", "", redact_output(str(exc)), None
+        status, response, stderr, returncode = "infra_error", "", redact_output(str(exc)), None
     duration = time.monotonic() - started_clock
     (task_dir / "stderr.log").write_text(stderr, encoding="utf-8")
     loading_path = task_dir / "loading.json"

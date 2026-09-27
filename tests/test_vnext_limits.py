@@ -198,7 +198,7 @@ def test_adapter_declared_infrastructure_exit_is_not_an_agent_failure(tmp_path: 
     batch = run_evaluation(root, request)
     _, records, _ = validate_evidence(root, batch["id"])
     statuses = {record["case_id"]: record["execution"]["status"] for record in records.values()}
-    assert statuses == {"auth": "infrastructure_error", "agent": "agent_error"}
+    assert statuses == {"auth": "infra_error", "agent": "agent_error"}
     execution_ids = {record["case_id"]: record["execution"]["id"] for record in records.values()}
     with pytest.raises(ATKError, match="infrastructure failure"):
         run_evaluation(
@@ -211,6 +211,91 @@ def test_adapter_declared_infrastructure_exit_is_not_an_agent_failure(tmp_path: 
     assert {record["execution"]["status"] for record in retried.values() if record["execution"]["retry_of"]} == {
         "completed"
     }
+
+
+def test_unknown_runner_execution_status_cannot_seal_a_batch(tmp_path: Path) -> None:
+    rows = [{"id": "case", "input": "case", "usage": "optimization", "source_group_id": "g"}]
+    repo, root, dataset, round_data, plan = project(tmp_path, "print('ok')\n", rows)
+    runner = root / "adapters/runner.py"
+    source = runner.read_text()
+    assert '"status": status' in source
+    runner.write_text(source.replace('"status": status', '"status": "infrastructure_error"'))
+    plan["runner_hash"] = digest(runner)
+    freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    batch = run_evaluation(
+        root,
+        {
+            "dataset_id": dataset["id"],
+            "case_ids": ["case"],
+            "purpose": "evaluation",
+            "revision_id": round_data["baseline_revision_id"],
+            "round_id": round_data["id"],
+        },
+    )
+    _, records, _ = validate_evidence(root, batch["id"])
+    assert batch["status"] == "partial"
+    assert batch["invalid_execution_status_ids"] == list(records)
+
+
+def test_infra_error_cannot_be_counted_as_a_case_fix(tmp_path: Path) -> None:
+    rows = [{"id": "case", "input": "case", "usage": "optimization", "source_group_id": "g"}]
+    script = "import sys\nfrom pathlib import Path\nif Path('prompt.txt').read_text() == 'old': sys.exit(75)\nprint('ok')\n"
+    repo, root, dataset, round_data, plan = project(tmp_path, script, rows, infrastructure_exit_codes=[75])
+    freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    request = {
+        "dataset_id": dataset["id"],
+        "case_ids": ["case"],
+        "purpose": "evaluation",
+        "revision_id": round_data["baseline_revision_id"],
+        "round_id": round_data["id"],
+    }
+    baseline = run_evaluation(root, request)
+    draft = prepare_candidate(
+        repo, root, {"round_id": round_data["id"], "primary_issue_id": "issue", "paths": ["prompt.txt"]}
+    )
+    (repo / "prompt.txt").write_text("new")
+    sealed = seal_candidate(repo, root, {"round_id": round_data["id"], "candidate_id": draft["id"]})
+    candidate = run_evaluation(root, {**request, "revision_id": sealed["revision_id"]})
+
+    def score_as_valid(batch: dict, verdict: str) -> str:
+        _, records, _ = validate_evidence(root, batch["id"])
+        record = next(iter(records.values()))
+        return store_assessment(
+            root,
+            {
+                "batch_id": batch["id"],
+                "evaluation_spec": SPEC,
+                "judger": JUDGER,
+                "rows": [
+                    {
+                        "record_id": record["id"],
+                        "dimension": "task_success",
+                        "validity": "valid",
+                        "validity_reason": "",
+                        "verdict": verdict,
+                        "score": None,
+                        "reason": "deliberately optimistic scorer",
+                        "evidence_refs": [{"batch_id": batch["id"], "evidence_id": record["id"]}],
+                        "judger_kind": "deterministic",
+                    }
+                ],
+            },
+        ).parent.name
+
+    result = compare_and_gate(
+        root,
+        {
+            "round_id": round_data["id"],
+            "mode": "incremental",
+            "issue_id": "issue",
+            "candidate_id": draft["id"],
+            "left_assessment_id": score_as_valid(baseline, "fail"),
+            "right_assessment_id": score_as_valid(candidate, "pass"),
+            "left_commit": round_data["baseline_commit"],
+        },
+    )
+    assert result["result"] == "insufficient"
+    assert result["outcome_counts"]["unknown"] == 1
 
 
 def test_retry_keeps_all_attempts_and_budget_blocks_extra_run(tmp_path: Path) -> None:

@@ -489,7 +489,7 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
             raise ATKError("COMPARISON_INVALID", "retry needs distinct targets and a frozen retry allowance")
         for target_id in targets:
             target = executions.get(target_id)
-            if not target or target["execution"]["status"] not in {"timeout", "infrastructure_error"}:
+            if not target or target["execution"]["status"] not in {"timeout", "infra_error"}:
                 raise ATKError("COMPARISON_INVALID", "only an infrastructure failure can be retried")
             previous = target["execution"]
             if (
@@ -715,6 +715,7 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
     if batch.get("batch_id") != batch_id or batch.get("planned_record_ids") != list(expected):
         raise ATKError("INCOMPLETE_EVIDENCE", "runner changed planned attempt identities")
     observed = set()
+    invalid_execution_status_ids = []
     for record in records:
         if not isinstance(record, dict):
             raise ATKError("INCOMPLETE_EVIDENCE", "runner returned an invalid attempt record")
@@ -741,6 +742,15 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
             or any(execution.get(key) != value for key, value in identity.items())
         ):
             raise ATKError("INCOMPLETE_EVIDENCE", "runner changed an attempt identity")
+        if execution.get("status") not in {
+            "completed",
+            "agent_error",
+            "infra_error",
+            "timeout",
+            "cancelled",
+            "unknown",
+        }:
+            invalid_execution_status_ids.append(record_id)
     for field in ("completed_record_ids", "not_started_record_ids"):
         ids = batch.get(field, [])
         if not isinstance(ids, list) or any(not isinstance(item, str) for item in ids) or len(ids) != len(set(ids)):
@@ -810,6 +820,7 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
         and not invalid_artifacts
         and not malformed_records
         and not status_conflict
+        and not invalid_execution_status_ids
         else "partial",
         "runner_exit_code": result.returncode,
         "runner_start_error": runner_start_error,
@@ -817,6 +828,7 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
         "invalid_runner_artifacts": invalid_artifacts,
         "incomplete_records_sha256": digest(raw_records) if malformed_records else None,
         "runner_status_conflict": status_conflict,
+        "invalid_execution_status_ids": invalid_execution_status_ids,
         "run_config_hash": digest(project),
         "runner_hash": digest(runner),
         "fixed_context_hash": digest(fixed_components),
