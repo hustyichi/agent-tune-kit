@@ -18,3 +18,6 @@ checkpoint, or pause for an explicit human exception. Rollback creates a normal
 restoration commit and withdraws the affected suffix; it never rewrites Git history.
 No adopted Candidate means `close_without_adoption`, with no empty commit. Report B0,
 all accepted/rejected candidates, final commit, and limitations. Never push or deploy.
+For a linked external fix Round, use `finish_round: complete_external_fix` only with a
+passing external-fix Validation. Then append a resolved revision to the original Issue
+with the linked Round, component identity, direct evidence refs, and Validation ID.

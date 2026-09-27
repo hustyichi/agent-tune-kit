@@ -143,6 +143,7 @@ def test_local_prompt_candidate_is_compared_and_committed(tmp_path: Path, final_
         "repeatability": "deterministic",
         "final_repeats": 1,
         "budget": {"executions": 20, "candidates": 2},
+        "replay_preparation": {"mode": "stateless", "reason": "fake Agent has no persistent cache"},
         "commit_authorized": True,
         "rollback_on_failure": "B0",
     }

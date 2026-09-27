@@ -24,10 +24,21 @@ cross-repository edit is part of this workflow.
 
 Before any candidate, record a finite plan with scope, protected paths, issue and case
 IDs, calibrated judger/spec/runner/fixed-context hashes, repeat plan, budget, commit
-authorization, and rollback rule. `freeze_round` blocks a dirty baseline. Do not edit
+authorization, rollback rule, and `replay_preparation` (`stateless` with reason, or a
+bounded command that rebuilds caches and artifacts at each checked-out Revision).
+`freeze_round` blocks a dirty baseline. Do not edit
 `.atk/`, the runner, dataset, judge, or validation criteria as part of a candidate.
 If an operation is interrupted, use `inspect_or_recover_operation` and inspect the
 recorded operation before another edit; unknown Git or file state remains blocked.
+
+For a repaired external component, link a new Round to the closed handoff Round and
+record `external_fix_identity`. Its frozen Cases include the original affected Cases
+and protection set. Run an authorized direct-component probe and assess it against the
+frozen direct-check specification; then run `phase=external_fix` once on the new B0
+and assess all frozen Case/repeat slots. `validate_external_fix` requires the direct
+Assessment and evidence refs plus the end-to-end Assessment. Only a passing result
+allows `finish_round: complete_external_fix` and a resolved revision of the original
+Issue. A workaround leaves that Issue open.
 
 End every Skill with: object IDs, completed action, result, artifact paths, blocking
 reason if any, and the next required action. Do not claim online/general improvement

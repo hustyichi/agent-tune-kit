@@ -9,6 +9,9 @@ Read `../WORKFLOW.md`. Choose an explicit action: `run`, `import`, or `reassess`
 For run, use `run_evaluation` with a dataset ID, Case IDs, Revision ID, round ID (if
 frozen), repeat count, timeout, purpose, and `phase=incremental/final`. Final runs
 must use both frozen sides once; their attempts are reserved before candidate work.
+For a linked external fix Round, use `phase=external_fix` on the new B0 only; include
+the original affected and protection Cases. Its direct component check is a separate
+authorized `diagnostic_probe` with a passing Assessment, never the end-to-end run.
 For an authorized infrastructure retry, pass `retry_batch_id` and the failed
 `retry_execution_ids`; keep the same Round, Revision, dataset, purpose and phase.
 The new batch retains every earlier Execution and adds linked retries. Never rerun a

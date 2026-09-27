@@ -30,7 +30,9 @@ JUDGER = {
 }
 
 
-def project(tmp_path: Path, script: str, rows: list[dict]) -> tuple[Path, Path, dict, dict, dict]:
+def project(
+    tmp_path: Path, script: str, rows: list[dict], issue_ids: list[str] | None = None
+) -> tuple[Path, Path, dict, dict, dict]:
     repo = tmp_path / "agent"
     repo.mkdir()
     git(repo, "init", "-q")
@@ -67,11 +69,12 @@ def project(tmp_path: Path, script: str, rows: list[dict]) -> tuple[Path, Path, 
             "mapping": {"id": "id", "input": "input", "usage": "usage", "source_group_id": "source_group_id"},
         },
     )
-    round_data = create_round(repo, root, {"issue_ids": ["issue"]})
+    issue_ids = issue_ids or ["issue"]
+    round_data = create_round(repo, root, {"issue_ids": issue_ids})
     plan = {
         "allowed_paths": ["prompt.txt"],
         "protected_paths": ["agent.py"],
-        "issue_ids": ["issue"],
+        "issue_ids": issue_ids,
         "evaluation_spec_hash": digest(SPEC),
         "judger_hash": digest(JUDGER),
         "runner_hash": digest(root / "adapters/runner.py"),
@@ -82,6 +85,7 @@ def project(tmp_path: Path, script: str, rows: list[dict]) -> tuple[Path, Path, 
         "repeatability": "deterministic",
         "final_repeats": 1,
         "budget": {"executions": 12, "probes": 0, "candidates": 1},
+        "replay_preparation": {"mode": "stateless", "reason": "fake Agent has no persistent cache"},
         "commit_authorized": True,
         "rollback_on_failure": "B0",
     }

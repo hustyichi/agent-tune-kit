@@ -109,6 +109,12 @@ def _round(root: Path, round_id: str) -> dict:
     return read_json(_round_path(root, round_id) / "round.json")
 
 
+def _latest_issue(root: Path, round_id: str, issue_id: str) -> dict | None:
+    folder = _round_path(root, round_id) / "issues" / safe_id(issue_id)
+    revisions = list(folder.glob("revision-*.json"))
+    return read_json(max(revisions, key=lambda path: int(path.stem.split("-")[1]))) if revisions else None
+
+
 def _write_round(root: Path, round_data: dict) -> None:
     round_data["state_version"] += 1
     write_json(_round_path(root, round_data["id"]) / "round.json", round_data)
@@ -119,6 +125,23 @@ def create_round(repo: Path, root: Path, request: dict) -> dict:
         verify_repo(repo)
         if git(repo, "diff", "--name-only", "-z"):
             raise ATKError("DIRTY_BASELINE", "tracked working tree must be clean for B0")
+        previous_round_id = request.get("previous_round_id")
+        if previous_round_id:
+            previous = _round(root, previous_round_id)
+            if request.get("external_fix_identity") and (
+                previous["status"] not in {"closed_without_adoption", "completed"}
+                or not any(
+                    (issue := _latest_issue(root, previous_round_id, issue_id))
+                    and issue["disposition"] == "external_handoff"
+                    and issue["resolution"] != "resolved"
+                    for issue_id in set(request.get("issue_ids", [])) & set(previous["issues"])
+                )
+            ):
+                raise ATKError(
+                    "INCOMPLETE_EVIDENCE", "external fix Round needs a closed source Round and open handoff Issue"
+                )
+        elif request.get("external_fix_identity"):
+            raise ATKError("INCOMPLETE_EVIDENCE", "external fix needs a linked previous Round")
         for old in (root / "rounds").glob("*/round.json"):
             if read_json(old).get("status") in {"ready", "optimizing", "finalizing"}:
                 raise ATKError("WORKSPACE_CONFLICT", "another active round exists")
@@ -174,11 +197,32 @@ def freeze_round(repo: Path, root: Path, request: dict) -> dict:
             "repeatability",
             "final_repeats",
             "budget",
+            "replay_preparation",
             "commit_authorized",
             "rollback_on_failure",
         }
-        if required - plan.keys() or not plan["commit_authorized"] or not plan["allowed_paths"]:
+        external_fix_round = bool(value.get("external_fix_identity"))
+        if required - plan.keys() or (
+            not external_fix_round and (not plan["commit_authorized"] or not plan["allowed_paths"])
+        ):
             raise ATKError("INCOMPLETE_EVIDENCE", f"incomplete frozen plan: {sorted(required - plan.keys())}")
+        if external_fix_round:
+            previous_folder = _round_path(root, value["previous_round_id"])
+            previous_plan = read_json(previous_folder / "plan.json")
+            affected = {
+                case_id
+                for issue_id in value["issues"]
+                if (issue := _latest_issue(root, value["previous_round_id"], issue_id))
+                and issue["disposition"] == "external_handoff"
+                and issue["resolution"] != "resolved"
+                for case_id in issue["case_ids"]
+            }
+            if (
+                not affected
+                or not affected <= set(plan["case_ids"])
+                or not set(previous_plan["protection_case_ids"]) <= set(plan["protection_case_ids"])
+            ):
+                raise ATKError("COMPARISON_INVALID", "external fix plan must retain affected and protection Cases")
         if (
             not plan["case_ids"]
             or len(plan["case_ids"]) != len(set(plan["case_ids"]))
@@ -194,10 +238,11 @@ def freeze_round(repo: Path, root: Path, request: dict) -> dict:
         if (
             not isinstance(budget, dict)
             or type(budget.get("executions")) is not int
-            or budget["executions"] < 2 * len(set(plan["case_ids"])) * plan["final_repeats"]
+            or budget["executions"]
+            < (1 if external_fix_round else 2) * len(set(plan["case_ids"])) * plan["final_repeats"]
             or any(type(budget.get(key, 0)) is not int or budget.get(key, 0) < 0 for key in ("probes", "candidates"))
         ):
-            raise ATKError("BUDGET_EXHAUSTED", "budget must reserve both sides of the final validation")
+            raise ATKError("BUDGET_EXHAUSTED", "budget must reserve the frozen final validation")
         if type(plan.get("max_retries_per_slot", 0)) is not int or plan.get("max_retries_per_slot", 0) < 0:
             raise ATKError("COMPARISON_INVALID", "max_retries_per_slot must be non-negative")
         if plan.get("objective", "quality") not in {"quality", "efficiency"}:
@@ -218,6 +263,33 @@ def freeze_round(repo: Path, root: Path, request: dict) -> dict:
                 raise ATKError("COMPARISON_INVALID", f"{key} must be non-negative")
         if set(plan.get("metric_limits", {})) - {"max_total_cost", "max_mean_duration_seconds", "max_mean_tool_calls"}:
             raise ATKError("COMPARISON_INVALID", "unsupported metric limit")
+        preparation = plan["replay_preparation"]
+        if not isinstance(preparation, dict) or preparation.get("mode") not in {"stateless", "command"}:
+            raise ATKError("NOT_REPLAYABLE", "replay preparation must be frozen before candidate work")
+        if preparation["mode"] == "stateless" and not preparation.get("reason"):
+            raise ATKError("NOT_REPLAYABLE", "stateless replay needs a recorded cache assessment")
+        if preparation["mode"] == "command" and (
+            not isinstance(preparation.get("argv"), list)
+            or not preparation["argv"]
+            or any(not isinstance(part, str) or not part for part in preparation["argv"])
+            or type(preparation.get("timeout_seconds")) is not int
+            or preparation["timeout_seconds"] < 1
+        ):
+            raise ATKError("NOT_REPLAYABLE", "replay preparation needs command arguments and a finite timeout")
+        dependencies = plan.get("blocked_by_issue_ids_by_issue", {})
+        workaround_ids = plan.get("workaround_issue_ids", [])
+        if (
+            not isinstance(dependencies, dict)
+            or not isinstance(workaround_ids, list)
+            or set(workaround_ids) - set(plan["issue_ids"])
+            or any(
+                issue_id not in plan["issue_ids"]
+                or not isinstance(blockers, list)
+                or set(blockers) - set(plan["issue_ids"])
+                for issue_id, blockers in dependencies.items()
+            )
+        ):
+            raise ATKError("COMPARISON_INVALID", "Issue dependencies or workaround scope are outside the plan")
         write_json(_round_path(root, value["id"]) / "plan.json", plan, immutable=True)
         value["status"] = "ready"
         _write_round(root, value)
@@ -234,6 +306,8 @@ def prepare_candidate(repo: Path, root: Path, request: dict) -> dict:
         plan = read_json(_round_path(root, value["id"]) / "plan.json")
         if value["status"] not in {"ready", "optimizing"} or value["pending_candidate_id"]:
             raise ATKError("WORKSPACE_CONFLICT", "round is not ready for another candidate")
+        if value.get("external_fix_identity"):
+            raise ATKError("WORKSPACE_CONFLICT", "external fix Round verifies its new B0 without an Agent candidate")
         exposure_path = root / "source-exposure.json"
         if exposure_path.exists() and any(
             entry["round_id"] == value["id"] for entry in read_json(exposure_path).get("groups", {}).values()
@@ -245,8 +319,25 @@ def prepare_candidate(repo: Path, root: Path, request: dict) -> dict:
         if changed_paths(repo) != set(value["baseline_untracked"]):
             raise ATKError("DIRTY_BASELINE", "workspace has unaccounted changes before candidate")
         issue_id = request["primary_issue_id"]
-        if issue_id not in plan["issue_ids"] or request.get("blocked_by_issue_ids"):
-            raise ATKError("WORKSPACE_CONFLICT", "issue is outside frozen plan or blocked")
+        if issue_id not in plan["issue_ids"]:
+            raise ATKError("WORKSPACE_CONFLICT", "issue is outside frozen plan")
+        change_kind = request.get("change_kind", "fix")
+        if change_kind not in {"fix", "workaround"}:
+            raise ATKError("COMPARISON_INVALID", "candidate change_kind is invalid")
+        blocked = set(request.get("blocked_by_issue_ids", [])) | set(
+            plan.get("blocked_by_issue_ids_by_issue", {}).get(issue_id, [])
+        )
+        issue = _latest_issue(root, value["id"], issue_id)
+        if issue and issue["disposition"] == "external_handoff" and issue["resolution"] != "resolved":
+            if change_kind != "workaround":
+                raise ATKError("WORKSPACE_CONFLICT", "out-of-scope Issue cannot be a local fix")
+            blocked.add(issue_id)
+        for blocker_id in blocked:
+            blocker = _latest_issue(root, value["id"], blocker_id)
+            if blocker_id not in plan["issue_ids"] or not blocker or blocker["disposition"] != "external_handoff":
+                raise ATKError("INCOMPLETE_EVIDENCE", f"blocking Issue is not a recorded handoff: {blocker_id}")
+        if change_kind == "workaround" and (not blocked or blocked - set(plan.get("workaround_issue_ids", []))):
+            raise ATKError("WORKSPACE_CONFLICT", "workaround needs a frozen authorization for its blocking Issues")
         paths = request["paths"]
         if not paths or len(paths) != len(set(paths)):
             raise ATKError("SCOPE_VIOLATION", "candidate must declare distinct paths")
@@ -265,11 +356,11 @@ def prepare_candidate(repo: Path, root: Path, request: dict) -> dict:
             "created_at": now(),
             "round_id": value["id"],
             "primary_issue_id": issue_id,
-            "related_issue_ids": request.get("related_issue_ids", []),
+            "related_issue_ids": sorted((set(request.get("related_issue_ids", [])) | blocked) - {issue_id}),
             "parent_commit": value["current_commit"],
             "parent_revision_id": value.get("current_revision_id"),
-            "blocked_by_issue_ids": [],
-            "change_kind": request.get("change_kind", "fix"),
+            "blocked_by_issue_ids": sorted(blocked),
+            "change_kind": change_kind,
             "declared_paths": paths,
             "content_status": "draft",
         }
@@ -383,6 +474,13 @@ def decide_candidate(repo: Path, root: Path, request: dict) -> dict:
             raise ATKError("COMPARISON_INVALID", "validation does not match candidate and parent")
         if action == "keep" and validation["result"] != "pass" and not request.get("override"):
             raise ATKError("COMPARISON_INVALID", "keep requires a passing validation or explicit override")
+        if action == "keep":
+            blockers = [_latest_issue(root, value["id"], issue_id) for issue_id in candidate["blocked_by_issue_ids"]]
+            if any(issue is None for issue in blockers):
+                raise ATKError("INCOMPLETE_EVIDENCE", "candidate blocking Issue disappeared")
+            unresolved = [issue for issue in blockers if issue["resolution"] != "resolved"]
+            if unresolved and (candidate["change_kind"] != "workaround" or validation["result"] != "pass"):
+                raise ATKError("WORKSPACE_CONFLICT", "unresolved external Issue blocks candidate adoption")
         if action not in {"keep", "reject", "defer"}:
             raise ATKError("WORKSPACE_CONFLICT", f"unsupported candidate action: {action}")
         operation = {
@@ -623,6 +721,13 @@ def temporary_revision(repo: Path, root: Path, round_id: str, target_commit: str
         if target_commit not in known:
             raise ATKError("REVISION_MISMATCH", "temporary replay target is not a recorded checkpoint")
         paths = set(filter(None, git(repo, "diff", "--name-only", "-z", target_commit, "HEAD").decode().split("\0")))
+        for name in paths:
+            current = _git_file(repo, "HEAD", name)
+            if content(repo, name) != current:
+                raise ATKError("WORKSPACE_CONFLICT", f"replay path differs from current commit: {name}")
+        preparation = read_json(_round_path(root, round_id) / "plan.json").get("replay_preparation")
+        if not preparation:
+            raise ATKError("NOT_REPLAYABLE", "Round has no frozen replay preparation")
         operation = {
             "id": new_id("operation"),
             "action": "temporary_replay",
@@ -631,20 +736,47 @@ def temporary_revision(repo: Path, root: Path, round_id: str, target_commit: str
             "before_commit": value["current_commit"],
             "target_commit": target_commit,
             "paths": sorted(paths),
+            "replay_preparation_hash": digest(preparation),
         }
         op_path = _round_path(root, round_id) / "operations" / f"{operation['id']}.json"
         write_json(op_path, operation, immutable=True)
-        if paths:
-            git(repo, "--literal-pathspecs", "restore", f"--source={target_commit}", "--worktree", "--", *sorted(paths))
-        operation["stage"] = "switched"
-        write_json(op_path, operation)
+        ready = False
         try:
+            operation["stage"] = "switching"
+            write_json(op_path, operation)
+            if paths:
+                git(
+                    repo,
+                    "--literal-pathspecs",
+                    "restore",
+                    f"--source={target_commit}",
+                    "--worktree",
+                    "--",
+                    *sorted(paths),
+                )
+            if any(content(repo, name) != _git_file(repo, target_commit, name) for name in paths):
+                raise ATKError("GIT_OPERATION_INTERRUPTED", "target source differs after replay switch")
+            _prepare_replay(repo, preparation)
+            if (
+                head(repo) != value["current_commit"]
+                or staged_paths(repo)
+                or changed_paths(repo) != paths | set(value["baseline_untracked"])
+                or any(content(repo, name) != _git_file(repo, target_commit, name) for name in paths)
+            ):
+                raise ATKError("GIT_OPERATION_INTERRUPTED", "replay preparation changed source or Git state")
+            operation["stage"] = "switched"
+            write_json(op_path, operation)
+            ready = True
             yield
         finally:
             if head(repo) != value["current_commit"] or staged_paths(repo):
                 raise ATKError("GIT_OPERATION_INTERRUPTED", "HEAD or index changed during temporary replay")
-            if any(content(repo, name) != _git_file(repo, target_commit, name) for name in paths):
-                raise ATKError("GIT_OPERATION_INTERRUPTED", "target source changed during replay; inspection required")
+            if any(
+                content(repo, name)
+                not in {_git_file(repo, target_commit, name), _git_file(repo, value["current_commit"], name)}
+                for name in paths
+            ):
+                raise ATKError("GIT_OPERATION_INTERRUPTED", "replay source has unknown content; inspection required")
             if paths:
                 git(
                     repo,
@@ -655,10 +787,24 @@ def temporary_revision(repo: Path, root: Path, round_id: str, target_commit: str
                     "--",
                     *sorted(paths),
                 )
+            _prepare_replay(repo, preparation)
             if changed_paths(repo) != set(value["baseline_untracked"]):
                 raise ATKError("GIT_OPERATION_INTERRUPTED", "temporary replay did not restore starting checkpoint")
-            operation["stage"] = "complete"
+            operation["stage"] = "complete" if ready else "aborted"
             write_json(op_path, operation)
+
+
+def _prepare_replay(repo: Path, preparation: dict) -> None:
+    if preparation["mode"] == "stateless":
+        return
+    try:
+        result = subprocess.run(
+            preparation["argv"], cwd=repo, capture_output=True, timeout=preparation["timeout_seconds"], check=False
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise ATKError("NOT_REPLAYABLE", f"replay preparation failed: {exc}") from exc
+    if result.returncode:
+        raise ATKError("NOT_REPLAYABLE", f"replay preparation exited with {result.returncode}")
 
 
 @contextmanager

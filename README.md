@@ -25,10 +25,12 @@ uvx --from agent-tune-kit atk install
 | `atk-eval` | 显式运行、导入或重判；接收批量结果及 Langfuse JSON/JSONL/CSV/`.gz` 文件 |
 | `atk-diagnose` | 从证据调查竞争解释，记录多个 Issue、范围外交接和复验条件 |
 | `atk-optimize` | 在干净的 Git B0 上按允许路径准备并封存一个候选 |
-| `atk-validate` | 对比候选与父检查点，最后对比累计版本与 B0 |
+| `atk-validate` | 对比候选与父检查点、累计版本与 B0；外部修复后验证新 B0 |
 | `atk-decide` | 保留并提交、拒绝并恢复、回退已接受后缀或结束本轮 |
 
 核心顺序：`atk-init → atk-dataset（按需）→ atk-eval → atk-diagnose → [atk-optimize → atk-validate → atk-decide]×N → atk-validate（最终）→ atk-decide`。一轮只有一个未决候选；通过的候选在原工程形成一个本地 commit，失败候选保存证据后恢复父检查点。最终门禁以冻结的完整 Case、保护集与重复计划验证累计效果。不会自动 push、发布、部署、改写 Git 历史或修改其他仓库。
+
+范围外组件修复后，可将关闭的交接 Round 链接到新 Round，登记修复制品身份，在新 B0 分别执行获授权的组件直接探针与受影响 Case／保护集的端到端复验。两份 Assessment 都通过后才能完成新 Round 并把原 Issue 标为已解决；Agent 端规避仍保留原缺陷为开放。旧 Revision 在原目录复跑前须冻结缓存／制品重建命令或无状态依据。
 
 ## 证据入口与预算
 
@@ -65,4 +67,4 @@ python3 scripts/validate_skill_pack.py
 uv build --no-sources
 ```
 
-离线测试使用小型 Git 仓库和假 Agent。Magic Workspace 的真实轨迹导入和单 Case 自动加载业务 Skill 已单独验证；已知责任层案例、外部修复后复验与多 Case 链路仍待验收。尚未确认安全隔离的目标 Agent 外部写操作不得在正式跑测中启动。
+离线测试使用小型 Git 仓库和假 Agent。Magic Workspace 的真实轨迹导入和单 Case 自动加载业务 Skill 已单独验证；外部修复的新轮协议有合成测试，真实组件修复案例、已知责任层案例与多 Case 链路仍待验收。尚未确认安全隔离的目标 Agent 外部写操作不得在正式跑测中启动。

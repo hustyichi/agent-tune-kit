@@ -98,16 +98,27 @@ def store_diagnosis(root: Path, request: dict) -> dict:
                     "resolution needs a linked new Round, fix identity, direct check, and end-to-end Validation",
                 )
             new_round = read_json(_round_folder(root, fix["new_round_id"]) / "round.json")
-            if new_round.get("previous_round_id") != round_data["id"]:
-                raise ATKError("INCOMPLETE_EVIDENCE", "fix Round does not link back to the original Round")
+            if (
+                new_round.get("previous_round_id") != round_data["id"]
+                or issue["id"] not in new_round["issues"]
+                or new_round.get("external_fix_identity") != fix["component_identity"]
+            ):
+                raise ATKError("INCOMPLETE_EVIDENCE", "fix Round does not link Issue and component identity")
             linked_validation = read_json(
                 _round_folder(root, fix["new_round_id"])
                 / "validations"
                 / safe_id(fix["end_to_end_validation_id"])
                 / "validation.json"
             )
-            if linked_validation["result"] != "pass":
-                raise ATKError("COMPARISON_INVALID", "external fix end-to-end Validation did not pass")
+            if (
+                new_round["status"] != "completed"
+                or linked_validation["mode"] != "external_fix"
+                or linked_validation["result"] != "pass"
+                or linked_validation["component_identity"] != fix["component_identity"]
+                or linked_validation["direct_evidence_refs"] != fix["direct_evidence_refs"]
+                or not set(issue["case_ids"]) <= set(linked_validation["case_ids"])
+            ):
+                raise ATKError("COMPARISON_INVALID", "external fix end-to-end Validation did not cover affected Cases")
         for ref in issue["evidence_refs"] + issue["mechanism_evidence_refs"]:
             if not isinstance(ref, dict) or not ref.get("batch_id") or not ref.get("evidence_id"):
                 raise ATKError("INCOMPLETE_EVIDENCE", "Issue evidence reference is malformed")
@@ -245,6 +256,8 @@ def compare_and_gate(root: Path, request: dict) -> dict:
     folder = _round_folder(root, request["round_id"])
     round_data = read_json(folder / "round.json")
     plan = read_json(folder / "plan.json")
+    if round_data.get("external_fix_identity"):
+        raise ATKError("COMPARISON_INVALID", "external fix Round needs one-sided new B0 validation")
     mode = request["mode"]
     if mode not in {"incremental", "final"}:
         raise ATKError("COMPARISON_INVALID", "mode must be incremental or final")
@@ -449,6 +462,123 @@ def compare_and_gate(root: Path, request: dict) -> dict:
     return validation
 
 
+def validate_external_fix(root: Path, request: dict) -> dict:
+    folder = _round_folder(root, request["round_id"])
+    round_data = read_json(folder / "round.json")
+    plan = read_json(folder / "plan.json")
+    if not round_data.get("external_fix_identity") or round_data["status"] not in {"ready", "optimizing"}:
+        raise ATKError("WORKSPACE_CONFLICT", "external fix validation needs an open linked Round")
+    refs = request.get("direct_evidence_refs", [])
+    if not isinstance(refs, list) or not refs or not request.get("direct_assessment_id"):
+        raise ATKError("INCOMPLETE_EVIDENCE", "external fix needs separate direct-check evidence")
+    direct_manifest, direct_rows = read_assessment(root, request["direct_assessment_id"])
+    if direct_manifest["judger_readiness"] != "calibrated":
+        raise ATKError("JUDGER_INVALID", "direct component check needs a calibrated Assessment")
+    direct_dimension = request.get("direct_dimension", "task_success")
+    direct_batches = []
+    for ref in refs:
+        if not isinstance(ref, dict) or not ref.get("batch_id") or not ref.get("evidence_id"):
+            raise ATKError("INCOMPLETE_EVIDENCE", "direct-check evidence reference is malformed")
+        direct_batch, _, index = validate_evidence(root, ref["batch_id"])
+        permission = next(
+            (
+                item
+                for item in plan.get("probe_permissions", [])
+                if item.get("id") == direct_batch.get("probe_authorization_id")
+            ),
+            None,
+        )
+        if (
+            direct_batch.get("purpose") != "diagnostic_probe"
+            or direct_batch.get("round_id") != round_data["id"]
+            or direct_batch.get("revision_id") != round_data["baseline_revision_id"]
+            or direct_batch.get("status") != "sealed"
+            or not permission
+            or permission.get("kind") != "direct_component"
+            or permission.get("component_identity") != round_data["external_fix_identity"]
+            or permission.get("evaluation_spec_hash") != direct_manifest["evaluation_spec_hash"]
+            or direct_batch.get("runner_hash") != plan["runner_hash"]
+            or direct_manifest["batch_id"] != direct_batch["id"]
+            or ref["evidence_id"] not in index
+            or not any(
+                row["record_id"] == ref["evidence_id"]
+                and row["dimension"] == direct_dimension
+                and row["validity"] == "valid"
+                and row["verdict"] == "pass"
+                for row in direct_rows
+            )
+        ):
+            raise ATKError(
+                "INCOMPLETE_EVIDENCE", "direct check needs a passing authorized component probe on the new B0"
+            )
+        direct_batches.append(direct_batch)
+    dimension = request.get("dimension", "task_success")
+    manifest, batch, slots = _assessment_slots(root, request["assessment_id"], dimension)
+    if manifest["judger_readiness"] != "calibrated" or digest(manifest["judger"]) != plan["judger_hash"]:
+        raise ATKError("JUDGER_INVALID", "external fix needs the frozen calibrated judger")
+    if manifest["evaluation_spec_hash"] != plan["evaluation_spec_hash"]:
+        raise ATKError("COMPARISON_INVALID", "evaluation_spec differs from frozen plan")
+    if (
+        batch.get("status") != "sealed"
+        or batch.get("phase") != "external_fix"
+        or batch.get("round_id") != round_data["id"]
+        or batch.get("revision_id") != round_data["baseline_revision_id"]
+        or batch.get("runner_hash") != plan["runner_hash"]
+        or batch.get("fixed_context_hash") != plan["fixed_context_hash"]
+        or any(direct.get("run_config_hash") != batch.get("run_config_hash") for direct in direct_batches)
+    ):
+        raise ATKError("COMPARISON_INVALID", "external fix run differs from the frozen new B0")
+    expected = {(case_id, repeat) for case_id in plan["case_ids"] for repeat in range(1, plan["final_repeats"] + 1)}
+    if {(case_id, repeat) for case_id, _, repeat in slots} != expected or len(slots) != len(expected):
+        raise ATKError("COMPARISON_INVALID", "external fix run lacks frozen Cases or repeats")
+    actual_hashes = {entry["component_id"]: entry.get("actual_sha256") for entry in batch.get("actual_components", [])}
+    required_loaded = set(plan.get("required_loaded_component_ids", []))
+    result = "pass"
+    case_scores: dict[str, float] = defaultdict(float)
+    for (case_id, _, _), attempts in slots.items():
+        selected = _selected_attempt(attempts, plan.get("max_retries_per_slot", 0))
+        if selected is None:
+            result = "insufficient"
+            continue
+        execution, row, record = selected
+        loaded = {
+            entry.get("component_id")
+            for entry in record.get("loading_evidence", [])
+            if entry.get("state") in {"loaded", "invoked"}
+            and entry.get("fingerprint") == actual_hashes.get(entry.get("component_id"))
+        }
+        if (
+            row["validity"] != "valid"
+            or execution.get("status") in {"timeout", "infrastructure_error"}
+            or row["verdict"] not in {"pass", "fail"}
+            or required_loaded - loaded
+        ):
+            result = "insufficient"
+        elif row["verdict"] == "fail" and result == "pass":
+            result = "no_effect"
+        elif row["verdict"] == "pass":
+            case_scores[case_id] += 1 / plan["final_repeats"]
+    validation = {
+        "schema_version": 2,
+        "id": new_id("validation"),
+        "created_at": now(),
+        "round_id": round_data["id"],
+        "mode": "external_fix",
+        "assessment_id": request["assessment_id"],
+        "revision_id": batch["revision_id"],
+        "final_commit": round_data["current_commit"],
+        "component_identity": round_data["external_fix_identity"],
+        "direct_evidence_refs": refs,
+        "direct_assessment_id": request["direct_assessment_id"],
+        "result": result,
+        "case_ids": sorted(plan["case_ids"]),
+        "case_scores": dict(case_scores),
+        "plan_hash": digest(plan),
+    }
+    write_json(folder / "validations" / validation["id"] / "validation.json", validation, immutable=True)
+    return validation
+
+
 def finish_round(repo: Path, root: Path, request: dict) -> dict:
     with locked(root):
         return _finish_round_locked(repo, root, request)
@@ -463,7 +593,22 @@ def _finish_round_locked(repo: Path, root: Path, request: dict) -> dict:
     if value["pending_candidate_id"] or changed_paths(repo) != set(value["baseline_untracked"]):
         raise ATKError("WORKSPACE_CONFLICT", "pending candidate or extra workspace changes")
     action = request["action"]
-    if action == "complete":
+    if action == "complete_external_fix":
+        validation = read_json(folder / "validations" / safe_id(request["validation_id"]) / "validation.json")
+        if (
+            not value.get("external_fix_identity")
+            or value["active_candidate_ids"]
+            or validation["mode"] != "external_fix"
+            or validation["result"] != "pass"
+            or validation["round_id"] != value["id"]
+            or validation["component_identity"] != value["external_fix_identity"]
+            or validation["final_commit"] != head(repo)
+        ):
+            raise ATKError("COMPARISON_INVALID", "external fix lacks passing direct and end-to-end checks")
+        value["status"] = "completed"
+    elif action == "complete":
+        if value.get("external_fix_identity"):
+            raise ATKError("COMPARISON_INVALID", "external fix Round needs its dedicated completion gate")
         validation = read_json(folder / "validations" / safe_id(request["validation_id"]) / "validation.json")
         if validation["mode"] != "final" or validation["result"] != "pass" or validation["final_commit"] != head(repo):
             raise ATKError("COMPARISON_INVALID", "current commit lacks passing final validation")

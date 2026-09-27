@@ -19,7 +19,14 @@ from .checkpoints import (
 from .core import ATKError, store_assessment, write_json
 from .evidence import import_evidence
 from .execution import initialize_project, run_evaluation, store_dataset
-from .governance import compare_and_gate, finish_round, knowledge_applicability, store_diagnosis, store_knowledge
+from .governance import (
+    compare_and_gate,
+    finish_round,
+    knowledge_applicability,
+    store_diagnosis,
+    store_knowledge,
+    validate_external_fix,
+)
 from .installer import main as installer_main
 
 
@@ -46,6 +53,7 @@ def internal_main(argv: list[str]) -> int:
         "prepare_candidate": lambda: prepare_candidate(repo, root, request),
         "seal_candidate": lambda: seal_candidate(repo, root, request),
         "compare_and_gate": lambda: compare_and_gate(root, request),
+        "validate_external_fix": lambda: validate_external_fix(root, request),
         "decide_candidate": lambda: decide_candidate(repo, root, request),
         "rollback_to": lambda: rollback_to(repo, root, request),
         "inspect_or_recover_operation": lambda: inspect_or_recover_operation(repo, root, request),

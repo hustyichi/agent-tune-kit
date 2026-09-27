@@ -182,15 +182,28 @@ def _reserve_run(root: Path, request: dict, cases: dict, attempts: list[dict], b
         ):
             raise ATKError("COMPARISON_INVALID", "formal execution is outside the frozen Round")
         phase = request.get("phase", "incremental")
-        if purpose == "evaluation" and phase not in {"incremental", "final"}:
-            raise ATKError("COMPARISON_INVALID", "evaluation phase must be incremental or final")
+        if purpose == "evaluation" and phase not in {"incremental", "final", "external_fix"}:
+            raise ATKError("COMPARISON_INVALID", "evaluation phase is not recognized")
+        if purpose == "evaluation" and round_data.get("external_fix_identity") and phase != "external_fix":
+            raise ATKError("COMPARISON_INVALID", "external fix Round needs its dedicated verification phase")
+        if (
+            purpose == "evaluation"
+            and phase == "external_fix"
+            and (
+                not round_data.get("external_fix_identity")
+                or round_data["pending_candidate_id"]
+                or round_data["active_candidate_ids"]
+                or request["revision_id"] != round_data["baseline_revision_id"]
+            )
+        ):
+            raise ATKError("COMPARISON_INVALID", "external fix verification must run on the new B0")
         if (
             purpose == "evaluation"
             and phase == "final"
             and (round_data["pending_candidate_id"] or not round_data["active_candidate_ids"])
         ):
             raise ATKError("COMPARISON_INVALID", "final runs require a fixed accepted Revision")
-        if purpose == "evaluation" and phase == "final" and not request.get("retry_batch_id"):
+        if purpose == "evaluation" and phase in {"final", "external_fix"} and not request.get("retry_batch_id"):
             selected = request.get("case_ids", [])
             if (
                 len(selected) != len(set(selected))
@@ -234,10 +247,10 @@ def _reserve_run(root: Path, request: dict, cases: dict, attempts: list[dict], b
             raise ATKError("COMPARISON_INVALID", "retry batch was already continued; use its successor")
         if (
             purpose == "evaluation"
-            and phase == "final"
+            and phase in {"final", "external_fix"}
             and not request.get("retry_batch_id")
             and any(
-                reservation.get("phase") == "final" and reservation.get("revision_id") == request["revision_id"]
+                reservation.get("phase") == phase and reservation.get("revision_id") == request["revision_id"]
                 for reservation in usage["reservations"]
             )
         ):
@@ -246,10 +259,16 @@ def _reserve_run(root: Path, request: dict, cases: dict, attempts: list[dict], b
         limit = budget.get(counter, 0)
         if type(limit) is not int or limit < 0 or usage[counter] + len(attempts) > limit:
             raise ATKError("BUDGET_EXHAUSTED", f"{counter} budget cannot cover {len(attempts)} attempts")
-        if purpose == "evaluation" and phase != "final":
-            final_needed = 2 * len(set(plan["case_ids"])) * plan["final_repeats"]
+        if purpose == "evaluation" and phase not in {"final", "external_fix"}:
+            final_needed = (
+                (1 if round_data.get("external_fix_identity") else 2)
+                * len(set(plan["case_ids"]))
+                * plan["final_repeats"]
+            )
             final_spent = sum(
-                reservation["attempts"] for reservation in usage["reservations"] if reservation.get("phase") == "final"
+                reservation["attempts"]
+                for reservation in usage["reservations"]
+                if reservation.get("phase") in {"final", "external_fix"}
             )
             if limit - usage["executions"] - len(attempts) < max(0, final_needed - final_spent):
                 raise ATKError("BUDGET_EXHAUSTED", "run would consume the reserved final validation budget")
@@ -452,6 +471,9 @@ def run_evaluation(root: Path, request: dict) -> dict:
         "source_type": "local_runner",
         "dataset_id": request["dataset_id"],
         "round_id": request.get("round_id"),
+        "probe_authorization_id": request.get("probe_authorization_id")
+        if request["purpose"] == "diagnostic_probe"
+        else None,
         "supersedes_batch_id": retry_batch_id,
         "revision_id": request["revision_id"],
         "revision_commit": request.get("revision_commit"),

@@ -20,6 +20,9 @@ required metrics yield `insufficient`. Cost includes all attempts, including ret
 Verify the metric source before trusting cost or tool counts; the default runner's
 `metrics.json` sidecar alone does not prove that the target Agent could not edit them.
 Call `compare_and_gate` with exact Assessment IDs and parent/B0 commit.
+For a linked external fix Round, call `validate_external_fix` with the new B0
+Assessment, passing direct-probe Assessment, and direct evidence refs. There is no
+Agent Candidate or old-B0 comparison in this verification Round.
 Report `pass/no_effect/regression/insufficient/invalid` with fixed, regressed, stable,
 and unknown Cases. A single-run exploratory improvement is not final proof for a
 stochastic or unknown Agent. Do not edit the Candidate or create a commit here.

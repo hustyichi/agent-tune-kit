@@ -13,6 +13,8 @@ change the repair location. Use source/contract inspection first; run a bounded
 probe as an original execution or as effect validation.
 Record each probe permission in the frozen plan (or an `analysis_plan` before freeze):
 ID, configured command hash, runner hash, allowed Case IDs and isolation reference.
+For a post-fix direct check also freeze `kind=direct_component`, the repaired
+`component_identity`, and its `evaluation_spec_hash` in that permission.
 Set a separate `budget.probes`; zero is the default. The reference records a checked
 setup and does not create an OS sandbox for the target Agent.
 

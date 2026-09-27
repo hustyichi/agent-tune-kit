@@ -89,6 +89,7 @@ def test_business_skill_must_be_loaded_at_each_revision(tmp_path: Path) -> None:
         "repeatability": "deterministic",
         "final_repeats": 1,
         "budget": {"executions": 4},
+        "replay_preparation": {"mode": "stateless", "reason": "fixture has no persistent cache"},
         "commit_authorized": True,
         "rollback_on_failure": "B0",
     }
