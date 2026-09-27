@@ -1201,6 +1201,37 @@ def test_prepare_candidate_reuses_draft_after_round_write_failure(
     assert len(list((folder / "candidates").glob("*/draft.json"))) == 1
 
 
+def test_replacement_candidate_records_validated_lineage_and_patch(tmp_path: Path) -> None:
+    rows = [{"id": "case", "input": "task", "usage": "optimization", "source_group_id": "group"}]
+    repo, root, _, round_data, plan = project(tmp_path, "print('ok')\n", rows)
+    plan["budget"]["candidates"] = 2
+    freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    request = {"round_id": round_data["id"], "primary_issue_id": "issue", "paths": ["prompt.txt"]}
+    first = prepare_candidate(repo, root, request)
+    (repo / "prompt.txt").write_text("first")
+    sealed = seal_candidate(repo, root, {"round_id": round_data["id"], "candidate_id": first["id"]})
+    assert sealed["supersedes"] is None
+    assert (root / "rounds" / round_data["id"] / sealed["patch_ref"]).is_file()
+    decide_candidate(
+        repo,
+        root,
+        {
+            "round_id": round_data["id"],
+            "candidate_id": first["id"],
+            "action": "reject",
+            "validation_id": _passing_validation(root, round_data, sealed),
+            "reason": "try a different rule",
+        },
+    )
+    with pytest.raises(ATKError, match="related Issues are outside"):
+        prepare_candidate(repo, root, {**request, "related_issue_ids": ["unknown"]})
+    with pytest.raises(ATKError, match="superseded candidate is outside"):
+        prepare_candidate(repo, root, {**request, "supersedes": "candidate-unknown"})
+    replacement = prepare_candidate(repo, root, {**request, "supersedes": first["id"]})
+    assert replacement["supersedes"] == first["id"]
+    assert replacement["parent_commit"] == first["parent_commit"]
+
+
 @pytest.mark.parametrize("after_write", [False, True])
 def test_finish_round_reuses_final_decision_after_status_write_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, after_write: bool

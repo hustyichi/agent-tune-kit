@@ -1,6 +1,6 @@
 # Agent Tune Kit
 
-最后更新：2026-09-28。状态：vNext 核心链路、10 Case 合成累积验收、轮次冻结／候选草稿／封存／最终决策中断续恢复、中断批次／Git 内容恢复与转换／旧检查点复跑中断恢复／并发边界、Python editable／Node 链接加载及合成服务版本前后核查已在本地验证；Magic Workspace 单 Case 已按严格加载路径门禁复验，原生两 Case 批量基线通过；ATK 两 Case 候选对照因 B0 漏加载 Skill 而证据不足，完整验收待收口。详见 [实现与验收记录](docs/vnext-implementation-report.md)。
+最后更新：2026-09-28。状态：vNext 核心链路、10 Case 合成累积验收、候选替代谱系及补丁引用、轮次冻结／候选草稿／封存／最终决策中断续恢复、中断批次／Git 内容恢复与转换／旧检查点复跑中断恢复／并发边界、Python editable／Node 链接加载及合成服务版本前后核查已在本地验证；Magic Workspace 单 Case 已按严格加载路径门禁复验，原生两 Case 批量基线通过；ATK 两 Case 候选对照因 B0 漏加载 Skill 而证据不足，完整验收待收口。详见 [实现与验收记录](docs/vnext-implementation-report.md)。
 
 简体中文 | [English](README.en.md)
 

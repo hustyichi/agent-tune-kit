@@ -27,6 +27,8 @@ T10 补充：自定义 runner 写出无法解析的 `batch.json` 时保留原文
 
 T25 补充：轮次冻结先落不可变计划、候选准备先落草稿时，若随后的 Round 状态写入失败，可分别核对同一计划或同一草稿并续写状态；不同内容的重试停止，不生成第二份草稿。两个分析轮次也不能先后冻结为两个活跃轮次。最终收尾的 Decision 先于 Round 状态落盘时，无论状态写入前还是写入后中断，同一请求均复用原 Decision；改动理由的重试被拒绝。候选封存分阶段写入时，先核对既有不可变清单、补丁及文件副本，再复用或创建 Revision 和 Candidate；模拟在 Revision 写入前、Candidate 写入前后中断的三条路径均可安全重试。重试时工作文件改变会阻断，封存副本被改写也会阻断后续 `keep`。
 
+Candidate 协议补充：替代方案现在保存经本轮候选清单和主要 Issue 核对的 `supersedes`，封存产物保存可定位的 `patch_ref`；关联 Issue 必须属于冻结计划。已拒绝候选的新方案保留原记录并消耗新的候选预算。
+
 T39 补充：增量门禁的 `insufficient` 现在在 Validation 的 `limitations` 中自动列出缺失批次、固定组件身份、配对槽位、重复次数、加载路径、判定或必需指标；Magic 两 Case 实测明确列出 B0 `groupBy` 漏加载，而不是只返回状态。
 
 T45 补充：运行预算现在只在目标 Revision 的 Git 工作区核验通过后预留。意外修改导致执行前拒绝时，不再扣减额度或创建空批次；恢复干净工作区后原额度可继续使用。冻结轮次现要求记录 `repeatability_basis`；波动或未知场景若将最终重复计划由默认 3 次缩为 2 次，还必须记录 `repeat_plan_basis`。Validation 现保存每个 Case 两侧的通过／失败／未知重复次数、完整覆盖数及计划次数，并汇总修复、退化、持续失败、稳定成功、持平波动和未知 Case 数；缺失配对或有效证据下仍为未知的 verdict 均计入未知，不凭已知子集给出通过。本次真实 B0 与前次相同版本 Magic 基线的 `groupBy` 判定相反，说明原轮次的“确定性”假设不足。
@@ -37,8 +39,8 @@ T45 补充：运行预算现在只在目标 Revision 的 Git 工作区核验通�
 
 ## 已运行的验证
 
-- 离线单测：`UV_OFFLINE=1 uv run --frozen python scripts/check-release.py` 内执行全量 pytest，113 项通过；新增计划冻结／候选草稿／最终决策在 Round 状态写入失败后的续恢复和双活跃轮次阻断测试，以及执行前 Revision 异常不扣预算、候选文件恢复中断、末阶段收尾、Git `smudge` 真实文件字节漂移、合成远端服务运行版本前后核查、旧检查点复跑进程中断、准备命令超时清理子进程、单次 Agent 超时防止污染后续 Case、异常 runner 批次文件／组件清单测试；覆盖并发操作锁、磁盘写入失败、runner 提前退出与 JSONL 尾部截断、预分配身份校验、批次超时结束子进程组，以及 Python editable／Node 链接／误导入／旧 wheel 运行路径测试。此前覆盖还包括 Prompt 闭环、10 Case 四候选与最终 9/10、回退已采用后缀与重新验证、Case 输入变化后的双方重跑、跨轮换判据只重判原执行、跨进程提交恢复、Skill 直读／链接到源码／隔离副本／错误安装副本／过期构建／缺路径证据、已知故障配对、评分器校准、独立探针、固定组件漂移、暂存区与 HEAD 漂移、2 Case×2 次执行与授权重试、外部 Issue 新轮复验和 Git 中断恢复。新增的分布／覆盖统计在两 Case 重试、10 Case 最终对照和输入变化导致缺失配对的场景中通过断言。
-- 静态与打包：`UV_OFFLINE=1 uv run --frozen python scripts/check-release.py` 通过；包含 Ruff 格式与静态检查、Skill 包校验、113 项测试、wheel／sdist 构建及独立环境安装烟测。Python 运行环境 3.13.13，uv 0.11.6；项目声明 Python >=3.11、运行时无第三方依赖。
+- 离线单测：`UV_OFFLINE=1 uv run --frozen python scripts/check-release.py` 内执行全量 pytest，114 项通过；新增替代候选谱系及补丁引用测试，以及计划冻结／候选草稿／最终决策在 Round 状态写入失败后的续恢复和双活跃轮次阻断测试；覆盖执行前 Revision 异常不扣预算、候选文件恢复中断、末阶段收尾、Git `smudge` 真实文件字节漂移、合成远端服务运行版本前后核查、旧检查点复跑进程中断、准备命令超时清理子进程、单次 Agent 超时防止污染后续 Case、异常 runner 批次文件／组件清单测试、并发操作锁、磁盘写入失败、runner 提前退出与 JSONL 尾部截断、预分配身份校验、批次超时结束子进程组，以及 Python editable／Node 链接／误导入／旧 wheel 运行路径测试。此前覆盖还包括 Prompt 闭环、10 Case 四候选与最终 9/10、回退已采用后缀与重新验证、Case 输入变化后的双方重跑、跨轮换判据只重判原执行、跨进程提交恢复、Skill 直读／链接到源码／隔离副本／错误安装副本／过期构建／缺路径证据、已知故障配对、评分器校准、独立探针、固定组件漂移、暂存区与 HEAD 漂移、2 Case×2 次执行与授权重试、外部 Issue 新轮复验和 Git 中断恢复。新增的分布／覆盖统计在两 Case 重试、10 Case 最终对照和输入变化导致缺失配对的场景中通过断言。
+- 静态与打包：`UV_OFFLINE=1 uv run --frozen python scripts/check-release.py` 通过；包含 Ruff 格式与静态检查、Skill 包校验、114 项测试、wheel／sdist 构建及独立环境安装烟测。Python 运行环境 3.13.13，uv 0.11.6；项目声明 Python >=3.11、运行时无第三方依赖。
 - 实际导出只读导入：`projects/magic-workspace/traces/20260926/onl/SES_2103665448775192576` 下 8 个 Langfuse Trace bundle，来源文件集合指纹 `76bcd1bc43705473d2a5da6b42c7d05a106fec56c8a2c33d1faedd93979cc946`。临时目录中生成 8 条 Trace Record、1666 条证据索引；重复导入返回原批次；修正根 Observation 无父节点误报后，8 条均无结构缺口。原始内容未提交到 ATK 仓库。
 - 严格脱敏结构复验：将上述实际导出的 Trace／Observation ID 一致替换、所有自由文本值替换为 `[REDACTED]`，仅在临时目录保存并重新导入；仍得到 8 条 Record、1666 条索引，脱敏文件集合指纹 `3e25b2269fc368b50e04392966dbe2ac2ccbabfb480e3154a700c55c37c1e9c0`。该副本验证实际层级结构；不用于内容语义判断。
 - 真实本地 Agent：在 `projects/magic-workspace/official-toolkit` 的忽略目录 `.atk/` 中建立 `round-02486338-3d01-4e4b-b3a5-1f321e99ad18`。通过 `scripts/run-eval.sh --ids L1a-groupBy --port 9595` 执行 B0 和一个只改 `create-util/SKILL.md` 的候选；Magic run 分别为 `atk-vnext-f5595b97dd184af494e05b921ef565ad`、`atk-vnext-9aebf00c8bdd4d1f8e108c1aecac23b3`。两侧 `casePass=true`、可比、`skill-usage.json` 显示实际加载；注入工作区的 Skill SHA-256 分别等于 B0 `1f7a3bed016726678e85554cb7c9e629374fd7d9cbbc5f84f3184cf7483382b6` 与候选 `6a36eef49e569387edcb9c7cfd6cac8974363dedfe374e6ad49879abf4278858` 源文件。root／MCS／Official Toolkit commit、模型配置、运行时 Prompt、Case 和超时设置两侧相同；Agent 配置哈希随 Skill 改变。

@@ -365,6 +365,20 @@ def prepare_candidate(repo: Path, root: Path, request: dict) -> dict:
         issue_id = request["primary_issue_id"]
         if issue_id not in plan["issue_ids"]:
             raise ATKError("WORKSPACE_CONFLICT", "issue is outside frozen plan")
+        related = request.get("related_issue_ids", [])
+        if (
+            not isinstance(related, list)
+            or any(not isinstance(item, str) for item in related)
+            or set(related) - set(plan["issue_ids"])
+        ):
+            raise ATKError("WORKSPACE_CONFLICT", "related Issues are outside frozen plan")
+        supersedes = request.get("supersedes")
+        if supersedes is not None:
+            if supersedes not in value["candidate_ids"]:
+                raise ATKError("WORKSPACE_CONFLICT", "superseded candidate is outside this Round")
+            earlier = read_json(_round_path(root, value["id"]) / "candidates" / safe_id(supersedes) / "candidate.json")
+            if earlier["primary_issue_id"] != issue_id:
+                raise ATKError("WORKSPACE_CONFLICT", "superseded candidate belongs to another Issue")
         change_kind = request.get("change_kind", "fix")
         if change_kind not in {"fix", "workaround"}:
             raise ATKError("COMPARISON_INVALID", "candidate change_kind is invalid")
@@ -400,7 +414,8 @@ def prepare_candidate(repo: Path, root: Path, request: dict) -> dict:
             "created_at": now(),
             "round_id": value["id"],
             "primary_issue_id": issue_id,
-            "related_issue_ids": sorted((set(request.get("related_issue_ids", [])) | blocked) - {issue_id}),
+            "related_issue_ids": sorted((set(related) | blocked) - {issue_id}),
+            "supersedes": supersedes,
             "parent_commit": value["current_commit"],
             "parent_revision_id": value.get("current_revision_id"),
             "blocked_by_issue_ids": sorted(blocked),
@@ -507,6 +522,7 @@ def seal_candidate(repo: Path, root: Path, request: dict) -> dict:
             "content_status": "sealed",
             "revision_id": revision["id"],
             "changed_paths": sorted(actual),
+            "patch_ref": f"candidates/{candidate_id}/changes.patch",
             "files_hash": revision["files_hash"],
         }
         candidate_path = folder / "candidate.json"
