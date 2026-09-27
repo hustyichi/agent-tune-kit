@@ -1,6 +1,6 @@
 # Agent Tune Kit
 
-最后更新：2026-09-28。状态：vNext 核心链路、10 Case 合成累积验收、中断批次／Git 内容恢复与转换／旧检查点复跑中断恢复／并发边界、Python editable／Node 链接加载及合成服务版本前后核查已在本地验证；Magic Workspace 单 Case 已按严格加载路径门禁复验，真实多 Case 与完整验收待收口。详见 [实现与验收记录](docs/vnext-implementation-report.md)。
+最后更新：2026-09-28。状态：vNext 核心链路、10 Case 合成累积验收、中断批次／Git 内容恢复与转换／旧检查点复跑中断恢复／并发边界、Python editable／Node 链接加载及合成服务版本前后核查已在本地验证；Magic Workspace 单 Case 已按严格加载路径门禁复验，原生两 Case 批量基线通过，ATK 真实多 Case 候选对照与完整验收待收口。详见 [实现与验收记录](docs/vnext-implementation-report.md)。
 
 简体中文 | [English](README.en.md)
 
@@ -70,4 +70,4 @@ python3 scripts/validate_skill_pack.py
 uv build --no-sources
 ```
 
-离线测试使用小型 Git 仓库和假 Agent，已覆盖 10 Case 四候选累积收益、已采用后缀回退、Case 输入变化后的双方重跑、批内固定文件漂移、其他安装副本误加载、链接源码、过期副本与跨进程提交恢复。Magic Workspace 的真实轨迹导入和单 Case 自动加载业务 Skill 已单独验证；桥接器补充绝对路径与副本来源后，已重新执行正式对照。外部修复的新轮协议有合成测试，真实组件修复案例、已知责任层案例与真实多 Case 链路仍待验收。尚未确认安全隔离的目标 Agent 外部写操作不得在正式跑测中启动。
+离线测试使用小型 Git 仓库和假 Agent，已覆盖 10 Case 四候选累积收益、已采用后缀回退、Case 输入变化后的双方重跑、批内固定文件漂移、其他安装副本误加载、链接源码、过期副本与跨进程提交恢复。Magic Workspace 的真实轨迹导入和单 Case 自动加载业务 Skill 已单独验证；桥接器补充绝对路径与副本来源后，已重新执行正式对照。Magic 原生两 Case 批量基线已通过。外部修复的新轮协议有合成测试，真实组件修复案例、已知责任层案例与 ATK 真实多 Case 候选对照仍待验收。尚未确认安全隔离的目标 Agent 外部写操作不得在正式跑测中启动。
