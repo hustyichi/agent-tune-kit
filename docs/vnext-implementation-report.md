@@ -19,14 +19,16 @@
 | W7 Skills 与精简 | 已打包七个入口和共享流程，删除 12 个旧 Skill、旧 Agent 模板及旧 `.atk` runner 模板；README、manifest、安装及发布检查已更新。 |
 | W8 端到端验收 | **部分完成**。T34 的单 Case 真实导出／自动加载／无效果候选恢复链路已跑通，并用绝对路径与隔离副本来源证据重新执行两侧；T12 增加真实 Python editable 安装、Node 本地链接、PYTHONPATH 误导入、上级目录 Skill 和旧 wheel 制品测试。T25 新增 `reject/defer` 中断续恢复、未知内容／暂存阻断和操作末阶段幂等收尾测试；T26／T49／T50 新增 Git `smudge` 内容转换对失败恢复、已采用链回退及临时复跑还原的合成测试。T36／T40 新增合成服务版本前后核查：稳定版本可用于正式对照，批间变更被拒，批内漂移和未知输出不伪称身份已验证。T16–T19、T28、T30 的合成整轮或跨进程恢复，T35–T39 的已知原因配对与证据不足门禁，以及 T20–T27、T32、T40–T42、T47–T52 的部分异常路径已有测试。真实范围外组件修复后新轮复验未执行。 |
 
+T49 补充：旧检查点复跑进程在源码切换后直接退出时，可按操作 ID 检查并恢复；仅接受当前与目标检查点的已知文件内容，拒绝第三种内容，并重跑冻结的缓存／制品准备命令。真实子进程中断、拒绝未知改动、恢复与幂等查询均已验证。
+
 ## 新产物与兼容性
 
 `.atk/project.json` 使用 `schema_version=2`；`datasets/`、`evidence/`、`assessments/`、`rounds/`、`knowledge/` 以显式 ID 引用。Assessment 的 `assessment.csv` 是唯一权威评分明细，manifest 保存指纹。旧版 `.atk` 不自动迁移，遇到旧目录会停止。对外仍保留 `atk install`；七个 Skill 经 `atk internal <operation> --request ... --output ...` 调用本地确定性操作。旧版入口和模板已经删除，此 checkout 属于破坏兼容的开发状态，尚未发布。
 
 ## 已运行的验证
 
-- 离线单测：`UV_OFFLINE=1 uv run --frozen python scripts/check-release.py` 内执行全量 pytest，98 项通过；新增候选文件恢复中断、末阶段收尾、Git `smudge` 真实文件字节漂移，以及合成远端服务运行版本前后核查测试；覆盖并发操作锁、磁盘写入失败、runner 提前退出与 JSONL 尾部截断、预分配身份校验、批次超时结束子进程组，以及 Python editable／Node 链接／误导入／旧 wheel 运行路径测试。此前覆盖还包括 Prompt 闭环、10 Case 四候选与最终 9/10、回退已采用后缀与重新验证、Case 输入变化后的双方重跑、跨轮换判据只重判原执行、跨进程提交恢复、Skill 直读／链接到源码／隔离副本／错误安装副本／过期构建／缺路径证据、已知故障配对、评分器校准、独立探针、固定组件漂移、暂存区与 HEAD 漂移、2 Case×2 次执行与授权重试、外部 Issue 新轮复验和 Git 中断恢复。
-- 静态与打包：`UV_OFFLINE=1 uv run --frozen python scripts/check-release.py` 通过；包含 Ruff 格式与静态检查、Skill 包校验、98 项测试、wheel／sdist 构建及独立环境安装烟测。Python 运行环境 3.13.13，uv 0.11.6；项目声明 Python >=3.11、运行时无第三方依赖。
+- 离线单测：`UV_OFFLINE=1 uv run --frozen python scripts/check-release.py` 内执行全量 pytest，99 项通过；新增候选文件恢复中断、末阶段收尾、Git `smudge` 真实文件字节漂移、合成远端服务运行版本前后核查及旧检查点复跑进程中断测试；覆盖并发操作锁、磁盘写入失败、runner 提前退出与 JSONL 尾部截断、预分配身份校验、批次超时结束子进程组，以及 Python editable／Node 链接／误导入／旧 wheel 运行路径测试。此前覆盖还包括 Prompt 闭环、10 Case 四候选与最终 9/10、回退已采用后缀与重新验证、Case 输入变化后的双方重跑、跨轮换判据只重判原执行、跨进程提交恢复、Skill 直读／链接到源码／隔离副本／错误安装副本／过期构建／缺路径证据、已知故障配对、评分器校准、独立探针、固定组件漂移、暂存区与 HEAD 漂移、2 Case×2 次执行与授权重试、外部 Issue 新轮复验和 Git 中断恢复。
+- 静态与打包：`UV_OFFLINE=1 uv run --frozen python scripts/check-release.py` 通过；包含 Ruff 格式与静态检查、Skill 包校验、99 项测试、wheel／sdist 构建及独立环境安装烟测。Python 运行环境 3.13.13，uv 0.11.6；项目声明 Python >=3.11、运行时无第三方依赖。
 - 实际导出只读导入：`projects/magic-workspace/traces/20260926/onl/SES_2103665448775192576` 下 8 个 Langfuse Trace bundle，来源文件集合指纹 `76bcd1bc43705473d2a5da6b42c7d05a106fec56c8a2c33d1faedd93979cc946`。临时目录中生成 8 条 Trace Record、1666 条证据索引；重复导入返回原批次；修正根 Observation 无父节点误报后，8 条均无结构缺口。原始内容未提交到 ATK 仓库。
 - 严格脱敏结构复验：将上述实际导出的 Trace／Observation ID 一致替换、所有自由文本值替换为 `[REDACTED]`，仅在临时目录保存并重新导入；仍得到 8 条 Record、1666 条索引，脱敏文件集合指纹 `3e25b2269fc368b50e04392966dbe2ac2ccbabfb480e3154a700c55c37c1e9c0`。该副本验证实际层级结构；不用于内容语义判断。
 - 真实本地 Agent：在 `projects/magic-workspace/official-toolkit` 的忽略目录 `.atk/` 中建立 `round-02486338-3d01-4e4b-b3a5-1f321e99ad18`。通过 `scripts/run-eval.sh --ids L1a-groupBy --port 9595` 执行 B0 和一个只改 `create-util/SKILL.md` 的候选；Magic run 分别为 `atk-vnext-f5595b97dd184af494e05b921ef565ad`、`atk-vnext-9aebf00c8bdd4d1f8e108c1aecac23b3`。两侧 `casePass=true`、可比、`skill-usage.json` 显示实际加载；注入工作区的 Skill SHA-256 分别等于 B0 `1f7a3bed016726678e85554cb7c9e629374fd7d9cbbc5f84f3184cf7483382b6` 与候选 `6a36eef49e569387edcb9c7cfd6cac8974363dedfe374e6ad49879abf4278858` 源文件。root／MCS／Official Toolkit commit、模型配置、运行时 Prompt、Case 和超时设置两侧相同；Agent 配置哈希随 Skill 改变。

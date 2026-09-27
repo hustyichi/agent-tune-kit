@@ -342,6 +342,59 @@ def test_replay_preparation_switches_cache_and_restores_after_failure(tmp_path: 
     assert {operation["stage"] for operation in replays} == {"complete", "aborted"}
 
 
+def test_crashed_temporary_replay_restores_only_known_source(tmp_path: Path) -> None:
+    rows = [{"id": "case", "input": "task", "usage": "optimization", "source_group_id": "group"}]
+    repo, root, _, round_data, plan = project(tmp_path, "print('ok')\n", rows)
+    with (repo / ".git" / "info" / "exclude").open("a") as handle:
+        handle.write("\ncache.txt\n")
+    script = "from pathlib import Path; Path('cache.txt').write_text(Path('prompt.txt').read_text())"
+    plan["replay_preparation"] = {"mode": "command", "argv": [sys.executable, "-c", script], "timeout_seconds": 2}
+    freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    draft = prepare_candidate(
+        repo, root, {"round_id": round_data["id"], "primary_issue_id": "issue", "paths": ["prompt.txt"]}
+    )
+    (repo / "prompt.txt").write_text("new")
+    sealed = seal_candidate(repo, root, {"round_id": round_data["id"], "candidate_id": draft["id"]})
+    decide_candidate(
+        repo,
+        root,
+        {
+            "round_id": round_data["id"],
+            "candidate_id": draft["id"],
+            "action": "keep",
+            "validation_id": _passing_validation(root, round_data, sealed),
+            "reason": "fixture",
+        },
+    )
+    current_commit = git(repo, "rev-parse", "HEAD")
+    worker = (
+        "import os\n"
+        "from pathlib import Path\n"
+        "from agent_tune_kit.checkpoints import temporary_revision\n"
+        f"with temporary_revision(Path({str(repo)!r}), Path({str(root)!r}), {round_data['id']!r}, "
+        f"{round_data['baseline_commit']!r}): os._exit(17)\n"
+    )
+    crashed = subprocess.run([sys.executable, "-c", worker], cwd=repo, capture_output=True, check=False)
+    assert crashed.returncode == 17, crashed.stderr.decode()
+    operations = [
+        read_json(path)
+        for path in (root / "rounds" / round_data["id"] / "operations").glob("*.json")
+        if read_json(path)["action"] == "temporary_replay"
+    ]
+    assert len(operations) == 1 and operations[0]["stage"] == "switched"
+    assert (repo / "prompt.txt").read_text() == (repo / "cache.txt").read_text() == "old"
+    request = {"round_id": round_data["id"], "operation_id": operations[0]["id"]}
+    (repo / "prompt.txt").write_text("third-party")
+    with pytest.raises(ATKError, match="unknown content"):
+        inspect_or_recover_operation(repo, root, request)
+    assert (repo / "prompt.txt").read_text() == "third-party"
+    (repo / "prompt.txt").write_text("old")
+    assert inspect_or_recover_operation(repo, root, request)["stage"] == "aborted"
+    assert inspect_or_recover_operation(repo, root, request)["stage"] == "aborted"
+    assert (repo / "prompt.txt").read_text() == (repo / "cache.txt").read_text() == "new"
+    assert git(repo, "rev-parse", "HEAD") == current_commit
+
+
 def test_replay_restores_file_added_after_baseline(tmp_path: Path) -> None:
     rows = [{"id": "case", "input": "task", "usage": "optimization", "source_group_id": "group"}]
     repo, root, _, round_data, plan = project(tmp_path, "print('ok')\n", rows)

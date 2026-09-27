@@ -702,6 +702,8 @@ def inspect_or_recover_operation(repo: Path, root: Path, request: dict) -> dict:
     with locked(root):
         folder = _round_path(root, request["round_id"])
         operation = read_json(folder / "operations" / f"{safe_id(request['operation_id'])}.json")
+        if operation.get("action") == "temporary_replay":
+            return _recover_temporary_replay_locked(repo, root, folder, operation)
         if operation.get("action") == "rollback_to":
             return _recover_rollback_locked(repo, folder, operation)
         if operation.get("action") in {"reject", "defer"}:
@@ -821,6 +823,62 @@ def inspect_or_recover_operation(repo: Path, root: Path, request: dict) -> dict:
         operation["stage"] = "complete"
         write_json(folder / "operations" / f"{operation['id']}.json", operation)
         return {"stage": "complete", "decision": decision}
+
+
+def _recover_temporary_replay_locked(repo: Path, root: Path, folder: Path, operation: dict) -> dict:
+    value = _round(root, folder.name)
+    if operation.get("round_id", value["id"]) != value["id"]:
+        raise ATKError("GIT_OPERATION_INTERRUPTED", "replay operation belongs to another Round")
+    stage = operation.get("stage")
+    if stage in {"complete", "aborted"}:
+        return {"stage": stage, "round_id": value["id"]}
+    if stage not in {"prepared", "switching", "switched"}:
+        raise ATKError("GIT_OPERATION_INTERRUPTED", "replay operation stage is inconsistent")
+    target = operation.get("target_commit")
+    known = {value["baseline_commit"]}
+    known.update(
+        read_json(folder / "candidates" / candidate_id / "decision.json")["after_commit"]
+        for candidate_id in value["active_candidate_ids"]
+    )
+    preparation = read_json(folder / "plan.json").get("replay_preparation")
+    if (
+        value["pending_candidate_id"]
+        or operation.get("before_commit") != value["current_commit"]
+        or target not in known
+        or target == value["current_commit"]
+        or not preparation
+        or operation.get("replay_preparation_hash") != digest(preparation)
+    ):
+        raise ATKError("GIT_OPERATION_INTERRUPTED", "replay operation differs from the current checkpoint")
+    paths = set(operation.get("paths", []))
+    expected_paths = set(
+        filter(None, git(repo, "diff", "--name-only", "-z", target, value["current_commit"]).decode().split("\0"))
+    )
+    if paths != expected_paths:
+        raise ATKError("GIT_OPERATION_INTERRUPTED", "replay paths differ from the current checkpoint")
+    verify_repo(repo, expected_head=value["current_commit"], expected_branch=value["branch"])
+    if changed_paths(repo) - set(value["baseline_untracked"]) - paths:
+        raise ATKError("GIT_OPERATION_INTERRUPTED", "unknown workspace changes appeared during replay")
+    for name in paths:
+        if content(repo, name) not in {_git_file(repo, target, name), _git_file(repo, value["current_commit"], name)}:
+            raise ATKError("GIT_OPERATION_INTERRUPTED", f"replay source has unknown content: {name}")
+    if paths:
+        git(
+            repo,
+            "--literal-pathspecs",
+            "restore",
+            f"--source={value['current_commit']}",
+            "--worktree",
+            "--",
+            *sorted(paths),
+        )
+    _prepare_replay(repo, preparation)
+    _verify_restored_content(repo, value["current_commit"], paths)
+    if changed_paths(repo) != set(value["baseline_untracked"]) or staged_paths(repo):
+        raise ATKError("GIT_OPERATION_INTERRUPTED", "replay recovery did not restore the starting checkpoint")
+    operation["stage"] = "aborted"
+    write_json(folder / "operations" / f"{operation['id']}.json", operation)
+    return {"stage": "aborted", "round_id": value["id"]}
 
 
 def _verify_rollback_commit(repo: Path, operation: dict) -> None:
@@ -1034,6 +1092,7 @@ def temporary_revision(repo: Path, root: Path, round_id: str, target_commit: str
         operation = {
             "id": new_id("operation"),
             "action": "temporary_replay",
+            "round_id": round_id,
             "stage": "prepared",
             "created_at": now(),
             "before_commit": value["current_commit"],

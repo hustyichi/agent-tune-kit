@@ -40,6 +40,8 @@ A frozen Round reserves both sides of final validation before candidate work. Au
 
 ATK stores project configuration and runner under `.atk/`, immutable datasets under `datasets/<id>/`, evidence under `evidence/<batch-id>/`, the authoritative scoring CSV under `assessments/<id>/`, and Round plans, Issues, Candidates, Validations, Decisions, and recovery operations under `rounds/<id>/`. Objects are addressed by explicit IDs, never by a “latest vN” folder. The seven Skills call `atk internal <operation> --request <JSON> --output <JSON>`; it is an implementation interface, not an additional public tuning workflow.
 
+If a process exits during replay of an older checkpoint, the recorded operation can restore the current source and rerun the frozen cache or artifact preparation, provided no unknown file content has appeared.
+
 ## Development checks
 
 ```sh

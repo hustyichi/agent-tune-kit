@@ -21,6 +21,9 @@ outputs, runner exit status, actual component hashes and pre/post service versio
 identity failures, and loading evidence. A diagnostic
 probe needs a frozen `probe_authorization_id` matching the command, runner, Cases and
 recorded isolation, plus separate probe budget. It is not formal effect evidence.
+If a process dies while replaying an older checkpoint, run
+`inspect_or_recover_operation` with its recorded operation ID. Recovery only restores
+known source content and re-runs the frozen preparation; unknown changes need inspection.
 
 For import, call `import_evidence` with `source_kind=batch_results` and explicit field
 mapping, or `source_kind=langfuse` with `adapter_profile` set to
