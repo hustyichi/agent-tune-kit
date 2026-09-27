@@ -36,6 +36,9 @@ def _passing_validation(root: Path, round_data: dict, candidate: dict) -> str:
             "result": "pass",
             "left_commit": candidate["parent_commit"],
             "right_revision_id": candidate["revision_id"],
+            "candidate_id": candidate["id"],
+            "issue_id": candidate["primary_issue_id"],
+            "target_case_ids": candidate["target_case_ids"],
         },
     )
     return validation_id
@@ -139,6 +142,7 @@ def test_external_issue_blocks_normal_keep_but_allows_authorized_workaround(tmp_
         },
     )
     plan["blocked_by_issue_ids_by_issue"] = {"issue": ["tool"]}
+    plan["target_case_ids_by_issue"]["tool"] = ["case"]
     plan["workaround_issue_ids"] = ["tool"]
     plan["budget"]["candidates"] = 2
     freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
@@ -980,6 +984,9 @@ def test_trial_override_keeps_original_result_and_cannot_claim_normal_completion
             "result": "no_effect",
             "left_commit": draft["parent_commit"],
             "right_revision_id": sealed["revision_id"],
+            "candidate_id": draft["id"],
+            "issue_id": draft["primary_issue_id"],
+            "target_case_ids": draft["target_case_ids"],
         },
     )
     request = {

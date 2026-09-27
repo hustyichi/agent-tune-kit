@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import json
+import math
 import os
 import re
 import shutil
@@ -339,6 +340,10 @@ def _reserve_run(
             raise ATKError("COMPARISON_INVALID", "project runner configuration changed after Round freeze")
         if request["purpose"] == "evaluation" and request.get("concurrency", 1) != plan.get("concurrency", 1):
             raise ATKError("COMPARISON_INVALID", "execution concurrency differs from the frozen plan")
+        if request["purpose"] == "evaluation" and request.get(
+            "timeout_seconds", plan.get("timeout_seconds", 120)
+        ) != plan.get("timeout_seconds", 120):
+            raise ATKError("COMPARISON_INVALID", "execution timeout differs from the frozen plan")
         budget = plan.get("budget", {})
         purpose = request["purpose"]
         probe_config = None
@@ -426,7 +431,11 @@ def _reserve_run(
             and (round_data["pending_candidate_id"] or not round_data["active_candidate_ids"])
         ):
             raise ATKError("COMPARISON_INVALID", "final runs require a fixed accepted Revision")
-        if purpose == "evaluation" and phase in {"final", "external_fix"} and not request.get("retry_batch_id"):
+        if (
+            purpose == "evaluation"
+            and phase in {"final", "external_fix"}
+            and not (request.get("retry_batch_id") or request.get("continue_batch_id"))
+        ):
             selected = request.get("case_ids", [])
             if (
                 len(selected) != len(set(selected))
@@ -473,14 +482,17 @@ def _reserve_run(
                     raise ATKError("COMPARISON_INVALID", "holdout source group was exposed in another milestone")
         usage_path = folder / "budget-usage.json"
         usage = read_json(usage_path) if usage_path.exists() else {"executions": 0, "probes": 0, "reservations": []}
-        if request.get("retry_batch_id") and any(
-            reservation.get("retry_batch_id") == request["retry_batch_id"] for reservation in usage["reservations"]
+        predecessor_id = request.get("retry_batch_id") or request.get("continue_batch_id")
+        if predecessor_id and any(
+            reservation.get("retry_batch_id") == predecessor_id
+            or reservation.get("continue_batch_id") == predecessor_id
+            for reservation in usage["reservations"]
         ):
-            raise ATKError("COMPARISON_INVALID", "retry batch was already continued; use its successor")
+            raise ATKError("COMPARISON_INVALID", "batch was already continued; use its successor")
         if (
             purpose == "evaluation"
             and phase in {"final", "external_fix"}
-            and not request.get("retry_batch_id")
+            and not predecessor_id
             and any(
                 reservation.get("phase") == phase and reservation.get("revision_id") == request["revision_id"]
                 for reservation in usage["reservations"]
@@ -536,6 +548,7 @@ def _reserve_run(
                 "phase": phase if purpose == "evaluation" else None,
                 "revision_id": request["revision_id"],
                 "retry_batch_id": request.get("retry_batch_id"),
+                "continue_batch_id": request.get("continue_batch_id"),
                 "probe_authorization_id": permission_id if purpose == "diagnostic_probe" else None,
                 "attempts": len(attempts),
                 "at": now(),
@@ -564,6 +577,8 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
     concurrency = request.get("concurrency", 1)
     if type(concurrency) is not int or concurrency < 1:
         raise ATKError("INCOMPLETE_EVIDENCE", "concurrency must be a positive integer")
+    if type(request.get("batch_timeout_seconds", 3600)) is not int or request.get("batch_timeout_seconds", 3600) < 1:
+        raise ATKError("INCOMPLETE_EVIDENCE", "batch timeout must be a positive integer")
     for effect in project.get("external_effects", []):
         if not isinstance(effect, dict) or not isinstance(effect.get("name"), str):
             raise ATKError("NOT_REPLAYABLE", "external effect declaration is invalid")
@@ -576,22 +591,43 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
         ):
             raise ATKError("NOT_REPLAYABLE", f"external effect lacks recorded protection: {effect['name']}")
     repo = Path(project["workspace_path"])
+    plan_path = root / "rounds" / safe_id(request["round_id"]) / "plan.json" if request.get("round_id") else None
+    formal_plan = (
+        read_json(plan_path) if plan_path and plan_path.exists() and request["purpose"] == "evaluation" else {}
+    )
+    formal_timeout = request.get("timeout_seconds", formal_plan.get("timeout_seconds", 120))
+    if type(formal_timeout) not in {int, float} or not math.isfinite(formal_timeout) or formal_timeout <= 0:
+        raise ATKError("INCOMPLETE_EVIDENCE", "execution timeout must be positive and finite")
     version_commands = _version_commands(project["components"])
     retry_batch_id = request.get("retry_batch_id")
+    continue_batch_id = request.get("continue_batch_id")
+    if retry_batch_id and continue_batch_id:
+        raise ATKError("COMPARISON_INVALID", "retry and continuation are separate operations")
     prior_manifest, prior_records = None, []
-    if retry_batch_id:
-        prior_manifest, records, _ = validate_evidence(root, retry_batch_id)
-        if prior_manifest.get("source_type") != "local_runner" or prior_manifest.get("status") != "sealed":
-            raise ATKError("COMPARISON_INVALID", "only a sealed local batch can be retried")
-        prior_records = list(records.values())
+    predecessor_id = retry_batch_id or continue_batch_id
+    if predecessor_id:
+        prior_manifest, records, _ = validate_evidence(root, predecessor_id)
+        if (
+            prior_manifest.get("source_type") != "local_runner"
+            or (retry_batch_id and prior_manifest.get("status") != "sealed")
+            or (continue_batch_id and prior_manifest.get("status") not in {"partial", "interrupted"})
+        ):
+            raise ATKError("COMPARISON_INVALID", "batch state does not permit the requested retry or continuation")
+        prior_records = (
+            list(records.values())
+            if retry_batch_id
+            else [
+                record for record in records.values() if record["id"] in prior_manifest.get("completed_record_ids", [])
+            ]
+        )
         for key in ("dataset_id", "revision_id", "round_id", "purpose", "phase"):
             expected_value = request.get(key, "incremental") if key == "phase" else request.get(key)
             if expected_value != prior_manifest.get(key):
-                raise ATKError("REVISION_MISMATCH", f"retry changes frozen {key}")
+                raise ATKError("REVISION_MISMATCH", f"continuation changes frozen {key}")
     cases = load_cases(root, request["dataset_id"])
     selected = request.get("case_ids", [])
     repeats = request.get("repeats", 1)
-    if not retry_batch_id and (
+    if not predecessor_id and (
         not selected
         or len(selected) != len(set(selected))
         or type(repeats) is not int
@@ -601,11 +637,54 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
         raise ATKError("INCOMPLETE_EVIDENCE", "run requires known Cases and positive repeat count")
     if request["purpose"] not in {"evaluation", "diagnostic_probe"}:
         raise ATKError("INCOMPLETE_EVIDENCE", "invalid run purpose")
-    if retry_batch_id and request["purpose"] != "evaluation":
-        raise ATKError("COMPARISON_INVALID", "diagnostic probes cannot be retried as formal evidence")
+    if predecessor_id and request["purpose"] != "evaluation":
+        raise ATKError("COMPARISON_INVALID", "diagnostic probes cannot be continued as formal evidence")
     batch_id = new_id("batch")
     attempts = []
-    if retry_batch_id:
+    if continue_batch_id:
+        previous_path = root / "evidence" / safe_id(continue_batch_id) / "request.json"
+        if not previous_path.is_file() or prior_manifest.get("request_sha256") != digest(previous_path):
+            raise ATKError("INCOMPLETE_EVIDENCE", "predecessor attempt plan changed")
+        previous_request = read_json(previous_path)
+        pending = set(prior_manifest.get("not_started_record_ids", [])) | set(
+            prior_manifest.get("unknown_record_ids", [])
+        )
+        unknown = set(prior_manifest.get("unknown_record_ids", []))
+        authorization = request.get("unknown_execution_authorization")
+        if unknown and (
+            not isinstance(authorization, dict)
+            or authorization.get("source") != "user"
+            or authorization.get("batch_id") != continue_batch_id
+            or not isinstance(authorization.get("record_ids"), list)
+            or any(not isinstance(item, str) for item in authorization["record_ids"])
+            or set(authorization["record_ids"]) != unknown
+            or not authorization.get("reason")
+            or not authorization.get("risk")
+        ):
+            raise ATKError("COMPARISON_INVALID", "unknown executions need inspection and explicit rerun authorization")
+        if not pending or pending != {item["record_id"] for item in previous_request["attempts"]} - set(
+            prior_manifest.get("completed_record_ids", [])
+        ):
+            raise ATKError("COMPARISON_INVALID", "batch has no safely identifiable pending slots")
+        for previous in previous_request["attempts"]:
+            if previous["record_id"] not in pending:
+                continue
+            if (
+                previous["case_id"] not in cases
+                or previous["case_fingerprint"] != cases[previous["case_id"]]["fingerprint"]
+            ):
+                raise ATKError("REVISION_MISMATCH", "continuation Case changed")
+            attempts.append(
+                {
+                    "execution_id": new_id("execution"),
+                    "record_id": new_id("record"),
+                    "case_id": previous["case_id"],
+                    "case_fingerprint": previous["case_fingerprint"],
+                    "repeat_index": previous["repeat_index"],
+                    "retry_of": None,
+                }
+            )
+    elif retry_batch_id:
         targets = request.get("retry_execution_ids", [])
         executions = {record["execution"]["id"]: record for record in prior_records}
         plan = read_json(root / "rounds" / safe_id(request["round_id"]) / "plan.json")
@@ -653,13 +732,15 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
                         "retry_of": None,
                     }
                 )
-    if retry_batch_id and prior_manifest.get("run_config_hash") != digest(project):
-        raise ATKError("COMPARISON_INVALID", "runner configuration changed before retry")
+    if predecessor_id and prior_manifest.get("run_config_hash") != digest(project):
+        raise ATKError("COMPARISON_INVALID", "runner configuration changed before continuation")
+    if predecessor_id and prior_manifest.get("timeout_seconds") != formal_timeout:
+        raise ATKError("COMPARISON_INVALID", "execution timeout changed before continuation")
     runner = root / "adapters" / "runner.py"
     if not runner.exists():
         raise ATKError("NOT_REPLAYABLE", f"project runner is missing: {runner}")
-    if retry_batch_id and prior_manifest.get("runner_hash") != digest(runner):
-        raise ATKError("COMPARISON_INVALID", "runner changed before retry")
+    if predecessor_id and prior_manifest.get("runner_hash") != digest(runner):
+        raise ATKError("COMPARISON_INVALID", "runner changed before continuation")
     with execution_revision(repo, root, request):
         probe_config = _reserve_run(root, request, cases, attempts, batch_id, project)
         folder = root / "evidence" / batch_id
@@ -675,7 +756,7 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
             "workspace_path": str(repo),
             "cases_path": str((root / "datasets" / safe_id(request["dataset_id"]) / "cases.jsonl").resolve()),
             "attempts": attempts,
-            "timeout_seconds": probe_config["timeout_seconds"] if probe_config else request.get("timeout_seconds", 120),
+            "timeout_seconds": probe_config["timeout_seconds"] if probe_config else formal_timeout,
             "concurrency": request.get("concurrency", 1),
             "run_config_ref": str(config_path.resolve()),
             "output_dir": str(folder.resolve()),
@@ -909,8 +990,8 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
     status_conflict = bool(
         declared_not_started & (declared_completed | observed) or running & (declared_completed | declared_not_started)
     )
-    if retry_batch_id and actual_components != prior_manifest.get("actual_components"):
-        raise ATKError("REVISION_MISMATCH", "component identity changed during retry")
+    if predecessor_id and actual_components != prior_manifest.get("actual_components"):
+        raise ATKError("REVISION_MISMATCH", "component identity changed during continuation")
     if prior_records:
         records = prior_records + records
         atomic_write(records_path, b"\n".join(canonical(record) for record in records) + b"\n")
@@ -940,13 +1021,21 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
         if request["purpose"] == "diagnostic_probe"
         else None,
         "probe_config": probe_config,
-        "supersedes_batch_id": retry_batch_id,
+        "supersedes_batch_id": predecessor_id,
+        "continuation_kind": "resume" if continue_batch_id else "retry" if retry_batch_id else None,
+        "unknown_execution_authorization": request.get("unknown_execution_authorization")
+        if continue_batch_id
+        else None,
         "revision_id": request["revision_id"],
         "revision_commit": request.get("revision_commit"),
         "records_ref": "records.jsonl",
         "records_sha256": digest(records_path),
         "record_count": len(records),
-        "planned_count": prior_manifest["planned_count"] + len(attempts) if prior_manifest else len(attempts),
+        "planned_count": prior_manifest["planned_count"] + len(attempts)
+        if retry_batch_id
+        else prior_manifest["planned_count"]
+        if continue_batch_id
+        else len(attempts),
         "status": "interrupted"
         if timed_out
         else "sealed"
@@ -967,13 +1056,15 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
         "runner_status_conflict": status_conflict,
         "invalid_execution_status_ids": invalid_execution_status_ids,
         "run_config_hash": digest(project),
+        "request_sha256": digest(request_path),
+        "timeout_seconds": runner_request["timeout_seconds"],
         "runner_hash": digest(runner),
         "fixed_context_hash": digest(fixed_components),
         "actual_components": actual_components,
         "post_run_component_drift": component_drift,
         "evidence_index": evidence_index,
         "missing_record_ids": sorted(set(expected) - observed),
-        "completed_record_ids": sorted(confirmed),
+        "completed_record_ids": sorted(confirmed | {record["id"] for record in prior_records}),
         "not_started_record_ids": sorted(not_started),
         "unknown_record_ids": sorted(unknown),
     }

@@ -314,6 +314,25 @@ def freeze_round(repo: Path, root: Path, request: dict) -> dict:
             raise ATKError("COMPARISON_INVALID", "short stochastic repeat plan needs a recorded reason")
         if type(plan.get("concurrency", 1)) is not int or plan.get("concurrency", 1) < 1:
             raise ATKError("COMPARISON_INVALID", "concurrency must be a positive integer")
+        if (
+            type(plan.get("timeout_seconds", 120)) not in {int, float}
+            or not math.isfinite(plan.get("timeout_seconds", 120))
+            or plan.get("timeout_seconds", 120) <= 0
+        ):
+            raise ATKError("COMPARISON_INVALID", "formal timeout must be positive and finite")
+        plan.setdefault("timeout_seconds", 120)
+        if not isinstance(plan.get("primary_dimension", "task_success"), str) or not plan.get(
+            "primary_dimension", "task_success"
+        ):
+            raise ATKError("COMPARISON_INVALID", "primary dimension is invalid")
+        plan.setdefault("primary_dimension", "task_success")
+        required_dimensions = plan.get("required_dimensions", [])
+        if (
+            not isinstance(required_dimensions, list)
+            or any(not isinstance(item, str) or not item for item in required_dimensions)
+            or len(required_dimensions) != len(set(required_dimensions))
+        ):
+            raise ATKError("COMPARISON_INVALID", "required dimensions are invalid")
         budget = plan["budget"]
         if (
             not isinstance(budget, dict)
@@ -508,6 +527,17 @@ def prepare_candidate(repo: Path, root: Path, request: dict) -> dict:
             plan.get("blocked_by_issue_ids_by_issue", {}).get(issue_id, [])
         )
         issue = _latest_issue(root, value["id"], issue_id)
+        if not issue or issue["disposition"] not in {"local_candidate", "external_handoff"}:
+            raise ATKError("INCOMPLETE_EVIDENCE", "primary Issue needs a recorded candidate or handoff disposition")
+        target_cases = plan.get("target_case_ids_by_issue", {}).get(issue_id, [])
+        if (
+            not target_cases
+            or not set(target_cases) <= set(issue["case_ids"])
+            or not set(target_cases) <= set(plan["case_ids"])
+        ):
+            raise ATKError("COMPARISON_INVALID", "candidate target Cases must be frozen and linked to its Issue")
+        if any(_latest_issue(root, value["id"], related_id) is None for related_id in related):
+            raise ATKError("INCOMPLETE_EVIDENCE", "related Issue has no recorded revision")
         if issue and issue["disposition"] == "external_handoff" and issue["resolution"] != "resolved":
             if change_kind != "workaround":
                 raise ATKError("WORKSPACE_CONFLICT", "out-of-scope Issue cannot be a local fix")
@@ -542,6 +572,8 @@ def prepare_candidate(repo: Path, root: Path, request: dict) -> dict:
             "created_at": now(),
             "round_id": value["id"],
             "primary_issue_id": issue_id,
+            "primary_issue_revision": issue["revision"],
+            "target_case_ids": sorted(target_cases),
             "related_issue_ids": sorted((set(related) | blocked) - {issue_id}),
             "supersedes": supersedes,
             "parent_commit": value["current_commit"],
@@ -664,6 +696,55 @@ def seal_candidate(repo: Path, root: Path, request: dict) -> dict:
         return sealed
 
 
+def cancel_draft(repo: Path, root: Path, request: dict) -> dict:
+    """Release an unsealed Candidate only after its workspace is clean."""
+    with locked(root):
+        value = _round(root, request["round_id"])
+        candidate_id = safe_id(request["candidate_id"])
+        folder = _round_path(root, value["id"]) / "candidates" / candidate_id
+        decision_path = folder / "decision.json"
+        if value["pending_candidate_id"] != candidate_id:
+            if decision_path.exists():
+                decision = read_json(decision_path)
+                if decision.get("action") == "cancel_draft" and decision.get("reason") == request.get("reason"):
+                    return decision
+            raise ATKError("WORKSPACE_CONFLICT", "candidate is not the pending draft")
+        if value["status"] != "optimizing" or (folder / "candidate.json").exists():
+            raise ATKError("WORKSPACE_CONFLICT", "only an unsealed draft can be cancelled")
+        reason = request.get("reason")
+        if not isinstance(reason, str) or not reason.strip():
+            raise ATKError("INCOMPLETE_EVIDENCE", "draft cancellation needs a reason")
+        draft = read_json(folder / "draft.json")
+        verify_repo(repo, expected_head=draft["parent_commit"], expected_branch=value["branch"])
+        if changed_paths(repo) != set(value["baseline_untracked"]) or staged_paths(repo):
+            raise ATKError("WORKSPACE_CONFLICT", "restore or inspect draft edits before cancellation")
+        if decision_path.exists():
+            decision = read_json(decision_path)
+            if (decision.get("action"), decision.get("reason"), decision.get("candidate_id")) != (
+                "cancel_draft",
+                reason,
+                candidate_id,
+            ):
+                raise ATKError("WORKSPACE_CONFLICT", "saved draft cancellation differs from the retry")
+        else:
+            decision = {
+                "schema_version": 2,
+                "id": new_id("decision"),
+                "created_at": now(),
+                "round_id": value["id"],
+                "candidate_id": candidate_id,
+                "action": "cancel_draft",
+                "reason": reason,
+                "validation_id": None,
+                "before_commit": draft["parent_commit"],
+                "after_commit": value["current_commit"],
+            }
+            write_json(decision_path, decision, immutable=True)
+        value["pending_candidate_id"] = None
+        _write_round(root, value)
+        return decision
+
+
 def _verify_sealed(repo: Path, folder: Path, candidate: dict) -> dict:
     files = read_json(folder / "files.json")
     if digest(files) != candidate["files_hash"]:
@@ -761,6 +842,9 @@ def decide_candidate(repo: Path, root: Path, request: dict) -> dict:
         if (
             validation.get("right_revision_id") != candidate["revision_id"]
             or validation.get("left_commit") != candidate["parent_commit"]
+            or validation.get("candidate_id") != candidate_id
+            or validation.get("issue_id") != candidate["primary_issue_id"]
+            or validation.get("target_case_ids") != candidate["target_case_ids"]
         ):
             raise ATKError("COMPARISON_INVALID", "validation does not match candidate and parent")
         override = request.get("override") is True

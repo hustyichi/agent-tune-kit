@@ -19,7 +19,7 @@ from agent_tune_kit.core import ATKError, digest, read_json, store_assessment, v
 from agent_tune_kit.evidence import record_source_contract
 from agent_tune_kit.execution import run_evaluation, store_dataset
 from agent_tune_kit.governance import compare_and_gate, finish_round, store_diagnosis
-from tests.test_vnext_flow import assessment_for, git
+from tests.test_vnext_flow import assessment_for, git, record_local_issue
 from tests.test_vnext_limits import JUDGER, SPEC, assess, project
 
 
@@ -717,6 +717,7 @@ def test_new_judger_reassesses_prior_execution_without_rerunning_agent(tmp_path:
             "reuse_revision": True,
         },
     )
+    record_local_issue(root, second["id"], "new-rule", ["case"])
     assert second["baseline_revision_id"] == sealed["revision_id"]
     new_spec = {
         **SPEC,
@@ -852,6 +853,7 @@ def test_changed_case_input_needs_new_execution_on_both_sides(tmp_path: Path) ->
     )
 
     second = create_round(repo, root, {"issue_ids": ["issue"], "previous_round_id": first["id"]})
+    record_local_issue(root, second["id"], "issue", ["case"])
     freeze_round(repo, root, {"round_id": second["id"], "plan": plan})
     fresh_left = assessed(new_dataset["id"], second["id"], second["baseline_revision_id"])
     rebuilt = prepare_candidate(
@@ -1268,6 +1270,7 @@ def test_service_failure_remains_valid_failure_while_skill_dimension_is_unknown(
         },
     }
     plan["evaluation_spec_hash"] = digest(spec)
+    plan["primary_dimension"] = "service_reliability"
     freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
     request = {
         "dataset_id": dataset["id"],
@@ -1325,8 +1328,9 @@ def test_service_failure_remains_valid_failure_while_skill_dimension_is_unknown(
         "right_assessment_id": right,
         "left_commit": round_data["baseline_commit"],
     }
-    assert compare_and_gate(root, {**common, "dimension": "service_reliability"})["result"] == "no_effect"
-    assert compare_and_gate(root, {**common, "dimension": "skill_behavior"})["result"] == "insufficient"
+    assert compare_and_gate(root, {**common, "dimension": "service_reliability"})["result"] == "insufficient"
+    with pytest.raises(ATKError, match="frozen primary"):
+        compare_and_gate(root, {**common, "dimension": "skill_behavior"})
 
 
 @pytest.mark.parametrize("fault_layer", ["skill", "agent_code"])

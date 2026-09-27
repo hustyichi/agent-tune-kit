@@ -13,7 +13,7 @@ results as they complete. Inspect `running_record_ids`, `completed_record_ids`, 
 supported. Each attempt has a distinct output directory, but session and external-write
 isolation must still be provided by the target Agent.
 For run, use `run_evaluation` with a dataset ID, Case IDs, Revision ID, round ID (if
-frozen), repeat count, timeout, purpose, and `phase=incremental/final`. Final runs
+frozen), repeat count, the frozen `timeout_seconds`, purpose, and `phase=incremental/final`. Final runs
 must use both frozen sides once; their attempts are reserved before candidate work.
 For a linked external fix Round, use `phase=external_fix` on the new B0 only; include
 the original affected and protection Cases. Its direct component check is a separate
@@ -23,6 +23,11 @@ For an authorized infrastructure retry, pass `retry_batch_id` and the failed
 The new batch retains every earlier Execution and adds linked retries. Never rerun a
 completed Agent failure or branch from an already continued batch. The target project's Python runs its
 `.atk/adapters/runner.py`; each attempt gets its own Execution ID. Inspect partial
+or interrupted batches before using `continue_batch_id`. Confirmed records are carried
+forward; only not-started slots rerun automatically. Unknown slots need an explicit
+`unknown_execution_authorization` with `source=user`, the predecessor batch ID, exact
+unknown record IDs, reason, and risk. Continuations consume new execution budget and
+leave the predecessor evidence intact. Inspect partial
 outputs, runner exit status, actual component hashes and pre/post service versions,
 identity failures, and loading evidence. A diagnostic
 probe needs a frozen `probe_authorization_id` matching the command, runner, Cases and

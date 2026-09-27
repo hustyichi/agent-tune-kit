@@ -10,7 +10,7 @@ from agent_tune_kit.checkpoints import create_round, freeze_round, prepare_candi
 from agent_tune_kit.core import digest
 from agent_tune_kit.execution import initialize_project, run_evaluation, store_dataset
 from agent_tune_kit.governance import compare_and_gate
-from tests.test_vnext_flow import assessment_for, git
+from tests.test_vnext_flow import assessment_for, git, record_local_issue
 
 
 @pytest.mark.parametrize(
@@ -79,6 +79,7 @@ def test_business_skill_must_be_loaded_at_each_revision(tmp_path: Path, load_mod
         {"source": str(source), "mapping": {"id": "id", "input": "input", "expected": "expected", "usage": "usage"}},
     )
     round_data = create_round(repo, root, {"issue_ids": ["skill-rule"]})
+    record_local_issue(root, round_data["id"], "skill-rule", ["case-1"])
     spec = {
         "version": "v1",
         "boundary": "local skill Agent",

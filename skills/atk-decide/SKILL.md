@@ -12,6 +12,9 @@ and risk); it stages only sealed paths and checks the commit parent, changed pat
 trailers, and content. `reject` or `defer` preserves evidence and restores the
 Candidate's parent without making a failure commit. Inspect any interrupted operation
 with `inspect_or_recover_operation` before retrying.
+For an unsealed draft with no remaining workspace edits, use `cancel_draft` with a
+reason; it records the cancellation and releases the pending slot without refunding
+candidate budget. Never use `decide_candidate` on a draft.
 
 After all candidates, require a passing final Validation for `finish_round: complete`.
 It must match this Round, frozen plan, B0, current Revision, and final commit.

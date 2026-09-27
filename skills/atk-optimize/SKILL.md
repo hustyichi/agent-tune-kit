@@ -17,10 +17,15 @@ original directory with their caches and artifacts rebuilt.
 The finite plan's execution budget must preserve both sides of final validation;
 `budget.candidates` limits drafts and `max_retries_per_slot` is zero unless authorized.
 
-Call `prepare_candidate` with the exact primary Issue and declared file paths.
+Record the primary Issue and its target Cases before `prepare_candidate`; the frozen
+target set must be included in that Issue. Related Issue IDs must also have recorded
+revisions. Call `prepare_candidate` with the exact primary Issue and declared file paths.
 Edit the existing Agent's business Skill, Prompt, code, or config in its original
 worktree; keep one principal mechanism per candidate. Call `seal_candidate` after
 editing. Check the returned changed paths and Revision. Do not continue editing after
 seal. Do not submit, push, or stack another candidate before `atk-decide` has resolved
 this one. To revise the same Issue, create a new Candidate with `supersedes` pointing to
 the sealed Candidate; seal and validate the new content separately.
+If an unsealed draft is abandoned, first restore its files to the parent checkpoint
+and inspect any partial seal artifacts, then use `cancel_draft` with a reason. This
+releases the pending slot while retaining the draft and its consumed candidate budget.

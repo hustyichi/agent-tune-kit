@@ -26,6 +26,10 @@ Cost and tool-count gates require the frozen project's independent `metric_sourc
 declaration and a matching source on every Record. The default runner's
 Agent-written `metrics.json` sidecar remains untrusted for these gates.
 Call `compare_and_gate` with exact Assessment IDs and parent/B0 commit.
+The incremental target set comes from the sealed Candidate's primary Issue; a
+different request Issue is rejected. Assess all frozen required dimensions on both
+sides and keep the same formal timeout. Do not choose a different dimension during
+comparison.
 For a linked external fix Round, call `validate_external_fix` with the new B0
 Assessment, passing direct-probe Assessment, and direct evidence refs. There is no
 Agent Candidate or old-B0 comparison in this verification Round.

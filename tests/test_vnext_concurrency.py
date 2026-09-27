@@ -11,10 +11,13 @@ from agent_tune_kit.execution import run_evaluation
 from tests.test_vnext_limits import project
 
 
-def setup_run(tmp_path: Path, script: str, concurrency: int, ids: list[str]) -> tuple[Path, dict]:
+def setup_run(
+    tmp_path: Path, script: str, concurrency: int, ids: list[str], timeout_seconds: int = 120
+) -> tuple[Path, dict]:
     rows = [{"id": cid, "input": cid, "usage": "optimization", "source_group_id": cid} for cid in ids]
     repo, root, dataset, rnd, plan = project(tmp_path, script, rows)
     plan["concurrency"] = concurrency
+    plan["timeout_seconds"] = timeout_seconds
     plan["budget"]["executions"] = 3 * len(ids)
     freeze_round(repo, root, {"round_id": rnd["id"], "plan": plan})
     return root, {
@@ -65,7 +68,7 @@ def test_invalid_or_unfrozen_concurrency_does_not_reserve_budget(tmp_path: Path,
 
 def test_parallel_attempt_timeout_keeps_other_results(tmp_path: Path) -> None:
     script = "import json,sys,time\nfrom pathlib import Path\nx=json.loads(Path(sys.argv[1]).read_text())\ntime.sleep(3 if x=='slow' else 0.1)\nprint('ok')\n"
-    root, request = setup_run(tmp_path, script, 2, ["slow", "fast", "next"])
+    root, request = setup_run(tmp_path, script, 2, ["slow", "fast", "next"], timeout_seconds=1)
     batch = run_evaluation(root, {**request, "timeout_seconds": 1})
     _, records, _ = validate_evidence(root, batch["id"])
     assert batch["status"] == "sealed"

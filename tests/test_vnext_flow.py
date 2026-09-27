@@ -20,11 +20,40 @@ from agent_tune_kit.checkpoints import (
 )
 from agent_tune_kit.core import ATKError, digest, store_assessment, validate_evidence
 from agent_tune_kit.execution import initialize_project, run_evaluation, store_dataset
-from agent_tune_kit.governance import compare_and_gate, finish_round
+from agent_tune_kit.governance import compare_and_gate, finish_round, store_diagnosis
 
 
 def git(repo: Path, *args: str) -> str:
     return subprocess.check_output(["git", *args], cwd=repo).decode().strip()
+
+
+def record_local_issue(root: Path, round_id: str, issue_id: str, case_ids: list[str]) -> None:
+    store_diagnosis(
+        root,
+        {
+            "round_id": round_id,
+            "issues": [
+                {
+                    "id": issue_id,
+                    "symptom": "target failure",
+                    "hypothesis": "local rule",
+                    "competing_explanations": [],
+                    "checks": [],
+                    "evidence_refs": [],
+                    "mechanism_evidence_refs": [],
+                    "intervention_validation_refs": [],
+                    "root_cause_status": "hypothesis",
+                    "intervention_layer": "prompt",
+                    "responsible_component": "agent",
+                    "case_ids": case_ids,
+                    "priority": "high",
+                    "disposition": "local_candidate",
+                    "resolution": "open",
+                    "next_action": "test local candidate",
+                }
+            ],
+        },
+    )
 
 
 def assessment_for(root: Path, batch: dict, spec: dict, judger: dict, expected: dict[str, str]) -> str:
@@ -113,6 +142,7 @@ def test_local_prompt_candidate_is_compared_and_committed(tmp_path: Path, final_
         {"source": str(source), "mapping": {"id": "id", "input": "input", "expected": "expected", "usage": "usage"}},
     )
     round_data = create_round(repo, root, {"issue_ids": ["issue-prompt"]})
+    record_local_issue(root, round_data["id"], "issue-prompt", ["target"])
     spec = {
         "version": "v1",
         "boundary": "local fake Agent",

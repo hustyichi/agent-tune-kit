@@ -315,6 +315,38 @@ def _selected_attempt(attempts: list, max_retries: int):
     return current
 
 
+def _required_dimensions(plan: dict, spec: dict, requested: str | None = None) -> list[str]:
+    primary = plan["primary_dimension"]
+    if requested is not None and requested != primary:
+        raise ATKError("COMPARISON_INVALID", "comparison dimension differs from the frozen primary dimension")
+    dimensions = spec["dimensions"]
+    required = plan.get("required_dimensions") or dimensions
+    if primary not in dimensions or not set(required) <= set(dimensions):
+        raise ATKError("COMPARISON_INVALID", "frozen dimensions differ from the Assessment specification")
+    return sorted(set(required) | {primary})
+
+
+def _dimension_verdicts(
+    root: Path, assessment_id: str, dimension: str, cases: set[str], repeats: int, max_retries: int
+) -> dict[str, list[str]] | None:
+    _, _, slots = _assessment_slots(root, assessment_id, dimension)
+    outcome = {case_id: [] for case_id in cases}
+    for case_id in cases:
+        for repeat in range(1, repeats + 1):
+            matches = [attempts for (name, _, index), attempts in slots.items() if name == case_id and index == repeat]
+            if len(matches) != 1 or (selected := _selected_attempt(matches[0], max_retries)) is None:
+                return None
+            execution, row, _ = selected
+            if (
+                row["validity"] != "valid"
+                or row["verdict"] not in {"pass", "fail"}
+                or execution["status"] not in {"completed", "agent_error"}
+            ):
+                return None
+            outcome[case_id].append(row["verdict"])
+    return outcome
+
+
 def _metric_total(slots: dict, cases: set[str], metric: str, source: str | None) -> float | None:
     if source is None:
         return None
@@ -448,9 +480,10 @@ def _compare_and_gate_locked(root: Path, request: dict) -> dict:
         raise ATKError("WORKSPACE_CONFLICT", "finalizing Round cannot accept incremental validation")
     if mode not in {"incremental", "final"}:
         raise ATKError("COMPARISON_INVALID", "mode must be incremental or final")
-    dimension = request.get("dimension", "task_success")
+    dimension = plan["primary_dimension"]
     left_manifest, left_batch, left_slots = _assessment_slots(root, request["left_assessment_id"], dimension)
     right_manifest, right_batch, right_slots = _assessment_slots(root, request["right_assessment_id"], dimension)
+    required_dimensions = _required_dimensions(plan, left_manifest["evaluation_spec"], request.get("dimension"))
     for manifest in (left_manifest, right_manifest):
         if manifest["judger_readiness"] != "calibrated" or digest(manifest["judger"]) != plan["judger_hash"]:
             raise ATKError("JUDGER_INVALID", "comparison requires the frozen calibrated judger")
@@ -461,8 +494,11 @@ def _compare_and_gate_locked(root: Path, request: dict) -> dict:
     if plan.get("run_config_hash") and left_batch.get("run_config_hash") != plan["run_config_hash"]:
         raise ATKError("COMPARISON_INVALID", "runner configuration differs from the frozen Round")
     for batch in (left_batch, right_batch):
-        if batch.get("concurrency", 1) != plan.get("concurrency", 1):
-            raise ATKError("COMPARISON_INVALID", "execution concurrency differs from the frozen plan")
+        if (
+            batch.get("concurrency", 1) != plan.get("concurrency", 1)
+            or batch.get("timeout_seconds") != plan["timeout_seconds"]
+        ):
+            raise ATKError("COMPARISON_INVALID", "execution concurrency or timeout differs from the frozen plan")
         if (
             batch.get("runner_hash") != plan["runner_hash"]
             or batch.get("fixed_context_hash") != plan["fixed_context_hash"]
@@ -484,10 +520,17 @@ def _compare_and_gate_locked(root: Path, request: dict) -> dict:
     if set(left_slots) != set(right_slots):
         result = "insufficient"
         limitations.append("paired Case slots differ between baseline and candidate")
+    candidate = None
+    issue_id = None
+    if mode == "incremental":
+        candidate = read_json(folder / "candidates" / safe_id(request["candidate_id"]) / "candidate.json")
+        issue_id = candidate["primary_issue_id"]
+        if request.get("issue_id", issue_id) != issue_id:
+            raise ATKError("COMPARISON_INVALID", "validation Issue differs from the sealed Candidate")
+        if candidate.get("target_case_ids") != sorted(plan.get("target_case_ids_by_issue", {}).get(issue_id, [])):
+            raise ATKError("COMPARISON_INVALID", "Candidate target Cases differ from the frozen plan")
     expected_cases = set(
-        plan["case_ids"]
-        if mode == "final"
-        else plan["protection_case_ids"] + plan.get("target_case_ids_by_issue", {}).get(request.get("issue_id"), [])
+        plan["case_ids"] if mode == "final" else plan["protection_case_ids"] + candidate["target_case_ids"]
     )
     if mode == "incremental":
         for accepted_id in round_data["active_candidate_ids"]:
@@ -504,6 +547,34 @@ def _compare_and_gate_locked(root: Path, request: dict) -> dict:
     ):
         result = "insufficient"
         limitations.append("baseline repeat count differs from the frozen plan")
+    secondary_regression = False
+    for required_dimension in required_dimensions:
+        if required_dimension == dimension:
+            continue
+        left_verdicts = _dimension_verdicts(
+            root,
+            request["left_assessment_id"],
+            required_dimension,
+            expected_cases,
+            expected_repeats,
+            plan.get("max_retries_per_slot", 0),
+        )
+        right_verdicts = _dimension_verdicts(
+            root,
+            request["right_assessment_id"],
+            required_dimension,
+            expected_cases,
+            expected_repeats,
+            plan.get("max_retries_per_slot", 0),
+        )
+        if left_verdicts is None or right_verdicts is None:
+            result = "insufficient"
+            limitations.append(f"required dimension {required_dimension} has an unknown or invalid verdict")
+        elif any(
+            right_verdicts[case_id].count("pass") < left_verdicts[case_id].count("pass") for case_id in expected_cases
+        ):
+            secondary_regression = True
+            limitations.append(f"required dimension {required_dimension} regressed")
     max_retries = plan.get("max_retries_per_slot", 0)
     case_results = {}
     case_distributions = {}
@@ -524,7 +595,7 @@ def _compare_and_gate_locked(root: Path, request: dict) -> dict:
                 row["verdict"]
                 if row["validity"] == "valid"
                 and row["verdict"] in {"pass", "fail"}
-                and execution.get("status") not in {"timeout", "infra_error"}
+                and execution.get("status") in {"completed", "agent_error"}
                 else None
             )
         rows.append(
@@ -576,7 +647,7 @@ def _compare_and_gate_locked(root: Path, request: dict) -> dict:
         "unchanged_mixed": sum(0 < score["left"] == score["right"] < 1 for score in case_results.values()),
         "unknown": len(expected_cases) - len(case_results),
     }
-    target_cases = set(plan.get("target_case_ids_by_issue", {}).get(request.get("issue_id"), expected_cases))
+    target_cases = set(candidate["target_case_ids"] if candidate else expected_cases)
     primary_delta = (
         sum(score["right"] - score["left"] for score in case_results.values()) / len(expected_cases)
         if len(case_results) == len(expected_cases)
@@ -624,7 +695,7 @@ def _compare_and_gate_locked(root: Path, request: dict) -> dict:
         else False
     )
     if result is None:
-        if regressed or exceeds_limit:
+        if regressed or secondary_regression or exceeds_limit:
             result = "regression"
         elif plan.get("objective", "quality") == "efficiency":
             metric = metrics[plan["efficiency_metric"]]
@@ -665,13 +736,16 @@ def _compare_and_gate_locked(root: Path, request: dict) -> dict:
             "planned_repeats_per_case": expected_repeats,
         },
         "primary_delta": primary_delta,
+        "primary_dimension": dimension,
+        "required_dimensions": required_dimensions,
         "metrics": metrics,
         "evidence_level": "repeated" if expected_repeats > 1 else "single_run",
         "plan_hash": digest(plan),
         "limitations": limitations,
     }
     if mode == "incremental":
-        candidate = read_json(folder / "candidates" / safe_id(request["candidate_id"]) / "candidate.json")
+        validation["issue_id"] = issue_id
+        validation["target_case_ids"] = candidate["target_case_ids"]
         if (
             validation["left_commit"] != candidate["parent_commit"]
             or validation["left_revision_id"] != candidate["parent_revision_id"]
@@ -721,7 +795,7 @@ def _validate_external_fix_locked(root: Path, request: dict) -> dict:
     for ref in refs:
         if not isinstance(ref, dict) or not ref.get("batch_id") or not ref.get("evidence_id"):
             raise ATKError("INCOMPLETE_EVIDENCE", "direct-check evidence reference is malformed")
-        direct_batch, _, index = validate_evidence(root, ref["batch_id"])
+        direct_batch, direct_records, index = validate_evidence(root, ref["batch_id"])
         permission = next(
             (
                 item
@@ -742,6 +816,7 @@ def _validate_external_fix_locked(root: Path, request: dict) -> dict:
             or direct_batch.get("runner_hash") != plan["runner_hash"]
             or direct_manifest["batch_id"] != direct_batch["id"]
             or ref["evidence_id"] not in index
+            or direct_records.get(ref["evidence_id"], {}).get("execution", {}).get("status") != "completed"
             or not any(
                 row["record_id"] == ref["evidence_id"]
                 and row["dimension"] == direct_dimension
@@ -754,8 +829,9 @@ def _validate_external_fix_locked(root: Path, request: dict) -> dict:
                 "INCOMPLETE_EVIDENCE", "direct check needs a passing authorized component probe on the new B0"
             )
         direct_batches.append(direct_batch)
-    dimension = request.get("dimension", "task_success")
+    dimension = plan["primary_dimension"]
     manifest, batch, slots = _assessment_slots(root, request["assessment_id"], dimension)
+    required_dimensions = _required_dimensions(plan, manifest["evaluation_spec"], request.get("dimension"))
     if manifest["judger_readiness"] != "calibrated" or digest(manifest["judger"]) != plan["judger_hash"]:
         raise ATKError("JUDGER_INVALID", "external fix needs the frozen calibrated judger")
     if manifest["evaluation_spec_hash"] != plan["evaluation_spec_hash"]:
@@ -764,6 +840,7 @@ def _validate_external_fix_locked(root: Path, request: dict) -> dict:
         batch.get("status") != "sealed"
         or batch.get("phase") != "external_fix"
         or batch.get("concurrency", 1) != plan.get("concurrency", 1)
+        or batch.get("timeout_seconds") != plan["timeout_seconds"]
         or batch.get("round_id") != round_data["id"]
         or batch.get("revision_id") != round_data["baseline_revision_id"]
         or batch.get("runner_hash") != plan["runner_hash"]
@@ -788,7 +865,7 @@ def _validate_external_fix_locked(root: Path, request: dict) -> dict:
         execution, row, record = selected
         if (
             row["validity"] != "valid"
-            or execution.get("status") in {"timeout", "infra_error"}
+            or execution.get("status") not in {"completed", "agent_error"}
             or row["verdict"] not in {"pass", "fail"}
             or required_loaded - _loaded_component_ids(root, batch, record)
         ):
@@ -797,6 +874,21 @@ def _validate_external_fix_locked(root: Path, request: dict) -> dict:
             result = "no_effect"
         elif row["verdict"] == "pass":
             case_scores[case_id] += 1 / plan["final_repeats"]
+    for required_dimension in required_dimensions:
+        if required_dimension == dimension:
+            continue
+        verdicts = _dimension_verdicts(
+            root,
+            request["assessment_id"],
+            required_dimension,
+            set(plan["case_ids"]),
+            plan["final_repeats"],
+            plan.get("max_retries_per_slot", 0),
+        )
+        if verdicts is None:
+            result = "insufficient"
+        elif any("fail" in values for values in verdicts.values()) and result == "pass":
+            result = "no_effect"
     validation = {
         "schema_version": 2,
         "id": new_id("validation"),
@@ -810,6 +902,8 @@ def _validate_external_fix_locked(root: Path, request: dict) -> dict:
         "direct_evidence_refs": refs,
         "direct_assessment_id": request["direct_assessment_id"],
         "result": result,
+        "primary_dimension": dimension,
+        "required_dimensions": required_dimensions,
         "case_ids": sorted(plan["case_ids"]),
         "case_scores": dict(case_scores),
         "plan_hash": digest(plan),

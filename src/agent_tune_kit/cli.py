@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 from .checkpoints import (
+    cancel_draft,
     create_round,
     decide_candidate,
     freeze_round,
@@ -56,6 +57,7 @@ def internal_main(argv: list[str]) -> int:
         "knowledge_applicability": lambda: knowledge_applicability(root, request),
         "prepare_candidate": lambda: prepare_candidate(repo, root, request),
         "seal_candidate": lambda: seal_candidate(repo, root, request),
+        "cancel_draft": lambda: cancel_draft(repo, root, request),
         "compare_and_gate": lambda: compare_and_gate(root, request),
         "validate_external_fix": lambda: validate_external_fix(root, request),
         "decide_candidate": lambda: decide_candidate(repo, root, request),

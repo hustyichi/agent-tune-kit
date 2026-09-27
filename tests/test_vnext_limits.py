@@ -11,7 +11,13 @@ from agent_tune_kit.checkpoints import create_round, freeze_round, prepare_candi
 from agent_tune_kit.core import ATKError, digest, read_assessment, store_assessment, validate_evidence
 from agent_tune_kit.evidence import import_evidence
 from agent_tune_kit.execution import initialize_project, run_evaluation, store_dataset
-from agent_tune_kit.governance import compare_and_gate, finish_round, knowledge_applicability, store_knowledge
+from agent_tune_kit.governance import (
+    compare_and_gate,
+    finish_round,
+    knowledge_applicability,
+    store_diagnosis,
+    store_knowledge,
+)
 from tests.test_vnext_flow import git
 
 SPEC = {
@@ -86,6 +92,33 @@ def project(
     )
     issue_ids = issue_ids or ["issue"]
     round_data = create_round(repo, root, {"issue_ids": issue_ids})
+    if "issue" in issue_ids:
+        store_diagnosis(
+            root,
+            {
+                "round_id": round_data["id"],
+                "issues": [
+                    {
+                        "id": "issue",
+                        "symptom": "target Case fails",
+                        "hypothesis": "prompt is insufficient",
+                        "competing_explanations": [],
+                        "checks": [],
+                        "evidence_refs": [],
+                        "mechanism_evidence_refs": [],
+                        "intervention_validation_refs": [],
+                        "root_cause_status": "hypothesis",
+                        "intervention_layer": "prompt",
+                        "responsible_component": "prompt",
+                        "case_ids": [row["id"] for row in rows],
+                        "priority": "high",
+                        "disposition": "local_candidate",
+                        "resolution": "open",
+                        "next_action": "evaluate a candidate",
+                    }
+                ],
+            },
+        )
     plan = {
         "allowed_paths": ["prompt.txt"],
         "protected_paths": ["agent.py"],
@@ -322,6 +355,7 @@ def test_retry_keeps_all_attempts_and_budget_blocks_extra_run(tmp_path: Path) ->
     ]
     repo, root, dataset, round_data, plan = project(tmp_path, script, rows)
     plan["budget"]["executions"] = 13
+    plan["timeout_seconds"] = 0.2
     plan["max_retries_per_slot"] = 1
     plan["incremental_repeats"] = 2
     freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
@@ -359,7 +393,7 @@ def test_retry_keeps_all_attempts_and_budget_blocks_extra_run(tmp_path: Path) ->
     )
     (repo / "prompt.txt").write_text("new")
     sealed = seal_candidate(repo, root, {"round_id": round_data["id"], "candidate_id": draft["id"]})
-    candidate = run_evaluation(root, {**base_request, "revision_id": sealed["revision_id"], "timeout_seconds": 1})
+    candidate = run_evaluation(root, {**base_request, "revision_id": sealed["revision_id"]})
     right = assess(root, candidate, {"target": "ok", "protect": "safe"})
     result = compare_and_gate(
         root,

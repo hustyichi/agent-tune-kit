@@ -44,8 +44,13 @@ Before any candidate, record a finite plan with scope, protected paths, issue an
 IDs, calibrated judger/spec/runner/fixed-context hashes, repeat plan, budget, commit
 authorization, rollback rule, and `replay_preparation` (`stateless` with reason, or a
 bounded command that rebuilds caches and artifacts at each checked-out Revision).
-Freeze `concurrency` as a positive integer (default 1) and use the same value in
-each formal run. Attempts share one Revision; different Revisions never run in parallel.
+Freeze `concurrency` as a positive integer (default 1) and `timeout_seconds` as a
+positive finite number (default 120); use both values in every formal run and retry.
+Freeze `primary_dimension` (default `task_success`) and optionally
+`required_dimensions`; omitting the latter requires every specification dimension.
+Unknown or invalid required verdicts block passage, and regression in a required
+dimension defeats an improvement in the primary one. Attempts share one Revision;
+different Revisions never run in parallel.
 Record `repeatability_basis`; treat an uncalibrated model-backed Agent as `unknown`,
 not deterministic. Stochastic or unknown plans use three final repeats per side by
 default; a two-repeat plan needs `repeat_plan_basis` and still makes no significance claim.
