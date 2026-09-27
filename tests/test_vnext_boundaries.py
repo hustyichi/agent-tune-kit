@@ -1437,6 +1437,63 @@ def test_staged_baseline_scope_and_sealed_content_are_hard_gates(tmp_path: Path)
     assert git(repo, "rev-parse", "HEAD") == round_data["baseline_commit"]
 
 
+@pytest.mark.parametrize(
+    "interrupt_at,after_write", [("revision.json", False), ("candidate.json", False), ("candidate.json", True)]
+)
+def test_seal_candidate_resumes_only_matching_artifacts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, interrupt_at: str, after_write: bool
+) -> None:
+    rows = [{"id": "case", "input": "task", "usage": "optimization", "source_group_id": "group"}]
+    repo, root, _, round_data, plan = project(tmp_path, "print('ok')\n", rows)
+    freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    draft = prepare_candidate(
+        repo, root, {"round_id": round_data["id"], "primary_issue_id": "issue", "paths": ["prompt.txt"]}
+    )
+    (repo / "prompt.txt").write_text("new")
+    original_write = checkpoints.write_json
+
+    def interrupt(path: Path, value: dict, *, immutable: bool = False) -> None:
+        if path.name == interrupt_at:
+            if after_write:
+                original_write(path, value, immutable=immutable)
+            raise RuntimeError("seal interrupted")
+        original_write(path, value, immutable=immutable)
+
+    request = {"round_id": round_data["id"], "candidate_id": draft["id"]}
+    with monkeypatch.context() as patch:
+        patch.setattr(checkpoints, "write_json", interrupt)
+        with pytest.raises(RuntimeError, match="seal interrupted"):
+            seal_candidate(repo, root, request)
+    folder = root / "rounds" / round_data["id"] / "candidates" / draft["id"]
+    previous_revision = read_json(folder / "revision.json")["id"] if (folder / "revision.json").exists() else None
+    if interrupt_at == "revision.json":
+        (repo / "prompt.txt").write_text("other")
+        with pytest.raises(ATKError, match="partial seal differs"):
+            seal_candidate(repo, root, request)
+        (repo / "prompt.txt").write_text("new")
+    sealed = seal_candidate(repo, root, request)
+    assert sealed["revision_id"] == read_json(folder / "revision.json")["id"]
+    if previous_revision:
+        assert sealed["revision_id"] == previous_revision
+    assert seal_candidate(repo, root, request) == sealed
+    assert (folder / "files" / "prompt.txt").read_text() == "new"
+    if interrupt_at == "revision.json":
+        (folder / "files" / "prompt.txt").write_text("tampered")
+        with pytest.raises(ATKError, match="partial seal differs"):
+            seal_candidate(repo, root, request)
+        with pytest.raises(ATKError, match="sealed candidate copy changed"):
+            decide_candidate(
+                repo,
+                root,
+                {
+                    **request,
+                    "action": "keep",
+                    "validation_id": _passing_validation(root, round_data, sealed),
+                    "reason": "fixture",
+                },
+            )
+
+
 def test_unexpected_index_and_head_drift_block_candidate_keep(tmp_path: Path) -> None:
     rows = [{"id": "case", "input": "task", "usage": "optimization", "source_group_id": "group"}]
     repo, root, _, round_data, plan = project(tmp_path, "print('ok')\n", rows)

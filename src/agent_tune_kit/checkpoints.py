@@ -10,7 +10,7 @@ from collections.abc import Iterable
 from contextlib import contextmanager, suppress
 from pathlib import Path
 
-from .core import ATKError, digest, locked, new_id, now, read_json, safe_id, write_json
+from .core import ATKError, atomic_write, digest, locked, new_id, now, read_json, safe_id, write_json
 
 
 def git(repo: Path, *args: str, ok: bool = True) -> bytes:
@@ -416,34 +416,58 @@ def seal_candidate(repo: Path, root: Path, request: dict) -> dict:
             raise ATKError("WORKSPACE_CONFLICT", "candidate is not pending")
         folder = _round_path(root, value["id"]) / "candidates" / candidate_id
         draft = read_json(folder / "draft.json")
-        if (folder / "candidate.json").exists():
-            raise ATKError("WORKSPACE_CONFLICT", "candidate already sealed")
         verify_repo(repo, expected_head=draft["parent_commit"], expected_branch=value["branch"])
         actual = changed_paths(repo) - set(value["baseline_untracked"])
         if actual != set(draft["declared_paths"]):
             raise ATKError("SCOPE_VIOLATION", f"actual changed paths differ from declared paths: {sorted(actual)}")
         files = {}
+        contents = {}
         for name in sorted(actual):
             _check_regular_parent(repo, name)
             data = content(repo, name)
             files[name] = {"exists": data is not None, "sha256": digest(data) if data is not None else None}
             if data is not None:
-                target = folder / "files" / name
-                target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_bytes(data)
+                contents[name] = data
         patch = git(repo, "--literal-pathspecs", "diff", "--binary", "--no-ext-diff", "--", *sorted(actual))
-        (folder / "changes.patch").write_bytes(patch)
-        write_json(folder / "files.json", files, immutable=True)
-        revision = {
-            "schema_version": 2,
-            "id": new_id("revision"),
-            "created_at": now(),
-            "base_commit": draft["parent_commit"],
-            "candidate_id": candidate_id,
-            "files_hash": digest(files),
-            "changed_paths": sorted(actual),
-        }
-        write_json(folder / "revision.json", revision, immutable=True)
+        manifest_path = folder / "files.json"
+        if manifest_path.exists():
+            patch_path = folder / "changes.patch"
+            if (
+                read_json(manifest_path) != files
+                or not patch_path.is_file()
+                or patch_path.read_bytes() != patch
+                or any(
+                    not (folder / "files" / name).is_file() or (folder / "files" / name).read_bytes() != data
+                    for name, data in contents.items()
+                )
+            ):
+                raise ATKError("REVISION_MISMATCH", "partial seal differs from the pending candidate")
+        else:
+            for name, data in contents.items():
+                atomic_write(folder / "files" / name, data)
+            atomic_write(folder / "changes.patch", patch)
+            write_json(manifest_path, files, immutable=True)
+        revision_path = folder / "revision.json"
+        if revision_path.exists():
+            revision = read_json(revision_path)
+            if (
+                revision.get("base_commit") != draft["parent_commit"]
+                or revision.get("candidate_id") != candidate_id
+                or revision.get("files_hash") != digest(files)
+                or revision.get("changed_paths") != sorted(actual)
+            ):
+                raise ATKError("REVISION_MISMATCH", "recorded Revision differs from the sealed files")
+        else:
+            revision = {
+                "schema_version": 2,
+                "id": new_id("revision"),
+                "created_at": now(),
+                "base_commit": draft["parent_commit"],
+                "candidate_id": candidate_id,
+                "files_hash": digest(files),
+                "changed_paths": sorted(actual),
+            }
+            write_json(revision_path, revision, immutable=True)
         sealed = {
             **draft,
             "content_status": "sealed",
@@ -451,7 +475,12 @@ def seal_candidate(repo: Path, root: Path, request: dict) -> dict:
             "changed_paths": sorted(actual),
             "files_hash": revision["files_hash"],
         }
-        write_json(folder / "candidate.json", sealed, immutable=True)
+        candidate_path = folder / "candidate.json"
+        if candidate_path.exists():
+            if read_json(candidate_path) != sealed:
+                raise ATKError("REVISION_MISMATCH", "recorded candidate differs from its Revision")
+        else:
+            write_json(candidate_path, sealed, immutable=True)
         return sealed
 
 
@@ -463,6 +492,9 @@ def _verify_sealed(repo: Path, folder: Path, candidate: dict) -> dict:
         data = content(repo, name)
         if (data is not None) != expected["exists"] or (data is not None and digest(data) != expected["sha256"]):
             raise ATKError("REVISION_MISMATCH", f"candidate changed after sealing: {name}")
+        archived = folder / "files" / name
+        if expected["exists"] and (not archived.is_file() or digest(archived) != expected["sha256"]):
+            raise ATKError("REVISION_MISMATCH", f"sealed candidate copy changed: {name}")
     return files
 
 
