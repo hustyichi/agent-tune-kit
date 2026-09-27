@@ -106,6 +106,70 @@ def test_observation_csv_does_not_promote_tool_output_to_trace_output(tmp_path: 
     assert record["events"][0]["output"] == "tool says yes"
 
 
+def test_no_ground_truth_allows_unknown_success_and_observable_format(tmp_path: Path) -> None:
+    source = tmp_path / "trace.json"
+    source.write_text(
+        json.dumps(
+            {
+                "id": "trace-1",
+                "input": "question",
+                "output": '{"ok": true}',
+            }
+        )
+    )
+    root = tmp_path / "state"
+    batch = import_evidence(
+        root,
+        {
+            "source": str(source),
+            "source_kind": "langfuse",
+            "source_namespace": "fixture",
+            "adapter_profile": "langfuse_trace_bundle",
+            "mapping_version": "1",
+        },
+    )
+    record_id = next(iter(validate_evidence(root, batch["id"])[1]))
+    assessment = store_assessment(
+        root,
+        {
+            "batch_id": batch["id"],
+            "evaluation_spec": {
+                "version": "v1",
+                "boundary": "trace without expected answer",
+                "dimensions": ["task_success", "json_format"],
+                "dimension_rules": {
+                    "task_success": {"validity": "requires expected answer", "attribution": "unknown"},
+                    "json_format": {"validity": "parseable output", "attribution": "Agent"},
+                },
+                "denominator_rule": "one trace",
+            },
+            "judger": {"version": "v1", "readiness": "uncalibrated"},
+            "rows": [
+                {
+                    "record_id": record_id,
+                    "dimension": dimension,
+                    "validity": validity,
+                    "validity_reason": reason,
+                    "verdict": verdict,
+                    "score": None,
+                    "reason": reason,
+                    "evidence_refs": [{"batch_id": batch["id"], "evidence_id": "trace:trace-1"}],
+                    "judger_kind": "deterministic",
+                }
+                for dimension, validity, verdict, reason in (
+                    ("task_success", "unknown", "unknown", "no expected answer"),
+                    ("json_format", "valid", "pass", "output parses as JSON"),
+                )
+            ],
+        },
+    )
+    _, rows = read_assessment(root, assessment.parent.name)
+    assert {(row["dimension"], row["verdict"]) for row in rows} == {
+        ("task_success", "unknown"),
+        ("json_format", "pass"),
+    }
+
+
 def test_root_observation_without_parent_is_complete(tmp_path: Path) -> None:
     source = tmp_path / "trace.json"
     source.write_text(

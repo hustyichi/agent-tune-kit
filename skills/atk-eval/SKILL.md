@@ -39,6 +39,9 @@ the final root Observation. Do not rerun the Agent when the request is reassess.
 
 Define versioned `evaluation_spec` and `judger` before scoring. Use deterministic
 checks for hard constraints and the current Codex session for semantic judgments.
+Without Ground Truth, judge independently observable dimensions and mark any
+unjudgeable task-success dimension `unknown`; output presence or imported scores
+alone do not establish task success.
 Calibrate new or changed rules with confirmed positive and negative examples; mark
 uncalibrated if unresolved. Submit complete per-record, per-dimension rows to
 `store_assessment`; each verdict cites `{batch_id,evidence_id}`. Its CSV is the sole
