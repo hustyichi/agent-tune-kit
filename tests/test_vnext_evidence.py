@@ -160,7 +160,7 @@ def test_trace_bundle_joins_separate_observations_and_scores(tmp_path: Path) -> 
                     "id": "trace-1",
                     "input": None,
                     "output": "done",
-                    "metadata": {"accessToken": "secret", "totalTokens": 2},
+                    "metadata": {"accessToken": "secret", "totalTokens": 2, "token_usage": {"input_tokens": 1}},
                 }
             ]
         )
@@ -187,7 +187,11 @@ def test_trace_bundle_joins_separate_observations_and_scores(tmp_path: Path) -> 
     assert len(records) == 1
     record = next(iter(records.values()))
     assert record["input_present"] and record["input"] is None
-    assert record["runtime_metadata"]["metadata"] == {"accessToken": "[REDACTED]", "totalTokens": 2}
+    assert record["runtime_metadata"]["metadata"] == {
+        "accessToken": "[REDACTED]",
+        "totalTokens": 2,
+        "token_usage": {"input_tokens": 1},
+    }
     assert record["external_scores"] == [{"id": "score-1", "traceId": "trace-1", "name": "review", "value": 0.7}]
     event = record["events"][0]
     assert event["event_id"] == "obs-1"

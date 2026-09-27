@@ -15,7 +15,7 @@ from .core import ATKError, canonical, digest, new_id, now, write_json
 MAX_SOURCE_BYTES = 100 * 1024 * 1024
 SECRET_KEY = re.compile(
     r"(?:password|secret|authorization|api[_-]?key|private[_-]?key|cookie|"
-    r"(?:^|[_-])token(?:$|[_-])|token$)",
+    r"token(?:[_-]?value)?$)",
     re.I,
 )
 BEARER = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/-]+")
