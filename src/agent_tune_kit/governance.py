@@ -301,6 +301,7 @@ def _loaded_component_ids(root: Path, batch: dict, record: dict) -> set[str]:
             not source
             or not component
             or component.get("source_path") != source
+            or not component.get("actual_sha256")
             or not isinstance(observed_path, str)
             or not Path(observed_path).is_absolute()
             or event.get("state") not in {"loaded", "invoked"}
