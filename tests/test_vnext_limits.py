@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from agent_tune_kit.checkpoints import create_round, freeze_round, prepare_candidate, seal_candidate
-from agent_tune_kit.core import ATKError, digest, store_assessment, validate_evidence
+from agent_tune_kit.core import ATKError, digest, read_assessment, store_assessment, validate_evidence
 from agent_tune_kit.execution import initialize_project, run_evaluation, store_dataset
 from agent_tune_kit.governance import compare_and_gate, finish_round
 from tests.test_vnext_flow import git
@@ -237,6 +237,19 @@ def test_retry_keeps_all_attempts_and_budget_blocks_extra_run(tmp_path: Path) ->
         },
     )
     assert result["result"] == "pass"
+    assert result["case_distributions"]["target"] == {
+        "left": {"pass": 0, "fail": 2, "unknown": 0},
+        "right": {"pass": 2, "fail": 0, "unknown": 0},
+    }
+    assert result["outcome_counts"] == {
+        "fixed": 1,
+        "regressed": 0,
+        "persistent_failure": 0,
+        "stable_success": 1,
+        "unchanged_mixed": 0,
+        "unknown": 0,
+    }
+    assert result["coverage"] == {"complete_cases": 2, "planned_cases": 2, "planned_repeats_per_case": 2}
     assert result["metrics"]["cost"] == {"left_total": None, "right_total": None}
     assert result["metrics"]["duration_seconds"]["left_total"] is not None
     assert json.loads((root / "rounds" / round_data["id"] / "budget-usage.json").read_text())["executions"] == 9
@@ -347,20 +360,29 @@ def test_efficiency_gate_and_missing_metric(tmp_path: Path) -> None:
     sealed = seal_candidate(repo, root, {"round_id": round_data["id"], "candidate_id": draft["id"]})
     candidate = run_evaluation(root, {**request, "revision_id": sealed["revision_id"]})
     right = assess(root, candidate, {"case": "ok"})
-    result = compare_and_gate(
-        root,
-        {
-            "round_id": round_data["id"],
-            "mode": "incremental",
-            "issue_id": "issue",
-            "candidate_id": draft["id"],
-            "left_assessment_id": left,
-            "right_assessment_id": right,
-            "left_commit": round_data["baseline_commit"],
-        },
-    )
+    comparison = {
+        "round_id": round_data["id"],
+        "mode": "incremental",
+        "issue_id": "issue",
+        "candidate_id": draft["id"],
+        "left_assessment_id": left,
+        "right_assessment_id": right,
+        "left_commit": round_data["baseline_commit"],
+    }
+    result = compare_and_gate(root, comparison)
     assert result["result"] == "pass"
     assert result["metrics"]["cost"] == {"left_total": 2.0, "right_total": 1.0}
+    _, rows = read_assessment(root, right)
+    rows[0]["verdict"] = "unknown"
+    rows[0]["evidence_refs"] = json.loads(rows[0]["evidence_refs"])
+    unknown_right = store_assessment(
+        root, {"batch_id": candidate["id"], "evaluation_spec": SPEC, "judger": JUDGER, "rows": rows}
+    ).parent.name
+    incomplete = compare_and_gate(root, {**comparison, "right_assessment_id": unknown_right})
+    assert incomplete["result"] == "insufficient"
+    assert incomplete["case_distributions"]["case"]["right"] == {"pass": 0, "fail": 0, "unknown": 1}
+    assert incomplete["outcome_counts"]["unknown"] == 1
+    assert incomplete["coverage"]["complete_cases"] == 0
 
 
 def test_holdout_exposure_cannot_be_reused_in_new_round(tmp_path: Path) -> None:

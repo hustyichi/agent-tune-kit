@@ -131,6 +131,14 @@ def test_ten_case_cumulative_gain_counts_only_new_fixes(tmp_path: Path) -> None:
     assert validation["result"] == "pass"
     assert validation["fixed_case_ids"] == ["7", "8", "9"]
     assert sum(score["right"] for score in validation["case_scores"].values()) == 9
+    assert validation["outcome_counts"] == {
+        "fixed": 3,
+        "regressed": 0,
+        "persistent_failure": 1,
+        "stable_success": 6,
+        "unchanged_mixed": 0,
+        "unknown": 0,
+    }
     finish_round(
         repo,
         root,
@@ -659,6 +667,12 @@ def test_changed_case_input_needs_new_execution_on_both_sides(tmp_path: Path) ->
     }
     mismatch = compare_and_gate(root, request)
     assert mismatch["result"] == "insufficient"
+    assert mismatch["case_distributions"]["case"] == {
+        "left": {"pass": 0, "fail": 0, "unknown": 1},
+        "right": {"pass": 0, "fail": 0, "unknown": 1},
+    }
+    assert mismatch["outcome_counts"]["unknown"] == 1
+    assert mismatch["coverage"] == {"complete_cases": 0, "planned_cases": 1, "planned_repeats_per_case": 1}
     decide_candidate(
         repo,
         root,

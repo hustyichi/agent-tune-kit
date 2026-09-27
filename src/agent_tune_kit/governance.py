@@ -418,6 +418,7 @@ def _compare_and_gate_locked(root: Path, request: dict) -> dict:
         limitations.append("baseline repeat count differs from the frozen plan")
     max_retries = plan.get("max_retries_per_slot", 0)
     case_results = {}
+    case_distributions = {}
     rows = []
     for key in sorted(set(left_slots) & set(right_slots)):
         if key[0] not in expected_cases:
@@ -433,7 +434,9 @@ def _compare_and_gate_locked(root: Path, request: dict) -> dict:
             execution, row, _ = selected
             sides.append(
                 row["verdict"]
-                if row["validity"] == "valid" and execution.get("status") not in {"timeout", "infrastructure_error"}
+                if row["validity"] == "valid"
+                and row["verdict"] in {"pass", "fail"}
+                and execution.get("status") not in {"timeout", "infrastructure_error"}
                 else None
             )
         rows.append(
@@ -459,7 +462,15 @@ def _compare_and_gate_locked(root: Path, request: dict) -> dict:
             limitations.append(f"{key[0]} repeat {key[2]} has an unknown or invalid verdict")
     for case_id in expected_cases:
         paired = [row for row in rows if row["case_id"] == case_id]
-        if len(paired) != expected_repeats or any(row["left"] is None or row["right"] is None for row in paired):
+        repeats = [[row for row in paired if row["repeat_index"] == index] for index in range(1, expected_repeats + 1)]
+        case_distributions[case_id] = {}
+        for side in ("left", "right"):
+            verdicts = [matches[0][side] if len(matches) == 1 else None for matches in repeats]
+            case_distributions[case_id][side] = {verdict: verdicts.count(verdict) for verdict in ("pass", "fail")}
+            case_distributions[case_id][side]["unknown"] = verdicts.count(None)
+        if len(paired) != expected_repeats or any(
+            len(matches) != 1 or matches[0]["left"] is None or matches[0]["right"] is None for matches in repeats
+        ):
             result = "insufficient"
             limitations.append(f"{case_id} lacks complete paired repeats")
             continue
@@ -469,6 +480,14 @@ def _compare_and_gate_locked(root: Path, request: dict) -> dict:
         }
     fixed = [case_id for case_id, score in case_results.items() if score["right"] > score["left"]]
     regressed = [case_id for case_id, score in case_results.items() if score["right"] < score["left"]]
+    outcome_counts = {
+        "fixed": len(fixed),
+        "regressed": len(regressed),
+        "persistent_failure": sum(score["left"] == score["right"] == 0 for score in case_results.values()),
+        "stable_success": sum(score["left"] == score["right"] == 1 for score in case_results.values()),
+        "unchanged_mixed": sum(0 < score["left"] == score["right"] < 1 for score in case_results.values()),
+        "unknown": len(expected_cases) - len(case_results),
+    }
     target_cases = set(plan.get("target_case_ids_by_issue", {}).get(request.get("issue_id"), expected_cases))
     primary_delta = (
         sum(score["right"] - score["left"] for score in case_results.values()) / len(expected_cases)
@@ -546,6 +565,13 @@ def _compare_and_gate_locked(root: Path, request: dict) -> dict:
         "fixed_case_ids": sorted(fixed),
         "regressed_case_ids": sorted(regressed),
         "case_scores": case_results,
+        "case_distributions": case_distributions,
+        "outcome_counts": outcome_counts,
+        "coverage": {
+            "complete_cases": len(case_results),
+            "planned_cases": len(expected_cases),
+            "planned_repeats_per_case": expected_repeats,
+        },
         "primary_delta": primary_delta,
         "metrics": metrics,
         "evidence_level": "repeated" if expected_repeats > 1 else "single_run",
