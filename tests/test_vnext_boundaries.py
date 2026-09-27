@@ -519,6 +519,140 @@ def test_decision_written_before_round_update_can_recover(tmp_path: Path, monkey
     )
 
 
+@pytest.mark.parametrize("action", ["reject", "defer"])
+def test_interrupted_restoration_resumes_known_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, action: str
+) -> None:
+    rows = [{"id": "case", "input": "task", "usage": "optimization", "source_group_id": "group"}]
+    repo, root, _, round_data, plan = project(tmp_path, "print('ok')\n", rows, extra_files={"second.txt": "old"})
+    plan["allowed_paths"].append("second.txt")
+    freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    draft = prepare_candidate(
+        repo, root, {"round_id": round_data["id"], "primary_issue_id": "issue", "paths": ["prompt.txt", "second.txt"]}
+    )
+    (repo / "prompt.txt").write_text("new")
+    (repo / "second.txt").write_text("new")
+    sealed = seal_candidate(repo, root, {"round_id": round_data["id"], "candidate_id": draft["id"]})
+    original_git = checkpoints.git
+    restores = 0
+
+    def interrupt_second_restore(path: Path, *args: str, ok: bool = True) -> bytes:
+        nonlocal restores
+        if "restore" in args and "--worktree" in args:
+            restores += 1
+            if restores == 2:
+                raise RuntimeError("interrupted")
+        return original_git(path, *args, ok=ok)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(checkpoints, "git", interrupt_second_restore)
+        with pytest.raises(RuntimeError, match="interrupted"):
+            decide_candidate(
+                repo,
+                root,
+                {
+                    "round_id": round_data["id"],
+                    "candidate_id": draft["id"],
+                    "action": action,
+                    "validation_id": _passing_validation(root, round_data, sealed),
+                    "reason": "fixture",
+                },
+            )
+    operation = next((root / "rounds" / round_data["id"] / "operations").glob("*.json"))
+    assert {"prompt.txt": (repo / "prompt.txt").read_text(), "second.txt": (repo / "second.txt").read_text()} == {
+        "prompt.txt": "old",
+        "second.txt": "new",
+    }
+    request = {"round_id": round_data["id"], "operation_id": operation.stem}
+    result = inspect_or_recover_operation(repo, root, request)
+    assert result["stage"] == "complete"
+    assert result["decision"]["action"] == action
+    assert inspect_or_recover_operation(repo, root, request) == result
+    assert (repo / "prompt.txt").read_text() == (repo / "second.txt").read_text() == "old"
+    assert read_json(root / "rounds" / round_data["id"] / "round.json")["pending_candidate_id"] is None
+
+
+@pytest.mark.parametrize("action", ["keep", "reject"])
+def test_round_saved_before_operation_completion_recovers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, action: str
+) -> None:
+    rows = [{"id": "case", "input": "task", "usage": "optimization", "source_group_id": "group"}]
+    repo, root, _, round_data, plan = project(tmp_path, "print('ok')\n", rows)
+    freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    draft = prepare_candidate(
+        repo, root, {"round_id": round_data["id"], "primary_issue_id": "issue", "paths": ["prompt.txt"]}
+    )
+    (repo / "prompt.txt").write_text("new")
+    sealed = seal_candidate(repo, root, {"round_id": round_data["id"], "candidate_id": draft["id"]})
+    original_write_json = checkpoints.write_json
+
+    def interrupt_complete(path: Path, value: dict, *, immutable: bool = False) -> None:
+        if path.parent.name == "operations" and value.get("stage") == "complete":
+            raise RuntimeError("interrupted")
+        original_write_json(path, value, immutable=immutable)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(checkpoints, "write_json", interrupt_complete)
+        with pytest.raises(RuntimeError, match="interrupted"):
+            decide_candidate(
+                repo,
+                root,
+                {
+                    "round_id": round_data["id"],
+                    "candidate_id": draft["id"],
+                    "action": action,
+                    "validation_id": _passing_validation(root, round_data, sealed),
+                    "reason": "fixture",
+                },
+            )
+    operation = next((root / "rounds" / round_data["id"] / "operations").glob("*.json"))
+    current_commit = git(repo, "rev-parse", "HEAD")
+    request = {"round_id": round_data["id"], "operation_id": operation.stem}
+    result = inspect_or_recover_operation(repo, root, request)
+    assert result["stage"] == "complete"
+    assert result["decision"]["action"] == action
+    assert inspect_or_recover_operation(repo, root, request) == result
+    assert git(repo, "rev-parse", "HEAD") == current_commit
+    assert read_json(operation)["stage"] == "complete"
+
+
+@pytest.mark.parametrize("tamper", ["content", "index"])
+def test_interrupted_restoration_refuses_unknown_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tamper: str
+) -> None:
+    rows = [{"id": "case", "input": "task", "usage": "optimization", "source_group_id": "group"}]
+    repo, root, _, round_data, plan = project(tmp_path, "print('ok')\n", rows)
+    freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    draft = prepare_candidate(
+        repo, root, {"round_id": round_data["id"], "primary_issue_id": "issue", "paths": ["prompt.txt"]}
+    )
+    (repo / "prompt.txt").write_text("new")
+    sealed = seal_candidate(repo, root, {"round_id": round_data["id"], "candidate_id": draft["id"]})
+    with monkeypatch.context() as patch:
+        patch.setattr(checkpoints, "_restore_parent", lambda *_: (_ for _ in ()).throw(RuntimeError("interrupted")))
+        with pytest.raises(RuntimeError, match="interrupted"):
+            decide_candidate(
+                repo,
+                root,
+                {
+                    "round_id": round_data["id"],
+                    "candidate_id": draft["id"],
+                    "action": "reject",
+                    "validation_id": _passing_validation(root, round_data, sealed),
+                    "reason": "fixture",
+                },
+            )
+    if tamper == "content":
+        (repo / "prompt.txt").write_text("third")
+    else:
+        git(repo, "add", "prompt.txt")
+    operation = next((root / "rounds" / round_data["id"] / "operations").glob("*.json"))
+    with pytest.raises(ATKError, match="unknown restoration content|staged changes must be resolved"):
+        inspect_or_recover_operation(repo, root, {"round_id": round_data["id"], "operation_id": operation.stem})
+    assert (repo / "prompt.txt").read_text() == ("third" if tamper == "content" else "new")
+    assert read_json(root / "rounds" / round_data["id"] / "round.json")["pending_candidate_id"] == draft["id"]
+
+
 def test_final_completion_rejects_wrong_revision(tmp_path: Path) -> None:
     rows = [{"id": "case", "input": "task", "usage": "optimization", "source_group_id": "group"}]
     repo, root, _, round_data, plan = project(tmp_path, "print('ok')\n", rows)

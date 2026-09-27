@@ -484,11 +484,18 @@ def require_override(request: dict, action: str) -> dict:
     return authorization
 
 
-def _restore_parent(repo: Path, folder: Path, candidate: dict, files: dict) -> None:
-    parent_paths = tracked_paths(repo)
+def _restore_parent(repo: Path, candidate: dict, files: dict) -> None:
+    restore = []
     for name, state in files.items():
-        path = safe_path(repo, name)
-        if name in parent_paths:
+        parent = _git_file(repo, candidate["parent_commit"], name)
+        current = content(repo, name)
+        if current == parent:
+            continue
+        if (current is not None) != state["exists"] or (current is not None and digest(current) != state["sha256"]):
+            raise ATKError("GIT_OPERATION_INTERRUPTED", f"unknown restoration content requires inspection: {name}")
+        restore.append((name, parent))
+    for name, parent in restore:
+        if parent is not None:
             git(
                 repo,
                 "--literal-pathspecs",
@@ -498,10 +505,8 @@ def _restore_parent(repo: Path, folder: Path, candidate: dict, files: dict) -> N
                 "--",
                 name,
             )
-        elif state["exists"] and path.exists() and digest(path.read_bytes()) == state["sha256"]:
-            path.unlink()
         else:
-            raise ATKError("WORKSPACE_CONFLICT", f"new candidate file cannot be safely removed: {name}")
+            safe_path(repo, name).unlink()
 
 
 def decide_candidate(repo: Path, root: Path, request: dict) -> dict:
@@ -590,7 +595,7 @@ def decide_candidate(repo: Path, root: Path, request: dict) -> dict:
             value["current_revision_id"] = candidate["revision_id"]
             value["active_candidate_ids"].append(candidate_id)
         else:
-            _restore_parent(repo, folder, candidate, files)
+            _restore_parent(repo, candidate, files)
             if changed_paths(repo) != set(value["baseline_untracked"]):
                 raise ATKError("GIT_OPERATION_INTERRUPTED", "restoration incomplete; operation requires inspection")
             operation["stage"] = "restored"
@@ -619,6 +624,71 @@ def decide_candidate(repo: Path, root: Path, request: dict) -> dict:
         return decision
 
 
+def _recover_restoration_locked(repo: Path, root: Path, folder: Path, operation: dict) -> dict:
+    value = _round(root, operation["round_id"])
+    candidate_id = safe_id(operation["candidate_id"])
+    candidate_folder = folder / "candidates" / candidate_id
+    candidate = read_json(candidate_folder / "candidate.json")
+    files = read_json(candidate_folder / "files.json")
+    if (
+        operation.get("round_id") != value["id"]
+        or candidate.get("id") != candidate_id
+        or operation.get("parent_commit") != candidate["parent_commit"]
+        or operation.get("files_hash") != candidate["files_hash"]
+        or digest(files) != candidate["files_hash"]
+    ):
+        raise ATKError("GIT_OPERATION_INTERRUPTED", "restore operation identity differs from sealed candidate")
+    decision_path = candidate_folder / "decision.json"
+    decision = read_json(decision_path) if decision_path.exists() else None
+    expected = {
+        "round_id": value["id"],
+        "candidate_id": candidate_id,
+        "action": operation["action"],
+        "validation_id": operation["validation_id"],
+        "operation_id": operation["id"],
+        "before_commit": candidate["parent_commit"],
+        "after_commit": candidate["parent_commit"],
+    }
+    if decision and any(decision.get(key) != item for key, item in expected.items()):
+        raise ATKError("GIT_OPERATION_INTERRUPTED", "saved Decision disagrees with restoration")
+    if value["pending_candidate_id"] != candidate_id:
+        if operation.get("stage") == "complete" and decision:
+            return {"stage": "complete", "decision": decision}
+        if value["pending_candidate_id"] is not None or not decision:
+            raise ATKError("GIT_OPERATION_INTERRUPTED", "restore operation is not the pending candidate")
+    if operation.get("stage") not in {"prepared", "restored"}:
+        raise ATKError("GIT_OPERATION_INTERRUPTED", "restore operation stage is inconsistent")
+    if value["current_commit"] != candidate["parent_commit"]:
+        raise ATKError("GIT_OPERATION_INTERRUPTED", "Round checkpoint changed during restoration")
+    verify_repo(repo, expected_head=candidate["parent_commit"], expected_branch=value["branch"])
+    if changed_paths(repo) - set(value["baseline_untracked"]) - set(files):
+        raise ATKError("GIT_OPERATION_INTERRUPTED", "unknown workspace changes appeared during restoration")
+    _restore_parent(repo, candidate, files)
+    if changed_paths(repo) != set(value["baseline_untracked"]):
+        raise ATKError("GIT_OPERATION_INTERRUPTED", "restoration did not reach the parent checkpoint")
+    if operation["stage"] != "restored":
+        operation["stage"] = "restored"
+        write_json(folder / "operations" / f"{operation['id']}.json", operation)
+    if not decision:
+        decision = {
+            "schema_version": 2,
+            "id": new_id("decision"),
+            "created_at": now(),
+            "reason": operation["reason"],
+            "override": False,
+            "override_authorization": None,
+            "validation_result": operation["validation_result"],
+            **expected,
+        }
+        write_json(decision_path, decision, immutable=True)
+    if value["pending_candidate_id"] == candidate_id:
+        value["pending_candidate_id"] = None
+        _write_round(root, value)
+    operation["stage"] = "complete"
+    write_json(folder / "operations" / f"{operation['id']}.json", operation)
+    return {"stage": "complete", "decision": decision}
+
+
 def inspect_or_recover_operation(repo: Path, root: Path, request: dict) -> dict:
     """Reconcile a candidate operation with its exact Git and artifact state."""
     with locked(root):
@@ -626,25 +696,51 @@ def inspect_or_recover_operation(repo: Path, root: Path, request: dict) -> dict:
         operation = read_json(folder / "operations" / f"{safe_id(request['operation_id'])}.json")
         if operation.get("action") == "rollback_to":
             return _recover_rollback_locked(repo, folder, operation)
+        if operation.get("action") in {"reject", "defer"}:
+            return _recover_restoration_locked(repo, root, folder, operation)
         if operation.get("action") != "keep":
-            raise ATKError("GIT_OPERATION_INTERRUPTED", "restore operation needs manual content inspection")
+            raise ATKError("GIT_OPERATION_INTERRUPTED", "unknown candidate operation action")
         candidate_id = operation["candidate_id"]
         candidate_folder = folder / "candidates" / candidate_id
         decision_path = candidate_folder / "decision.json"
         value = _round(root, request["round_id"])
+        candidate = read_json(candidate_folder / "candidate.json")
+        files = read_json(candidate_folder / "files.json")
         if decision_path.exists() and value["pending_candidate_id"] != candidate_id:
             decision = read_json(decision_path)
             if (
-                operation.get("stage") != "complete"
+                operation.get("round_id") != value["id"]
+                or operation.get("parent_commit") != candidate["parent_commit"]
+                or operation.get("files_hash") != candidate["files_hash"]
+                or digest(files) != candidate["files_hash"]
                 or decision.get("operation_id") != operation["id"]
-                or decision.get("after_commit") != operation.get("commit")
+                or decision.get("candidate_id") != candidate_id
+                or decision.get("action") != "keep"
+                or decision.get("validation_id") != operation["validation_id"]
+                or decision.get("before_commit") != candidate["parent_commit"]
             ):
                 raise ATKError("GIT_OPERATION_INTERRUPTED", "completed operation identity is inconsistent")
+            if operation.get("stage") == "complete" and decision.get("after_commit") == operation.get("commit"):
+                return {"stage": "complete", "decision": decision}
+            if (
+                value["pending_candidate_id"] is not None
+                or value["current_commit"] != decision.get("after_commit")
+                or value["current_revision_id"] != candidate["revision_id"]
+                or value["active_candidate_ids"].count(candidate_id) != 1
+                or branch(repo) != value["branch"]
+                or head(repo) != value["current_commit"]
+                or (operation.get("commit") and operation["commit"] != value["current_commit"])
+            ):
+                raise ATKError("GIT_OPERATION_INTERRUPTED", "Round changed after candidate Decision was saved")
+            _verify_candidate_commit(repo, candidate, files, operation)
+            if changed_paths(repo) != set(value["baseline_untracked"]) or staged_paths(repo):
+                raise ATKError("GIT_OPERATION_INTERRUPTED", "workspace differs after candidate commit")
+            operation["commit"] = value["current_commit"]
+            operation["stage"] = "complete"
+            write_json(folder / "operations" / f"{operation['id']}.json", operation)
             return {"stage": "complete", "decision": decision}
         if value["pending_candidate_id"] != candidate_id:
             raise ATKError("GIT_OPERATION_INTERRUPTED", "operation is not the pending candidate")
-        candidate = read_json(candidate_folder / "candidate.json")
-        files = read_json(candidate_folder / "files.json")
         if (
             operation.get("parent_commit") != candidate["parent_commit"]
             or operation.get("files_hash") != candidate["files_hash"]
