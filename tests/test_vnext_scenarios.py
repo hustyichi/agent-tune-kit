@@ -1044,29 +1044,52 @@ def test_service_failure_remains_valid_failure_while_skill_dimension_is_unknown(
 @pytest.mark.parametrize("fault_layer", ["skill", "agent_code"])
 def test_wrong_skill_rule_is_distinct_from_agent_ignoring_correct_rule(tmp_path: Path, fault_layer: str) -> None:
     skill_text = "red" if fault_layer == "skill" else "blue"
-    script = (
-        "from pathlib import Path\nprint(Path('business_skill.md').read_text().strip())\n"
-        if fault_layer == "skill"
-        else "print('red')\n"
-    )
-    rows = [{"id": "case", "input": "valid", "usage": "optimization", "source_group_id": "g"}]
-    repo, root, dataset, round_data, _ = project(
+    prelude = "import json,sys\nfrom pathlib import Path\ncase=json.loads(Path(sys.argv[1]).read_text())\n"
+    corrected_script = prelude + "print('safe' if case=='safe' else Path('business_skill.md').read_text().strip())\n"
+    script = corrected_script if fault_layer == "skill" else prelude + "print('safe' if case=='safe' else 'red')\n"
+    rows = [
+        {"id": "case", "input": "valid", "usage": "optimization", "source_group_id": "g1"},
+        {"id": "protect", "input": "safe", "usage": "protection", "source_group_id": "g2"},
+    ]
+    repo, root, dataset, round_data, plan = project(
         tmp_path,
         script,
         rows,
+        issue_ids=[fault_layer],
         extra_files={"business_skill.md": skill_text, "contract.md": "Valid requests must return blue.\n"},
     )
+    changed_path = "business_skill.md" if fault_layer == "skill" else "agent.py"
+    config_path = root / "project.json"
+    config = read_json(config_path)
+    config["allowed_paths"] = [changed_path]
+    config["protected_paths"] = ["contract.md"]
+    config["components"] = [
+        {
+            "component_id": fault_layer,
+            "role": fault_layer,
+            "change_role": "variable",
+            "source_path": changed_path,
+        }
+    ]
+    write_json(config_path, config)
+    plan["allowed_paths"] = [changed_path]
+    plan["protected_paths"] = ["contract.md"]
+    plan["protection_case_ids"] = ["protect"]
+    plan["target_case_ids_by_issue"] = {fault_layer: ["case"]}
+    plan["budget"] = {"executions": 8, "probes": 0, "candidates": 1}
+    freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    request = {
+        "dataset_id": dataset["id"],
+        "case_ids": ["case", "protect"],
+        "purpose": "evaluation",
+        "round_id": round_data["id"],
+    }
     batch = run_evaluation(
         root,
-        {
-            "dataset_id": dataset["id"],
-            "case_ids": ["case"],
-            "purpose": "evaluation",
-            "revision_id": round_data["baseline_revision_id"],
-            "revision_commit": git(repo, "rev-parse", "HEAD"),
-        },
+        {**request, "revision_id": round_data["baseline_revision_id"]},
     )
-    record = next(iter(validate_evidence(root, batch["id"])[1].values()))
+    baseline_assessment = assess(root, batch, {"case": "blue", "protect": "safe"})
+    record = next(record for record in validate_evidence(root, batch["id"])[1].values() if record["case_id"] == "case")
     assert record["output"].strip() == "red"
     observed = {"batch_id": batch["id"], "evidence_id": record["id"]}
 
@@ -1088,7 +1111,7 @@ def test_wrong_skill_rule_is_distinct_from_agent_ignoring_correct_rule(tmp_path:
 
     contract_ref = source_ref("contract.md", "business-contract", 1)
     skill_ref = source_ref("business_skill.md", "business-skill", 1)
-    code_ref = source_ref("agent.py", "agent-code", 2 if fault_layer == "skill" else 1)
+    code_ref = source_ref("agent.py", "agent-code", 4)
     issue = {
         "id": fault_layer,
         "symptom": "valid request returned red instead of blue",
@@ -1110,3 +1133,60 @@ def test_wrong_skill_rule_is_distinct_from_agent_ignoring_correct_rule(tmp_path:
     }
     saved = store_diagnosis(root, {"round_id": round_data["id"], "issues": [issue]})
     assert saved["issues"][0]["intervention_layer"] == fault_layer
+
+    draft = prepare_candidate(
+        repo, root, {"round_id": round_data["id"], "primary_issue_id": fault_layer, "paths": [changed_path]}
+    )
+    (repo / changed_path).write_text("blue" if fault_layer == "skill" else corrected_script)
+    sealed = seal_candidate(repo, root, {"round_id": round_data["id"], "candidate_id": draft["id"]})
+    candidate = run_evaluation(root, {**request, "revision_id": sealed["revision_id"]})
+    candidate_assessment = assess(root, candidate, {"case": "blue", "protect": "safe"})
+    incremental = compare_and_gate(
+        root,
+        {
+            "round_id": round_data["id"],
+            "mode": "incremental",
+            "issue_id": fault_layer,
+            "candidate_id": draft["id"],
+            "left_assessment_id": baseline_assessment,
+            "right_assessment_id": candidate_assessment,
+            "left_commit": round_data["baseline_commit"],
+        },
+    )
+    assert incremental["result"] == "pass"
+    assert incremental["fixed_case_ids"] == ["case"]
+    assert incremental["regressed_case_ids"] == []
+    decide_candidate(
+        repo,
+        root,
+        {
+            "round_id": round_data["id"],
+            "candidate_id": draft["id"],
+            "action": "keep",
+            "validation_id": incremental["id"],
+            "reason": "known-cause synthetic repair",
+        },
+    )
+    final_left = run_evaluation(root, {**request, "phase": "final", "revision_id": round_data["baseline_revision_id"]})
+    final_right = run_evaluation(root, {**request, "phase": "final", "revision_id": sealed["revision_id"]})
+    final = compare_and_gate(
+        root,
+        {
+            "round_id": round_data["id"],
+            "mode": "final",
+            "left_assessment_id": assess(root, final_left, {"case": "blue", "protect": "safe"}),
+            "right_assessment_id": assess(root, final_right, {"case": "blue", "protect": "safe"}),
+            "left_commit": round_data["baseline_commit"],
+        },
+    )
+    assert final["result"] == "pass"
+    finish_round(
+        repo,
+        root,
+        {
+            "round_id": round_data["id"],
+            "action": "complete",
+            "validation_id": final["id"],
+            "reason": "target fixed and protection retained",
+        },
+    )
