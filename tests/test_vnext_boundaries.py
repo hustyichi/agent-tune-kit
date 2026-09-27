@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shlex
 import subprocess
 import sys
 import time
@@ -37,6 +38,21 @@ def _passing_validation(root: Path, round_data: dict, candidate: dict) -> str:
         },
     )
     return validation_id
+
+
+def _install_smudge_filter(repo: Path, tmp_path: Path, target: str) -> None:
+    script = tmp_path / "filter.py"
+    script.write_text(
+        "import sys\n"
+        "data=sys.stdin.buffer.read()\n"
+        "if sys.argv[1]=='smudge' and data==sys.argv[2].encode(): data+=b'!'\n"
+        "if sys.argv[1]=='clean' and data.endswith(b'!'): data=data[:-1]\n"
+        "sys.stdout.buffer.write(data)\n"
+    )
+    command = f"{shlex.quote(sys.executable)} {shlex.quote(str(script))}"
+    git(repo, "config", "filter.atk.smudge", f"{command} smudge {target}")
+    git(repo, "config", "filter.atk.clean", f"{command} clean {target}")
+    (repo / ".git" / "info" / "attributes").write_text("prompt.txt filter=atk\n")
 
 
 def _handoff_issue() -> dict:
@@ -651,6 +667,47 @@ def test_interrupted_restoration_refuses_unknown_state(
         inspect_or_recover_operation(repo, root, {"round_id": round_data["id"], "operation_id": operation.stem})
     assert (repo / "prompt.txt").read_text() == ("third" if tamper == "content" else "new")
     assert read_json(root / "rounds" / round_data["id"] / "round.json")["pending_candidate_id"] == draft["id"]
+
+
+@pytest.mark.parametrize("restore_kind", ["reject", "rollback", "replay"])
+def test_git_smudge_cannot_hide_restored_content_drift(tmp_path: Path, restore_kind: str) -> None:
+    rows = [{"id": "case", "input": "task", "usage": "optimization", "source_group_id": "group"}]
+    repo, root, _, round_data, plan = project(tmp_path, "print('ok')\n", rows)
+    freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    draft = prepare_candidate(
+        repo, root, {"round_id": round_data["id"], "primary_issue_id": "issue", "paths": ["prompt.txt"]}
+    )
+    (repo / "prompt.txt").write_text("new")
+    sealed = seal_candidate(repo, root, {"round_id": round_data["id"], "candidate_id": draft["id"]})
+    request = {
+        "round_id": round_data["id"],
+        "candidate_id": draft["id"],
+        "action": "reject" if restore_kind == "reject" else "keep",
+        "validation_id": _passing_validation(root, round_data, sealed),
+        "reason": "fixture",
+    }
+    if restore_kind != "reject":
+        decide_candidate(repo, root, request)
+    current_commit = git(repo, "rev-parse", "HEAD")
+    _install_smudge_filter(repo, tmp_path, "new" if restore_kind == "replay" else "old")
+    with pytest.raises(ATKError, match="restored content differs"):
+        if restore_kind == "reject":
+            decide_candidate(repo, root, request)
+        elif restore_kind == "rollback":
+            rollback_to(
+                repo,
+                root,
+                {"round_id": round_data["id"], "target_commit": round_data["baseline_commit"], "reason": "fixture"},
+            )
+        else:
+            with temporary_revision(repo, root, round_data["id"], round_data["baseline_commit"]):
+                assert (repo / "prompt.txt").read_text() == "old"
+    assert git(repo, "rev-parse", "HEAD") == current_commit
+    assert git(repo, "diff", "--name-only") == ("prompt.txt" if restore_kind == "rollback" else "")
+    assert (repo / "prompt.txt").read_text() == ("new!" if restore_kind == "replay" else "old!")
+    stored = read_json(root / "rounds" / round_data["id"] / "round.json")
+    assert stored["current_commit"] == current_commit
+    assert stored["pending_candidate_id"] == (draft["id"] if restore_kind == "reject" else None)
 
 
 def test_final_completion_rejects_wrong_revision(tmp_path: Path) -> None:

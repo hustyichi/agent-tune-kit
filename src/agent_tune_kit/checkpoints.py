@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import subprocess
+from collections.abc import Iterable
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -70,6 +71,12 @@ def content(repo: Path, name: str) -> bytes | None:
 def _git_file(repo: Path, revision: str, name: str) -> bytes | None:
     found = subprocess.run(["git", "cat-file", "-e", f"{revision}:{name}"], cwd=repo, capture_output=True)
     return git(repo, "show", f"{revision}:{name}") if found.returncode == 0 else None
+
+
+def _verify_restored_content(repo: Path, revision: str, paths: Iterable[str]) -> None:
+    for name in paths:
+        if content(repo, name) != _git_file(repo, revision, name):
+            raise ATKError("GIT_OPERATION_INTERRUPTED", f"restored content differs from checkpoint: {name}")
 
 
 def _check_regular_parent(repo: Path, name: str) -> None:
@@ -507,6 +514,7 @@ def _restore_parent(repo: Path, candidate: dict, files: dict) -> None:
             )
         else:
             safe_path(repo, name).unlink()
+    _verify_restored_content(repo, candidate["parent_commit"], files)
 
 
 def decide_candidate(repo: Path, root: Path, request: dict) -> dict:
@@ -878,12 +886,14 @@ def _recover_rollback_locked(repo: Path, folder: Path, operation: dict) -> dict:
             staged = staged_paths(repo)
             if staged:
                 git(repo, "--literal-pathspecs", "restore", "--staged", "--", *sorted(staged))
+        _verify_restored_content(repo, operation["before_commit"], paths)
         if changed_paths(repo) != set(value["baseline_untracked"]) or staged_paths(repo):
             raise ATKError("GIT_OPERATION_INTERRUPTED", "rollback abort did not restore the starting checkpoint")
         operation["stage"] = "aborted"
         write_json(folder / "operations" / f"{operation['id']}.json", operation)
         return {"stage": "aborted", "round_id": value["id"]}
     _verify_rollback_commit(repo, operation)
+    _verify_restored_content(repo, operation["target_commit"], paths)
     if changed_paths(repo) != set(value["baseline_untracked"]) or staged_paths(repo):
         raise ATKError("GIT_OPERATION_INTERRUPTED", "workspace differs after rollback commit")
     decision = (
@@ -975,6 +985,7 @@ def rollback_to(repo: Path, root: Path, request: dict) -> dict:
                 "--",
                 *sorted(changed),
             )
+            _verify_restored_content(repo, target_commit, changed)
             git(repo, "--literal-pathspecs", "add", "-A", "--", *sorted(changed))
         if staged_paths(repo) != changed:
             raise ATKError("GIT_OPERATION_INTERRUPTED", "rollback index differs from expected paths")
@@ -1080,6 +1091,7 @@ def temporary_revision(repo: Path, root: Path, round_id: str, target_commit: str
                     *sorted(paths),
                 )
             _prepare_replay(repo, preparation)
+            _verify_restored_content(repo, value["current_commit"], paths)
             if changed_paths(repo) != set(value["baseline_untracked"]):
                 raise ATKError("GIT_OPERATION_INTERRUPTED", "temporary replay did not restore starting checkpoint")
             operation["stage"] = "complete" if ready else "aborted"
