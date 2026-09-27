@@ -1,181 +1,66 @@
 # Agent Tune Kit
 
+最后更新：2026-09-27。状态：vNext 核心链路已实现，真实业务接入与完整验收待收口。详见 [实现与验收记录](docs/vnext-implementation-report.md)。
+
 简体中文 | [English](README.en.md)
 
-[![PyPI](https://img.shields.io/pypi/v/agent-tune-kit.svg)](https://pypi.org/project/agent-tune-kit/)
+Agent Tune Kit（ATK）是用于**已有本地 Agent** 的 Codex 插件。当前会话负责调查、语义判断和修改；本地 Python 工具负责证据导入、运行记录、判定明细、对照门禁和 Git 检查点。可调资产是业务 Skill、Prompt、Agent 代码或配置；ATK 自己的流程 Skill 不属于候选资产。
 
-Agent Tune Kit 是一个**本地 Codex 插件**，用于把你自己的本地 Agent 从“能跑”推进到“可评测、可诊断、可迭代调优”。
+> 本仓库正在实现 [vNext 改造方案](docs/agent-tune-kit-vnext-refactor-plan.md)。这是破坏兼容的开发状态，未发布为 PyPI 新版本。旧版 `.atk/results/vN/` 和旧 Skill 不自动迁移或删除；新版初始化遇到旧 `.atk` 会停止。
 
-它围绕两件事展开：先把评估数据集整理成可复用、可人工校准的资产；再把 Agent 的批量评测、异常发现、报告分析和调优改动串成一个可重复的闭环。
+## 安装与入口
 
-改造设计见 [vNext 正式改造方案](docs/agent-tune-kit-vnext-refactor-plan.md)（2026-09-27，文档 v1.2）。方案采用原工程内串行累积优化、有效候选 Git commit 与检查点回退，取消额外 worktree 和独立候选组合流程；保留根因诊断、组件证据、服务交接与复验契约。这是待实现、待验收的目标设计；下文仍说明当前已交付版本。
-
-## 架构图
-
-![Agent Tune Kit 架构图](docs/assets/arch.png)
-
-## 适合谁
-
-适合你，如果你已经有，或准备整理出：
-
-- 一个本地 Agent、聊天机器人、工具调用 Agent 或 RAG Agent。
-- 一份小型评估数据，推荐 CSV；5 到 20 条样例就能开始。
-- 一些可以判断好坏的输入、期望答案或人工可验收结果。
-- 想让 Codex 协助定位弱点，并调 prompt、代码、参数或工具配置。
-
-## 项目价值
-
-Agent Tune Kit 的价值不只是“跑一次测试”，而是把 Agent 调优拆成两条清晰路径：
-
-- **数据集准备路径**：从业务描述、样例或规则生成数据集，补齐 `ground_truth`，用本地 HTML 质检，再根据人工反馈修正预期结果。数据集会沉淀在 `.atk/datasets/`，不绑定某一轮测试结果。
-- **Agent 评测与调优路径**：把已有 Agent 接入 runner，批量运行评测，找出异常样本，生成分析报告，浏览失败样本，然后让 Codex 基于证据调优 Agent。每一轮结果写入 `.atk/results/vN/`，方便跨轮验证是否真的变好。
-
-这意味着你可以把 Agent 调优从一次性的主观试错，变成带有样本、结果、报告和调优记录的工程流程。
-
-## 安装
-
-一键运行：
+已发布版本的本地插件安装命令仍为：
 
 ```sh
 uvx --from agent-tune-kit atk install
 ```
 
-如果希望长期保留 `atk` 命令，可以改用：
+要试用此开发 checkout，请在本仓库执行 `uv run --frozen atk install`，再在 Codex 的 `/plugins` 中启用 Agent Tune Kit。只有七个公开 Skill：
 
-```sh
-uv tool install agent-tune-kit
-atk install
-```
+| Skill | 职责 |
+| --- | --- |
+| `atk-init` | 调查已有 Agent 的调用、依赖、副作用及业务 Skill 自动加载；建立项目本地 runner |
+| `atk-dataset` | 建立不可变的 Case 数据集，整理 Ground Truth、重放条件和来源分组 |
+| `atk-eval` | 显式运行、导入或重判；接收批量结果及 Langfuse JSON/JSONL/CSV/`.gz` 文件 |
+| `atk-diagnose` | 从证据调查竞争解释，记录多个 Issue、范围外交接和复验条件 |
+| `atk-optimize` | 在干净的 Git B0 上按允许路径准备并封存一个候选 |
+| `atk-validate` | 对比候选与父检查点，最后对比累计版本与 B0 |
+| `atk-decide` | 保留并提交、拒绝并恢复、回退已接受后缀或结束本轮 |
 
-或使用 `pipx`：
+核心顺序：`atk-init → atk-dataset（按需）→ atk-eval → atk-diagnose → [atk-optimize → atk-validate → atk-decide]×N → atk-validate（最终）→ atk-decide`。一轮只有一个未决候选；通过的候选在原工程形成一个本地 commit，失败候选保存证据后恢复父检查点。最终门禁以冻结的完整 Case、保护集与重复计划验证累计效果。不会自动 push、发布、部署、改写 Git 历史或修改其他仓库。
 
-```sh
-pipx install agent-tune-kit
-atk install
-```
+## 三种证据入口
 
-安装完成后，在 Codex 中打开插件列表：
+- **本地运行**：项目 `.atk/adapters/runner.py` 用目标项目的 Python 环境按显式尝试列表调用现有 Agent；每次尝试保存一个 Execution。Prompt、代码及业务 Skill 使用同一协议。Skill 的 `available`、`loaded`、`invoked` 状态分开记录，无法证明实际加载时不能正常通过 Skill 门禁。
+- **批量结果导入**：CSV/JSON/JSONL 按保存的字段映射导入，不重新运行 Agent；缺少尝试边界时不伪造 Execution。
+- **Langfuse 文件导入**：支持 Trace bundle 和 Observation 行两种显式 profile。保留 Trace/Observation ID、父子关系、来源、缺失与过滤范围；外部分数只当证据，不直接换算 ATK 的通过率。原文件只读，默认遮蔽常见凭证字段；项目敏感字段需要追加脱敏键。
 
-```text
-/plugins
-```
+没有 Ground Truth 也能调查证据；只有具备固定判据的维度才能给出确定判定。`reassess` 创建新 Assessment，不重跑 Agent，不覆盖旧评分。评分标准、被测边界、组件和运行条件变化会使旧对照失效。
 
-选择并启用 `Agent Tune Kit`。如果刚启用后当前会话里还看不到 `$atk-*` 自动补全，请重启 Codex，或重新打开当前项目会话。
-
-## 两条核心路径
-
-下面这些命令都在**你的 Agent 项目**里运行，不是在本仓库里运行。
-
-理想情况下，你已经有一个 Codex 能读取和修改的本地 Agent 项目，以及一份评估数据集。数据集建议优先使用 CSV；字段名不必严格固定，Codex 会根据内容判断输入、期望结果和评测方式。
-
-### 路径 A：数据集准备
-
-当你还没有可靠评估数据，或已有数据集但预期结果语义不稳定时，先走这条路径：
-
-```text
-$atk-build-dataset <你的业务描述、样例或规则>
-$atk-build-ground-truth
-$atk-visualize-dataset
-$atk-tune-ground-truth
-```
-
-这条路径只处理 `.atk/datasets/`，不会运行 Agent，也不会创建 `.atk/results/vN`。
-
-| 命令 | 作用 | 关键产物 |
-| --- | --- | --- |
-| `$atk-build-dataset` | 从业务描述、样例或规则构建小型高价值评估数据集 | `.atk/datasets/dataset.csv` |
-| `$atk-build-ground-truth` | 为已有数据集补齐统一语义的 `ground_truth` | 更新 `.atk/datasets/dataset.csv` |
-| `$atk-visualize-dataset` | 生成本地离线 HTML，浏览、搜索、筛选、质检数据集，并导出人工反馈 | `.atk/datasets/dataset.html`、浏览器导出的 `dataset_review.csv` |
-| `$atk-tune-ground-truth` | 根据 `dataset_review.csv` 修正 `ground_truth` | 更新 `.atk/datasets/dataset.csv` |
-
-`$atk-build-dataset` 会生成包含 `atk_id` 的 `.atk/datasets/dataset.csv`。它不会默认凭空推测规范 `ground_truth`；只有当用户明确提供正确答案或判定标准时才会写入。之后可以用 `$atk-build-ground-truth` 统一补齐预期结果，再用 `$atk-visualize-dataset` 做人工质检。如果 HTML 中导出的 `dataset_review.csv` 指出某些 `ground_truth` 不合理，运行 `$atk-tune-ground-truth` 把反馈写回数据集。
-
-### 路径 B：Agent 评测与调优
-
-当你已经有可运行 Agent 和评估数据集时，走这条调优闭环：
-
-```text
-$atk-init 我的 Agent 入口是 scripts/agent.py，评估数据是 data/eval.csv
-$atk-run
-$atk-find-failures
-$atk-report
-$atk-visualize-failures
-$atk-tune
-```
-
-| 命令 | 作用 | 关键产物 |
-| --- | --- | --- |
-| `$atk-init` | 接入已有 Agent 和评估数据，生成 runner，并把数据集规范化到 ATK 固定位置 | `.atk/runner/eval_runner.py`、`.atk/datasets/dataset.csv` |
-| `$atk-run` | 执行批量评测，由 runner 创建或复用当前结果版本 | `.atk/results/vN/eval_results.csv` |
-| `$atk-find-failures` | 让 Codex 根据当前评测结果判断异常样本 | `.atk/results/vN/failure_cases.csv` |
-| `$atk-report` | 生成当前轮分析报告，并在有上一轮时做跨版本验证 | `.atk/results/vN/report.md` |
-| `$atk-visualize-failures` | 生成本地离线 HTML，搜索、筛选、复核失败样本 | `.atk/results/vN/failure_cases.html` |
-| `$atk-tune` | 基于报告和失败样本调 prompt、代码、参数或工具配置 | Agent 改动、`.atk/results/vN/tuning_plan.md` |
-
-如果你有稳定、可程序化表达的失败判定标准，可以用规则分支替换 `$atk-find-failures`：
-
-```text
-$atk-init-failure-rule 规则：当 expected 字段与 agent_output 字段不一致时判定为异常
-$atk-find-failures-by-rule
-```
-
-#### 验证是否变好
-
-调优后再跑一轮。常见做法是只重跑上一轮失败样本：
-
-```text
-$atk-run --only-failures
-$atk-find-failures
-$atk-report
-```
-
-新结果会写入新的 `.atk/results/vN/`。`--only-failures` 会通过 `atk_id` 将上一轮 `failure_cases.csv` 映射回 `.atk/datasets/dataset.csv`，并只重跑这些行。从第二轮开始，`$atk-report` 会对比上一轮 `tuning_plan.md`，说明目标问题是已解决、部分解决、未解决，还是无法判断。
-
-### 本地调优上下文
-
-ATK 可选读取本地私有的 `.atk/context.md`，用于保存用户沟通后确认的调优目标、Agent 行为标准、`ground_truth` 判定标准、人工反馈和调优决策。它不是数据集元信息或运行日志文件：字段名、行数、版本路径、执行统计等能从 `.atk/datasets/`、`.atk/results/` 或 runner 中恢复的信息不应写入这里。
-
-`$atk-build-ground-truth` 和 `$atk-tune-ground-truth` 会在用户确认 `ground_truth` 标准变化时更新相关标准；`$atk-find-failures`、`$atk-report` 和 `$atk-tune` 会在判断失败、归因和调 Agent 时参考这些标准。缺少 `.atk/context.md` 不会阻塞任何流程。
-
-## 输出结构
+## 主要产物
 
 ```text
 .atk/
-├── datasets/
-│   └── dataset.csv        # ATK 可运行数据集，包含 atk_id
-├── runner/
-│   ├── eval_runner.py
-│   └── failure_rule.py
-└── results/
-    ├── v1/
-    │   ├── eval_results.csv
-    │   ├── failure_cases.csv
-    │   ├── failure_cases.html
-    │   ├── report.md
-    │   └── tuning_plan.md
-    └── v2/
-        └── ...
+├── project.json                # 项目运行配置与组件声明
+├── runtime.md                  # 接入调查、加载证明和局限
+├── adapters/runner.py          # 项目本地 runner
+├── datasets/<id>/              # 不可变 Case 快照
+├── evidence/<batch-id>/        # records.jsonl、来源索引、执行状态
+├── assessments/<id>/           # manifest.json + 唯一权威 assessment.csv
+├── rounds/<id>/                # 冻结计划、Issues、候选、验证、决策和操作日志
+└── knowledge/<id>/             # 带适用性和证据的经验修订
 ```
 
-常用输出文件：
+所有内部操作使用 `atk internal <operation> --request <JSON> --output <JSON>`；这是供七个 Skill 调用的确定性接口，不是另一套用户调优命令。机器产物用显式 ID 引用，不依赖“最新 vN”目录。被测 Agent 不应接触 Ground Truth、判定规则和诊断答案。
 
-- `eval_results.csv`：每条样本的实际输出。
-- `failure_cases.csv`：筛选出的异常样本。
-- `failure_cases.html`：可选的异常样本浏览页面。
-- `report.md`：本轮问题分析和调优建议。
-- `tuning_plan.md`：Codex 本轮改了什么、为什么改。
+## 开发验证
 
-## 常用 Skill
+```sh
+uv run --frozen pytest -q
+uv run --frozen ruff check .
+python3 scripts/validate_skill_pack.py
+uv build --no-sources
+```
 
-- `$atk-build-dataset`：从业务描述、样例或规则构建 `.atk/datasets/dataset.csv`。
-- `$atk-build-ground-truth`：为现有 `.atk/datasets/dataset.csv` 补齐规范的 `ground_truth` 列。
-- `$atk-visualize-dataset`：将 `.atk/datasets/dataset.csv` 生成本地 HTML 浏览页，便于快速查看数据并确认 ground_truth 是否符合预期。
-- `$atk-tune-ground-truth`：根据 `dataset_review.csv` 中的用户反馈修正 `.atk/datasets/dataset.csv` 里的 `ground_truth`。
-- `$atk-init`：生成测试脚本。
-- `$atk-run`：运行评测并生成新版本结果。
-- `$atk-find-failures`：让 Codex 判断异常样本。
-- `$atk-init-failure-rule`：创建或更新异常判定规则。
-- `$atk-find-failures-by-rule`：按规则筛选异常样本。
-- `$atk-report`：生成分析报告和跨轮验证结论。
-- `$atk-visualize-failures`：生成异常样本 HTML 浏览页。
-- `$atk-tune`：根据报告调优 Agent。
+离线测试使用小型 Git 仓库和假 Agent。真实轨迹、真实自动加载业务 Skill、已知责任层案例和外部修复后复验须分别验收；离线测试通过不能替代这些结果。尚未确认安全隔离的目标 Agent 外部写操作不得在正式跑测中启动。

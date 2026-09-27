@@ -28,30 +28,38 @@ PLUGIN_NAME = "agent-tune-kit"
 
 WHEEL_REQUIRED_PATHS = {
     "agent_tune_kit/plugin_payload/agent-tune-kit/.codex-plugin/plugin.json",
-    "agent_tune_kit/plugin_payload/agent-tune-kit/skills/atk-build-dataset/SKILL.md",
-    "agent_tune_kit/plugin_payload/agent-tune-kit/skills/atk-new-agent/SKILL.md",
-    "agent_tune_kit/plugin_payload/agent-tune-kit/templates/.atk/runner/eval_runner.py.md",
-    "agent_tune_kit/plugin_payload/agent-tune-kit/templates/.atk/runner/failure_rule.py.md",
-    "agent_tune_kit/plugin_payload/agent-tune-kit/templates/agent/agent.py",
-    "agent_tune_kit/plugin_payload/agent-tune-kit/templates/agent/run_agent.py",
-    "agent_tune_kit/plugin_payload/agent-tune-kit/templates/agent/pyproject.toml",
-    "agent_tune_kit/plugin_payload/agent-tune-kit/templates/agent/.env.example",
-    "agent_tune_kit/plugin_payload/agent-tune-kit/templates/agent/README.md",
-    "agent_tune_kit/plugin_payload/agent-tune-kit/docs/skill-template-pack-usage.md",
+    "agent_tune_kit/plugin_payload/agent-tune-kit/skills/WORKFLOW.md",
+    "agent_tune_kit/plugin_payload/agent-tune-kit/templates/runner.py",
+    *(
+        f"agent_tune_kit/plugin_payload/agent-tune-kit/skills/{name}/SKILL.md"
+        for name in (
+            "atk-init",
+            "atk-dataset",
+            "atk-eval",
+            "atk-diagnose",
+            "atk-optimize",
+            "atk-validate",
+            "atk-decide",
+        )
+    ),
 }
 
 SDIST_REQUIRED_PATHS = {
     ".codex-plugin/plugin.json",
-    "skills/atk-build-dataset/SKILL.md",
-    "skills/atk-new-agent/SKILL.md",
-    "templates/.atk/runner/eval_runner.py.md",
-    "templates/.atk/runner/failure_rule.py.md",
-    "templates/agent/agent.py",
-    "templates/agent/run_agent.py",
-    "templates/agent/pyproject.toml",
-    "templates/agent/.env.example",
-    "templates/agent/README.md",
-    "docs/skill-template-pack-usage.md",
+    "skills/WORKFLOW.md",
+    "templates/runner.py",
+    *(
+        f"skills/{name}/SKILL.md"
+        for name in (
+            "atk-init",
+            "atk-dataset",
+            "atk-eval",
+            "atk-diagnose",
+            "atk-optimize",
+            "atk-validate",
+            "atk-decide",
+        )
+    ),
     "scripts/check-release.py",
     "scripts/publish-release.py",
 }
@@ -65,7 +73,7 @@ PYTHON_FILES = [
     "scripts/check-release.py",
     "scripts/publish-release.py",
     "tests/test_install_plugin.py",
-    "tests/test_release_scripts.py",
+    "tests/test_vnext_flow.py",
 ]
 
 
@@ -236,9 +244,8 @@ def smoke_installed_artifact(artifact: Path, work_dir: Path) -> None:
     for required in [
         target / ".codex-plugin" / "plugin.json",
         target / ".codex-plugin" / "agent-tune-kit-install.json",
-        target / "skills" / "atk-build-dataset" / "SKILL.md",
-        target / "templates" / ".atk" / "runner" / "eval_runner.py.md",
-        target / "templates" / ".atk" / "runner" / "failure_rule.py.md",
+        target / "skills" / "atk-eval" / "SKILL.md",
+        target / "templates" / "runner.py",
     ]:
         if not required.exists():
             raise ReleaseCheckError(f"installed artifact missing {required}")

@@ -1,5 +1,7 @@
 # Codex Agent 迭代调优服务 — 产品需求文档
 
+> 历史 v1 PRD，已由 [vNext 改造方案](agent-tune-kit-vnext-refactor-plan.md) 取代；旧入口与产物仅供追溯。
+
 ## 1. 产品概述
 - **产品名称**：Agent Tune Kit
 - **目标用户**：开发者

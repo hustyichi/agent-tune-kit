@@ -1,0 +1,19 @@
+---
+name: atk-optimize
+description: Prepare and seal one scoped local Agent candidate on the current accepted Git checkpoint.
+---
+
+# Optimize one Issue
+
+Read `../WORKFLOW.md`. If the Round is not frozen, call `create_round` and
+`freeze_round` only after recording a clean B0, protected/allowed paths, component
+identity, calibrated scoring, target/protection Cases, final repeats, finite budget,
+commit authorization, and rollback rule. A blocked out-of-scope Issue cannot become
+a local fix. Do not modify ATK workflow, judge, dataset, or runner to pass a gate.
+
+Call `prepare_candidate` with the exact primary Issue and declared file paths.
+Edit the existing Agent's business Skill, Prompt, code, or config in its original
+worktree; keep one principal mechanism per candidate. Call `seal_candidate` after
+editing. Check the returned changed paths and Revision. Do not continue editing after
+seal; any further change requires a new seal/Validation. Do not submit, push, or stack
+another candidate before `atk-decide` has resolved this one.

@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "agent-tune-kit"
 version = "0.4.9"
-description = "Local Codex plugin for iterative Agent tuning with guided Skills, reusable runner templates, versioned results, and static validation."
+description = "Local Codex plugin for evidence-driven evaluation and checkpointed tuning of existing Agents."
 readme = "README.en.md"
 requires-python = ">=3.11"
 license = { text = "UNLICENSED" }
@@ -32,7 +32,6 @@ include = [
   ".codex-plugin/**",
   "skills/**",
   "templates/**",
-  "templates/.atk/**",
   "docs/**",
   "README.md",
   "README.en.md",
@@ -55,9 +54,6 @@ include = [
   "/.codex-plugin/**",
   "/skills/**",
   "/templates/**",
-  "/templates/.atk/**",
-  "/templates/.atk/runner/eval_runner.py.md",
-  "/templates/.atk/runner/failure_rule.py.md",
   "/docs/**",
   "/tests/**",
   "/scripts/**",
@@ -80,6 +76,3 @@ line-ending = "auto"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 ignore = ["E501", "UP022"]
-
-[tool.hatch.build.targets.sdist.force-include]
-"templates/.atk" = "templates/.atk"

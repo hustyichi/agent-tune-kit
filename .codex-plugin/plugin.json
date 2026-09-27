@@ -1,7 +1,7 @@
 {
   "name": "agent-tune-kit",
   "version": "0.4.9",
-  "description": "Local Codex plugin for iterative Agent tuning with guided Skills, reusable runner templates, versioned results, and static validation.",
+  "description": "Local Codex plugin for evidence-driven evaluation and checkpointed tuning of existing Agents.",
   "author": {
     "name": "hustyichi",
     "email": "hustyichi@163.com",
@@ -21,7 +21,7 @@
   "interface": {
     "displayName": "Agent Tune Kit",
     "shortDescription": "Run a guided local Agent tuning loop",
-    "longDescription": "Agent Tune Kit provides Codex Skills for generating local test runners, finding failing cases, reporting regressions and improvements, and applying focused Agent tuning with versioned local artifacts.",
+    "longDescription": "Agent Tune Kit imports or runs evidence, diagnoses issues, and validates scoped Agent changes against Git checkpoints.",
     "developerName": "hustyichi",
     "category": "Coding",
     "capabilities": [
@@ -31,9 +31,9 @@
     ],
     "websiteURL": "https://github.com/hustyichi/agent-tune-kit",
     "defaultPrompt": [
-      "Build an Agent tuning dataset",
-      "Find Agent failure cases",
-      "Generate an Agent tuning report"
+      "Connect my existing Agent with atk-init",
+      "Import traces and diagnose failures",
+      "Validate a scoped Agent candidate"
     ],
     "brandColor": "#334155",
     "screenshots": []
