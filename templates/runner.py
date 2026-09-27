@@ -58,7 +58,13 @@ def run_one(attempt: dict, case: dict, config: dict, output: Path, timeout: int)
         ) as process:
             try:
                 response, stderr = process.communicate(timeout=timeout)
-                status = "completed" if process.returncode == 0 else "agent_error"
+                status = (
+                    "completed"
+                    if process.returncode == 0
+                    else "infrastructure_error"
+                    if process.returncode in config.get("infrastructure_exit_codes", [])
+                    else "agent_error"
+                )
                 returncode = process.returncode
             except subprocess.TimeoutExpired:
                 with suppress(ProcessLookupError):

@@ -36,6 +36,7 @@ def project(
     rows: list[dict],
     issue_ids: list[str] | None = None,
     extra_files: dict[str, str] | None = None,
+    infrastructure_exit_codes: list[int] | None = None,
 ) -> tuple[Path, Path, dict, dict, dict]:
     repo = tmp_path / "agent"
     repo.mkdir()
@@ -62,6 +63,7 @@ def project(
             "allowed_paths": ["prompt.txt"],
             "protected_paths": ["agent.py"],
             "runtime_notes": "Local fake Agent with no external effects.\n",
+            "infrastructure_exit_codes": infrastructure_exit_codes or [],
         },
     )
     root = repo / ".atk"
@@ -166,6 +168,49 @@ def test_freeze_records_repeatability_and_short_repeat_basis(tmp_path: Path) -> 
         freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
     plan["repeat_plan_basis"] = "Two paired attempts fit the local evaluation budget; no significance claim."
     assert freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})["status"] == "ready"
+
+
+def test_adapter_declared_infrastructure_exit_is_not_an_agent_failure(tmp_path: Path) -> None:
+    marker = tmp_path / "authenticated"
+    script = (
+        "import json,sys\nfrom pathlib import Path\n"
+        "task=json.loads(Path(sys.argv[1]).read_text())\n"
+        f"marker=Path({str(marker)!r})\n"
+        "if task=='auth' and not marker.exists():\n"
+        "    marker.write_text('1'); sys.exit(75)\n"
+        "if task=='agent': sys.exit(3)\n"
+        "print('ok')\n"
+    )
+    rows = [
+        {"id": "auth", "input": "auth", "usage": "optimization", "source_group_id": "g1"},
+        {"id": "agent", "input": "agent", "usage": "protection", "source_group_id": "g2"},
+    ]
+    repo, root, dataset, round_data, plan = project(tmp_path, script, rows, infrastructure_exit_codes=[75])
+    plan["max_retries_per_slot"] = 1
+    freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    request = {
+        "dataset_id": dataset["id"],
+        "case_ids": ["auth", "agent"],
+        "purpose": "evaluation",
+        "revision_id": round_data["baseline_revision_id"],
+        "round_id": round_data["id"],
+    }
+    batch = run_evaluation(root, request)
+    _, records, _ = validate_evidence(root, batch["id"])
+    statuses = {record["case_id"]: record["execution"]["status"] for record in records.values()}
+    assert statuses == {"auth": "infrastructure_error", "agent": "agent_error"}
+    execution_ids = {record["case_id"]: record["execution"]["id"] for record in records.values()}
+    with pytest.raises(ATKError, match="infrastructure failure"):
+        run_evaluation(
+            root, {**request, "retry_batch_id": batch["id"], "retry_execution_ids": [execution_ids["agent"]]}
+        )
+    retry = run_evaluation(
+        root, {**request, "retry_batch_id": batch["id"], "retry_execution_ids": [execution_ids["auth"]]}
+    )
+    _, retried, _ = validate_evidence(root, retry["id"])
+    assert {record["execution"]["status"] for record in retried.values() if record["execution"]["retry_of"]} == {
+        "completed"
+    }
 
 
 def test_retry_keeps_all_attempts_and_budget_blocks_extra_run(tmp_path: Path) -> None:

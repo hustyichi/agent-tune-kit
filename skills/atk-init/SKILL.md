@@ -26,6 +26,11 @@ invocation changes necessary to preserve its request/response contract. Do not c
 a new Agent, run the full dataset, commit existing changes, or replace legacy `.atk`
 data. If `.atk` already contains older data, stop and report the conflict.
 
+If a project adapter can identify infrastructure failures (for example, model
+authentication failure), pass its distinct nonzero `infrastructure_exit_codes` to
+`initialize_project`. Reserve these codes for failures that make an attempt
+unusable as effect evidence; ordinary Agent failures must use other codes.
+
 For a fixed remote component whose actual version matters, configure a read-only
 argv-array `version_command`, an `expected_version` when known, and optionally
 `version_timeout_seconds`. The command must print only a nonsecret version token.

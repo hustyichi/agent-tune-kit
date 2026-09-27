@@ -108,6 +108,13 @@ def initialize_project(repo: Path, request: dict) -> dict:
     required = {"python", "command", "components", "allowed_paths", "protected_paths", "runtime_notes"}
     if required - request.keys() or not isinstance(request["command"], list) or not request["command"]:
         raise ATKError("INCOMPLETE_EVIDENCE", f"project configuration missing: {sorted(required - request.keys())}")
+    infrastructure_codes = request.get("infrastructure_exit_codes", [])
+    if (
+        not isinstance(infrastructure_codes, list)
+        or any(type(code) is not int or not 1 <= code <= 255 for code in infrastructure_codes)
+        or len(infrastructure_codes) != len(set(infrastructure_codes))
+    ):
+        raise ATKError("INCOMPLETE_EVIDENCE", "infrastructure exit codes must be distinct integers from 1 to 255")
     _version_commands(request["components"])
     git_dir = Path(git(repo, "rev-parse", "--git-dir").decode().strip())
     if not git_dir.is_absolute():
@@ -124,6 +131,7 @@ def initialize_project(repo: Path, request: dict) -> dict:
         "workspace_path": str(repo),
         "python": request["python"],
         "command": request["command"],
+        "infrastructure_exit_codes": infrastructure_codes,
         "components": request["components"],
         "allowed_paths": request["allowed_paths"],
         "protected_paths": request["protected_paths"],
