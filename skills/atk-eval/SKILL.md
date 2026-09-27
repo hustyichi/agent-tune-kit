@@ -39,6 +39,9 @@ the final root Observation. Do not rerun the Agent when the request is reassess.
 
 Define versioned `evaluation_spec` and `judger` before scoring. Use deterministic
 checks for hard constraints and the current Codex session for semantic judgments.
+For formal evaluation, record execution evidence trust, component contract or
+artifact checks, and task effect as separate dimensions. Mark a dimension
+`not_applicable` only under an explicit rule; mark missing evidence `unknown`.
 Without Ground Truth, judge independently observable dimensions and mark any
 unjudgeable task-success dimension `unknown`; output presence or imported scores
 alone do not establish task success.

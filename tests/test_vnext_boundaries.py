@@ -21,7 +21,7 @@ from agent_tune_kit.checkpoints import (
     seal_candidate,
     temporary_revision,
 )
-from agent_tune_kit.core import ATKError, digest, read_json, validate_evidence, write_json
+from agent_tune_kit.core import ATKError, digest, read_assessment, read_json, validate_evidence, write_json
 from agent_tune_kit.execution import run_evaluation
 from agent_tune_kit.governance import compare_and_gate, finish_round, store_diagnosis, validate_external_fix
 from tests.test_vnext_flow import git
@@ -201,29 +201,126 @@ def test_external_issue_blocks_normal_keep_but_allows_authorized_workaround(tmp_
 
 
 def test_external_fix_new_baseline_needs_direct_and_end_to_end_evidence(tmp_path: Path) -> None:
-    rows = [{"id": "case", "input": "task", "usage": "optimization", "source_group_id": "group"}]
-    repo, root, dataset, first, plan = project(tmp_path, "print('ok')\n", rows, ["tool"])
-    store_diagnosis(root, {"round_id": first["id"], "issues": [_handoff_issue()]})
+    rows = [
+        {"id": "case", "input": "task", "usage": "optimization", "source_group_id": "group"},
+        {"id": "protect", "input": "safe", "usage": "protection", "source_group_id": "other"},
+    ]
+    agent = (
+        "import json, subprocess, sys\nfrom pathlib import Path\n"
+        "task = json.loads(Path(sys.argv[1]).read_text())\n"
+        "result = subprocess.run([sys.executable, 'tool.py', task], capture_output=True, text=True)\n"
+        "print(result.stdout.strip())\n"
+    )
+    repo, root, dataset, first, plan = project(
+        tmp_path,
+        agent,
+        rows,
+        ["tool"],
+        extra_files={"tool.py": "import sys\nprint('error' if sys.argv[1] == 'task' else 'ok')\n"},
+    )
+    config = read_json(root / "project.json")
+    config["components"].append(
+        {"component_id": "tool", "role": "tool", "change_role": "fixed", "source_path": "tool.py"}
+    )
+    write_json(root / "project.json", config)
+
+    def fixed_context_hash() -> str:
+        return digest(
+            [
+                {
+                    "component_id": "tool",
+                    "role": "tool",
+                    "change_role": "fixed",
+                    "source_path": "tool.py",
+                    "actual_sha256": digest(repo / "tool.py"),
+                    "identity_status": "available",
+                }
+            ]
+        )
+
+    command = [sys.executable, "tool.py", "{input}"]
+    plan["fixed_context_hash"] = fixed_context_hash()
+    plan["budget"]["probes"] = 1
+    plan["probe_permissions"] = [
+        {
+            "id": "initial-direct",
+            "command": command,
+            "command_hash": digest(command),
+            "runner_hash": digest(root / "adapters" / "runner.py"),
+            "case_ids": ["case"],
+            "isolation_ref": "read-only local fixture",
+            "timeout_seconds": 5,
+            "max_calls": 1,
+        }
+    ]
     freeze_round(repo, root, {"round_id": first["id"], "plan": plan})
+    initial_request = {
+        "dataset_id": dataset["id"],
+        "case_ids": ["case", "protect"],
+        "revision_id": first["baseline_revision_id"],
+        "round_id": first["id"],
+    }
+    initial = run_evaluation(root, {**initial_request, "purpose": "evaluation"})
+    initial_records = validate_evidence(root, initial["id"])[1]
+    assert {record["case_id"]: record["output"].strip() for record in initial_records.values()} == {
+        "case": "error",
+        "protect": "ok",
+    }
+    initial_assessment = assess(root, initial, {"case": "ok", "protect": "ok"})
+    _, initial_rows = read_assessment(root, initial_assessment)
+    assert {initial_records[row["record_id"]]["case_id"]: row["verdict"] for row in initial_rows} == {
+        "case": "fail",
+        "protect": "pass",
+    }
+    direct = run_evaluation(
+        root,
+        {
+            **initial_request,
+            "case_ids": ["case"],
+            "purpose": "diagnostic_probe",
+            "probe_authorization_id": "initial-direct",
+        },
+    )
+    direct_record = next(iter(validate_evidence(root, direct["id"])[1].values()))
+    assert direct_record["output"].strip() == "error"
+    direct_ref = {"batch_id": direct["id"], "evidence_id": direct_record["id"]}
+    issue = {
+        **_handoff_issue(),
+        "root_cause_status": "supported",
+        "competing_explanations_addressed": "direct tool call fails before Agent handoff",
+        "checks": [{"status": "completed", "expected": "ok", "actual": "error", "evidence_refs": [direct_ref]}],
+        "evidence_refs": [
+            {"batch_id": initial["id"], "evidence_id": record["id"]}
+            for record in initial_records.values()
+            if record["case_id"] == "case"
+        ],
+        "mechanism_evidence_refs": [direct_ref],
+    }
+    store_diagnosis(root, {"round_id": first["id"], "issues": [issue]})
     finish_round(repo, root, {"round_id": first["id"], "action": "close_without_adoption", "reason": "tool owner"})
+    (repo / "tool.py").write_text("print('ok')\n")
+    git(repo, "add", "tool.py")
+    git(repo, "commit", "-qm", "repair tool")
+    fixed_identity = digest(repo / "tool.py")
     second = checkpoints.create_round(
         repo,
         root,
-        {"issue_ids": ["tool"], "previous_round_id": first["id"], "external_fix_identity": "tool@fixed"},
+        {"issue_ids": ["tool"], "previous_round_id": first["id"], "external_fix_identity": fixed_identity},
     )
     plan.update(
         {
             "allowed_paths": [],
             "commit_authorized": False,
-            "budget": {"executions": 1, "probes": 1},
+            "fixed_context_hash": fixed_context_hash(),
+            "budget": {"executions": 2, "probes": 1},
             "probe_permissions": [
                 {
                     "id": "direct-tool",
                     "kind": "direct_component",
-                    "component_identity": "tool@fixed",
+                    "component_identity": fixed_identity,
                     "evaluation_spec_hash": digest(SPEC),
-                    "command": [sys.executable, "-c", "print('ok')"],
-                    "command_hash": digest([sys.executable, "-c", "print('ok')"]),
+                    "command": command,
+                    "command_hash": digest(command),
                     "runner_hash": digest(root / "adapters" / "runner.py"),
                     "case_ids": ["case"],
                     "isolation_ref": "local fixture",
@@ -234,12 +331,12 @@ def test_external_fix_new_baseline_needs_direct_and_end_to_end_evidence(tmp_path
     freeze_round(repo, root, {"round_id": second["id"], "plan": plan})
     base_request = {
         "dataset_id": dataset["id"],
-        "case_ids": ["case"],
+        "case_ids": ["case", "protect"],
         "revision_id": second["baseline_revision_id"],
         "round_id": second["id"],
     }
     batch = run_evaluation(root, {**base_request, "purpose": "evaluation", "phase": "external_fix"})
-    assessment_id = assess(root, batch, {"case": "ok"})
+    assessment_id = assess(root, batch, {"case": "ok", "protect": "ok"})
     evidence_id = next(iter(validate_evidence(root, batch["id"])[2]))
     with pytest.raises(ATKError, match="component probe"):
         validate_external_fix(
@@ -253,7 +350,7 @@ def test_external_fix_new_baseline_needs_direct_and_end_to_end_evidence(tmp_path
         )
     probe = run_evaluation(
         root,
-        {**base_request, "purpose": "diagnostic_probe", "probe_authorization_id": "direct-tool"},
+        {**base_request, "case_ids": ["case"], "purpose": "diagnostic_probe", "probe_authorization_id": "direct-tool"},
     )
     direct_refs = [{"batch_id": probe["id"], "evidence_id": next(iter(validate_evidence(root, probe["id"])[2]))}]
     failed_direct = assess(root, probe, {"case": "wrong"})
@@ -280,14 +377,14 @@ def test_external_fix_new_baseline_needs_direct_and_end_to_end_evidence(tmp_path
     assert validation["result"] == "pass"
     fix = {
         "new_round_id": second["id"],
-        "component_identity": "tool@fixed",
+        "component_identity": fixed_identity,
         "direct_evidence_refs": direct_refs,
         "end_to_end_validation_id": validation["id"],
     }
     with pytest.raises(ATKError, match="did not cover"):
         store_diagnosis(
             root,
-            {"round_id": first["id"], "issues": [{**_handoff_issue(), "resolution": "resolved", "external_fix": fix}]},
+            {"round_id": first["id"], "issues": [{**issue, "resolution": "resolved", "external_fix": fix}]},
         )
     finish_round(
         repo,
@@ -301,7 +398,7 @@ def test_external_fix_new_baseline_needs_direct_and_end_to_end_evidence(tmp_path
     )
     resolved = store_diagnosis(
         root,
-        {"round_id": first["id"], "issues": [{**_handoff_issue(), "resolution": "resolved", "external_fix": fix}]},
+        {"round_id": first["id"], "issues": [{**issue, "resolution": "resolved", "external_fix": fix}]},
     )
     assert resolved["issues"][0]["resolution"] == "resolved"
 
