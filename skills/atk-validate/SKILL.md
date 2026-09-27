@@ -19,8 +19,9 @@ Also check actual component identity, runner and fixed context, Case content,
 judgement calibration, and paired repeat slots. Apply the frozen quality or
 efficiency objective and metric limits; missing
 required metrics yield `insufficient`. Cost includes all attempts, including retries.
-Verify the metric source before trusting cost or tool counts; the default runner's
-`metrics.json` sidecar alone does not prove that the target Agent could not edit them.
+Cost and tool-count gates require the frozen project's independent `metric_sources`
+declaration and a matching source on every Record. The default runner's
+Agent-written `metrics.json` sidecar remains untrusted for these gates.
 Call `compare_and_gate` with exact Assessment IDs and parent/B0 commit.
 For a linked external fix Round, call `validate_external_fix` with the new B0
 Assessment, passing direct-probe Assessment, and direct evidence refs. There is no

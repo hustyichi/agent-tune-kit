@@ -38,6 +38,7 @@ def project(
     extra_files: dict[str, str] | None = None,
     infrastructure_exit_codes: list[int] | None = None,
     external_effects: list[dict] | None = None,
+    metric_sources: dict | None = None,
 ) -> tuple[Path, Path, dict, dict, dict]:
     repo = tmp_path / "agent"
     repo.mkdir()
@@ -66,6 +67,7 @@ def project(
             "runtime_notes": "Local fake Agent with no external effects.\n",
             "infrastructure_exit_codes": infrastructure_exit_codes or [],
             "external_effects": external_effects or [],
+            "metric_sources": metric_sources or {},
         },
     )
     root = repo / ".atk"
@@ -514,15 +516,35 @@ def test_init_requires_explicit_external_effect_declaration(tmp_path: Path) -> N
     assert not (repo / ".atk").exists()
 
 
-def test_efficiency_gate_and_missing_metric(tmp_path: Path) -> None:
+@pytest.mark.parametrize("trusted", [False, True])
+def test_efficiency_gate_and_missing_metric(tmp_path: Path, trusted: bool) -> None:
     script = (
         "import json,sys\nfrom pathlib import Path\n"
-        "cost=2 if Path('prompt.txt').read_text()=='old' else 1\n"
-        "(Path(sys.argv[2])/'metrics.json').write_text(json.dumps({'cost':cost,'tool_calls':1}))\n"
+        "(Path(sys.argv[2])/'metrics.json').write_text(json.dumps({'cost':0,'tool_calls':1}))\n"
         "print('ok')\n"
     )
     rows = [{"id": "case", "input": "case", "usage": "optimization", "source_group_id": "g"}]
-    repo, root, dataset, round_data, plan = project(tmp_path, script, rows)
+    repo, root, dataset, round_data, plan = project(
+        tmp_path,
+        script,
+        rows,
+        metric_sources={"cost": {"source": "adapter_meter", "evidence_ref": "runtime.md#billing-meter"}},
+    )
+    if trusted:
+        runner = root / "adapters" / "runner.py"
+        code = runner.read_text()
+        code = code.replace(
+            "def main() -> int:",
+            "_run_one = run_one\n"
+            "def run_one(attempt, case, config, output, timeout):\n"
+            "    record = _run_one(attempt, case, config, output, timeout)\n"
+            "    record['metrics']['cost'] = 2 if (Path(config['workspace_path']) / 'prompt.txt').read_text() == 'old' else 1\n"
+            "    record['metric_sources']['cost'] = 'adapter_meter'\n"
+            "    return record\n\n"
+            "def main() -> int:",
+        )
+        runner.write_text(code)
+        plan["runner_hash"] = digest(runner)
     plan.update({"objective": "efficiency", "efficiency_metric": "cost", "metric_limits": {"max_total_cost": 1.5}})
     freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
     request = {
@@ -551,6 +573,11 @@ def test_efficiency_gate_and_missing_metric(tmp_path: Path) -> None:
         "left_commit": round_data["baseline_commit"],
     }
     result = compare_and_gate(root, comparison)
+    if not trusted:
+        assert result["result"] == "insufficient"
+        assert result["metrics"]["cost"] == {"left_total": None, "right_total": None}
+        assert any("trusted source" in reason for reason in result["limitations"])
+        return
     assert result["result"] == "pass"
     assert result["metrics"]["cost"] == {"left_total": 2.0, "right_total": 1.0}
     _, rows = read_assessment(root, right)

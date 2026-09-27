@@ -34,6 +34,13 @@ checked setup in `runtime.md` or another local record. ATK blocks replay while
 any declared write lacks this record. Verify the setup itself; the reference is
 not an operating-system sandbox.
 
+For cost or tool-call limits, configure `metric_sources` with an independent
+collector name and `evidence_ref` after inspecting the adapter. The adapter must
+write that name in each Record's `metric_sources` for the measured value. The
+generated runner labels its own duration `runner_clock` and labels Agent-written
+`metrics.json` values `agent_sidecar`; sidecar values remain diagnostic and cannot
+satisfy a formal cost or tool-call gate. Do not label a sidecar as independent.
+
 If a project adapter can identify infrastructure failures (for example, model
 authentication failure), pass its distinct nonzero `infrastructure_exit_codes` to
 `initialize_project`. Reserve these codes for failures that make an attempt

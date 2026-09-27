@@ -129,6 +129,21 @@ def initialize_project(repo: Path, request: dict) -> dict:
         for effect in external_effects
     ):
         raise ATKError("INCOMPLETE_EVIDENCE", "external effects must be named objects")
+    metric_sources = request.get("metric_sources", {})
+    if (
+        not isinstance(metric_sources, dict)
+        or set(metric_sources) - {"cost", "tool_calls"}
+        or any(
+            not isinstance(source, dict)
+            or not isinstance(source.get("source"), str)
+            or not source["source"].strip()
+            or source["source"] in {"agent_sidecar", "runner_clock"}
+            or not isinstance(source.get("evidence_ref"), str)
+            or not source["evidence_ref"].strip()
+            for source in metric_sources.values()
+        )
+    ):
+        raise ATKError("INCOMPLETE_EVIDENCE", "cost and tool-call metrics need a named independent collector")
     _version_commands(request["components"])
     git_dir = Path(git(repo, "rev-parse", "--git-dir").decode().strip())
     if not git_dir.is_absolute():
@@ -152,6 +167,7 @@ def initialize_project(repo: Path, request: dict) -> dict:
         "redact_keys": request.get("redact_keys", []),
         "loading_verification": request.get("loading_verification", {}),
         "external_effects": external_effects,
+        "metric_sources": metric_sources,
     }
     write_json(root / "project.json", project, immutable=True)
     (root / "runtime.md").write_text(request["runtime_notes"], encoding="utf-8")

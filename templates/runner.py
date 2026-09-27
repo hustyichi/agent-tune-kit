@@ -84,8 +84,12 @@ def run_one(attempt: dict, case: dict, config: dict, output: Path, timeout: int)
     except (OSError, ValueError):
         agent_metrics = {}
     metrics = {"duration_seconds": duration}
+    metric_sources = {"duration_seconds": "runner_clock"}
     if isinstance(agent_metrics, dict):
-        metrics.update({key: agent_metrics[key] for key in ("cost", "tool_calls") if key in agent_metrics})
+        for key in ("cost", "tool_calls"):
+            if key in agent_metrics:
+                metrics[key] = agent_metrics[key]
+                metric_sources[key] = "agent_sidecar"
     return {
         "id": attempt["record_id"],
         "case_id": case["id"],
@@ -95,6 +99,7 @@ def run_one(attempt: dict, case: dict, config: dict, output: Path, timeout: int)
         "output": response,
         "loading_evidence": loading,
         "metrics": metrics,
+        "metric_sources": metric_sources,
         "source_locator": str(task_dir),
         "execution": {
             "id": attempt["execution_id"],

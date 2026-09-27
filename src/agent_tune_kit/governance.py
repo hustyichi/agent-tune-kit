@@ -267,17 +267,51 @@ def _selected_attempt(attempts: list, max_retries: int):
     return current
 
 
-def _metric_total(slots: dict, cases: set[str], metric: str) -> float | None:
+def _metric_total(slots: dict, cases: set[str], metric: str, source: str | None) -> float | None:
+    if source is None:
+        return None
     values = []
     for key, attempts in slots.items():
         if key[0] not in cases:
             continue
         for _, _, record in attempts:
-            value = record.get("metrics", {}).get(metric)
-            if type(value) not in {int, float} or not math.isfinite(value) or value < 0:
+            metrics = record.get("metrics")
+            sources = record.get("metric_sources")
+            if not isinstance(metrics, dict) or not isinstance(sources, dict):
+                return None
+            value = metrics.get(metric)
+            if (
+                sources.get(metric) != source
+                or type(value) not in {int, float}
+                or not math.isfinite(value)
+                or value < 0
+            ):
                 return None
             values.append(float(value))
     return sum(values) if values else None
+
+
+def _trusted_metric_source(root: Path, batch: dict, metric: str) -> str | None:
+    config_path = root / "evidence" / safe_id(batch["id"]) / "run-config.json"
+    if not config_path.is_file():
+        return None
+    config = read_json(config_path)
+    if digest(config) != batch.get("run_config_hash"):
+        return None
+    if metric == "duration_seconds":
+        return "runner_clock"
+    sources = config.get("metric_sources")
+    source = sources.get(metric, {}) if isinstance(sources, dict) else {}
+    return (
+        source.get("source")
+        if isinstance(source, dict)
+        and isinstance(source.get("source"), str)
+        and source["source"].strip()
+        and source["source"] not in {"agent_sidecar", "runner_clock"}
+        and isinstance(source.get("evidence_ref"), str)
+        and source["evidence_ref"].strip()
+        else None
+    )
 
 
 def _fixed_identity_known(batch: dict) -> bool:
@@ -507,14 +541,18 @@ def _compare_and_gate_locked(root: Path, request: dict) -> dict:
         required_metrics.add(plan["efficiency_metric"])
     metrics = {
         metric: {
-            "left_total": _metric_total(left_slots, expected_cases, metric),
-            "right_total": _metric_total(right_slots, expected_cases, metric),
+            "left_total": _metric_total(
+                left_slots, expected_cases, metric, _trusted_metric_source(root, left_batch, metric)
+            ),
+            "right_total": _metric_total(
+                right_slots, expected_cases, metric, _trusted_metric_source(root, right_batch, metric)
+            ),
         }
         for metric in sorted(metric_names)
     }
     if any(value is None for name in required_metrics for value in metrics[name].values()):
         result = "insufficient"
-        limitations.append("required cost, duration, or tool-call metrics are missing")
+        limitations.append("required cost, duration, or tool-call metrics lack a trusted source or valid values")
     slot_count = len(expected_cases) * expected_repeats
     exceeds_limit = (
         (
