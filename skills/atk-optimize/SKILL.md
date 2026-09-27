@@ -21,5 +21,6 @@ Call `prepare_candidate` with the exact primary Issue and declared file paths.
 Edit the existing Agent's business Skill, Prompt, code, or config in its original
 worktree; keep one principal mechanism per candidate. Call `seal_candidate` after
 editing. Check the returned changed paths and Revision. Do not continue editing after
-seal; any further change requires a new seal/Validation. Do not submit, push, or stack
-another candidate before `atk-decide` has resolved this one.
+seal. Do not submit, push, or stack another candidate before `atk-decide` has resolved
+this one. To revise the same Issue, create a new Candidate with `supersedes` pointing to
+the sealed Candidate; seal and validate the new content separately.
