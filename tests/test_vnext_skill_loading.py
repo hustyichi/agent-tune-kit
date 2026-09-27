@@ -13,7 +13,9 @@ from agent_tune_kit.governance import compare_and_gate
 from tests.test_vnext_flow import assessment_for, git
 
 
-@pytest.mark.parametrize("load_mode", ["direct", "wrong_install", "staged_copy", "missing_path"])
+@pytest.mark.parametrize(
+    "load_mode", ["direct", "linked_source", "wrong_install", "staged_copy", "stale_build", "missing_path"]
+)
 def test_business_skill_must_be_loaded_at_each_revision(tmp_path: Path, load_mode: str) -> None:
     repo = tmp_path / "agent"
     (repo / "skills" / "reply").mkdir(parents=True)
@@ -24,7 +26,10 @@ def test_business_skill_must_be_loaded_at_each_revision(tmp_path: Path, load_mod
     skill.write_text("old")
     installed_copy = tmp_path / "installed-copy" / "SKILL.md"
     installed_copy.parent.mkdir()
-    installed_copy.write_text("new")
+    if load_mode == "linked_source":
+        installed_copy.symlink_to(skill)
+    else:
+        installed_copy.write_text("old" if load_mode == "stale_build" else "new")
     (repo / "agent.py").write_text(
         "import hashlib,json,sys\nfrom pathlib import Path\n"
         "skill=Path('skills/reply/SKILL.md')\n"
@@ -37,7 +42,8 @@ def test_business_skill_must_be_loaded_at_each_revision(tmp_path: Path, load_mod
         "event={'component_id':'business-skill','state':'loaded','fingerprint':hashlib.sha256(data).hexdigest(),"
         "'resolved_path':str(loaded.resolve())}\n"
         "if mode=='missing_path': event.pop('resolved_path')\n"
-        "if mode=='staged_copy' and loaded==installed: event['staged_from_path']=str(skill.resolve())\n"
+        "if mode in ('staged_copy','stale_build') and loaded==installed: "
+        "event['staged_from_path']=str(skill.resolve())\n"
         "(out/'loading.json').write_text(json.dumps([event]))\n"
         "print('hello' if data==b'new' else 'bad')\n"
     )
@@ -148,4 +154,6 @@ def test_business_skill_must_be_loaded_at_each_revision(tmp_path: Path, load_mod
             "left_commit": round_data["baseline_commit"],
         },
     )
-    assert validation["result"] == ("insufficient" if load_mode in {"wrong_install", "missing_path"} else "pass")
+    assert validation["result"] == (
+        "insufficient" if load_mode in {"wrong_install", "stale_build", "missing_path"} else "pass"
+    )

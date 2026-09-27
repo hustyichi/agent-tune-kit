@@ -1,6 +1,6 @@
 # Agent Tune Kit
 
-最后更新：2026-09-28。状态：vNext 核心链路与 10 Case 合成累积验收已验证；Magic Workspace 单 Case 旧路径证据已验证，严格加载路径与完整验收待收口。详见 [实现与验收记录](docs/vnext-implementation-report.md)。
+最后更新：2026-09-28。状态：vNext 核心链路与 10 Case 合成累积验收已验证；Magic Workspace 单 Case 已按严格加载路径门禁复验，真实多 Case 与完整验收待收口。详见 [实现与验收记录](docs/vnext-implementation-report.md)。
 
 简体中文 | [English](README.en.md)
 
@@ -70,4 +70,4 @@ python3 scripts/validate_skill_pack.py
 uv build --no-sources
 ```
 
-离线测试使用小型 Git 仓库和假 Agent，已覆盖 10 Case 四候选累积收益、已采用后缀回退、Case 输入变化后的双方重跑、批内固定文件漂移、其他安装副本误加载与跨进程提交恢复。Magic Workspace 的真实轨迹导入和单 Case 自动加载业务 Skill 已单独验证；这份旧加载证据缺少新路径门禁要求的绝对路径，需在桥接脚本补证后重新验证正式对照。外部修复的新轮协议有合成测试，真实组件修复案例、已知责任层案例与真实多 Case 链路仍待验收。尚未确认安全隔离的目标 Agent 外部写操作不得在正式跑测中启动。
+离线测试使用小型 Git 仓库和假 Agent，已覆盖 10 Case 四候选累积收益、已采用后缀回退、Case 输入变化后的双方重跑、批内固定文件漂移、其他安装副本误加载、链接源码、过期副本与跨进程提交恢复。Magic Workspace 的真实轨迹导入和单 Case 自动加载业务 Skill 已单独验证；桥接器补充绝对路径与副本来源后，已重新执行正式对照。外部修复的新轮协议有合成测试，真实组件修复案例、已知责任层案例与真实多 Case 链路仍待验收。尚未确认安全隔离的目标 Agent 外部写操作不得在正式跑测中启动。
