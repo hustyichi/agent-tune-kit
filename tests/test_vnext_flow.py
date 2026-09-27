@@ -93,6 +93,7 @@ def test_local_prompt_candidate_is_compared_and_committed(tmp_path: Path, final_
             "allowed_paths": ["prompt.txt"],
             "protected_paths": ["agent.py"],
             "runtime_notes": "Fake Agent reads prompt.txt for every task. No external effects.\n",
+            "external_effects": [],
         },
     )
     root = repo / ".atk"

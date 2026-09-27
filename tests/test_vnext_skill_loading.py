@@ -65,6 +65,7 @@ def test_business_skill_must_be_loaded_at_each_revision(tmp_path: Path, load_mod
             "allowed_paths": ["skills/reply"],
             "protected_paths": ["agent.py"],
             "runtime_notes": "Agent reads the Skill during each fresh process and emits loading.json.\n",
+            "external_effects": [],
         },
     )
     root = repo / ".atk"

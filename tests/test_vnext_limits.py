@@ -37,6 +37,7 @@ def project(
     issue_ids: list[str] | None = None,
     extra_files: dict[str, str] | None = None,
     infrastructure_exit_codes: list[int] | None = None,
+    external_effects: list[dict] | None = None,
 ) -> tuple[Path, Path, dict, dict, dict]:
     repo = tmp_path / "agent"
     repo.mkdir()
@@ -64,6 +65,7 @@ def project(
             "protected_paths": ["agent.py"],
             "runtime_notes": "Local fake Agent with no external effects.\n",
             "infrastructure_exit_codes": infrastructure_exit_codes or [],
+            "external_effects": external_effects or [],
         },
     )
     root = repo / ".atk"
@@ -463,6 +465,53 @@ def test_direct_probe_runs_frozen_script_instead_of_agent(tmp_path: Path) -> Non
     script.write_text("print('changed')\n")
     with pytest.raises(ATKError, match="not authorized"):
         run_evaluation(root, request)
+
+
+@pytest.mark.parametrize("protected", [False, True])
+def test_external_write_requires_recorded_protection_before_replay(tmp_path: Path, protected: bool) -> None:
+    effect = {"name": "write customer database"}
+    if protected:
+        effect["protection"] = {"kind": "stub", "evidence_ref": "runtime.md#database-stub"}
+    rows = [{"id": "case", "input": "task", "usage": "optimization", "source_group_id": "g"}]
+    repo, root, dataset, round_data, _ = project(tmp_path, "print('ok')\n", rows, external_effects=[effect])
+    request = {
+        "dataset_id": dataset["id"],
+        "case_ids": ["case"],
+        "purpose": "evaluation",
+        "revision_id": round_data["baseline_revision_id"],
+        "revision_commit": git(repo, "rev-parse", "HEAD"),
+    }
+    if not protected:
+        with pytest.raises(ATKError, match="external effect lacks recorded protection"):
+            run_evaluation(root, request)
+        assert not (root / "evidence").exists()
+    else:
+        batch = run_evaluation(root, request)
+        assert batch["status"] == "sealed"
+
+
+def test_init_requires_explicit_external_effect_declaration(tmp_path: Path) -> None:
+    repo = tmp_path / "agent"
+    repo.mkdir()
+    git(repo, "init", "-q")
+    git(repo, "config", "user.email", "test@example.com")
+    git(repo, "config", "user.name", "ATK Test")
+    (repo / "agent.py").write_text("print('ok')\n")
+    git(repo, "add", "agent.py")
+    git(repo, "commit", "-qm", "initial")
+    with pytest.raises(ATKError, match="external_effects"):
+        initialize_project(
+            repo,
+            {
+                "python": sys.executable,
+                "command": [sys.executable, "agent.py"],
+                "components": [],
+                "allowed_paths": ["agent.py"],
+                "protected_paths": [],
+                "runtime_notes": "No external writes.\n",
+            },
+        )
+    assert not (repo / ".atk").exists()
 
 
 def test_efficiency_gate_and_missing_metric(tmp_path: Path) -> None:

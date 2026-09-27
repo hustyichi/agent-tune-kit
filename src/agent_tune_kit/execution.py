@@ -105,7 +105,15 @@ def initialize_project(repo: Path, request: dict) -> dict:
     verify_repo(repo)
     if any(path == ".atk" or path.startswith(".atk/") for path in tracked_paths(repo)):
         raise ATKError("DIRTY_BASELINE", "tracked .atk files must be handled before initialization")
-    required = {"python", "command", "components", "allowed_paths", "protected_paths", "runtime_notes"}
+    required = {
+        "python",
+        "command",
+        "components",
+        "allowed_paths",
+        "protected_paths",
+        "runtime_notes",
+        "external_effects",
+    }
     if required - request.keys() or not isinstance(request["command"], list) or not request["command"]:
         raise ATKError("INCOMPLETE_EVIDENCE", f"project configuration missing: {sorted(required - request.keys())}")
     infrastructure_codes = request.get("infrastructure_exit_codes", [])
@@ -115,6 +123,12 @@ def initialize_project(repo: Path, request: dict) -> dict:
         or len(infrastructure_codes) != len(set(infrastructure_codes))
     ):
         raise ATKError("INCOMPLETE_EVIDENCE", "infrastructure exit codes must be distinct integers from 1 to 255")
+    external_effects = request["external_effects"]
+    if not isinstance(external_effects, list) or any(
+        not isinstance(effect, dict) or not isinstance(effect.get("name"), str) or not effect["name"].strip()
+        for effect in external_effects
+    ):
+        raise ATKError("INCOMPLETE_EVIDENCE", "external effects must be named objects")
     _version_commands(request["components"])
     git_dir = Path(git(repo, "rev-parse", "--git-dir").decode().strip())
     if not git_dir.is_absolute():
@@ -137,7 +151,7 @@ def initialize_project(repo: Path, request: dict) -> dict:
         "protected_paths": request["protected_paths"],
         "redact_keys": request.get("redact_keys", []),
         "loading_verification": request.get("loading_verification", {}),
-        "external_effects": request.get("external_effects", []),
+        "external_effects": external_effects,
     }
     write_json(root / "project.json", project, immutable=True)
     (root / "runtime.md").write_text(request["runtime_notes"], encoding="utf-8")
@@ -450,6 +464,17 @@ def run_evaluation(root: Path, request: dict) -> dict:
 
 def _run_evaluation_locked(root: Path, request: dict) -> dict:
     project = json.loads((root / "project.json").read_text(encoding="utf-8"))
+    for effect in project.get("external_effects", []):
+        if not isinstance(effect, dict) or not isinstance(effect.get("name"), str):
+            raise ATKError("NOT_REPLAYABLE", "external effect declaration is invalid")
+        protection = effect.get("protection")
+        if (
+            not isinstance(protection, dict)
+            or protection.get("kind") not in {"test_environment", "stub", "approved_safeguard"}
+            or not isinstance(protection.get("evidence_ref"), str)
+            or not protection["evidence_ref"].strip()
+        ):
+            raise ATKError("NOT_REPLAYABLE", f"external effect lacks recorded protection: {effect['name']}")
     repo = Path(project["workspace_path"])
     version_commands = _version_commands(project["components"])
     retry_batch_id = request.get("retry_batch_id")

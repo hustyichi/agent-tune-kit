@@ -19,12 +19,20 @@ If the Agent loads an isolated copy, the trusted adapter may also emit absolute
 infer the origin solely from equal file contents.
 
 Call `initialize_project` with `python`, argv-array `command`, `components`,
-`allowed_paths`, `protected_paths`, and detailed `runtime_notes`. It creates
+`allowed_paths`, `protected_paths`, `external_effects` (use `[]` only after
+checking that no external writes occur), and detailed `runtime_notes`. It creates
 `.atk/project.json`, `.atk/runtime.md`, and `.atk/adapters/runner.py`, and adds `.atk/`
 to the local Git exclude. Inspect the generated adapter and make only project-specific
 invocation changes necessary to preserve its request/response contract. Do not create
 a new Agent, run the full dataset, commit existing changes, or replace legacy `.atk`
 data. If `.atk` already contains older data, stop and report the conflict.
+
+Declare each known external write in `external_effects` as a named object. Before
+replay, add `protection: {kind, evidence_ref}` for each one: `kind` is
+`test_environment`, `stub`, or `approved_safeguard`; `evidence_ref` points to the
+checked setup in `runtime.md` or another local record. ATK blocks replay while
+any declared write lacks this record. Verify the setup itself; the reference is
+not an operating-system sandbox.
 
 If a project adapter can identify infrastructure failures (for example, model
 authentication failure), pass its distinct nonzero `infrastructure_exit_codes` to

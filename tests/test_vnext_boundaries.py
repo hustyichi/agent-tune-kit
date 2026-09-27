@@ -1553,6 +1553,39 @@ def test_staged_baseline_scope_and_sealed_content_are_hard_gates(tmp_path: Path)
 
 
 @pytest.mark.parametrize(
+    "alias",
+    [
+        "./prompt.txt",
+        "nested//file.txt",
+        "nested/./file.txt",
+        "prompt.txt/",
+        ".ATK/state.json",
+        ".GIT/config",
+        "C:\\secrets\\file.txt",
+        "C:relative.txt",
+        "nested\\file.txt",
+    ],
+)
+def test_candidate_path_aliases_are_rejected(tmp_path: Path, alias: str) -> None:
+    with pytest.raises(ATKError, match="unsafe path"):
+        checkpoints.safe_path(tmp_path, alias)
+
+
+def test_candidate_path_cannot_differ_only_by_case(tmp_path: Path) -> None:
+    rows = [{"id": "case", "input": "task", "usage": "optimization", "source_group_id": "group"}]
+    repo, root, _, round_data, plan = project(tmp_path, "print('ok')\n", rows, extra_files={"Example.txt": "base"})
+    plan["allowed_paths"].append("example.txt")
+    freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    with pytest.raises(ATKError, match="case or Unicode alias"):
+        prepare_candidate(
+            repo,
+            root,
+            {"round_id": round_data["id"], "primary_issue_id": "issue", "paths": ["example.txt"]},
+        )
+    assert read_json(root / "rounds" / round_data["id"] / "round.json")["pending_candidate_id"] is None
+
+
+@pytest.mark.parametrize(
     "interrupt_at,after_write", [("revision.json", False), ("candidate.json", False), ("candidate.json", True)]
 )
 def test_seal_candidate_resumes_only_matching_artifacts(

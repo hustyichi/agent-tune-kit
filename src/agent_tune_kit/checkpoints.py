@@ -6,9 +6,10 @@ import math
 import os
 import signal
 import subprocess
+import unicodedata
 from collections.abc import Iterable
 from contextlib import contextmanager, suppress
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 from .core import ATKError, atomic_write, digest, locked, new_id, now, read_json, safe_id, write_json
 
@@ -46,8 +47,18 @@ def tracked_paths(repo: Path) -> set[str]:
 
 
 def safe_path(repo: Path, name: str) -> Path:
+    if not isinstance(name, str) or not name or "\0" in name:
+        raise ATKError("SCOPE_VIOLATION", f"unsafe path: {name}")
     relative = Path(name)
-    if not name or relative.is_absolute() or ".." in relative.parts or ".git" in relative.parts:
+    windows = PureWindowsPath(name)
+    if (
+        relative.is_absolute()
+        or windows.drive
+        or "\\" in name
+        or name != relative.as_posix()
+        or ".." in relative.parts
+        or any(part.casefold() in {".git", ".atk"} for part in relative.parts)
+    ):
         raise ATKError("SCOPE_VIOLATION", f"unsafe path: {name}")
     path = repo / relative
     for parent in [path, *path.parents]:
@@ -399,6 +410,12 @@ def prepare_candidate(repo: Path, root: Path, request: dict) -> dict:
         paths = request["paths"]
         if not paths or len(paths) != len(set(paths)):
             raise ATKError("SCOPE_VIOLATION", "candidate must declare distinct paths")
+        spellings = {}
+        for name in tracked_paths(repo) | changed_paths(repo) | set(paths):
+            key = unicodedata.normalize("NFC", name).casefold()
+            spellings.setdefault(key, set()).add(name)
+        if any(len(spellings[unicodedata.normalize("NFC", name).casefold()]) > 1 for name in paths):
+            raise ATKError("SCOPE_VIOLATION", "candidate path has a case or Unicode alias")
         for path in paths:
             safe_path(repo, path)
             if (
