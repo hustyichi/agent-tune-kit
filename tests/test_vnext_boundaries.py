@@ -395,6 +395,19 @@ def test_crashed_temporary_replay_restores_only_known_source(tmp_path: Path) -> 
     assert git(repo, "rev-parse", "HEAD") == current_commit
 
 
+def test_replay_preparation_timeout_stops_child_writes(tmp_path: Path) -> None:
+    marker = tmp_path / "late-write.txt"
+    child = f"import time; from pathlib import Path; time.sleep(2); Path({str(marker)!r}).write_text('late')"
+    parent = f"import subprocess, sys, time; subprocess.Popen([sys.executable, '-c', {child!r}]); time.sleep(10)"
+    with pytest.raises(ATKError, match="replay preparation timed out"):
+        checkpoints._prepare_replay(
+            tmp_path,
+            {"mode": "command", "argv": [sys.executable, "-c", parent], "timeout_seconds": 1},
+        )
+    time.sleep(2.2)
+    assert not marker.exists()
+
+
 def test_replay_restores_file_added_after_baseline(tmp_path: Path) -> None:
     rows = [{"id": "case", "input": "task", "usage": "optimization", "source_group_id": "group"}]
     repo, root, _, round_data, plan = project(tmp_path, "print('ok')\n", rows)

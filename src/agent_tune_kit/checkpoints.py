@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import math
+import os
+import signal
 import subprocess
 from collections.abc import Iterable
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from pathlib import Path
 
 from .core import ATKError, digest, locked, new_id, now, read_json, safe_id, write_json
@@ -1161,13 +1163,20 @@ def _prepare_replay(repo: Path, preparation: dict) -> None:
     if preparation["mode"] == "stateless":
         return
     try:
-        result = subprocess.run(
-            preparation["argv"], cwd=repo, capture_output=True, timeout=preparation["timeout_seconds"], check=False
-        )
-    except (OSError, subprocess.TimeoutExpired) as exc:
+        with subprocess.Popen(
+            preparation["argv"], cwd=repo, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True
+        ) as process:
+            try:
+                process.communicate(timeout=preparation["timeout_seconds"])
+            except subprocess.TimeoutExpired as exc:
+                with suppress(ProcessLookupError):
+                    os.killpg(process.pid, signal.SIGKILL)
+                process.communicate()
+                raise ATKError("NOT_REPLAYABLE", f"replay preparation timed out: {exc}") from exc
+    except OSError as exc:
         raise ATKError("NOT_REPLAYABLE", f"replay preparation failed: {exc}") from exc
-    if result.returncode:
-        raise ATKError("NOT_REPLAYABLE", f"replay preparation exited with {result.returncode}")
+    if process.returncode:
+        raise ATKError("NOT_REPLAYABLE", f"replay preparation exited with {process.returncode}")
 
 
 @contextmanager
