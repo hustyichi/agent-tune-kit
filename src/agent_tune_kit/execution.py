@@ -527,43 +527,43 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
         raise ATKError("NOT_REPLAYABLE", f"project runner is missing: {runner}")
     if retry_batch_id and prior_manifest.get("runner_hash") != digest(runner):
         raise ATKError("COMPARISON_INVALID", "runner changed before retry")
-    probe_config = _reserve_run(root, request, cases, attempts, batch_id, project)
-    folder = root / "evidence" / batch_id
-    folder.mkdir(parents=True, exist_ok=False)
-    config_path = folder / "run-config.json"
-    write_json(config_path, project, immutable=True)
-    runner_request = {
-        "batch_id": batch_id,
-        "purpose": request["purpose"],
-        "phase": request.get("phase", "incremental") if request["purpose"] == "evaluation" else None,
-        "revision_id": request["revision_id"],
-        "revision_commit": request.get("revision_commit"),
-        "workspace_path": str(repo),
-        "cases_path": str((root / "datasets" / safe_id(request["dataset_id"]) / "cases.jsonl").resolve()),
-        "attempts": attempts,
-        "timeout_seconds": probe_config["timeout_seconds"] if probe_config else request.get("timeout_seconds", 120),
-        "concurrency": request.get("concurrency", 1),
-        "run_config_ref": str(config_path.resolve()),
-        "output_dir": str(folder.resolve()),
-    }
-    if probe_config:
-        runner_request["probe_config"] = probe_config
-    request_path = folder / "request.json"
-    write_json(request_path, runner_request, immutable=True)
-    command = [
-        project["python"],
-        str(runner),
-        "--request",
-        str(request_path.resolve()),
-        "--output",
-        str(folder.resolve()),
-    ]
-    timed_out = False
-    runner_start_error = None
-    component_drift = []
-    batch_path = folder / "batch.json"
-    runner_batch = None
     with execution_revision(repo, root, request):
+        probe_config = _reserve_run(root, request, cases, attempts, batch_id, project)
+        folder = root / "evidence" / batch_id
+        folder.mkdir(parents=True, exist_ok=False)
+        config_path = folder / "run-config.json"
+        write_json(config_path, project, immutable=True)
+        runner_request = {
+            "batch_id": batch_id,
+            "purpose": request["purpose"],
+            "phase": request.get("phase", "incremental") if request["purpose"] == "evaluation" else None,
+            "revision_id": request["revision_id"],
+            "revision_commit": request.get("revision_commit"),
+            "workspace_path": str(repo),
+            "cases_path": str((root / "datasets" / safe_id(request["dataset_id"]) / "cases.jsonl").resolve()),
+            "attempts": attempts,
+            "timeout_seconds": probe_config["timeout_seconds"] if probe_config else request.get("timeout_seconds", 120),
+            "concurrency": request.get("concurrency", 1),
+            "run_config_ref": str(config_path.resolve()),
+            "output_dir": str(folder.resolve()),
+        }
+        if probe_config:
+            runner_request["probe_config"] = probe_config
+        request_path = folder / "request.json"
+        write_json(request_path, runner_request, immutable=True)
+        command = [
+            project["python"],
+            str(runner),
+            "--request",
+            str(request_path.resolve()),
+            "--output",
+            str(folder.resolve()),
+        ]
+        timed_out = False
+        runner_start_error = None
+        component_drift = []
+        batch_path = folder / "batch.json"
+        runner_batch = None
         versions_before = _probe_versions(repo, version_commands)
         try:
             with subprocess.Popen(

@@ -127,6 +127,31 @@ def assess(root: Path, batch: dict, expected: dict[str, str]) -> str:
     ).parent.name
 
 
+def test_invalid_revision_does_not_consume_execution_budget(tmp_path: Path) -> None:
+    rows = [{"id": "case", "input": "case", "usage": "optimization", "source_group_id": "g"}]
+    repo, root, dataset, round_data, plan = project(tmp_path, "print('ok')\n", rows)
+    plan["budget"]["executions"] = 3
+    freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    request = {
+        "dataset_id": dataset["id"],
+        "case_ids": ["case"],
+        "purpose": "evaluation",
+        "revision_id": round_data["baseline_revision_id"],
+        "round_id": round_data["id"],
+    }
+    (repo / "prompt.txt").write_text("unexpected edit")
+    with pytest.raises(ATKError, match="dirty"):
+        run_evaluation(root, request)
+    usage_path = root / "rounds" / round_data["id"] / "budget-usage.json"
+    assert not usage_path.exists()
+    assert not list((root / "evidence").glob("batch-*"))
+
+    (repo / "prompt.txt").write_text("old")
+    batch = run_evaluation(root, request)
+    assert batch["status"] == "sealed"
+    assert json.loads(usage_path.read_text())["executions"] == 1
+
+
 def test_retry_keeps_all_attempts_and_budget_blocks_extra_run(tmp_path: Path) -> None:
     marker = tmp_path / "timeout-once"
     script = (
