@@ -1,6 +1,6 @@
 # Agent Tune Kit
 
-最后更新：2026-09-27。状态：vNext 核心链路和 Magic Workspace 单 Case 真实接入已验证，完整验收待收口。详见 [实现与验收记录](docs/vnext-implementation-report.md)。
+最后更新：2026-09-28。状态：vNext 核心链路、10 Case 合成累积验收和 Magic Workspace 单 Case 真实接入已验证，完整验收待收口。详见 [实现与验收记录](docs/vnext-implementation-report.md)。
 
 简体中文 | [English](README.en.md)
 
@@ -36,6 +36,7 @@ uvx --from agent-tune-kit atk install
 
 - **本地运行**：项目 `.atk/adapters/runner.py` 用目标项目的 Python 环境按显式尝试列表调用现有 Agent；每次尝试保存一个 Execution。Prompt、代码及业务 Skill 使用同一协议。Skill 的 `available`、`loaded`、`invoked` 状态分开记录，无法证明实际加载时不能正常通过 Skill 门禁。诊断探针可在冻结许可内改用直接工具或项目测试命令；许可限定 argv、脚本指纹、工作目录、超时、Case、调用数和隔离依据，探针结果不参与正式效果对照。
 - **预算与对照**：冻结轮次按尝试预留最终 B0／累计版本复验额度；授权重试生成关联旧 Execution 的新批次，保留全部尝试而不挑最好一次。效率或成本门槛仅在预先冻结且指标齐全时判定。独立 holdout 按来源组和里程碑记录暴露，已暴露的组不能在后续轮次重用。
+- **运行身份**：冻结计划保存项目运行配置指纹，每批使用自己的配置快照。正式对照要求固定组件身份可核验；未知身份或接入配置漂移返回证据不足或阻塞执行。
 - **批量结果导入**：CSV/JSON/JSONL 按保存的字段映射导入，不重新运行 Agent；缺少尝试边界时不伪造 Execution。
 - **Langfuse 文件导入**：支持 Trace bundle 和 Observation 行两种显式 profile。保留 Trace/Observation ID、父子关系、来源、缺失与过滤范围；外部分数只当证据，不直接换算 ATK 的通过率。原文件只读，默认遮蔽常见凭证字段；项目敏感字段需要追加脱敏键。
 
@@ -68,4 +69,4 @@ python3 scripts/validate_skill_pack.py
 uv build --no-sources
 ```
 
-离线测试使用小型 Git 仓库和假 Agent。Magic Workspace 的真实轨迹导入和单 Case 自动加载业务 Skill 已单独验证；外部修复的新轮协议有合成测试，真实组件修复案例、已知责任层案例与多 Case 链路仍待验收。尚未确认安全隔离的目标 Agent 外部写操作不得在正式跑测中启动。
+离线测试使用小型 Git 仓库和假 Agent，已覆盖 10 Case 四候选累积收益与最终复验失败后的回退。Magic Workspace 的真实轨迹导入和单 Case 自动加载业务 Skill 已单独验证；外部修复的新轮协议有合成测试，真实组件修复案例、已知责任层案例与真实多 Case 链路仍待验收。尚未确认安全隔离的目标 Agent 外部写操作不得在正式跑测中启动。

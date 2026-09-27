@@ -166,6 +166,8 @@ def _reserve_run(
         plan = (
             read_json(folder / "plan.json") if (folder / "plan.json").exists() else round_data.get("analysis_plan", {})
         )
+        if plan.get("run_config_hash") and plan["run_config_hash"] != digest(project):
+            raise ATKError("COMPARISON_INVALID", "project runner configuration changed after Round freeze")
         budget = plan.get("budget", {})
         purpose = request["purpose"]
         probe_config = None
@@ -444,6 +446,8 @@ def run_evaluation(root: Path, request: dict) -> dict:
     probe_config = _reserve_run(root, request, cases, attempts, batch_id, project)
     folder = root / "evidence" / batch_id
     folder.mkdir(parents=True, exist_ok=False)
+    config_path = folder / "run-config.json"
+    write_json(config_path, project, immutable=True)
     runner_request = {
         "batch_id": batch_id,
         "purpose": request["purpose"],
@@ -455,7 +459,7 @@ def run_evaluation(root: Path, request: dict) -> dict:
         "attempts": attempts,
         "timeout_seconds": probe_config["timeout_seconds"] if probe_config else request.get("timeout_seconds", 120),
         "concurrency": request.get("concurrency", 1),
-        "run_config_ref": str(root / "project.json"),
+        "run_config_ref": str(config_path.resolve()),
         "output_dir": str(folder.resolve()),
     }
     if probe_config:

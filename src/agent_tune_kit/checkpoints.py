@@ -183,7 +183,7 @@ def freeze_round(repo: Path, root: Path, request: dict) -> dict:
         verify_repo(repo, expected_head=value["baseline_commit"], expected_branch=value["branch"])
         if git(repo, "diff", "--name-only", "-z") or changed_paths(repo) != set(value["baseline_untracked"]):
             raise ATKError("DIRTY_BASELINE", "workspace changed since B0 was recorded")
-        plan = request["plan"]
+        plan = dict(request["plan"])
         required = {
             "allowed_paths",
             "protected_paths",
@@ -290,6 +290,10 @@ def freeze_round(repo: Path, root: Path, request: dict) -> dict:
             )
         ):
             raise ATKError("COMPARISON_INVALID", "Issue dependencies or workaround scope are outside the plan")
+        project_hash = digest(read_json(root / "project.json"))
+        if plan.get("run_config_hash", project_hash) != project_hash:
+            raise ATKError("COMPARISON_INVALID", "frozen runner configuration differs from the project")
+        plan["run_config_hash"] = project_hash
         write_json(_round_path(root, value["id"]) / "plan.json", plan, immutable=True)
         value["status"] = "ready"
         _write_round(root, value)

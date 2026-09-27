@@ -270,6 +270,15 @@ def _metric_total(slots: dict, cases: set[str], metric: str) -> float | None:
     return sum(values) if values else None
 
 
+def _fixed_identity_known(batch: dict) -> bool:
+    return all(
+        component.get("identity_status") in {"available", "verified"}
+        and (component.get("actual_sha256") or component.get("actual_version"))
+        for component in batch.get("actual_components", [])
+        if component.get("change_role") == "fixed"
+    )
+
+
 def compare_and_gate(root: Path, request: dict) -> dict:
     folder = _round_folder(root, request["round_id"])
     round_data = read_json(folder / "round.json")
@@ -289,6 +298,8 @@ def compare_and_gate(root: Path, request: dict) -> dict:
             raise ATKError("COMPARISON_INVALID", "evaluation_spec differs from frozen plan")
     if left_batch.get("run_config_hash") != right_batch.get("run_config_hash"):
         raise ATKError("COMPARISON_INVALID", "runner configuration drifted between sides")
+    if plan.get("run_config_hash") and left_batch.get("run_config_hash") != plan["run_config_hash"]:
+        raise ATKError("COMPARISON_INVALID", "runner configuration differs from the frozen Round")
     for batch in (left_batch, right_batch):
         if (
             batch.get("runner_hash") != plan["runner_hash"]
@@ -296,6 +307,8 @@ def compare_and_gate(root: Path, request: dict) -> dict:
         ):
             raise ATKError("COMPARISON_INVALID", "runner or fixed component identity differs from frozen plan")
     result = "insufficient" if left_batch.get("status") != "sealed" or right_batch.get("status") != "sealed" else None
+    if not _fixed_identity_known(left_batch) or not _fixed_identity_known(right_batch):
+        result = "insufficient"
     if left_batch.get("phase", "incremental") != mode or right_batch.get("phase", "incremental") != mode:
         result = "insufficient"
     if set(left_slots) != set(right_slots):
@@ -542,6 +555,7 @@ def validate_external_fix(root: Path, request: dict) -> dict:
         or batch.get("round_id") != round_data["id"]
         or batch.get("revision_id") != round_data["baseline_revision_id"]
         or batch.get("runner_hash") != plan["runner_hash"]
+        or (plan.get("run_config_hash") and batch.get("run_config_hash") != plan["run_config_hash"])
         or batch.get("fixed_context_hash") != plan["fixed_context_hash"]
         or any(direct.get("run_config_hash") != batch.get("run_config_hash") for direct in direct_batches)
     ):
@@ -552,6 +566,8 @@ def validate_external_fix(root: Path, request: dict) -> dict:
     actual_hashes = {entry["component_id"]: entry.get("actual_sha256") for entry in batch.get("actual_components", [])}
     required_loaded = set(plan.get("required_loaded_component_ids", []))
     result = "pass"
+    if not _fixed_identity_known(batch):
+        result = "insufficient"
     case_scores: dict[str, float] = defaultdict(float)
     for (case_id, _, _), attempts in slots.items():
         selected = _selected_attempt(attempts, plan.get("max_retries_per_slot", 0))
