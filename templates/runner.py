@@ -11,8 +11,10 @@ import hashlib
 import json
 import os
 import re
+import signal
 import subprocess
 import time
+from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -46,24 +48,24 @@ def run_one(attempt: dict, case: dict, config: dict, output: Path, timeout: int)
             and hashlib.sha256(Path(config["script_path"]).read_bytes()).hexdigest() != config["script_sha256"]
         ):
             raise OSError("probe script changed after authorization")
-        result = subprocess.run(
+        with subprocess.Popen(
             command,
             cwd=config.get("working_directory", config["workspace_path"]),
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
-            timeout=timeout,
-            check=False,
-        )
-        status = "completed" if result.returncode == 0 else "agent_error"
-        response = redact_output(result.stdout)
-        stderr = redact_output(result.stderr)
-        returncode = result.returncode
-    except subprocess.TimeoutExpired as exc:
-        status = "timeout"
-        response = (exc.stdout or b"").decode(errors="replace") if isinstance(exc.stdout, bytes) else exc.stdout or ""
-        stderr = (exc.stderr or b"").decode(errors="replace") if isinstance(exc.stderr, bytes) else exc.stderr or ""
+            start_new_session=True,
+        ) as process:
+            try:
+                response, stderr = process.communicate(timeout=timeout)
+                status = "completed" if process.returncode == 0 else "agent_error"
+                returncode = process.returncode
+            except subprocess.TimeoutExpired:
+                with suppress(ProcessLookupError):
+                    os.killpg(process.pid, signal.SIGKILL)
+                response, stderr = process.communicate()
+                status, returncode = "timeout", None
         response, stderr = redact_output(response), redact_output(stderr)
-        returncode = None
     except OSError as exc:
         status, response, stderr, returncode = "infrastructure_error", "", redact_output(str(exc)), None
     duration = time.monotonic() - started_clock

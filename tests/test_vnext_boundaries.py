@@ -408,6 +408,41 @@ def test_replay_preparation_timeout_stops_child_writes(tmp_path: Path) -> None:
     assert not marker.exists()
 
 
+def test_timed_out_agent_cannot_write_into_next_case(tmp_path: Path) -> None:
+    marker = tmp_path / "late-agent-write.txt"
+    child = f"import time; from pathlib import Path; time.sleep(1.4); Path({str(marker)!r}).write_text('late')"
+    script = (
+        "import json, subprocess, sys, time\n"
+        "from pathlib import Path\n"
+        "task=json.loads(Path(sys.argv[1]).read_text())\n"
+        f"if task=='first':\n subprocess.Popen([sys.executable, '-c', {child!r}])\n time.sleep(10)\n"
+        f"else:\n time.sleep(0.8)\n print('polluted' if Path({str(marker)!r}).exists() else 'clean')\n"
+    )
+    rows = [
+        {"id": name, "input": name, "usage": "optimization", "source_group_id": name} for name in ("first", "second")
+    ]
+    repo, root, dataset, round_data, _ = project(tmp_path, script, rows)
+    batch = run_evaluation(
+        root,
+        {
+            "dataset_id": dataset["id"],
+            "case_ids": ["first", "second"],
+            "purpose": "evaluation",
+            "revision_id": round_data["baseline_revision_id"],
+            "revision_commit": git(repo, "rev-parse", "HEAD"),
+            "timeout_seconds": 1,
+            "batch_timeout_seconds": 5,
+        },
+    )
+    _, records, _ = validate_evidence(root, batch["id"])
+    by_case = {record["case_id"]: record for record in records.values()}
+    assert batch["status"] == "sealed"
+    assert by_case["first"]["execution"]["status"] == "timeout"
+    assert by_case["second"]["execution"]["status"] == "completed"
+    assert by_case["second"]["output"].strip() == "clean"
+    assert not marker.exists()
+
+
 def test_replay_restores_file_added_after_baseline(tmp_path: Path) -> None:
     rows = [{"id": "case", "input": "task", "usage": "optimization", "source_group_id": "group"}]
     repo, root, _, round_data, plan = project(tmp_path, "print('ok')\n", rows)
