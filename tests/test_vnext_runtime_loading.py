@@ -146,15 +146,20 @@ def test_node_local_link_reads_candidate_revision(tmp_path: Path, wrong_copy: bo
     assert candidate_record["loading_evidence"][0]["entry_source_path"] == str(target)
 
 
-def test_python_editable_install_reads_candidate_revision(tmp_path: Path) -> None:
+@pytest.mark.parametrize("path_mode", ["editable", "pythonpath_override", "parent_scan", "stale_wheel"])
+def test_python_editable_install_reads_candidate_revision(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, path_mode: str
+) -> None:
     uv = shutil.which("uv")
     if not uv:
         pytest.skip("uv is not installed")
     agent = (
-        "import fixture_agent, hashlib, json, sys\n"
+        "import fixture_agent, hashlib, json, os, sys\n"
         "from pathlib import Path\n"
         "source = Path(fixture_agent.__file__).resolve()\n"
         "skill = source.parent.parent / 'skills/reply/SKILL.md'\n"
+        "if os.environ.get('ATK_PARENT_SCAN'): skill = Path.cwd().parent / 'skills/reply/SKILL.md'\n"
+        "if os.environ.get('ATK_STALE_BUILD'): skill = source.parent / 'SKILL.md'\n"
         "data = skill.read_bytes()\n"
         "event = {'component_id': 'business-skill', 'state': 'loaded', "
         "'fingerprint': hashlib.sha256(data).hexdigest(), "
@@ -167,30 +172,69 @@ def test_python_editable_install_reads_candidate_revision(tmp_path: Path) -> Non
     rows = [{"id": "case", "input": "task", "usage": "optimization", "source_group_id": "group"}]
     repo, root, dataset, round_data, plan = project(
         tmp_path,
-        agent,
+        "print('unused')\n",
         rows,
         extra_files={
             "pyproject.toml": '[build-system]\nrequires = ["hatchling"]\nbuild-backend = "hatchling.build"\n'
             '[project]\nname = "atk-target-fixture"\nversion = "0.0.1"\n'
             '[tool.hatch.build.targets.wheel]\npackages = ["fixture_agent"]\n',
             "fixture_agent/__init__.py": "VALUE = 1\n",
+            "fixture_agent/SKILL.md": "old",
             "skills/reply/SKILL.md": "old",
         },
     )
+    launcher = root / "adapters/launcher.py"
+    launcher.write_text(agent)
     environment = tmp_path / "target-venv"
     subprocess.run([uv, "venv", "--python", sys.executable, str(environment)], check=True, capture_output=True)
     python = environment / "bin" / "python"
     subprocess.run(
-        [uv, "pip", "install", "--offline", "--python", str(python), "-e", str(repo)],
+        [
+            uv,
+            "pip",
+            "install",
+            "--offline",
+            "--python",
+            str(python),
+            *([] if path_mode == "stale_wheel" else ["-e"]),
+            str(repo),
+        ],
         check=True,
         capture_output=True,
         env={**os.environ, "UV_OFFLINE": "1"},
     )
+    expected_source = repo / "fixture_agent/__init__.py"
+    if path_mode == "pythonpath_override":
+        alternate = tmp_path / "alternate"
+        (alternate / "fixture_agent").mkdir(parents=True)
+        (alternate / "skills/reply").mkdir(parents=True)
+        expected_source = alternate / "fixture_agent/__init__.py"
+        expected_source.write_text("VALUE = 1\n")
+        (alternate / "skills/reply/SKILL.md").write_text("new")
+        monkeypatch.setenv("PYTHONPATH", str(alternate))
+    elif path_mode == "parent_scan":
+        (tmp_path / "skills/reply").mkdir(parents=True)
+        (tmp_path / "skills/reply/SKILL.md").write_text("new")
+        monkeypatch.setenv("ATK_PARENT_SCAN", "1")
+    elif path_mode == "stale_wheel":
+        expected_source = Path(
+            subprocess.check_output(
+                [str(python), "-c", "import fixture_agent; print(fixture_agent.__file__)"], cwd=tmp_path, text=True
+            ).strip()
+        ).resolve()
+        monkeypatch.setenv("ATK_STALE_BUILD", "1")
     configure_skill(
-        root, str(python), [str(python), "-B", "agent.py", "{input_file}", "{output_dir}"], "fixture_agent/__init__.py"
+        root,
+        str(python),
+        [str(python), "-B", str(launcher), "{input_file}", "{output_dir}"],
+        "fixture_agent/__init__.py",
     )
-    baseline, updated = run_revision_pair(repo, root, dataset, round_data, plan)
-    assert loaded_record(root, baseline)["output"].strip() == "bad"
+    baseline, updated = run_revision_pair(
+        repo, root, dataset, round_data, plan, "pass" if path_mode == "editable" else "insufficient"
+    )
+    assert loaded_record(root, baseline)["output"].strip() == (
+        "hello" if path_mode in {"pythonpath_override", "parent_scan"} else "bad"
+    )
     candidate_record = loaded_record(root, updated)
-    assert candidate_record["output"].strip() == "hello"
-    assert candidate_record["loading_evidence"][0]["entry_source_path"] == str(repo / "fixture_agent/__init__.py")
+    assert candidate_record["output"].strip() == ("bad" if path_mode == "stale_wheel" else "hello")
+    assert candidate_record["loading_evidence"][0]["entry_source_path"] == str(expected_source)
