@@ -141,6 +141,7 @@ def test_local_prompt_candidate_is_compared_and_committed(tmp_path: Path, final_
         "protection_case_ids": ["protect"],
         "target_case_ids_by_issue": {"issue-prompt": ["target"]},
         "repeatability": "deterministic",
+        "repeatability_basis": "Fake Agent has fixed branches for each Case and prompt content.",
         "final_repeats": 1,
         "budget": {"executions": 20, "candidates": 2},
         "replay_preparation": {"mode": "stateless", "reason": "fake Agent has no persistent cache"},

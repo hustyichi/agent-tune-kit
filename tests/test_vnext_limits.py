@@ -91,6 +91,7 @@ def project(
         "protection_case_ids": [row["id"] for row in rows if row["usage"] == "protection"],
         "target_case_ids_by_issue": {"issue": [rows[0]["id"]]},
         "repeatability": "deterministic",
+        "repeatability_basis": "Fake Agent branches only on fixed Case input and repository files.",
         "final_repeats": 1,
         "budget": {"executions": 12, "probes": 0, "candidates": 1},
         "replay_preparation": {"mode": "stateless", "reason": "fake Agent has no persistent cache"},
@@ -150,6 +151,21 @@ def test_invalid_revision_does_not_consume_execution_budget(tmp_path: Path) -> N
     batch = run_evaluation(root, request)
     assert batch["status"] == "sealed"
     assert json.loads(usage_path.read_text())["executions"] == 1
+
+
+def test_freeze_records_repeatability_and_short_repeat_basis(tmp_path: Path) -> None:
+    rows = [{"id": "case", "input": "case", "usage": "optimization", "source_group_id": "g"}]
+    repo, root, _, round_data, plan = project(tmp_path, "print('ok')\n", rows)
+    plan.pop("repeatability_basis")
+    with pytest.raises(ATKError, match="repeatability_basis"):
+        freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    plan["repeatability"] = "unknown"
+    plan["repeatability_basis"] = "Real model behavior has not been calibrated."
+    plan["final_repeats"] = 2
+    with pytest.raises(ATKError, match="short stochastic repeat plan"):
+        freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    plan["repeat_plan_basis"] = "Two paired attempts fit the local evaluation budget; no significance claim."
+    assert freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})["status"] == "ready"
 
 
 def test_retry_keeps_all_attempts_and_budget_blocks_extra_run(tmp_path: Path) -> None:

@@ -380,13 +380,22 @@ def _compare_and_gate_locked(root: Path, request: dict) -> dict:
             or batch.get("fixed_context_hash") != plan["fixed_context_hash"]
         ):
             raise ATKError("COMPARISON_INVALID", "runner or fixed component identity differs from frozen plan")
+    limitations = request.get("limitations", [])
+    if not isinstance(limitations, list):
+        raise ATKError("COMPARISON_INVALID", "limitations must be a list")
+    limitations = list(limitations)
     result = "insufficient" if left_batch.get("status") != "sealed" or right_batch.get("status") != "sealed" else None
+    if result:
+        limitations.append("one or both execution batches are not sealed")
     if not _fixed_identity_known(left_batch) or not _fixed_identity_known(right_batch):
         result = "insufficient"
+        limitations.append("fixed component identity is unknown")
     if left_batch.get("phase", "incremental") != mode or right_batch.get("phase", "incremental") != mode:
         result = "insufficient"
+        limitations.append("execution phase differs from the requested comparison")
     if set(left_slots) != set(right_slots):
         result = "insufficient"
+        limitations.append("paired Case slots differ between baseline and candidate")
     expected_cases = set(
         plan["case_ids"]
         if mode == "final"
@@ -399,12 +408,14 @@ def _compare_and_gate_locked(root: Path, request: dict) -> dict:
             expected_cases.update(prior["fixed_case_ids"])
     if not expected_cases or expected_cases - {slot[0] for slot in left_slots}:
         result = "insufficient"
+        limitations.append("frozen target or protection Cases are missing from the baseline")
     expected_repeats = plan["final_repeats"] if mode == "final" else plan.get("incremental_repeats", 1)
     if any(
         {repeat for case, _, repeat in left_slots if case == case_id} != set(range(1, expected_repeats + 1))
         for case_id in expected_cases
     ):
         result = "insufficient"
+        limitations.append("baseline repeat count differs from the frozen plan")
     max_retries = plan.get("max_retries_per_slot", 0)
     case_results = {}
     rows = []
@@ -412,10 +423,11 @@ def _compare_and_gate_locked(root: Path, request: dict) -> dict:
         if key[0] not in expected_cases:
             continue
         sides = []
-        for side in (left_slots, right_slots):
+        for side_name, side in (("baseline", left_slots), ("candidate", right_slots)):
             selected = _selected_attempt(side[key], max_retries)
             if selected is None:
                 result = "insufficient"
+                limitations.append(f"{side_name} {key[0]} repeat {key[2]} has no usable execution")
                 sides.append(None)
                 continue
             execution, row, _ = selected
@@ -429,17 +441,27 @@ def _compare_and_gate_locked(root: Path, request: dict) -> dict:
         )
         required_loaded = set(plan.get("required_loaded_component_ids", []))
         if required_loaded:
-            for slots, batch in ((left_slots, left_batch), (right_slots, right_batch)):
+            for side_name, slots, batch in (
+                ("baseline", left_slots, left_batch),
+                ("candidate", right_slots, right_batch),
+            ):
                 selected = _selected_attempt(slots[key], max_retries)
                 for _, _, record in [selected] if selected else []:
-                    if required_loaded - _loaded_component_ids(root, batch, record):
+                    missing_loaded = required_loaded - _loaded_component_ids(root, batch, record)
+                    if missing_loaded:
                         result = "insufficient"
+                        limitations.append(
+                            f"{side_name} {key[0]} repeat {key[2]} lacks verified loading: "
+                            + ", ".join(sorted(missing_loaded))
+                        )
         if any(verdict not in {"pass", "fail"} for verdict in sides):
             result = "insufficient"
+            limitations.append(f"{key[0]} repeat {key[2]} has an unknown or invalid verdict")
     for case_id in expected_cases:
         paired = [row for row in rows if row["case_id"] == case_id]
         if len(paired) != expected_repeats or any(row["left"] is None or row["right"] is None for row in paired):
             result = "insufficient"
+            limitations.append(f"{case_id} lacks complete paired repeats")
             continue
         case_results[case_id] = {
             "left": sum(row["left"] == "pass" for row in paired) / expected_repeats,
@@ -473,6 +495,7 @@ def _compare_and_gate_locked(root: Path, request: dict) -> dict:
     }
     if any(value is None for name in required_metrics for value in metrics[name].values()):
         result = "insufficient"
+        limitations.append("required cost, duration, or tool-call metrics are missing")
     slot_count = len(expected_cases) * expected_repeats
     exceeds_limit = (
         (
@@ -527,7 +550,7 @@ def _compare_and_gate_locked(root: Path, request: dict) -> dict:
         "metrics": metrics,
         "evidence_level": "repeated" if expected_repeats > 1 else "single_run",
         "plan_hash": digest(plan),
-        "limitations": request.get("limitations", []),
+        "limitations": limitations,
     }
     if mode == "incremental":
         candidate = read_json(folder / "candidates" / safe_id(request["candidate_id"]) / "candidate.json")

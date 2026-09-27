@@ -106,6 +106,7 @@ def test_business_skill_must_be_loaded_at_each_revision(tmp_path: Path, load_mod
         "target_case_ids_by_issue": {"skill-rule": ["case-1"]},
         "required_loaded_component_ids": ["business-skill"],
         "repeatability": "deterministic",
+        "repeatability_basis": "Fake Agent reads one fixed Skill file and follows deterministic branches.",
         "final_repeats": 1,
         "budget": {"executions": 4},
         "replay_preparation": {"mode": "stateless", "reason": "fixture has no persistent cache"},
@@ -157,3 +158,5 @@ def test_business_skill_must_be_loaded_at_each_revision(tmp_path: Path, load_mod
     assert validation["result"] == (
         "insufficient" if load_mode in {"wrong_install", "stale_build", "missing_path"} else "pass"
     )
+    if validation["result"] == "insufficient":
+        assert any("case-1 repeat 1 lacks verified loading: business-skill" in gap for gap in validation["limitations"])

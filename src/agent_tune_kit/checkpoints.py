@@ -217,6 +217,7 @@ def freeze_round(repo: Path, root: Path, request: dict) -> dict:
             "case_ids",
             "protection_case_ids",
             "repeatability",
+            "repeatability_basis",
             "final_repeats",
             "budget",
             "replay_preparation",
@@ -253,9 +254,17 @@ def freeze_round(repo: Path, root: Path, request: dict) -> dict:
             raise ATKError("COMPARISON_INVALID", "frozen Case set is empty, duplicated, or inconsistent")
         if plan["repeatability"] not in {"deterministic", "stochastic", "unknown"}:
             raise ATKError("COMPARISON_INVALID", "repeatability is invalid")
+        if not isinstance(plan["repeatability_basis"], str) or not plan["repeatability_basis"].strip():
+            raise ATKError("COMPARISON_INVALID", "repeatability needs a recorded evidence basis")
         minimum = 1 if plan["repeatability"] == "deterministic" else 2
         if type(plan["final_repeats"]) is not int or plan["final_repeats"] < minimum:
             raise ATKError("BUDGET_EXHAUSTED", "final repeat plan is below required minimum")
+        if (
+            plan["repeatability"] != "deterministic"
+            and plan["final_repeats"] < 3
+            and (not isinstance(plan.get("repeat_plan_basis"), str) or not plan["repeat_plan_basis"].strip())
+        ):
+            raise ATKError("COMPARISON_INVALID", "short stochastic repeat plan needs a recorded reason")
         budget = plan["budget"]
         if (
             not isinstance(budget, dict)

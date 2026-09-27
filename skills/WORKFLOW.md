@@ -26,6 +26,9 @@ Before any candidate, record a finite plan with scope, protected paths, issue an
 IDs, calibrated judger/spec/runner/fixed-context hashes, repeat plan, budget, commit
 authorization, rollback rule, and `replay_preparation` (`stateless` with reason, or a
 bounded command that rebuilds caches and artifacts at each checked-out Revision).
+Record `repeatability_basis`; treat an uncalibrated model-backed Agent as `unknown`,
+not deterministic. Stochastic or unknown plans use three final repeats per side by
+default; a two-repeat plan needs `repeat_plan_basis` and still makes no significance claim.
 `freeze_round` blocks a dirty baseline. Do not edit
 `.atk/`, the runner, dataset, judge, or validation criteria as part of a candidate.
 When only the judging rule changes, close the old Round and link a new one with

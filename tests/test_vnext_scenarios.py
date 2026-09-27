@@ -266,7 +266,9 @@ def test_incremental_pass_cannot_finish_when_final_replay_fails(tmp_path: Path) 
     ]
     repo, root, dataset, round_data, plan = project(tmp_path, script, rows)
     plan["repeatability"] = "unknown"
+    plan["repeatability_basis"] = "The fake Agent increments a counter and changes its answer across attempts."
     plan["final_repeats"] = 2
+    plan["repeat_plan_basis"] = "Two paired attempts demonstrate this deterministic fixture's varying responses."
     plan["budget"] = {"executions": 16, "probes": 0, "candidates": 2}
     freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
     request = {
