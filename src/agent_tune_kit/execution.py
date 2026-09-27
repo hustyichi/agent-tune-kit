@@ -276,13 +276,23 @@ def source_groups_for_evidence(root: Path, refs: list[dict]) -> list[str]:
         manifest, records, index = validate_evidence(root, ref["batch_id"])
         if ref["evidence_id"] not in index:
             raise ATKError("INCOMPLETE_EVIDENCE", "Knowledge evidence reference is missing")
-        if manifest.get("source_type") != "local_runner" or ref["evidence_id"] not in records:
+        if manifest.get("source_type") == "source_contract":
             continue
+        if manifest.get("source_type") != "local_runner":
+            group = ref.get("source_group_id")
+            if not isinstance(group, str) or not group.strip():
+                raise ATKError("INCOMPLETE_EVIDENCE", "imported Knowledge evidence needs a source group")
+            groups.add(group)
+            continue
+        if ref["evidence_id"] not in records:
+            raise ATKError("INCOMPLETE_EVIDENCE", "Knowledge local evidence must reference an Execution")
         case_id = records[ref["evidence_id"]].get("execution", {}).get("case_id")
         case = load_cases(root, manifest["dataset_id"]).get(case_id)
         if not case:
             raise ATKError("INCOMPLETE_EVIDENCE", "Knowledge Execution has no matching Case")
-        if case and case.get("source_group_id"):
+        if ref.get("source_group_id") not in {None, case.get("source_group_id")}:
+            raise ATKError("INCOMPLETE_EVIDENCE", "Knowledge source group differs from its Case")
+        if case.get("source_group_id"):
             groups.add(case["source_group_id"])
     return sorted(groups)
 

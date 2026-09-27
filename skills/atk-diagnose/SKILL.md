@@ -41,3 +41,12 @@ For out-of-scope components, record a local `external_handoff` with trigger,
 expected/actual, contract, component version, minimal reproduction and post-fix
 end-to-end regression. Do not send it or edit another repository. A fixed service
 requires a linked new Round and fresh verification before resolving its Issue.
+
+Use `store_knowledge` for reusable findings with input applicability, component,
+contract and judger fingerprints, supporting/contrary evidence, and links to
+Candidates or Validations. For imported task evidence, put the Case-equivalent
+`source_group_id` on each evidence ref; local Execution refs derive it from the
+sealed dataset. Knowledge that uses a holdout group makes that group ineligible
+for independent holdout claims. On reuse, call `knowledge_applicability` with
+current identities and input applicability; treat `needs_revalidation` as a
+research lead, not a verified conclusion.

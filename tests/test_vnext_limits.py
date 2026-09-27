@@ -9,6 +9,7 @@ import pytest
 
 from agent_tune_kit.checkpoints import create_round, freeze_round, prepare_candidate, seal_candidate
 from agent_tune_kit.core import ATKError, digest, read_assessment, store_assessment, validate_evidence
+from agent_tune_kit.evidence import import_evidence
 from agent_tune_kit.execution import initialize_project, run_evaluation, store_dataset
 from agent_tune_kit.governance import compare_and_gate, finish_round, knowledge_applicability, store_knowledge
 from tests.test_vnext_flow import git
@@ -662,6 +663,55 @@ def test_holdout_evidence_used_for_knowledge_cannot_be_reused(tmp_path: Path) ->
     assert knowledge["optimization_source_group_ids"] == ["shared"]
     with pytest.raises(ATKError, match="used for optimization"):
         run_evaluation(root, request)
+
+
+def test_imported_knowledge_needs_source_group_before_holdout(tmp_path: Path) -> None:
+    rows = [{"id": "hold", "input": "case", "usage": "holdout", "source_group_id": "shared"}]
+    repo, root, dataset, round_data, plan = project(tmp_path, "print('ok')\n", rows)
+    source = tmp_path / "trace.json"
+    source.write_text(json.dumps({"id": "trace-1", "input": "case", "output": "done"}))
+    batch = import_evidence(
+        root,
+        {
+            "source": str(source),
+            "source_kind": "langfuse",
+            "source_namespace": "fixture",
+            "adapter_profile": "langfuse_trace_bundle",
+            "mapping_version": "1",
+        },
+    )
+    ref = {"batch_id": batch["id"], "evidence_id": batch["evidence_index"][0]["evidence_id"]}
+    knowledge = {
+        "status": "provisional",
+        "applicability": "case",
+        "component_hashes": {"agent": "v1"},
+        "contract_hashes": {"task": "v1"},
+        "judger_hash": "v1",
+        "evidence_refs": [ref],
+        "contrary_refs": [],
+        "candidate_ids": [],
+        "validation_ids": [],
+        "body": "Trace informed this rule.",
+    }
+    with pytest.raises(ATKError, match="source group"):
+        store_knowledge(root, {"knowledge": knowledge})
+    knowledge["evidence_refs"] = [{**ref, "source_group_id": "shared"}]
+    saved = store_knowledge(root, {"knowledge": knowledge})
+    assert saved["optimization_source_group_ids"] == ["shared"]
+    plan["holdout_milestone_id"] = "milestone-1"
+    freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    with pytest.raises(ATKError, match="used for optimization"):
+        run_evaluation(
+            root,
+            {
+                "dataset_id": dataset["id"],
+                "case_ids": ["hold"],
+                "purpose": "evaluation",
+                "revision_id": round_data["baseline_revision_id"],
+                "round_id": round_data["id"],
+                "holdout_milestone_id": "milestone-1",
+            },
+        )
 
 
 def test_knowledge_input_scope_or_unknown_identity_needs_revalidation(tmp_path: Path) -> None:
