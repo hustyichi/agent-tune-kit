@@ -1194,6 +1194,51 @@ def test_interrupted_runner_keeps_running_and_not_started_attempts(tmp_path: Pat
     assert validate_evidence(root, batch["id"])[1] == {}
 
 
+@pytest.mark.parametrize("kind", ["invalid_json", "missing_component_id"])
+def test_invalid_runner_batch_keeps_partial_evidence(tmp_path: Path, kind: str) -> None:
+    rows = [{"id": "case", "input": "task", "usage": "optimization", "source_group_id": "g"}]
+    repo, root, dataset, round_data, plan = project(tmp_path, "print('ok')\n", rows)
+    runner = root / "adapters" / "runner.py"
+    runner.write_text(
+        "import argparse, json\n"
+        "from pathlib import Path\n"
+        "parser=argparse.ArgumentParser()\n"
+        "parser.add_argument('--request')\n"
+        "parser.add_argument('--output')\n"
+        "args=parser.parse_args()\n"
+        "request=json.loads(Path(args.request).read_text())\n"
+        "ids=[item['record_id'] for item in request['attempts']]\n"
+        "batch={'batch_id': request['batch_id'], 'planned_record_ids': ids, 'completed_record_ids': [], "
+        "'running_record_id': None, 'not_started_record_ids': ids, "
+        "'actual_components': [{'role': 'prompt', 'change_role': 'variable', "
+        "'source_path': 'prompt.txt', 'actual_sha256': 'incorrect'}]}\n"
+        f"payload='{{bad' if {kind!r}=='invalid_json' else json.dumps(batch)\n"
+        "(Path(args.output)/'batch.json').write_text(payload)\n"
+    )
+    plan["runner_hash"] = digest(runner)
+    freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    batch = run_evaluation(
+        root,
+        {
+            "dataset_id": dataset["id"],
+            "case_ids": ["case"],
+            "purpose": "evaluation",
+            "revision_id": round_data["baseline_revision_id"],
+            "round_id": round_data["id"],
+        },
+    )
+    assert batch["status"] == "partial"
+    assert batch["invalid_runner_artifacts"] == (["batch.json"] if kind == "invalid_json" else [])
+    assert validate_evidence(root, batch["id"])[1] == {}
+    if kind == "invalid_json":
+        assert (root / "evidence" / batch["id"] / "batch.json").read_text() == "{bad"
+    else:
+        assert any(
+            item.get("reason") == "runner component inventory differs from project configuration"
+            for item in batch["post_run_component_drift"]
+        )
+
+
 def test_truncated_runner_record_preserves_completed_prefix(tmp_path: Path) -> None:
     rows = [
         {"id": "first", "input": "first", "usage": "optimization", "source_group_id": "g1"},

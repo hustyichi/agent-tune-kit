@@ -562,6 +562,7 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
     runner_start_error = None
     component_drift = []
     batch_path = folder / "batch.json"
+    runner_batch = None
     with execution_revision(repo, root, request):
         versions_before = _probe_versions(repo, version_commands)
         try:
@@ -581,13 +582,19 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
             result = subprocess.CompletedProcess(command, 127, b"", b"")
         versions_after = _probe_versions(repo, version_commands)
         if batch_path.exists():
-            reported = json.loads(batch_path.read_text(encoding="utf-8")).get("actual_components", [])
+            try:
+                parsed = json.loads(batch_path.read_text(encoding="utf-8"))
+                runner_batch = parsed if isinstance(parsed, dict) else None
+            except (OSError, UnicodeDecodeError, ValueError):
+                pass
+        if runner_batch is not None:
+            reported = runner_batch.get("actual_components", [])
             for component in reported if isinstance(reported, list) else []:
                 if not isinstance(component, dict):
                     continue
                 source = component.get("source_path")
                 before = component.get("actual_sha256")
-                if not source or not before:
+                if not isinstance(source, str) or not source or not isinstance(before, str) or not before:
                     continue
                 path = repo / source
                 try:
@@ -597,7 +604,7 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
                 if after != before:
                     component_drift.append(
                         {
-                            "component_id": component["component_id"],
+                            "component_id": component.get("component_id"),
                             "source_path": source,
                             "before_sha256": before,
                             "after_sha256": after,
@@ -607,21 +614,21 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
     missing_artifacts = [
         name for name, path in (("batch.json", batch_path), ("records.jsonl", records_path)) if not path.exists()
     ]
-    if not batch_path.exists():
-        write_json(
-            batch_path,
-            {
-                "batch_id": batch_id,
-                "planned_record_ids": [attempt["record_id"] for attempt in attempts],
-                "completed_record_ids": [],
-                "running_record_id": None,
-                "not_started_record_ids": [attempt["record_id"] for attempt in attempts] if runner_start_error else [],
-                "actual_components": [],
-            },
-        )
+    invalid_artifacts = ["batch.json"] if batch_path.exists() and runner_batch is None else []
+    batch = runner_batch
+    if batch is None:
+        batch = {
+            "batch_id": batch_id,
+            "planned_record_ids": [attempt["record_id"] for attempt in attempts],
+            "completed_record_ids": [],
+            "running_record_id": None,
+            "not_started_record_ids": [attempt["record_id"] for attempt in attempts] if runner_start_error else [],
+            "actual_components": [],
+        }
+        if not batch_path.exists():
+            write_json(batch_path, batch)
     if not records_path.exists():
         records_path.write_bytes(b"")
-    batch = json.loads(batch_path.read_text(encoding="utf-8"))
     actual_components = batch.get("actual_components", [])
     if not isinstance(actual_components, list) or any(not isinstance(item, dict) for item in actual_components):
         actual_components = []
@@ -792,12 +799,14 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
         and result.returncode == 0
         and not component_drift
         and not missing_artifacts
+        and not invalid_artifacts
         and not malformed_records
         and not status_conflict
         else "partial",
         "runner_exit_code": result.returncode,
         "runner_start_error": runner_start_error,
         "missing_runner_artifacts": missing_artifacts,
+        "invalid_runner_artifacts": invalid_artifacts,
         "incomplete_records_sha256": digest(raw_records) if malformed_records else None,
         "runner_status_conflict": status_conflict,
         "run_config_hash": digest(project),
