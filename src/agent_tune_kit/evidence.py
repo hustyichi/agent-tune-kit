@@ -294,11 +294,21 @@ def _trace_record(
                 "source_trace_id": trace_id,
             }
         )
+    trace_start = _alias(trace, "timestamp", "startTime", "start_time")
+    trace_end = _alias(trace, "endTime", "end_time")
     record = {
         "id": new_id("record"),
         "source_namespace": namespace,
         "source_trace_id": trace_id,
         "source_session_id": _alias(trace, "sessionId", "session_id"),
+        "raw_started_at": trace_start,
+        "started_at": _parsed_time(trace_start),
+        "raw_ended_at": trace_end,
+        "ended_at": _parsed_time(trace_end),
+        "source_status": redact(
+            {"level": trace.get("level"), "message": _alias(trace, "statusMessage", "status_message")},
+            extra_keys,
+        ),
         "execution": None,
         "input_present": "input" in input_source,
         "input": redact(input_source.get("input"), extra_keys),
@@ -318,7 +328,11 @@ def _trace_record(
         "external_scores": redact(scores, extra_keys),
         "metrics": redact({"latency": trace.get("latency"), "totalCost": trace.get("totalCost")}, extra_keys),
         "runtime_metadata": redact(
-            {key: trace[key] for key in ("metadata", "version", "release", "environment") if key in trace},
+            {
+                key: trace[key]
+                for key in ("model", "usage", "usageDetails", "metadata", "version", "release", "environment")
+                if key in trace
+            },
             extra_keys,
         ),
         "analysis": "limited" if missing else "sufficient",

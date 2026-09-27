@@ -160,6 +160,11 @@ def test_trace_bundle_joins_separate_observations_and_scores(tmp_path: Path) -> 
                     "id": "trace-1",
                     "input": None,
                     "output": "done",
+                    "timestamp": "2026-09-26T09:59:59Z",
+                    "endTime": "unknown",
+                    "level": "WARNING",
+                    "statusMessage": "source warning",
+                    "model": "model-x",
                     "metadata": {"accessToken": "secret", "totalTokens": 2, "token_usage": {"input_tokens": 1}},
                 }
             ]
@@ -187,6 +192,11 @@ def test_trace_bundle_joins_separate_observations_and_scores(tmp_path: Path) -> 
     assert len(records) == 1
     record = next(iter(records.values()))
     assert record["input_present"] and record["input"] is None
+    assert record["raw_started_at"] == "2026-09-26T09:59:59Z"
+    assert record["started_at"] == "2026-09-26T09:59:59+00:00"
+    assert record["raw_ended_at"] == "unknown" and record["ended_at"] is None
+    assert record["source_status"] == {"level": "WARNING", "message": "source warning"}
+    assert record["runtime_metadata"]["model"] == "model-x"
     assert record["runtime_metadata"]["metadata"] == {
         "accessToken": "[REDACTED]",
         "totalTokens": 2,
