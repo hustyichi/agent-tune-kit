@@ -11,6 +11,10 @@ contract, raw response, and runtime handoff. Compare credible explanations that 
 change the repair location. Use source/contract inspection first; run a bounded
 `diagnostic_probe` only with an approved command, isolation, and budget. Never treat a
 probe as an original execution or as effect validation.
+Use `record_source_contract` for a small project-local source or contract excerpt:
+specify component, source revision, exact lines, and any separately verified artifact
+identity. Secret-bearing lines are redacted. Source version alone never proves the
+running binary or remote service version.
 Record each probe permission in the frozen plan (or an `analysis_plan` before freeze):
 ID, command argv and its `command_hash`, runner hash, allowed Case IDs,
 `working_directory`, `timeout_seconds`, `max_calls`, and checked `isolation_ref`.

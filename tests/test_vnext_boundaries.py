@@ -752,3 +752,64 @@ def test_runner_commit_blocks_evaluation_without_advancing_round(tmp_path: Path)
         read_json(root / "rounds" / round_data["id"] / "round.json")["current_commit"] == round_data["baseline_commit"]
     )
     assert git(repo, "rev-parse", "HEAD") != round_data["baseline_commit"]
+
+
+def test_runner_untracked_output_blocks_pending_candidate_evidence(tmp_path: Path) -> None:
+    rows = [{"id": "case", "input": "task", "usage": "optimization", "source_group_id": "group"}]
+    script = "from pathlib import Path\nPath('unexpected.txt').write_text('output')\nprint('ok')\n"
+    repo, root, dataset, round_data, plan = project(tmp_path, script, rows)
+    freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    draft = prepare_candidate(
+        repo, root, {"round_id": round_data["id"], "primary_issue_id": "issue", "paths": ["prompt.txt"]}
+    )
+    (repo / "prompt.txt").write_text("new")
+    sealed = seal_candidate(repo, root, {"round_id": round_data["id"], "candidate_id": draft["id"]})
+    with pytest.raises(ATKError, match="runner changed candidate Git state"):
+        run_evaluation(
+            root,
+            {
+                "dataset_id": dataset["id"],
+                "case_ids": ["case"],
+                "purpose": "evaluation",
+                "round_id": round_data["id"],
+                "revision_id": sealed["revision_id"],
+            },
+        )
+    assert (repo / "unexpected.txt").read_text() == "output"
+    assert read_json(root / "rounds" / round_data["id"] / "round.json")["pending_candidate_id"] == draft["id"]
+
+
+def test_staged_baseline_scope_and_sealed_content_are_hard_gates(tmp_path: Path) -> None:
+    rows = [{"id": "case", "input": "task", "usage": "optimization", "source_group_id": "group"}]
+    repo, root, _, round_data, plan = project(tmp_path, "print('ok')\n", rows)
+    (repo / "prompt.txt").write_text("staged")
+    git(repo, "add", "prompt.txt")
+    with pytest.raises(ATKError, match="staged changes"):
+        freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    assert git(repo, "diff", "--cached", "--name-only") == "prompt.txt"
+    git(repo, "restore", "--staged", "prompt.txt")
+    git(repo, "restore", "prompt.txt")
+    freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    draft = prepare_candidate(
+        repo, root, {"round_id": round_data["id"], "primary_issue_id": "issue", "paths": ["prompt.txt"]}
+    )
+    (repo / "prompt.txt").write_text("new")
+    (repo / "agent.py").write_text("print('unauthorized')\n")
+    with pytest.raises(ATKError, match="differ from declared paths"):
+        seal_candidate(repo, root, {"round_id": round_data["id"], "candidate_id": draft["id"]})
+    git(repo, "restore", "agent.py")
+    sealed = seal_candidate(repo, root, {"round_id": round_data["id"], "candidate_id": draft["id"]})
+    (repo / "prompt.txt").write_text("modified-after-seal")
+    with pytest.raises(ATKError, match="changed after sealing"):
+        decide_candidate(
+            repo,
+            root,
+            {
+                "round_id": round_data["id"],
+                "candidate_id": draft["id"],
+                "action": "keep",
+                "validation_id": _passing_validation(root, round_data, sealed),
+                "reason": "fixture",
+            },
+        )
+    assert git(repo, "rev-parse", "HEAD") == round_data["baseline_commit"]

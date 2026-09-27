@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import fcntl
 import hashlib
+import html
 import json
 import os
 import re
@@ -246,3 +247,23 @@ def read_assessment(root: Path, assessment_id: str) -> tuple[dict, list[dict]]:
     with (folder / "assessment.csv").open(newline="", encoding="utf-8") as handle:
         rows = list(csv.DictReader(handle))
     return manifest, rows
+
+
+def render_assessment_html(root: Path, assessment_id: str) -> Path:
+    """Regenerate an escaped local view from the authoritative Assessment CSV."""
+    manifest, rows = read_assessment(root, assessment_id)
+    headings = "".join(f"<th>{html.escape(name)}</th>" for name in ASSESSMENT_COLUMNS)
+    body = "".join(
+        "<tr>" + "".join(f"<td>{html.escape(str(row[name]))}</td>" for name in ASSESSMENT_COLUMNS) + "</tr>"
+        for row in rows
+    )
+    title = html.escape(str(manifest["evaluation_spec"]["boundary"]))
+    page = (
+        "<!doctype html><html lang='en'><meta charset='utf-8'>"
+        "<meta http-equiv='Content-Security-Policy' content=\"default-src 'none'\">"
+        f"<title>{title}</title><h1>{title}</h1><table><thead><tr>{headings}</tr></thead>"
+        f"<tbody>{body}</tbody></table></html>"
+    )
+    path = root / "assessments" / safe_id(assessment_id) / "report.html"
+    atomic_write(path, page.encode("utf-8"))
+    return path

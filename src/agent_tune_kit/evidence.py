@@ -14,6 +14,7 @@ from .core import ATKError, canonical, digest, new_id, now, write_json
 MAX_SOURCE_BYTES = 100 * 1024 * 1024
 SECRET_KEY = re.compile(r"(?:password|secret|token|authorization|api[_-]?key|private[_-]?key|cookie)", re.I)
 BEARER = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/-]+")
+INLINE_SECRET = re.compile(r"(?i)\b(api[_-]?key|token|password|secret)\s*[:=]\s*[^\s,;]+")
 
 
 def redact(value: object, extra_keys: set[str] | None = None) -> object:
@@ -26,8 +27,78 @@ def redact(value: object, extra_keys: set[str] | None = None) -> object:
     if isinstance(value, list):
         return [redact(item, extra_keys) for item in value]
     if isinstance(value, str):
-        return BEARER.sub("Bearer [REDACTED]", value)
+        return INLINE_SECRET.sub(r"\1=[REDACTED]", BEARER.sub("Bearer [REDACTED]", value))
     return value
+
+
+def record_source_contract(repo: Path, root: Path, request: dict) -> dict:
+    """Seal a small, redacted source excerpt as diagnostic evidence."""
+    if not isinstance(request.get("source_path"), str) or not request["source_path"]:
+        raise ATKError("INCOMPLETE_EVIDENCE", "contract source path is required")
+    path = (repo / request["source_path"]).resolve()
+    if (
+        not path.is_relative_to(repo.resolve())
+        or ".atk" in path.relative_to(repo.resolve()).parts
+        or not path.is_file()
+        or path.stat().st_size > 1024 * 1024
+    ):
+        raise ATKError("SCOPE_VIOLATION", "contract source must be a small file inside the target project")
+    start, end = request.get("start_line"), request.get("end_line")
+    if (
+        type(start) is not int
+        or type(end) is not int
+        or start < 1
+        or end < start
+        or end - start > 99
+        or not request.get("component_id")
+        or not request.get("source_revision")
+    ):
+        raise ATKError("INCOMPLETE_EVIDENCE", "contract needs component, source revision, and at most 100 lines")
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except UnicodeError as exc:
+        raise ATKError("UNSUPPORTED_EXPORT_FORMAT", "contract source is not UTF-8 text") from exc
+    if end > len(lines):
+        raise ATKError("INCOMPLETE_EVIDENCE", "contract line range exceeds the source")
+    excerpt = "\n".join(
+        "[REDACTED SECRET LINE]" if SECRET_KEY.search(line) else redact(line) for line in lines[start - 1 : end]
+    )
+    batch_id, record_id = new_id("batch"), new_id("record")
+    folder = root / "evidence" / batch_id
+    folder.mkdir(parents=True, exist_ok=False)
+    record = {
+        "id": record_id,
+        "source_locator": f"{path}#L{start}-L{end}",
+        "source_sha256": digest(path),
+        "source_revision": request["source_revision"],
+        "component_id": request["component_id"],
+        "artifact_identity": request.get("artifact_identity"),
+        "excerpt": excerpt,
+    }
+    records_path = folder / "records.jsonl"
+    records_path.write_bytes(canonical(record) + b"\n")
+    manifest = {
+        "schema_version": 2,
+        "id": batch_id,
+        "created_at": now(),
+        "source_type": "source_contract",
+        "purpose": "diagnostic_reference",
+        "round_id": request.get("round_id"),
+        "records_ref": "records.jsonl",
+        "records_sha256": digest(records_path),
+        "record_count": 1,
+        "evidence_index": [
+            {
+                "evidence_id": record_id,
+                "fingerprint": digest(record),
+                "locator": record["source_locator"],
+                "origin": "source_contract",
+                "source_component": request["component_id"],
+            }
+        ],
+    }
+    write_json(folder / "manifest.json", manifest, immutable=True)
+    return manifest
 
 
 def _source_files(path: Path) -> list[Path]:

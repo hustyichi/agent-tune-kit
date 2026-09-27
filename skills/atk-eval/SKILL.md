@@ -34,4 +34,6 @@ Calibrate new or changed rules with confirmed positive and negative examples; ma
 uncalibrated if unresolved. Submit complete per-record, per-dimension rows to
 `store_assessment`; each verdict cites `{batch_id,evidence_id}`. Its CSV is the sole
 authoritative scoring detail. New standards create a new Assessment and invalidate
-old comparisons; never edit an old Assessment in place.
+old comparisons; never edit an old Assessment in place. `render_assessment_html`
+regenerates an escaped local view from the sealed CSV when needed; never use the
+HTML as an independent scoring source.

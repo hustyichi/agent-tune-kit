@@ -1013,8 +1013,9 @@ def execution_revision(repo: Path, root: Path, request: dict):
         verify_repo(repo, expected_head=request["revision_commit"])
         if git(repo, "diff", "--name-only", "-z"):
             raise ATKError("DIRTY_BASELINE", "unfrozen local run requires a clean tracked worktree")
+        initial_paths = changed_paths(repo)
         yield
-        if head(repo) != request["revision_commit"] or staged_paths(repo) or git(repo, "diff", "--name-only", "-z"):
+        if head(repo) != request["revision_commit"] or staged_paths(repo) or changed_paths(repo) != initial_paths:
             raise ATKError("WORKSPACE_CONFLICT", "runner changed unfrozen source or Git state")
         return
     value = _round(root, round_id)
@@ -1030,7 +1031,11 @@ def execution_revision(repo: Path, root: Path, request: dict):
             raise ATKError("WORKSPACE_CONFLICT", "candidate workspace has extra changes")
         yield
         _verify_sealed(repo, folder, candidate)
-        if head(repo) != candidate["parent_commit"] or staged_paths(repo):
+        if (
+            head(repo) != candidate["parent_commit"]
+            or staged_paths(repo)
+            or changed_paths(repo) - set(value["baseline_untracked"]) != set(candidate["changed_paths"])
+        ):
             raise ATKError("WORKSPACE_CONFLICT", "runner changed candidate Git state")
         return
     checkpoints = {value["baseline_revision_id"]: value["baseline_commit"]}

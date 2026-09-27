@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
@@ -14,9 +15,10 @@ from agent_tune_kit.checkpoints import (
     rollback_to,
     seal_candidate,
 )
-from agent_tune_kit.core import ATKError, digest, read_json, write_json
+from agent_tune_kit.core import ATKError, digest, read_json, validate_evidence, write_json
+from agent_tune_kit.evidence import record_source_contract
 from agent_tune_kit.execution import run_evaluation
-from agent_tune_kit.governance import compare_and_gate, finish_round
+from agent_tune_kit.governance import compare_and_gate, finish_round, store_diagnosis
 from tests.test_vnext_flow import assessment_for, git
 from tests.test_vnext_limits import SPEC, assess, project
 
@@ -499,3 +501,153 @@ def test_new_judger_reassesses_prior_execution_without_rerunning_agent(tmp_path:
         },
     )
     assert validation["result"] == "pass"
+
+
+@pytest.mark.parametrize("fault_layer", ["tool", "runtime"])
+def test_direct_probe_separates_tool_failure_from_runtime_handoff(tmp_path: Path, fault_layer: str) -> None:
+    tool_output = "error" if fault_layer == "tool" else "ok"
+    tool_script = (
+        "import sys\n"
+        "if sys.argv[1]=='valid':\n"
+        f"    print({tool_output!r})\n"
+        f"    raise SystemExit({1 if fault_layer == 'tool' else 0})\n"
+    )
+    agent_script = (
+        "import json,subprocess,sys\nfrom pathlib import Path\n"
+        "task=json.loads(Path(sys.argv[1]).read_text())\n"
+        "result=subprocess.run([sys.executable,'tool.py',task],capture_output=True,text=True)\n"
+        + ("print('error')\n" if fault_layer == "runtime" else "print(result.stdout.strip())\n")
+    )
+    rows = [{"id": "case", "input": "valid", "usage": "optimization", "source_group_id": "g"}]
+    repo, root, dataset, round_data, plan = project(
+        tmp_path,
+        agent_script,
+        rows,
+        extra_files={"tool.py": tool_script, "contract.md": "Valid requests return ok.\n"},
+    )
+    config_path = root / "project.json"
+    config = read_json(config_path)
+    config["components"].append(
+        {
+            "component_id": "tool",
+            "role": "tool",
+            "change_role": "fixed",
+            "source_path": "tool.py",
+        }
+    )
+    write_json(config_path, config)
+    plan["fixed_context_hash"] = digest(
+        [
+            {
+                "component_id": "tool",
+                "role": "tool",
+                "change_role": "fixed",
+                "source_path": "tool.py",
+                "actual_sha256": digest(repo / "tool.py"),
+                "identity_status": "available",
+            }
+        ]
+    )
+    command = [sys.executable, "tool.py", "{input}"]
+    plan["budget"]["probes"] = 1
+    plan["probe_permissions"] = [
+        {
+            "id": "direct",
+            "command": command,
+            "command_hash": digest(command),
+            "runner_hash": digest(root / "adapters" / "runner.py"),
+            "case_ids": ["case"],
+            "isolation_ref": "read-only local fixture",
+            "timeout_seconds": 5,
+            "max_calls": 1,
+        }
+    ]
+    freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    request = {
+        "dataset_id": dataset["id"],
+        "case_ids": ["case"],
+        "revision_id": round_data["baseline_revision_id"],
+        "round_id": round_data["id"],
+    }
+    agent_batch = run_evaluation(root, {**request, "purpose": "evaluation"})
+    direct_batch = run_evaluation(
+        root,
+        {
+            **request,
+            "purpose": "diagnostic_probe",
+            "probe_authorization_id": "direct",
+        },
+    )
+    agent_ref = {
+        "batch_id": agent_batch["id"],
+        "evidence_id": next(iter(validate_evidence(root, agent_batch["id"])[2])),
+    }
+    direct_ref = {
+        "batch_id": direct_batch["id"],
+        "evidence_id": next(iter(validate_evidence(root, direct_batch["id"])[2])),
+    }
+    contract = record_source_contract(
+        repo,
+        root,
+        {
+            "source_path": "contract.md",
+            "start_line": 1,
+            "end_line": 1,
+            "component_id": "tool",
+            "source_revision": git(repo, "rev-parse", "HEAD"),
+            "artifact_identity": digest(repo / "tool.py"),
+            "round_id": round_data["id"],
+        },
+    )
+    contract_ref = {"batch_id": contract["id"], "evidence_id": next(iter(validate_evidence(root, contract["id"])[2]))}
+    mechanism_refs = [contract_ref, direct_ref]
+    if fault_layer == "runtime":
+        runtime_source = record_source_contract(
+            repo,
+            root,
+            {
+                "source_path": "agent.py",
+                "start_line": 4,
+                "end_line": 5,
+                "component_id": "runtime",
+                "source_revision": git(repo, "rev-parse", "HEAD"),
+                "artifact_identity": digest(repo / "agent.py"),
+                "round_id": round_data["id"],
+            },
+        )
+        mechanism_refs.append(
+            {
+                "batch_id": runtime_source["id"],
+                "evidence_id": next(iter(validate_evidence(root, runtime_source["id"])[2])),
+            }
+        )
+    issue = {
+        "id": fault_layer,
+        "symptom": "Agent returned error for a valid request",
+        "hypothesis": f"{fault_layer} changed the result",
+        "competing_explanations": ["other layer failed"],
+        "competing_explanations_addressed": "direct tool response compared with Agent response",
+        "checks": [
+            {
+                "status": "completed",
+                "expected": "ok",
+                "actual": "error" if fault_layer == "tool" else "ok",
+                "evidence_refs": [direct_ref],
+            }
+        ],
+        "evidence_refs": [agent_ref],
+        "mechanism_evidence_refs": mechanism_refs,
+        "intervention_validation_refs": [],
+        "root_cause_status": "supported",
+        "intervention_layer": fault_layer,
+        "responsible_component": fault_layer,
+        "case_ids": ["case"],
+        "priority": "high",
+        "disposition": "external_handoff" if fault_layer == "tool" else "local_candidate",
+        "resolution": "open",
+        "next_action": "repair the responsible layer",
+    }
+    if fault_layer == "tool":
+        issue["handoff"] = {"trigger_input": "valid", "expected": "ok", "actual": "error"}
+    saved = store_diagnosis(root, {"round_id": round_data["id"], "issues": [issue]})
+    assert saved["issues"][0]["intervention_layer"] == fault_layer

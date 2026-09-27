@@ -16,8 +16,8 @@ from .checkpoints import (
     rollback_to,
     seal_candidate,
 )
-from .core import ATKError, store_assessment, write_json
-from .evidence import import_evidence
+from .core import ATKError, render_assessment_html, store_assessment, write_json
+from .evidence import import_evidence, record_source_contract
 from .execution import initialize_project, run_evaluation, store_dataset
 from .governance import (
     compare_and_gate,
@@ -43,8 +43,10 @@ def internal_main(argv: list[str]) -> int:
         "initialize_project": lambda: initialize_project(repo, request),
         "store_dataset": lambda: store_dataset(root, request),
         "import_evidence": lambda: import_evidence(root, request),
+        "record_source_contract": lambda: record_source_contract(repo, root, request),
         "run_evaluation": lambda: run_evaluation(root, request),
         "store_assessment": lambda: store_assessment(root, request),
+        "render_assessment_html": lambda: render_assessment_html(root, request["assessment_id"]),
         "create_round": lambda: create_round(repo, root, request),
         "freeze_round": lambda: freeze_round(repo, root, request),
         "store_diagnosis": lambda: store_diagnosis(root, request),

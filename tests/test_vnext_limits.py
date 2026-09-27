@@ -31,7 +31,11 @@ JUDGER = {
 
 
 def project(
-    tmp_path: Path, script: str, rows: list[dict], issue_ids: list[str] | None = None
+    tmp_path: Path,
+    script: str,
+    rows: list[dict],
+    issue_ids: list[str] | None = None,
+    extra_files: dict[str, str] | None = None,
 ) -> tuple[Path, Path, dict, dict, dict]:
     repo = tmp_path / "agent"
     repo.mkdir()
@@ -40,7 +44,11 @@ def project(
     git(repo, "config", "user.name", "ATK Test")
     (repo / "agent.py").write_text(script)
     (repo / "prompt.txt").write_text("old")
-    git(repo, "add", "agent.py", "prompt.txt")
+    for name, body in (extra_files or {}).items():
+        target = repo / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(body)
+    git(repo, "add", "agent.py", "prompt.txt", *(extra_files or {}))
     git(repo, "commit", "-qm", "initial")
     command = [sys.executable, "agent.py", "{input_file}", "{output_dir}"]
     initialize_project(

@@ -7,8 +7,15 @@ from pathlib import Path
 
 import pytest
 
-from agent_tune_kit.core import ATKError, read_assessment, safe_id, store_assessment, validate_evidence
-from agent_tune_kit.evidence import import_evidence
+from agent_tune_kit.core import (
+    ATKError,
+    read_assessment,
+    render_assessment_html,
+    safe_id,
+    store_assessment,
+    validate_evidence,
+)
+from agent_tune_kit.evidence import import_evidence, record_source_contract
 
 
 @pytest.mark.parametrize("extension", ["json", "jsonl", "json.gz"])
@@ -16,7 +23,7 @@ def test_trace_bundle_keeps_missing_parent_and_revisions(tmp_path: Path, extensi
     trace = {
         "id": "trace-1",
         "input": {"authorization": "secret", "task": "hello"},
-        "output": "done",
+        "output": "api_key=secret-value done",
         "scores": [{"name": "external", "value": 0.7}],
         "observations": [
             {
@@ -49,6 +56,7 @@ def test_trace_bundle_keeps_missing_parent_and_revisions(tmp_path: Path, extensi
     _, records, index = validate_evidence(root, batch["id"])
     record = next(iter(records.values()))
     assert record["input"]["authorization"] == "[REDACTED]"
+    assert "secret-value" not in json.dumps(record)
     assert record["missing"] == ["parent_observations"]
     assert record["execution"] is None
     assert "observation:obs-1" in index
@@ -121,6 +129,45 @@ def test_artifact_id_cannot_escape_workspace() -> None:
         safe_id("../../outside")
 
 
+def test_source_contract_keeps_source_and_artifact_identities_separate(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    source = repo / "contract.py"
+    source.write_text("# supports direct call\napi_key='secret-value'\n# rejects malformed input\n")
+    root = repo / ".atk"
+    manifest = record_source_contract(
+        repo,
+        root,
+        {
+            "source_path": "contract.py",
+            "start_line": 1,
+            "end_line": 3,
+            "component_id": "tool",
+            "source_revision": "source@v1",
+            "artifact_identity": "binary@v2",
+        },
+    )
+    _, records, index = validate_evidence(root, manifest["id"])
+    record = next(iter(records.values()))
+    assert record["source_revision"] == "source@v1"
+    assert record["artifact_identity"] == "binary@v2"
+    assert next(iter(index.values()))["origin"] == "source_contract"
+    assert "secret-value" not in (root / "evidence" / manifest["id"] / "records.jsonl").read_text()
+    assert "[REDACTED SECRET LINE]" in record["excerpt"]
+    with pytest.raises(ATKError, match="inside the target project"):
+        record_source_contract(
+            repo,
+            root,
+            {
+                "source_path": "../outside",
+                "start_line": 1,
+                "end_line": 1,
+                "component_id": "tool",
+                "source_revision": "source@v1",
+            },
+        )
+
+
 def test_assessment_csv_is_authoritative_and_tampering_is_rejected(tmp_path: Path) -> None:
     source = tmp_path / "results.csv"
     source.write_text("input,output\nhi,hello\n")
@@ -155,7 +202,7 @@ def test_assessment_csv_is_authoritative_and_tampering_is_rejected(tmp_path: Pat
                 "validity_reason": "",
                 "verdict": "pass",
                 "score": None,
-                "reason": "reviewed",
+                "reason": "<script>alert(1)</script>",
                 "evidence_refs": [{"batch_id": batch["id"], "evidence_id": record_id}],
                 "judger_kind": "semantic",
             }
@@ -167,6 +214,9 @@ def test_assessment_csv_is_authoritative_and_tampering_is_rejected(tmp_path: Pat
     manifest, rows = read_assessment(root, path.parent.name)
     assert manifest["judger_readiness"] == "uncalibrated"
     assert rows[0]["verdict"] == "pass"
+    report = render_assessment_html(root, path.parent.name).read_text()
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in report
+    assert "<script>" not in report
     csv_path = path.parent / "assessment.csv"
     csv_path.write_text(csv_path.read_text().replace("pass", "fail"))
     with pytest.raises(ATKError, match="fingerprint mismatch"):
