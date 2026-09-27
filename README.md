@@ -40,7 +40,7 @@ uvx --from agent-tune-kit atk install
 - **批量结果导入**：CSV/JSON/JSONL 按保存的字段映射导入，不重新运行 Agent；缺少尝试边界时不伪造 Execution。
 - **Langfuse 文件导入**：支持 Trace bundle 和 Observation 行两种显式 profile。保留 Trace/Observation ID、父子关系、来源、缺失与过滤范围；外部分数只当证据，不直接换算 ATK 的通过率。原文件只读，默认遮蔽常见凭证字段；项目敏感字段需要追加脱敏键。
 
-没有 Ground Truth 也能调查证据；只有具备固定判据的维度才能给出确定判定。`reassess` 创建新 Assessment，不重跑 Agent，不覆盖旧评分。评分标准、被测边界、组件和运行条件变化会使旧对照失效。
+没有 Ground Truth 也能调查证据；只有具备固定判据的维度才能给出确定判定。`reassess` 创建新 Assessment，不重跑 Agent，不覆盖旧评分。只改评分规则时，可在旧轮关闭后显式复用相同 commit 与运行配置的 Revision，在新轮对原始执行统一重判。评分标准、被测边界、组件和运行条件变化会使旧对照失效；任务输入或固定运行条件变化时需要重新执行。
 
 ## 主要产物
 

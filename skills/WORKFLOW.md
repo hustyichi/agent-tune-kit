@@ -28,6 +28,10 @@ authorization, rollback rule, and `replay_preparation` (`stateless` with reason,
 bounded command that rebuilds caches and artifacts at each checked-out Revision).
 `freeze_round` blocks a dirty baseline. Do not edit
 `.atk/`, the runner, dataset, judge, or validation criteria as part of a candidate.
+When only the judging rule changes, close the old Round and link a new one with
+`reuse_revision=true` only if its B0 commit and project run config match the old
+current Revision. Reassess the original batch under the new calibrated rule;
+changed Case input or fixed execution context requires a fresh run.
 If an operation is interrupted, use `inspect_or_recover_operation` and inspect the
 recorded operation before another edit; unknown Git or file state remains blocked.
 

@@ -6,12 +6,19 @@ from pathlib import Path
 
 import pytest
 
-from agent_tune_kit.checkpoints import decide_candidate, freeze_round, prepare_candidate, rollback_to, seal_candidate
+from agent_tune_kit.checkpoints import (
+    create_round,
+    decide_candidate,
+    freeze_round,
+    prepare_candidate,
+    rollback_to,
+    seal_candidate,
+)
 from agent_tune_kit.core import ATKError, digest, read_json, write_json
 from agent_tune_kit.execution import run_evaluation
 from agent_tune_kit.governance import compare_and_gate, finish_round
-from tests.test_vnext_flow import git
-from tests.test_vnext_limits import assess, project
+from tests.test_vnext_flow import assessment_for, git
+from tests.test_vnext_limits import SPEC, assess, project
 
 
 def test_ten_case_cumulative_gain_counts_only_new_fixes(tmp_path: Path) -> None:
@@ -352,3 +359,143 @@ def test_unknown_fixed_component_and_config_drift_block_comparison(tmp_path: Pat
     write_json(project_path, config)
     with pytest.raises(ATKError, match="configuration changed"):
         run_evaluation(root, {**request, "revision_id": round_data["baseline_revision_id"]})
+
+
+def test_new_judger_reassesses_prior_execution_without_rerunning_agent(tmp_path: Path) -> None:
+    rows = [{"id": "case", "input": "case", "usage": "optimization", "source_group_id": "g"}]
+    script = "from pathlib import Path\nprint(Path('prompt.txt').read_text())\n"
+    repo, root, dataset, first, plan = project(tmp_path, script, rows)
+    plan["budget"] = {"executions": 4, "probes": 0, "candidates": 1}
+    freeze_round(repo, root, {"round_id": first["id"], "plan": plan})
+    request = {"dataset_id": dataset["id"], "case_ids": ["case"], "purpose": "evaluation", "round_id": first["id"]}
+    baseline = run_evaluation(root, {**request, "revision_id": first["baseline_revision_id"]})
+    draft = prepare_candidate(
+        repo, root, {"round_id": first["id"], "primary_issue_id": "issue", "paths": ["prompt.txt"]}
+    )
+    (repo / "prompt.txt").write_text("new")
+    sealed = seal_candidate(repo, root, {"round_id": first["id"], "candidate_id": draft["id"]})
+    candidate = run_evaluation(root, {**request, "revision_id": sealed["revision_id"]})
+    old_baseline_assessment = assess(root, baseline, {"case": "new"})
+    old_candidate_assessment = assess(root, candidate, {"case": "new"})
+    incremental = compare_and_gate(
+        root,
+        {
+            "round_id": first["id"],
+            "mode": "incremental",
+            "issue_id": "issue",
+            "candidate_id": draft["id"],
+            "left_assessment_id": old_baseline_assessment,
+            "right_assessment_id": old_candidate_assessment,
+            "left_commit": first["baseline_commit"],
+        },
+    )
+    assert incremental["result"] == "pass"
+    decide_candidate(
+        repo,
+        root,
+        {
+            "round_id": first["id"],
+            "candidate_id": draft["id"],
+            "action": "keep",
+            "validation_id": incremental["id"],
+            "reason": "first rule passes",
+        },
+    )
+    final_left = run_evaluation(root, {**request, "phase": "final", "revision_id": first["baseline_revision_id"]})
+    final_right = run_evaluation(root, {**request, "phase": "final", "revision_id": sealed["revision_id"]})
+    final = compare_and_gate(
+        root,
+        {
+            "round_id": first["id"],
+            "mode": "final",
+            "left_assessment_id": assess(root, final_left, {"case": "new"}),
+            "right_assessment_id": assess(root, final_right, {"case": "new"}),
+            "left_commit": first["baseline_commit"],
+        },
+    )
+    finish_round(
+        repo, root, {"round_id": first["id"], "action": "complete", "validation_id": final["id"], "reason": "pass"}
+    )
+    original_config = read_json(root / "project.json")
+    write_json(root / "project.json", {**original_config, "command": [original_config["python"], "another.py"]})
+    with pytest.raises(ATKError, match="cannot be reused"):
+        create_round(
+            repo,
+            root,
+            {
+                "issue_ids": ["new-rule"],
+                "previous_round_id": first["id"],
+                "reuse_revision": True,
+            },
+        )
+    write_json(root / "project.json", original_config)
+    second = create_round(
+        repo,
+        root,
+        {
+            "issue_ids": ["new-rule"],
+            "previous_round_id": first["id"],
+            "reuse_revision": True,
+        },
+    )
+    assert second["baseline_revision_id"] == sealed["revision_id"]
+    new_spec = {
+        **SPEC,
+        "version": "v2",
+        "dimension_rules": {
+            "task_success": {"validity": "completed response", "attribution": "Agent", "expected": "better"}
+        },
+    }
+    new_judger = {
+        "version": "v2",
+        "readiness": "calibrated",
+        "calibration_examples": [
+            {"source_ref": "positive", "expected_verdict": "pass", "actual_verdict": "pass"},
+            {"source_ref": "negative", "expected_verdict": "fail", "actual_verdict": "fail"},
+        ],
+    }
+    next_plan = {
+        **plan,
+        "issue_ids": ["new-rule"],
+        "evaluation_spec_hash": digest(new_spec),
+        "judger_hash": digest(new_judger),
+        "target_case_ids_by_issue": {"new-rule": ["case"]},
+    }
+    freeze_round(repo, root, {"round_id": second["id"], "plan": next_plan})
+    before = len(list((root / "evidence").glob("*/manifest.json")))
+    rejudged = assessment_for(root, candidate, new_spec, new_judger, {"case": "better"})
+    assert len(list((root / "evidence").glob("*/manifest.json"))) == before
+    rebuilt = prepare_candidate(
+        repo,
+        root,
+        {
+            "round_id": second["id"],
+            "primary_issue_id": "new-rule",
+            "paths": ["prompt.txt"],
+        },
+    )
+    (repo / "prompt.txt").write_text("better")
+    rebuilt = seal_candidate(repo, root, {"round_id": second["id"], "candidate_id": rebuilt["id"]})
+    new_batch = run_evaluation(
+        root,
+        {
+            "dataset_id": dataset["id"],
+            "case_ids": ["case"],
+            "purpose": "evaluation",
+            "round_id": second["id"],
+            "revision_id": rebuilt["revision_id"],
+        },
+    )
+    validation = compare_and_gate(
+        root,
+        {
+            "round_id": second["id"],
+            "mode": "incremental",
+            "issue_id": "new-rule",
+            "candidate_id": rebuilt["id"],
+            "left_assessment_id": rejudged,
+            "right_assessment_id": assessment_for(root, new_batch, new_spec, new_judger, {"case": "better"}),
+            "left_commit": second["baseline_commit"],
+        },
+    )
+    assert validation["result"] == "pass"

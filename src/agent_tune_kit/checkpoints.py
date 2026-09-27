@@ -146,6 +146,18 @@ def create_round(repo: Path, root: Path, request: dict) -> dict:
             if read_json(old).get("status") in {"ready", "optimizing", "finalizing"}:
                 raise ATKError("WORKSPACE_CONFLICT", "another active round exists")
         baseline = head(repo)
+        baseline_revision_id = new_id("revision")
+        if request.get("reuse_revision"):
+            if (
+                not previous_round_id
+                or request.get("external_fix_identity")
+                or previous["status"] not in {"completed", "completed_with_override", "closed_without_adoption"}
+                or previous["current_commit"] != baseline
+                or read_json(_round_path(root, previous_round_id) / "plan.json").get("run_config_hash")
+                != digest(read_json(root / "project.json"))
+            ):
+                raise ATKError("REVISION_MISMATCH", "prior Revision cannot be reused across this Round boundary")
+            baseline_revision_id = previous["current_revision_id"]
         round_id = new_id("round")
         value = {
             "schema_version": 2,
@@ -154,7 +166,7 @@ def create_round(repo: Path, root: Path, request: dict) -> dict:
             "state_version": 1,
             "status": "analysis_only",
             "baseline_commit": baseline,
-            "baseline_revision_id": new_id("revision"),
+            "baseline_revision_id": baseline_revision_id,
             "current_commit": baseline,
             "current_revision_id": None,
             "branch": branch(repo),
@@ -166,6 +178,7 @@ def create_round(repo: Path, root: Path, request: dict) -> dict:
             "source_batch_ids": request.get("batch_ids", []),
             "source_assessment_ids": request.get("assessment_ids", []),
             "previous_round_id": request.get("previous_round_id"),
+            "reused_baseline_revision": bool(request.get("reuse_revision")),
             "external_fix_identity": request.get("external_fix_identity"),
             "analysis_plan": request.get("analysis_plan", {}),
         }
