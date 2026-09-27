@@ -906,6 +906,115 @@ def test_external_fixed_artifact_drift_invalidates_candidate_gain(tmp_path: Path
         )
 
 
+def test_fixed_service_version_is_probed_before_and_after_batch(tmp_path: Path) -> None:
+    version_file = tmp_path / "service-version.txt"
+    drift_flag = tmp_path / "change-service-version"
+    version_file.write_text("v1")
+    script = (
+        "from pathlib import Path\n"
+        f"version=Path({str(version_file)!r})\n"
+        f"drift_flag=Path({str(drift_flag)!r})\n"
+        "if Path('prompt.txt').read_text()=='new' and drift_flag.exists() and version.read_text()=='v1': "
+        "version.write_text('v2')\n"
+        "print('ok' if Path('prompt.txt').read_text()=='new' else 'bad')\n"
+    )
+    rows = [{"id": "case", "input": "case", "usage": "optimization", "source_group_id": "g"}]
+    repo, root, dataset, round_data, plan = project(
+        tmp_path,
+        script,
+        rows,
+        extra_files={"version.py": f"from pathlib import Path\nprint(Path({str(version_file)!r}).read_text())\n"},
+    )
+    command = [sys.executable, "version.py"]
+    config_path = root / "project.json"
+    config = read_json(config_path)
+    config["components"].append(
+        {
+            "component_id": "service",
+            "role": "tool",
+            "change_role": "fixed",
+            "version_command": command,
+            "expected_version": "v1",
+        }
+    )
+    write_json(config_path, config)
+    plan["fixed_context_hash"] = digest(
+        [
+            {
+                "component_id": "service",
+                "role": "tool",
+                "change_role": "fixed",
+                "source_path": None,
+                "actual_sha256": None,
+                "identity_status": "verified",
+                "expected_version": "v1",
+                "actual_version": "v1",
+                "post_run_actual_version": "v1",
+                "identity_basis": {"method": "version_command", "command_hash": digest(command)},
+            }
+        ]
+    )
+    freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    request = {"dataset_id": dataset["id"], "case_ids": ["case"], "purpose": "evaluation", "round_id": round_data["id"]}
+    baseline = run_evaluation(root, {**request, "revision_id": round_data["baseline_revision_id"]})
+    assert baseline["fixed_context_hash"] == plan["fixed_context_hash"]
+    draft = prepare_candidate(
+        repo, root, {"round_id": round_data["id"], "primary_issue_id": "issue", "paths": ["prompt.txt"]}
+    )
+    (repo / "prompt.txt").write_text("new")
+    sealed = seal_candidate(repo, root, {"round_id": round_data["id"], "candidate_id": draft["id"]})
+    stable = run_evaluation(root, {**request, "revision_id": sealed["revision_id"]})
+    baseline_assessment = assess(root, baseline, {"case": "ok"})
+    assert stable["fixed_context_hash"] == plan["fixed_context_hash"]
+    assert (
+        compare_and_gate(
+            root,
+            {
+                "round_id": round_data["id"],
+                "mode": "incremental",
+                "issue_id": "issue",
+                "candidate_id": draft["id"],
+                "left_assessment_id": baseline_assessment,
+                "right_assessment_id": assess(root, stable, {"case": "ok"}),
+                "left_commit": round_data["baseline_commit"],
+            },
+        )["result"]
+        == "pass"
+    )
+    version_file.write_text("v2")
+    changed = run_evaluation(root, {**request, "revision_id": sealed["revision_id"]})
+    assert changed["actual_components"][1]["actual_version"] == "v2"
+    assert changed["actual_components"][1]["identity_issue"] == "expected_version_mismatch"
+    with pytest.raises(ATKError, match="fixed component identity differs"):
+        compare_and_gate(
+            root,
+            {
+                "round_id": round_data["id"],
+                "mode": "incremental",
+                "issue_id": "issue",
+                "candidate_id": draft["id"],
+                "left_assessment_id": baseline_assessment,
+                "right_assessment_id": assess(root, changed, {"case": "ok"}),
+                "left_commit": round_data["baseline_commit"],
+            },
+        )
+    version_file.write_text("v1")
+    drift_flag.write_text("yes")
+    drifted = run_evaluation(root, {**request, "revision_id": sealed["revision_id"]})
+    assert drifted["status"] == "partial"
+    assert drifted["actual_components"][1]["actual_version"] == "v1"
+    assert drifted["actual_components"][1]["post_run_actual_version"] == "v2"
+    assert drifted["post_run_component_drift"][0]["component_id"] == "service"
+    version_file.write_text("v1 invalid")
+    unknown = run_evaluation(root, {**request, "revision_id": sealed["revision_id"]})
+    assert unknown["actual_components"][1]["identity_status"] == "unknown"
+    assert unknown["actual_components"][1]["identity_issue"] == "before_invalid_output"
+    config["components"][1]["version_command"] = "python version.py"
+    write_json(config_path, config)
+    with pytest.raises(ATKError, match="invalid version command"):
+        run_evaluation(root, {**request, "revision_id": sealed["revision_id"]})
+
+
 def test_fixed_file_changed_during_batch_cannot_support_candidate_gain(tmp_path: Path) -> None:
     external = tmp_path / "service-artifact.txt"
     external.write_text("v1")

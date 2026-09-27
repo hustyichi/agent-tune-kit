@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import json
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -28,6 +29,70 @@ from .core import (
 )
 
 
+def _version_commands(components: list[dict]) -> dict[str, tuple[list[str], int, str | None]]:
+    if not isinstance(components, list):
+        raise ATKError("INCOMPLETE_EVIDENCE", "components must be a list")
+    commands = {}
+    ids = set()
+    for component in components:
+        if not isinstance(component, dict) or not {"component_id", "role", "change_role"} <= component.keys():
+            raise ATKError("INCOMPLETE_EVIDENCE", "component identity is incomplete")
+        component_id = component["component_id"]
+        if not isinstance(component_id, str) or not component_id:
+            raise ATKError("INCOMPLETE_EVIDENCE", "component ID is invalid")
+        if component_id in ids:
+            raise ATKError("INCOMPLETE_EVIDENCE", f"duplicate component ID: {component_id}")
+        ids.add(component_id)
+        command = component.get("version_command")
+        if command is None:
+            continue
+        timeout = component.get("version_timeout_seconds", 5)
+        expected = component.get("expected_version")
+        if (
+            component["change_role"] != "fixed"
+            or not isinstance(command, list)
+            or not command
+            or any(not isinstance(part, str) or not part for part in command)
+            or type(timeout) is not int
+            or not 1 <= timeout <= 60
+            or (
+                expected is not None
+                and (not isinstance(expected, str) or not re.fullmatch(r"[A-Za-z0-9._+:/@-]{1,128}", expected))
+            )
+        ):
+            raise ATKError("INCOMPLETE_EVIDENCE", f"invalid version command for component: {component_id}")
+        commands[component_id] = (command, timeout, expected)
+    return commands
+
+
+def _probe_versions(
+    repo: Path, commands: dict[str, tuple[list[str], int, str | None]]
+) -> dict[str, tuple[str | None, str | None]]:
+    versions = {}
+    for component_id, (command, timeout, _) in commands.items():
+        try:
+            with subprocess.Popen(
+                command, cwd=repo, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True
+            ) as process:
+                try:
+                    stdout, _ = process.communicate(timeout=timeout)
+                except subprocess.TimeoutExpired:
+                    with suppress(ProcessLookupError):
+                        os.killpg(process.pid, signal.SIGKILL)
+                    process.communicate()
+                    versions[component_id] = (None, "timeout")
+                    continue
+            value = stdout.decode(errors="replace").strip()
+            versions[component_id] = (
+                (value, None)
+                if process.returncode == 0 and re.fullmatch(r"[A-Za-z0-9._+:/@-]{1,128}", value)
+                else (None, "nonzero_exit" if process.returncode else "invalid_output")
+            )
+        except OSError:
+            versions[component_id] = (None, "launch_error")
+    return versions
+
+
 def initialize_project(repo: Path, request: dict) -> dict:
     repo = repo.expanduser().resolve()
     root = repo / ".atk"
@@ -43,9 +108,7 @@ def initialize_project(repo: Path, request: dict) -> dict:
     required = {"python", "command", "components", "allowed_paths", "protected_paths", "runtime_notes"}
     if required - request.keys() or not isinstance(request["command"], list) or not request["command"]:
         raise ATKError("INCOMPLETE_EVIDENCE", f"project configuration missing: {sorted(required - request.keys())}")
-    for component in request["components"]:
-        if not {"component_id", "role", "change_role"} <= component.keys():
-            raise ATKError("INCOMPLETE_EVIDENCE", "component identity is incomplete")
+    _version_commands(request["components"])
     git_dir = Path(git(repo, "rev-parse", "--git-dir").decode().strip())
     if not git_dir.is_absolute():
         git_dir = repo / git_dir
@@ -380,6 +443,7 @@ def run_evaluation(root: Path, request: dict) -> dict:
 def _run_evaluation_locked(root: Path, request: dict) -> dict:
     project = json.loads((root / "project.json").read_text(encoding="utf-8"))
     repo = Path(project["workspace_path"])
+    version_commands = _version_commands(project["components"])
     retry_batch_id = request.get("retry_batch_id")
     prior_manifest, prior_records = None, []
     if retry_batch_id:
@@ -499,6 +563,7 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
     component_drift = []
     batch_path = folder / "batch.json"
     with execution_revision(repo, root, request):
+        versions_before = _probe_versions(repo, version_commands)
         try:
             with subprocess.Popen(
                 command, cwd=repo, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True
@@ -514,8 +579,12 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
         except OSError as exc:
             runner_start_error = str(exc)
             result = subprocess.CompletedProcess(command, 127, b"", b"")
+        versions_after = _probe_versions(repo, version_commands)
         if batch_path.exists():
-            for component in json.loads(batch_path.read_text(encoding="utf-8")).get("actual_components", []):
+            reported = json.loads(batch_path.read_text(encoding="utf-8")).get("actual_components", [])
+            for component in reported if isinstance(reported, list) else []:
+                if not isinstance(component, dict):
+                    continue
                 source = component.get("source_path")
                 before = component.get("actual_sha256")
                 if not source or not before:
@@ -553,6 +622,67 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
     if not records_path.exists():
         records_path.write_bytes(b"")
     batch = json.loads(batch_path.read_text(encoding="utf-8"))
+    actual_components = batch.get("actual_components", [])
+    if not isinstance(actual_components, list) or any(not isinstance(item, dict) for item in actual_components):
+        actual_components = []
+        component_drift.append({"reason": "runner returned an invalid component inventory"})
+    declared_components = {component["component_id"]: component for component in project["components"]}
+    observed_ids = [component.get("component_id") for component in actual_components]
+    valid_ids = all(isinstance(component_id, str) and component_id for component_id in observed_ids)
+    observed_components = (
+        {component_id: component for component_id, component in zip(observed_ids, actual_components, strict=True)}
+        if valid_ids
+        else {}
+    )
+    if (
+        not valid_ids
+        or len(observed_ids) != len(set(observed_ids))
+        or not set(declared_components) <= set(observed_components)
+        or any(
+            observed_components[component_id].get(key) != declared.get(key)
+            for component_id, declared in declared_components.items()
+            if component_id in observed_components
+            for key in ("role", "change_role", "source_path")
+        )
+    ):
+        component_drift.append({"reason": "runner component inventory differs from project configuration"})
+    for component_id, (version_command, _, expected_version) in version_commands.items():
+        observed_component = observed_components.get(component_id)
+        if not observed_component:
+            component_drift.append({"component_id": component_id, "reason": "runner omitted component identity"})
+            continue
+        (before, before_issue), (after, after_issue) = versions_before[component_id], versions_after[component_id]
+        if before_issue:
+            issue = f"before_{before_issue}"
+        elif after_issue:
+            issue = f"after_{after_issue}"
+        elif before != after:
+            issue = "version_changed_during_batch"
+        elif expected_version is not None and before != expected_version:
+            issue = "expected_version_mismatch"
+        else:
+            issue = None
+        if issue is None:
+            status = "verified"
+        elif before_issue or after_issue:
+            status = "unknown"
+        elif before != after:
+            status = "drifted"
+        else:
+            status = "mismatch"
+        observed_component.update(
+            {
+                "expected_version": expected_version,
+                "actual_version": before,
+                "post_run_actual_version": after,
+                "identity_basis": {"method": "version_command", "command_hash": digest(version_command)},
+                "identity_status": status,
+            }
+        )
+        if issue:
+            observed_component["identity_issue"] = issue
+        if before != after:
+            component_drift.append({"component_id": component_id, "before_version": before, "after_version": after})
     raw_records = records_path.read_bytes()
     records = []
     malformed_records = False
@@ -618,7 +748,7 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
     status_conflict = bool(declared_not_started & (declared_completed | observed)) or running_record_id in (
         declared_completed | declared_not_started
     )
-    if retry_batch_id and batch.get("actual_components") != prior_manifest.get("actual_components"):
+    if retry_batch_id and actual_components != prior_manifest.get("actual_components"):
         raise ATKError("REVISION_MISMATCH", "component identity changed during retry")
     if prior_records:
         records = prior_records + records
@@ -634,9 +764,7 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
         }
         for index, record in enumerate(records)
     ]
-    fixed_components = [
-        component for component in batch.get("actual_components", []) if component.get("change_role") == "fixed"
-    ]
+    fixed_components = [component for component in actual_components if component.get("change_role") == "fixed"]
     manifest = {
         "schema_version": 2,
         "id": batch_id,
@@ -675,7 +803,7 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
         "run_config_hash": digest(project),
         "runner_hash": digest(runner),
         "fixed_context_hash": digest(fixed_components),
-        "actual_components": batch.get("actual_components", []),
+        "actual_components": actual_components,
         "post_run_component_drift": component_drift,
         "evidence_index": evidence_index,
         "missing_record_ids": sorted(set(expected) - observed),

@@ -1,6 +1,6 @@
 # Agent Tune Kit
 
-最后更新：2026-09-28。状态：vNext 核心链路、10 Case 合成累积验收、中断批次／Git 内容恢复与转换／并发边界及 Python editable／Node 链接加载已在本地验证；Magic Workspace 单 Case 已按严格加载路径门禁复验，真实多 Case 与完整验收待收口。详见 [实现与验收记录](docs/vnext-implementation-report.md)。
+最后更新：2026-09-28。状态：vNext 核心链路、10 Case 合成累积验收、中断批次／Git 内容恢复与转换／并发边界、Python editable／Node 链接加载及合成服务版本前后核查已在本地验证；Magic Workspace 单 Case 已按严格加载路径门禁复验，真实多 Case 与完整验收待收口。详见 [实现与验收记录](docs/vnext-implementation-report.md)。
 
 简体中文 | [English](README.en.md)
 
@@ -36,7 +36,7 @@ uvx --from agent-tune-kit atk install
 
 - **本地运行**：项目 `.atk/adapters/runner.py` 用目标项目的 Python 环境按显式尝试列表调用现有 Agent；每次尝试保存一个 Execution。Prompt、代码及业务 Skill 使用同一协议。Skill 的 `available`、`loaded`、`invoked` 状态分开记录；正式加载门禁核对实际绝对路径与指纹，隔离副本还须说明来源，无法证明时不能正常通过。诊断探针可在冻结许可内改用直接工具或项目测试命令；许可限定 argv、脚本指纹、工作目录、超时、Case、调用数和隔离依据，探针结果不参与正式效果对照。
 - **预算与对照**：冻结轮次按尝试预留最终 B0／累计版本复验额度；授权重试生成关联旧 Execution 的新批次，保留全部尝试而不挑最好一次。效率或成本门槛仅在预先冻结且指标齐全时判定。独立 holdout 按来源组和里程碑记录暴露，已暴露的组不能在后续轮次重用。
-- **运行身份**：冻结计划保存项目运行配置指纹，每批使用自己的配置快照。正式对照要求固定组件身份可核验；未知身份或接入配置漂移返回证据不足或阻塞执行。
+- **运行身份**：冻结计划保存项目运行配置指纹，每批使用自己的配置快照。固定远端组件可声明只读 argv 数组 `version_command`、`expected_version` 和可选的 `version_timeout_seconds`；ATK 在批次前后执行并保存实际版本、命令指纹与失败原因。版本不符或批内漂移不能支持正式效果归因。正式对照要求固定组件身份可核验；未知身份或接入配置漂移返回证据不足或阻塞执行。
 - **批量结果导入**：CSV/JSON/JSONL 按保存的字段映射导入，不重新运行 Agent；缺少尝试边界时不伪造 Execution。
 - **Langfuse 文件导入**：支持 Trace bundle 和 Observation 行两种显式 profile。保留 Trace/Observation ID、父子关系、来源、缺失与过滤范围；外部分数只当证据，不直接换算 ATK 的通过率。原文件只读，默认遮蔽常见凭证字段；项目敏感字段需要追加脱敏键。
 - **诊断与派生视图**：`record_source_contract` 将项目内少量源码／契约行脱敏封存为诊断证据，同时分别保留源码版本与实际制品身份；`render_assessment_html` 从权威 CSV 重建经过转义的本地 HTML，不另存可独立改分的明细。

@@ -25,3 +25,9 @@ to the local Git exclude. Inspect the generated adapter and make only project-sp
 invocation changes necessary to preserve its request/response contract. Do not create
 a new Agent, run the full dataset, commit existing changes, or replace legacy `.atk`
 data. If `.atk` already contains older data, stop and report the conflict.
+
+For a fixed remote component whose actual version matters, configure a read-only
+argv-array `version_command`, an `expected_version` when known, and optionally
+`version_timeout_seconds`. The command must print only a nonsecret version token.
+ATK runs it before and after each batch; record how this command reaches the actual
+service rather than merely reading local source metadata.

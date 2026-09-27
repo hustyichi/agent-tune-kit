@@ -1086,6 +1086,10 @@ def test_interrupted_runner_keeps_running_and_not_started_attempts(tmp_path: Pat
     assert batch["unknown_record_ids"] == [attempts[0]["record_id"]]
     assert batch["not_started_record_ids"] == [attempts[1]["record_id"]]
     assert batch["missing_runner_artifacts"] == ["records.jsonl"]
+    assert (
+        batch["post_run_component_drift"][0]["reason"]
+        == "runner component inventory differs from project configuration"
+    )
     assert validate_evidence(root, batch["id"])[1] == {}
 
 

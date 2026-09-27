@@ -281,12 +281,24 @@ def _metric_total(slots: dict, cases: set[str], metric: str) -> float | None:
 
 
 def _fixed_identity_known(batch: dict) -> bool:
-    return all(
-        component.get("identity_status") in {"available", "verified"}
-        and (component.get("actual_sha256") or component.get("actual_version"))
-        for component in batch.get("actual_components", [])
-        if component.get("change_role") == "fixed"
-    )
+    for component in batch.get("actual_components", []):
+        if component.get("change_role") != "fixed":
+            continue
+        if component.get("identity_status") not in {"available", "verified"}:
+            return False
+        if component.get("actual_sha256"):
+            continue
+        basis = component.get("identity_basis")
+        if (
+            component.get("identity_status") != "verified"
+            or not component.get("actual_version")
+            or component.get("actual_version") != component.get("post_run_actual_version")
+            or not isinstance(basis, dict)
+            or basis.get("method") != "version_command"
+            or not basis.get("command_hash")
+        ):
+            return False
+    return True
 
 
 def _loaded_component_ids(root: Path, batch: dict, record: dict) -> set[str]:

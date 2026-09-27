@@ -17,7 +17,8 @@ For an authorized infrastructure retry, pass `retry_batch_id` and the failed
 The new batch retains every earlier Execution and adds linked retries. Never rerun a
 completed Agent failure or branch from an already continued batch. The target project's Python runs its
 `.atk/adapters/runner.py`; each attempt gets its own Execution ID. Inspect partial
-outputs, runner exit status, actual component hashes, and loading evidence. A diagnostic
+outputs, runner exit status, actual component hashes and pre/post service versions,
+identity failures, and loading evidence. A diagnostic
 probe needs a frozen `probe_authorization_id` matching the command, runner, Cases and
 recorded isolation, plus separate probe budget. It is not formal effect evidence.
 
