@@ -202,6 +202,10 @@ def freeze_round(repo: Path, root: Path, request: dict) -> dict:
         value = _round(root, request["round_id"])
         if value["status"] != "analysis_only":
             raise ATKError("WORKSPACE_CONFLICT", "round is already frozen")
+        for old in (root / "rounds").glob("*/round.json"):
+            other = read_json(old)
+            if other["id"] != value["id"] and other.get("status") in {"ready", "optimizing", "finalizing"}:
+                raise ATKError("WORKSPACE_CONFLICT", "another active round exists")
         verify_repo(repo, expected_head=value["baseline_commit"], expected_branch=value["branch"])
         if git(repo, "diff", "--name-only", "-z") or changed_paths(repo) != set(value["baseline_untracked"]):
             raise ATKError("DIRTY_BASELINE", "workspace changed since B0 was recorded")
@@ -325,7 +329,12 @@ def freeze_round(repo: Path, root: Path, request: dict) -> dict:
         if plan.get("run_config_hash", project_hash) != project_hash:
             raise ATKError("COMPARISON_INVALID", "frozen runner configuration differs from the project")
         plan["run_config_hash"] = project_hash
-        write_json(_round_path(root, value["id"]) / "plan.json", plan, immutable=True)
+        plan_path = _round_path(root, value["id"]) / "plan.json"
+        if plan_path.exists():
+            if read_json(plan_path) != plan:
+                raise ATKError("WORKSPACE_CONFLICT", "partial frozen plan differs from the retry")
+        else:
+            write_json(plan_path, plan, immutable=True)
         value["status"] = "ready"
         _write_round(root, value)
         return value
@@ -399,8 +408,33 @@ def prepare_candidate(repo: Path, root: Path, request: dict) -> dict:
             "declared_paths": paths,
             "content_status": "draft",
         }
-        folder = _round_path(root, value["id"]) / "candidates" / candidate_id
-        write_json(folder / "draft.json", candidate, immutable=True)
+        candidates_folder = _round_path(root, value["id"]) / "candidates"
+        orphans = [
+            folder
+            for folder in candidates_folder.glob("*")
+            if folder.is_dir() and folder.name not in value["candidate_ids"] and (folder / "draft.json").exists()
+        ]
+        if orphans:
+            if len(orphans) != 1:
+                raise ATKError("WORKSPACE_CONFLICT", "multiple unregistered candidate drafts need inspection")
+            folder = orphans[0]
+            previous = read_json(folder / "draft.json")
+            if (
+                folder.is_symlink()
+                or (folder / "draft.json").is_symlink()
+                or previous.get("id") != folder.name
+                or not isinstance(previous.get("created_at"), str)
+                or not previous["created_at"]
+                or set(folder.iterdir()) != {folder / "draft.json"}
+                or {key: val for key, val in previous.items() if key not in {"id", "created_at"}}
+                != {key: val for key, val in candidate.items() if key not in {"id", "created_at"}}
+            ):
+                raise ATKError("WORKSPACE_CONFLICT", "unregistered candidate draft differs from the retry")
+            candidate = previous
+            candidate_id = candidate["id"]
+        else:
+            folder = candidates_folder / candidate_id
+            write_json(folder / "draft.json", candidate, immutable=True)
         value["pending_candidate_id"] = candidate_id
         value["candidate_ids"].append(candidate_id)
         value["status"] = "optimizing"

@@ -1147,6 +1147,59 @@ def test_disk_write_failure_preserves_prior_state(
     assert set(tmp_path.iterdir()) == original_files
 
 
+def test_freeze_round_resumes_only_matching_plan_after_status_write_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    rows = [{"id": "case", "input": "task", "usage": "optimization", "source_group_id": "group"}]
+    repo, root, _, round_data, plan = project(tmp_path, "print('ok')\n", rows)
+    request = {"round_id": round_data["id"], "plan": plan}
+    with monkeypatch.context() as patch:
+        patch.setattr(checkpoints, "_write_round", lambda *_: (_ for _ in ()).throw(OSError("status write failed")))
+        with pytest.raises(OSError, match="status write failed"):
+            freeze_round(repo, root, request)
+    folder = root / "rounds" / round_data["id"]
+    frozen = read_json(folder / "plan.json")
+    assert read_json(folder / "round.json")["status"] == "analysis_only"
+    with pytest.raises(ATKError, match="partial frozen plan differs"):
+        freeze_round(repo, root, {"round_id": round_data["id"], "plan": {**plan, "final_repeats": 2}})
+    assert read_json(folder / "plan.json") == frozen
+    assert freeze_round(repo, root, request)["status"] == "ready"
+    assert read_json(folder / "plan.json") == frozen
+
+
+def test_freeze_round_rejects_second_active_round(tmp_path: Path) -> None:
+    rows = [{"id": "case", "input": "task", "usage": "optimization", "source_group_id": "group"}]
+    repo, root, _, first, plan = project(tmp_path, "print('ok')\n", rows)
+    second = checkpoints.create_round(repo, root, {"issue_ids": ["issue"]})
+    freeze_round(repo, root, {"round_id": first["id"], "plan": plan})
+    with pytest.raises(ATKError, match="another active round"):
+        freeze_round(repo, root, {"round_id": second["id"], "plan": plan})
+    assert read_json(root / "rounds" / second["id"] / "round.json")["status"] == "analysis_only"
+    assert not (root / "rounds" / second["id"] / "plan.json").exists()
+
+
+def test_prepare_candidate_reuses_draft_after_round_write_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    rows = [{"id": "case", "input": "task", "usage": "optimization", "source_group_id": "group"}]
+    repo, root, _, round_data, plan = project(tmp_path, "print('ok')\n", rows, extra_files={"other.txt": "old"})
+    plan["allowed_paths"].append("other.txt")
+    freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    request = {"round_id": round_data["id"], "primary_issue_id": "issue", "paths": ["prompt.txt"]}
+    with monkeypatch.context() as patch:
+        patch.setattr(checkpoints, "_write_round", lambda *_: (_ for _ in ()).throw(OSError("status write failed")))
+        with pytest.raises(OSError, match="status write failed"):
+            prepare_candidate(repo, root, request)
+    folder = root / "rounds" / round_data["id"]
+    orphan = next((folder / "candidates").glob("*/draft.json"))
+    assert read_json(folder / "round.json")["pending_candidate_id"] is None
+    with pytest.raises(ATKError, match="unregistered candidate draft differs"):
+        prepare_candidate(repo, root, {**request, "paths": ["other.txt"]})
+    assert prepare_candidate(repo, root, request)["id"] == orphan.parent.name
+    assert read_json(folder / "round.json")["candidate_ids"] == [orphan.parent.name]
+    assert len(list((folder / "candidates").glob("*/draft.json"))) == 1
+
+
 def test_interrupted_runner_keeps_running_and_not_started_attempts(tmp_path: Path) -> None:
     rows = [
         {"id": "first", "input": "first", "usage": "optimization", "source_group_id": "g1"},
