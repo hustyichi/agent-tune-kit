@@ -210,6 +210,16 @@ def test_assessment_csv_is_authoritative_and_tampering_is_rejected(tmp_path: Pat
     }
     with pytest.raises(ATKError, match="invalid evidence reference"):
         store_assessment(root, {**assessment_request, "rows": [{**assessment_request["rows"][0], "evidence_refs": []}]})
+    bad_judger = {
+        "version": "bad-v1",
+        "readiness": "calibrated",
+        "calibration_examples": [
+            {"source_ref": "positive", "expected_verdict": "pass", "actual_verdict": "pass"},
+            {"source_ref": "negative", "expected_verdict": "fail", "actual_verdict": "pass"},
+        ],
+    }
+    with pytest.raises(ATKError, match="matched positive and negative"):
+        store_assessment(root, {**assessment_request, "judger": bad_judger})
     path = store_assessment(root, assessment_request)
     manifest, rows = read_assessment(root, path.parent.name)
     assert manifest["judger_readiness"] == "uncalibrated"

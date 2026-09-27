@@ -475,6 +475,8 @@ def run_evaluation(root: Path, request: dict) -> dict:
         str(folder.resolve()),
     ]
     timed_out = False
+    component_drift = []
+    batch_path = folder / "batch.json"
     with execution_revision(repo, root, request):
         try:
             result = subprocess.run(
@@ -483,7 +485,26 @@ def run_evaluation(root: Path, request: dict) -> dict:
         except subprocess.TimeoutExpired:
             timed_out = True
             result = subprocess.CompletedProcess(command, 124, b"", b"")
-    batch_path = folder / "batch.json"
+        if batch_path.exists():
+            for component in json.loads(batch_path.read_text(encoding="utf-8")).get("actual_components", []):
+                source = component.get("source_path")
+                before = component.get("actual_sha256")
+                if not source or not before:
+                    continue
+                path = repo / source
+                try:
+                    after = digest(path) if path.is_file() else None
+                except OSError:
+                    after = None
+                if after != before:
+                    component_drift.append(
+                        {
+                            "component_id": component["component_id"],
+                            "source_path": source,
+                            "before_sha256": before,
+                            "after_sha256": after,
+                        }
+                    )
     records_path = folder / "records.jsonl"
     if timed_out and not batch_path.exists():
         write_json(batch_path, {"batch_id": batch_id, "completed_record_ids": [], "actual_components": []})
@@ -552,13 +573,14 @@ def run_evaluation(root: Path, request: dict) -> dict:
         "status": "interrupted"
         if timed_out
         else "sealed"
-        if len(observed) == len(attempts) and result.returncode == 0
+        if len(observed) == len(attempts) and result.returncode == 0 and not component_drift
         else "partial",
         "runner_exit_code": result.returncode,
         "run_config_hash": digest(project),
         "runner_hash": digest(runner),
         "fixed_context_hash": digest(fixed_components),
         "actual_components": batch.get("actual_components", []),
+        "post_run_component_drift": component_drift,
         "evidence_index": evidence_index,
         "missing_record_ids": sorted(set(expected) - observed),
     }

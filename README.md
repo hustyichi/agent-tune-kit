@@ -70,4 +70,4 @@ python3 scripts/validate_skill_pack.py
 uv build --no-sources
 ```
 
-离线测试使用小型 Git 仓库和假 Agent，已覆盖 10 Case 四候选累积收益与最终复验失败后的回退。Magic Workspace 的真实轨迹导入和单 Case 自动加载业务 Skill 已单独验证；外部修复的新轮协议有合成测试，真实组件修复案例、已知责任层案例与真实多 Case 链路仍待验收。尚未确认安全隔离的目标 Agent 外部写操作不得在正式跑测中启动。
+离线测试使用小型 Git 仓库和假 Agent，已覆盖 10 Case 四候选累积收益、已采用后缀回退、Case 输入变化后的双方重跑、批内固定文件漂移与跨进程提交恢复。Magic Workspace 的真实轨迹导入和单 Case 自动加载业务 Skill 已单独验证；外部修复的新轮协议有合成测试，真实组件修复案例、已知责任层案例与真实多 Case 链路仍待验收。尚未确认安全隔离的目标 Agent 外部写操作不得在正式跑测中启动。

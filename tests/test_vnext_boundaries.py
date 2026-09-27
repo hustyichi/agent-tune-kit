@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 import sys
 from pathlib import Path
 
@@ -83,6 +84,12 @@ def test_supported_diagnosis_requires_check_evidence(tmp_path: Path) -> None:
     issue["checks"][0]["evidence_refs"] = [ref]
     stored = store_diagnosis(root, {"round_id": round_data["id"], "issues": [issue]})
     assert stored["issues"][0]["root_cause_status"] == "supported"
+    issue["root_cause_status"] = "inconclusive"
+    issue["checks"] = [{"status": "not_run", "reason": "tool fixture unavailable"}]
+    issue["mechanism_evidence_refs"] = []
+    issue["next_action"] = "run a bounded direct tool check"
+    unresolved = store_diagnosis(root, {"round_id": round_data["id"], "issues": [issue]})
+    assert unresolved["issues"][0]["root_cause_status"] == "inconclusive"
 
 
 def test_external_issue_blocks_normal_keep_but_allows_authorized_workaround(tmp_path: Path) -> None:
@@ -378,7 +385,33 @@ def test_commit_recovery_records_original_commit_once(tmp_path: Path, monkeypatc
             )
     committed = git(repo, "rev-parse", "HEAD")
     operation = next((root / "rounds" / round_data["id"] / "operations").glob("*.json"))
-    result = inspect_or_recover_operation(repo, root, {"round_id": round_data["id"], "operation_id": operation.stem})
+    request_path, output_path = tmp_path / "recovery-request.json", tmp_path / "recovery-output.json"
+    write_json(
+        request_path,
+        {
+            "project_path": str(repo),
+            "round_id": round_data["id"],
+            "operation_id": operation.stem,
+        },
+    )
+    resumed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "agent_tune_kit.cli",
+            "internal",
+            "inspect_or_recover_operation",
+            "--request",
+            str(request_path),
+            "--output",
+            str(output_path),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert resumed.returncode == 0, resumed.stderr
+    result = read_json(output_path)["artifact_refs"][0]
     assert result["decision"]["after_commit"] == committed
     assert (
         inspect_or_recover_operation(repo, root, {"round_id": round_data["id"], "operation_id": operation.stem})[
@@ -813,3 +846,32 @@ def test_staged_baseline_scope_and_sealed_content_are_hard_gates(tmp_path: Path)
             },
         )
     assert git(repo, "rev-parse", "HEAD") == round_data["baseline_commit"]
+
+
+def test_unexpected_index_and_head_drift_block_candidate_keep(tmp_path: Path) -> None:
+    rows = [{"id": "case", "input": "task", "usage": "optimization", "source_group_id": "group"}]
+    repo, root, _, round_data, plan = project(tmp_path, "print('ok')\n", rows)
+    freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    draft = prepare_candidate(
+        repo, root, {"round_id": round_data["id"], "primary_issue_id": "issue", "paths": ["prompt.txt"]}
+    )
+    (repo / "prompt.txt").write_text("new")
+    sealed = seal_candidate(repo, root, {"round_id": round_data["id"], "candidate_id": draft["id"]})
+    request = {
+        "round_id": round_data["id"],
+        "candidate_id": draft["id"],
+        "action": "keep",
+        "validation_id": _passing_validation(root, round_data, sealed),
+        "reason": "fixture",
+    }
+    intruder = repo / "intruder.txt"
+    intruder.write_text("third-party content")
+    git(repo, "add", "intruder.txt")
+    with pytest.raises(ATKError, match="staged changes"):
+        decide_candidate(repo, root, request)
+    assert git(repo, "diff", "--cached", "--name-only") == "intruder.txt"
+    git(repo, "commit", "-qm", "third-party commit")
+    with pytest.raises(ATKError, match="HEAD differs"):
+        decide_candidate(repo, root, request)
+    assert intruder.read_text() == "third-party content"
+    assert not (root / "rounds" / round_data["id"] / "candidates" / draft["id"] / "decision.json").exists()

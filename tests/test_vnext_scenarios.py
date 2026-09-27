@@ -15,12 +15,12 @@ from agent_tune_kit.checkpoints import (
     rollback_to,
     seal_candidate,
 )
-from agent_tune_kit.core import ATKError, digest, read_json, validate_evidence, write_json
+from agent_tune_kit.core import ATKError, digest, read_json, store_assessment, validate_evidence, write_json
 from agent_tune_kit.evidence import record_source_contract
-from agent_tune_kit.execution import run_evaluation
+from agent_tune_kit.execution import run_evaluation, store_dataset
 from agent_tune_kit.governance import compare_and_gate, finish_round, store_diagnosis
 from tests.test_vnext_flow import assessment_for, git
-from tests.test_vnext_limits import SPEC, assess, project
+from tests.test_vnext_limits import JUDGER, SPEC, assess, project
 
 
 def test_ten_case_cumulative_gain_counts_only_new_fixes(tmp_path: Path) -> None:
@@ -141,6 +141,110 @@ def test_ten_case_cumulative_gain_counts_only_new_fixes(tmp_path: Path) -> None:
             "reason": "9 of 10; three net fixes",
         },
     )
+
+
+def test_rollback_withdraws_accepted_suffix_and_requires_fresh_candidate_evidence(tmp_path: Path) -> None:
+    script = (
+        "import json,sys\nfrom pathlib import Path\n"
+        "case=json.loads(Path(sys.argv[1]).read_text())\n"
+        "print('ok' if case in Path('prompt.txt').read_text().split(',') else 'bad')\n"
+    )
+    rows = [
+        {"id": str(index), "input": str(index), "usage": "optimization", "source_group_id": f"g{index}"}
+        for index in range(1, 4)
+    ]
+    repo, root, dataset, round_data, plan = project(tmp_path, script, rows)
+    plan["target_case_ids_by_issue"] = {"issue": ["1", "2", "3"]}
+    plan["budget"] = {"executions": 24, "probes": 0, "candidates": 3}
+    freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    request = {
+        "dataset_id": dataset["id"],
+        "case_ids": ["1", "2", "3"],
+        "purpose": "evaluation",
+        "round_id": round_data["id"],
+    }
+
+    def assessed(revision_id: str) -> str:
+        return assess(
+            root,
+            run_evaluation(root, {**request, "revision_id": revision_id}),
+            {key: "ok" for key in request["case_ids"]},
+        )
+
+    parent_assessment = assessed(round_data["baseline_revision_id"])
+    accepted = []
+    for state in ("1", "1,2"):
+        draft = prepare_candidate(
+            repo, root, {"round_id": round_data["id"], "primary_issue_id": "issue", "paths": ["prompt.txt"]}
+        )
+        (repo / "prompt.txt").write_text(state)
+        sealed = seal_candidate(repo, root, {"round_id": round_data["id"], "candidate_id": draft["id"]})
+        right = assessed(sealed["revision_id"])
+        validation = compare_and_gate(
+            root,
+            {
+                "round_id": round_data["id"],
+                "mode": "incremental",
+                "issue_id": "issue",
+                "candidate_id": draft["id"],
+                "left_assessment_id": parent_assessment,
+                "right_assessment_id": right,
+                "left_commit": draft["parent_commit"],
+            },
+        )
+        assert validation["result"] == "pass"
+        decision = decide_candidate(
+            repo,
+            root,
+            {
+                "round_id": round_data["id"],
+                "candidate_id": draft["id"],
+                "action": "keep",
+                "validation_id": validation["id"],
+                "reason": "synthetic gain",
+            },
+        )
+        accepted.append((draft, sealed, right, decision))
+        parent_assessment = right
+
+    first, second = accepted
+    restored = rollback_to(
+        repo,
+        root,
+        {
+            "round_id": round_data["id"],
+            "target_commit": first[3]["after_commit"],
+            "reason": "withdraw second gain",
+        },
+    )
+    current = read_json(root / "rounds" / round_data["id"] / "round.json")
+    assert restored["withdrawn_candidate_ids"] == [second[0]["id"]]
+    assert current["active_candidate_ids"] == [first[0]["id"]]
+    assert current["current_revision_id"] == first[1]["revision_id"]
+    assert current["current_commit"] == restored["after_commit"] == git(repo, "rev-parse", "HEAD")
+    assert (repo / "prompt.txt").read_text() == "1"
+
+    draft = prepare_candidate(
+        repo, root, {"round_id": round_data["id"], "primary_issue_id": "issue", "paths": ["prompt.txt"]}
+    )
+    assert draft["parent_commit"] == restored["after_commit"]
+    assert draft["parent_revision_id"] == first[1]["revision_id"]
+    (repo / "prompt.txt").write_text("1,3")
+    sealed = seal_candidate(repo, root, {"round_id": round_data["id"], "candidate_id": draft["id"]})
+    right = assessed(sealed["revision_id"])
+    comparison = {
+        "round_id": round_data["id"],
+        "mode": "incremental",
+        "issue_id": "issue",
+        "candidate_id": draft["id"],
+        "right_assessment_id": right,
+        "left_commit": draft["parent_commit"],
+    }
+    with pytest.raises(ATKError, match="assessment Revision does not match candidate"):
+        compare_and_gate(root, {**comparison, "left_assessment_id": second[2]})
+    validation = compare_and_gate(root, {**comparison, "left_assessment_id": first[2]})
+    assert validation["result"] == "pass"
+    assert validation["fixed_case_ids"] == ["3"]
 
 
 def test_incremental_pass_cannot_finish_when_final_replay_fails(tmp_path: Path) -> None:
@@ -503,6 +607,95 @@ def test_new_judger_reassesses_prior_execution_without_rerunning_agent(tmp_path:
     assert validation["result"] == "pass"
 
 
+def test_changed_case_input_needs_new_execution_on_both_sides(tmp_path: Path) -> None:
+    script = (
+        "import json,sys\nfrom pathlib import Path\n"
+        "case=json.loads(Path(sys.argv[1]).read_text())\n"
+        "print('ok' if case=='new-input' and Path('prompt.txt').read_text()=='new' else 'bad')\n"
+    )
+    rows = [{"id": "case", "input": "old-input", "usage": "optimization", "source_group_id": "g"}]
+    repo, root, old_dataset, first, plan = project(tmp_path, script, rows)
+    freeze_round(repo, root, {"round_id": first["id"], "plan": plan})
+    changed_source = tmp_path / "changed-cases.csv"
+    changed_source.write_text("id,input,usage,source_group_id\ncase,new-input,optimization,g\n")
+    new_dataset = store_dataset(
+        root,
+        {
+            "source": str(changed_source),
+            "mapping": {"id": "id", "input": "input", "usage": "usage", "source_group_id": "source_group_id"},
+        },
+    )
+
+    def assessed(dataset_id: str, round_id: str, revision_id: str) -> str:
+        batch = run_evaluation(
+            root,
+            {
+                "dataset_id": dataset_id,
+                "case_ids": ["case"],
+                "purpose": "evaluation",
+                "round_id": round_id,
+                "revision_id": revision_id,
+            },
+        )
+        return assess(root, batch, {"case": "ok"})
+
+    old_left = assessed(old_dataset["id"], first["id"], first["baseline_revision_id"])
+    draft = prepare_candidate(
+        repo, root, {"round_id": first["id"], "primary_issue_id": "issue", "paths": ["prompt.txt"]}
+    )
+    (repo / "prompt.txt").write_text("new")
+    sealed = seal_candidate(repo, root, {"round_id": first["id"], "candidate_id": draft["id"]})
+    new_right = assessed(new_dataset["id"], first["id"], sealed["revision_id"])
+    request = {
+        "round_id": first["id"],
+        "mode": "incremental",
+        "issue_id": "issue",
+        "candidate_id": draft["id"],
+        "left_assessment_id": old_left,
+        "right_assessment_id": new_right,
+        "left_commit": first["baseline_commit"],
+    }
+    mismatch = compare_and_gate(root, request)
+    assert mismatch["result"] == "insufficient"
+    decide_candidate(
+        repo,
+        root,
+        {
+            "round_id": first["id"],
+            "candidate_id": draft["id"],
+            "action": "reject",
+            "validation_id": mismatch["id"],
+            "reason": "Case input changed",
+        },
+    )
+    finish_round(
+        repo, root, {"round_id": first["id"], "action": "close_without_adoption", "reason": "rebuild comparison"}
+    )
+
+    second = create_round(repo, root, {"issue_ids": ["issue"], "previous_round_id": first["id"]})
+    freeze_round(repo, root, {"round_id": second["id"], "plan": plan})
+    fresh_left = assessed(new_dataset["id"], second["id"], second["baseline_revision_id"])
+    rebuilt = prepare_candidate(
+        repo, root, {"round_id": second["id"], "primary_issue_id": "issue", "paths": ["prompt.txt"]}
+    )
+    (repo / "prompt.txt").write_text("new")
+    rebuilt = seal_candidate(repo, root, {"round_id": second["id"], "candidate_id": rebuilt["id"]})
+    fresh_right = assessed(new_dataset["id"], second["id"], rebuilt["revision_id"])
+    validation = compare_and_gate(
+        root,
+        {
+            **request,
+            "round_id": second["id"],
+            "candidate_id": rebuilt["id"],
+            "left_assessment_id": fresh_left,
+            "right_assessment_id": fresh_right,
+            "left_commit": second["baseline_commit"],
+        },
+    )
+    assert validation["result"] == "pass"
+    assert validation["fixed_case_ids"] == ["case"]
+
+
 @pytest.mark.parametrize("fault_layer", ["tool", "runtime"])
 def test_direct_probe_separates_tool_failure_from_runtime_handoff(tmp_path: Path, fault_layer: str) -> None:
     tool_output = "error" if fault_layer == "tool" else "ok"
@@ -649,5 +842,271 @@ def test_direct_probe_separates_tool_failure_from_runtime_handoff(tmp_path: Path
     }
     if fault_layer == "tool":
         issue["handoff"] = {"trigger_input": "valid", "expected": "ok", "actual": "error"}
+    saved = store_diagnosis(root, {"round_id": round_data["id"], "issues": [issue]})
+    assert saved["issues"][0]["intervention_layer"] == fault_layer
+
+
+def test_external_fixed_artifact_drift_invalidates_candidate_gain(tmp_path: Path) -> None:
+    rows = [{"id": "case", "input": "case", "usage": "optimization", "source_group_id": "g"}]
+    script = "from pathlib import Path\nprint('ok' if Path('prompt.txt').read_text()=='new' else 'bad')\n"
+    repo, root, dataset, round_data, plan = project(tmp_path, script, rows)
+    external = tmp_path / "service-artifact.txt"
+    external.write_text("v1")
+    config_path = root / "project.json"
+    config = read_json(config_path)
+    config["components"].append(
+        {
+            "component_id": "service",
+            "role": "tool",
+            "change_role": "fixed",
+            "source_path": str(external),
+        }
+    )
+    write_json(config_path, config)
+    plan["fixed_context_hash"] = digest(
+        [
+            {
+                "component_id": "service",
+                "role": "tool",
+                "change_role": "fixed",
+                "source_path": str(external),
+                "actual_sha256": digest(external),
+                "identity_status": "available",
+            }
+        ]
+    )
+    freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    request = {
+        "dataset_id": dataset["id"],
+        "case_ids": ["case"],
+        "purpose": "evaluation",
+        "round_id": round_data["id"],
+    }
+    baseline = run_evaluation(root, {**request, "revision_id": round_data["baseline_revision_id"]})
+    draft = prepare_candidate(
+        repo, root, {"round_id": round_data["id"], "primary_issue_id": "issue", "paths": ["prompt.txt"]}
+    )
+    (repo / "prompt.txt").write_text("new")
+    sealed = seal_candidate(repo, root, {"round_id": round_data["id"], "candidate_id": draft["id"]})
+    external.write_text("v2")
+    candidate = run_evaluation(root, {**request, "revision_id": sealed["revision_id"]})
+    assert baseline["fixed_context_hash"] != candidate["fixed_context_hash"]
+    with pytest.raises(ATKError, match="fixed component identity differs"):
+        compare_and_gate(
+            root,
+            {
+                "round_id": round_data["id"],
+                "mode": "incremental",
+                "issue_id": "issue",
+                "candidate_id": draft["id"],
+                "left_assessment_id": assess(root, baseline, {"case": "ok"}),
+                "right_assessment_id": assess(root, candidate, {"case": "ok"}),
+                "left_commit": round_data["baseline_commit"],
+            },
+        )
+
+
+def test_fixed_file_changed_during_batch_cannot_support_candidate_gain(tmp_path: Path) -> None:
+    external = tmp_path / "service-artifact.txt"
+    external.write_text("v1")
+    script = (
+        "from pathlib import Path\n"
+        f"service=Path({str(external)!r})\n"
+        "if Path('prompt.txt').read_text()=='old': service.write_text('v2')\n"
+        "print('ok' if Path('prompt.txt').read_text()=='new' else 'bad')\n"
+    )
+    rows = [{"id": "case", "input": "case", "usage": "optimization", "source_group_id": "g"}]
+    repo, root, dataset, round_data, plan = project(tmp_path, script, rows)
+    config_path = root / "project.json"
+    config = read_json(config_path)
+    component = {
+        "component_id": "service",
+        "role": "tool",
+        "change_role": "fixed",
+        "source_path": str(external),
+    }
+    config["components"].append(component)
+    write_json(config_path, config)
+    plan["fixed_context_hash"] = digest(
+        [{**component, "actual_sha256": digest(external), "identity_status": "available"}]
+    )
+    freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    request = {"dataset_id": dataset["id"], "case_ids": ["case"], "purpose": "evaluation", "round_id": round_data["id"]}
+    baseline = run_evaluation(root, {**request, "revision_id": round_data["baseline_revision_id"]})
+    assert baseline["status"] == "partial"
+    assert baseline["post_run_component_drift"] == [
+        {
+            "component_id": "service",
+            "source_path": str(external),
+            "before_sha256": digest(b"v1"),
+            "after_sha256": digest(external),
+        }
+    ]
+
+    external.write_text("v1")
+    draft = prepare_candidate(
+        repo, root, {"round_id": round_data["id"], "primary_issue_id": "issue", "paths": ["prompt.txt"]}
+    )
+    (repo / "prompt.txt").write_text("new")
+    sealed = seal_candidate(repo, root, {"round_id": round_data["id"], "candidate_id": draft["id"]})
+    candidate = run_evaluation(root, {**request, "revision_id": sealed["revision_id"]})
+    assert candidate["status"] == "sealed"
+    assert candidate["fixed_context_hash"] == baseline["fixed_context_hash"]
+    validation = compare_and_gate(
+        root,
+        {
+            "round_id": round_data["id"],
+            "mode": "incremental",
+            "issue_id": "issue",
+            "candidate_id": draft["id"],
+            "left_assessment_id": assess(root, baseline, {"case": "ok"}),
+            "right_assessment_id": assess(root, candidate, {"case": "ok"}),
+            "left_commit": round_data["baseline_commit"],
+        },
+    )
+    assert validation["result"] == "insufficient"
+
+
+def test_service_failure_remains_valid_failure_while_skill_dimension_is_unknown(tmp_path: Path) -> None:
+    rows = [{"id": "case", "input": "case", "usage": "optimization", "source_group_id": "g"}]
+    repo, root, dataset, round_data, plan = project(tmp_path, "print('service_error')\n", rows)
+    spec = {
+        **SPEC,
+        "boundary": "service and Skill observed separately",
+        "dimensions": ["service_reliability", "skill_behavior"],
+        "dimension_rules": {
+            "service_reliability": {"validity": "service response observed", "attribution": "service"},
+            "skill_behavior": {"validity": "service returned usable data", "attribution": "Skill"},
+        },
+    }
+    plan["evaluation_spec_hash"] = digest(spec)
+    freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    request = {
+        "dataset_id": dataset["id"],
+        "case_ids": ["case"],
+        "purpose": "evaluation",
+        "round_id": round_data["id"],
+    }
+    baseline = run_evaluation(root, {**request, "revision_id": round_data["baseline_revision_id"]})
+    draft = prepare_candidate(
+        repo, root, {"round_id": round_data["id"], "primary_issue_id": "issue", "paths": ["prompt.txt"]}
+    )
+    (repo / "prompt.txt").write_text("new")
+    sealed = seal_candidate(repo, root, {"round_id": round_data["id"], "candidate_id": draft["id"]})
+    candidate = run_evaluation(root, {**request, "revision_id": sealed["revision_id"]})
+
+    def boundary_assessment(batch: dict) -> str:
+        _, records, _ = validate_evidence(root, batch["id"])
+        record_id = next(iter(records))
+        ref = [{"batch_id": batch["id"], "evidence_id": record_id}]
+        judgment = []
+        for dimension, validity, verdict in [
+            ("service_reliability", "valid", "fail"),
+            ("skill_behavior", "unknown", "unknown"),
+        ]:
+            judgment.append(
+                {
+                    "record_id": record_id,
+                    "dimension": dimension,
+                    "validity": validity,
+                    "validity_reason": "service blocked observation" if validity == "unknown" else "",
+                    "verdict": verdict,
+                    "score": None,
+                    "reason": "observed service error",
+                    "evidence_refs": ref,
+                    "judger_kind": "deterministic",
+                }
+            )
+        return store_assessment(
+            root,
+            {
+                "batch_id": batch["id"],
+                "evaluation_spec": spec,
+                "judger": JUDGER,
+                "rows": judgment,
+            },
+        ).parent.name
+
+    left, right = boundary_assessment(baseline), boundary_assessment(candidate)
+    common = {
+        "round_id": round_data["id"],
+        "mode": "incremental",
+        "issue_id": "issue",
+        "candidate_id": draft["id"],
+        "left_assessment_id": left,
+        "right_assessment_id": right,
+        "left_commit": round_data["baseline_commit"],
+    }
+    assert compare_and_gate(root, {**common, "dimension": "service_reliability"})["result"] == "no_effect"
+    assert compare_and_gate(root, {**common, "dimension": "skill_behavior"})["result"] == "insufficient"
+
+
+@pytest.mark.parametrize("fault_layer", ["skill", "agent_code"])
+def test_wrong_skill_rule_is_distinct_from_agent_ignoring_correct_rule(tmp_path: Path, fault_layer: str) -> None:
+    skill_text = "red" if fault_layer == "skill" else "blue"
+    script = (
+        "from pathlib import Path\nprint(Path('business_skill.md').read_text().strip())\n"
+        if fault_layer == "skill"
+        else "print('red')\n"
+    )
+    rows = [{"id": "case", "input": "valid", "usage": "optimization", "source_group_id": "g"}]
+    repo, root, dataset, round_data, _ = project(
+        tmp_path,
+        script,
+        rows,
+        extra_files={"business_skill.md": skill_text, "contract.md": "Valid requests must return blue.\n"},
+    )
+    batch = run_evaluation(
+        root,
+        {
+            "dataset_id": dataset["id"],
+            "case_ids": ["case"],
+            "purpose": "evaluation",
+            "revision_id": round_data["baseline_revision_id"],
+            "revision_commit": git(repo, "rev-parse", "HEAD"),
+        },
+    )
+    record = next(iter(validate_evidence(root, batch["id"])[1].values()))
+    assert record["output"].strip() == "red"
+    observed = {"batch_id": batch["id"], "evidence_id": record["id"]}
+
+    def source_ref(path: str, component: str, line: int) -> dict:
+        manifest = record_source_contract(
+            repo,
+            root,
+            {
+                "source_path": path,
+                "start_line": line,
+                "end_line": line,
+                "component_id": component,
+                "source_revision": git(repo, "rev-parse", "HEAD"),
+                "artifact_identity": digest(repo / path),
+                "round_id": round_data["id"],
+            },
+        )
+        return {"batch_id": manifest["id"], "evidence_id": next(iter(validate_evidence(root, manifest["id"])[2]))}
+
+    contract_ref = source_ref("contract.md", "business-contract", 1)
+    skill_ref = source_ref("business_skill.md", "business-skill", 1)
+    code_ref = source_ref("agent.py", "agent-code", 2 if fault_layer == "skill" else 1)
+    issue = {
+        "id": fault_layer,
+        "symptom": "valid request returned red instead of blue",
+        "hypothesis": "wrong Skill rule" if fault_layer == "skill" else "Agent ignored correct Skill rule",
+        "competing_explanations": ["the other layer caused the mismatch"],
+        "competing_explanations_addressed": "contract, Skill text, Agent code, and output are compared",
+        "checks": [{"status": "completed", "expected": "blue", "actual": "red", "evidence_refs": [observed]}],
+        "evidence_refs": [observed],
+        "mechanism_evidence_refs": [contract_ref, skill_ref, code_ref],
+        "intervention_validation_refs": [],
+        "root_cause_status": "supported",
+        "intervention_layer": fault_layer,
+        "responsible_component": fault_layer,
+        "case_ids": ["case"],
+        "priority": "high",
+        "disposition": "local_candidate",
+        "resolution": "open",
+        "next_action": "repair the responsible layer",
+    }
     saved = store_diagnosis(root, {"round_id": round_data["id"], "issues": [issue]})
     assert saved["issues"][0]["intervention_layer"] == fault_layer
