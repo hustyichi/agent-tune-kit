@@ -10,6 +10,7 @@ import json
 import os
 import re
 import tempfile
+import threading
 import uuid
 from contextlib import contextmanager
 from datetime import UTC, datetime
@@ -45,6 +46,7 @@ ERROR_CODES = {
     "DIRTY_BASELINE",
     "UNSUPPORTED_GIT_STATE",
 }
+_held_locks = threading.local()
 
 
 class ATKError(Exception):
@@ -113,11 +115,22 @@ def write_json(path: Path, value: dict, *, immutable: bool = False) -> None:
 @contextmanager
 def locked(root: Path):
     root.mkdir(parents=True, exist_ok=True)
+    key = str(root.resolve())
+    held = getattr(_held_locks, "roots", set())
+    if key in held:
+        yield
+        return
     with (root / ".operation.lock").open("a+b") as handle:
-        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        try:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise ATKError("WORKSPACE_CONFLICT", "another ATK operation is running") from exc
+        held.add(key)
+        _held_locks.roots = held
         try:
             yield
         finally:
+            held.remove(key)
             fcntl.flock(handle, fcntl.LOCK_UN)
 
 

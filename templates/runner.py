@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import subprocess
 import time
@@ -18,7 +19,10 @@ from pathlib import Path
 
 def write_json(path: Path, value: dict) -> None:
     temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(json.dumps(value, ensure_ascii=False, sort_keys=True), encoding="utf-8")
+    with temporary.open("w", encoding="utf-8") as handle:
+        json.dump(value, handle, ensure_ascii=False, sort_keys=True)
+        handle.flush()
+        os.fsync(handle.fileno())
     temporary.replace(path)
 
 
@@ -125,8 +129,18 @@ def main() -> int:
         "planned_record_ids": [a["record_id"] for a in request["attempts"]],
         "completed_record_ids": completed,
         "running_record_id": None,
+        "not_started_record_ids": [a["record_id"] for a in request["attempts"]],
         "actual_components": [],
     }
+
+    def save_batch() -> None:
+        batch["not_started_record_ids"] = [
+            record_id
+            for record_id in batch["planned_record_ids"]
+            if record_id not in completed and record_id != batch["running_record_id"]
+        ]
+        write_json(output / "batch.json", batch)
+
     for component in config.get("components", []):
         observed = {
             "component_id": component["component_id"],
@@ -142,17 +156,18 @@ def main() -> int:
                 observed["actual_sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
                 observed["identity_status"] = "available"
         batch["actual_components"].append(observed)
-    write_json(output / "batch.json", batch)
+    save_batch()
     with records.open("a", encoding="utf-8") as handle:
         for attempt in request["attempts"]:
             batch["running_record_id"] = attempt["record_id"]
-            write_json(output / "batch.json", batch)
+            save_batch()
             record = run_one(attempt, cases[attempt["case_id"]], config, output, request["timeout_seconds"])
             handle.write(json.dumps(record, ensure_ascii=False) + "\n")
             handle.flush()
+            os.fsync(handle.fileno())
             completed.append(attempt["record_id"])
             batch["running_record_id"] = None
-            write_json(output / "batch.json", batch)
+            save_batch()
     return 0
 
 

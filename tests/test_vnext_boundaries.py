@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
 
 import agent_tune_kit.checkpoints as checkpoints
+import agent_tune_kit.core as core
 from agent_tune_kit.checkpoints import (
     decide_candidate,
     freeze_round,
@@ -785,6 +788,251 @@ def test_runner_commit_blocks_evaluation_without_advancing_round(tmp_path: Path)
         read_json(root / "rounds" / round_data["id"] / "round.json")["current_commit"] == round_data["baseline_commit"]
     )
     assert git(repo, "rev-parse", "HEAD") != round_data["baseline_commit"]
+
+
+def test_running_evaluation_blocks_candidate_operations(tmp_path: Path) -> None:
+    started = tmp_path / "agent-started"
+    release = tmp_path / "agent-release"
+    script = (
+        "import time\nfrom pathlib import Path\n"
+        f"Path({str(started)!r}).write_text('started')\n"
+        f"while not Path({str(release)!r}).exists(): time.sleep(0.01)\n"
+        "print('ok')\n"
+    )
+    rows = [{"id": "case", "input": "task", "usage": "optimization", "source_group_id": "group"}]
+    repo, root, dataset, round_data, plan = project(tmp_path, script, rows)
+    freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    request = {
+        "dataset_id": dataset["id"],
+        "case_ids": ["case"],
+        "purpose": "evaluation",
+        "revision_id": round_data["baseline_revision_id"],
+        "round_id": round_data["id"],
+    }
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(run_evaluation, root, request)
+        try:
+            deadline = time.monotonic() + 5
+            while not started.exists() and not future.done() and time.monotonic() < deadline:
+                time.sleep(0.01)
+            assert started.exists()
+            with pytest.raises(ATKError, match="another ATK operation is running"):
+                prepare_candidate(
+                    repo, root, {"round_id": round_data["id"], "primary_issue_id": "issue", "paths": ["prompt.txt"]}
+                )
+            with pytest.raises(ATKError, match="another ATK operation is running"):
+                store_diagnosis(root, {"round_id": round_data["id"], "issues": []})
+        finally:
+            release.write_text("go")
+        assert future.result(timeout=10)["status"] == "sealed"
+    assert (
+        prepare_candidate(
+            repo, root, {"round_id": round_data["id"], "primary_issue_id": "issue", "paths": ["prompt.txt"]}
+        )["content_status"]
+        == "draft"
+    )
+
+
+@pytest.mark.parametrize("failure", ["fsync", "replace"])
+def test_disk_write_failure_preserves_prior_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    state = tmp_path / "state.json"
+    write_json(state, {"value": "before"})
+    original_files = set(tmp_path.iterdir())
+
+    def disk_error(*_: object) -> None:
+        raise OSError("simulated disk write failure")
+
+    with monkeypatch.context() as patch:
+        if failure == "fsync":
+            patch.setattr(core.os, "fsync", disk_error)
+        else:
+            patch.setattr(Path, "replace", disk_error)
+        with pytest.raises(OSError, match="simulated disk write failure"):
+            write_json(state, {"value": "after"})
+    assert read_json(state) == {"value": "before"}
+    assert set(tmp_path.iterdir()) == original_files
+
+
+def test_interrupted_runner_keeps_running_and_not_started_attempts(tmp_path: Path) -> None:
+    rows = [
+        {"id": "first", "input": "first", "usage": "optimization", "source_group_id": "g1"},
+        {"id": "second", "input": "second", "usage": "optimization", "source_group_id": "g2"},
+    ]
+    repo, root, dataset, round_data, plan = project(tmp_path, "print('ok')\n", rows)
+    runner = root / "adapters" / "runner.py"
+    runner.write_text(
+        "import argparse, json, sys\n"
+        "from pathlib import Path\n"
+        "parser = argparse.ArgumentParser()\n"
+        "parser.add_argument('--request')\n"
+        "parser.add_argument('--output')\n"
+        "args = parser.parse_args()\n"
+        "request = json.loads(Path(args.request).read_text())\n"
+        "ids = [item['record_id'] for item in request['attempts']]\n"
+        "batch = {'batch_id': request['batch_id'], 'planned_record_ids': ids, "
+        "'completed_record_ids': [], 'running_record_id': ids[0], "
+        "'not_started_record_ids': ids[1:], 'actual_components': []}\n"
+        "(Path(args.output) / 'batch.json').write_text(json.dumps(batch))\n"
+        "sys.exit(3)\n"
+    )
+    plan["runner_hash"] = digest(runner)
+    freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    batch = run_evaluation(
+        root,
+        {
+            "dataset_id": dataset["id"],
+            "case_ids": ["first", "second"],
+            "purpose": "evaluation",
+            "revision_id": round_data["baseline_revision_id"],
+            "round_id": round_data["id"],
+        },
+    )
+    attempts = read_json(root / "evidence" / batch["id"] / "request.json")["attempts"]
+    assert batch["status"] == "partial"
+    assert batch["record_count"] == 0
+    assert batch["unknown_record_ids"] == [attempts[0]["record_id"]]
+    assert batch["not_started_record_ids"] == [attempts[1]["record_id"]]
+    assert batch["missing_runner_artifacts"] == ["records.jsonl"]
+    assert validate_evidence(root, batch["id"])[1] == {}
+
+
+def test_truncated_runner_record_preserves_completed_prefix(tmp_path: Path) -> None:
+    rows = [
+        {"id": "first", "input": "first", "usage": "optimization", "source_group_id": "g1"},
+        {"id": "second", "input": "second", "usage": "optimization", "source_group_id": "g2"},
+    ]
+    repo, root, dataset, round_data, plan = project(tmp_path, "print('ok')\n", rows)
+    runner = root / "adapters" / "runner.py"
+    runner.write_text(
+        "import argparse, json, sys\n"
+        "from pathlib import Path\n"
+        "parser = argparse.ArgumentParser()\n"
+        "parser.add_argument('--request')\n"
+        "parser.add_argument('--output')\n"
+        "args = parser.parse_args()\n"
+        "request = json.loads(Path(args.request).read_text())\n"
+        "first, second = request['attempts']\n"
+        "output = Path(args.output)\n"
+        "batch = {'batch_id': request['batch_id'], "
+        "'planned_record_ids': [first['record_id'], second['record_id']], "
+        "'completed_record_ids': [first['record_id']], 'running_record_id': second['record_id'], "
+        "'not_started_record_ids': [], 'actual_components': []}\n"
+        "(output / 'batch.json').write_text(json.dumps(batch))\n"
+        "execution = {'id': first['execution_id'], 'batch_id': request['batch_id'], "
+        "'record_id': first['record_id'], 'case_id': first['case_id'], "
+        "'case_fingerprint': first['case_fingerprint'], 'repeat_index': first['repeat_index'], "
+        "'retry_of': first['retry_of'], 'purpose': request['purpose'], "
+        "'revision_id': request['revision_id']}\n"
+        "record = {'id': first['record_id'], 'case_id': first['case_id'], 'execution': execution}\n"
+        "(output / 'records.jsonl').write_bytes(json.dumps(record).encode() + b'\\n{\"id\":')\n"
+        "sys.exit(3)\n"
+    )
+    plan["runner_hash"] = digest(runner)
+    freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    batch = run_evaluation(
+        root,
+        {
+            "dataset_id": dataset["id"],
+            "case_ids": ["first", "second"],
+            "purpose": "evaluation",
+            "revision_id": round_data["baseline_revision_id"],
+            "round_id": round_data["id"],
+        },
+    )
+    attempts = read_json(root / "evidence" / batch["id"] / "request.json")["attempts"]
+    folder = root / "evidence" / batch["id"]
+    assert batch["status"] == "partial"
+    assert batch["record_count"] == 1
+    assert batch["completed_record_ids"] == [attempts[0]["record_id"]]
+    assert batch["unknown_record_ids"] == [attempts[1]["record_id"]]
+    assert batch["incomplete_records_sha256"] == digest(folder / "records.incomplete.jsonl")
+    assert set(validate_evidence(root, batch["id"])[1]) == {attempts[0]["record_id"]}
+
+
+def test_runner_cannot_change_preallocated_attempt_identity(tmp_path: Path) -> None:
+    rows = [{"id": "case", "input": "task", "usage": "optimization", "source_group_id": "group"}]
+    repo, root, dataset, round_data, plan = project(tmp_path, "print('ok')\n", rows)
+    runner = root / "adapters" / "runner.py"
+    runner.write_text(
+        "import argparse, json\n"
+        "from pathlib import Path\n"
+        "parser = argparse.ArgumentParser()\n"
+        "parser.add_argument('--request')\n"
+        "parser.add_argument('--output')\n"
+        "args = parser.parse_args()\n"
+        "request = json.loads(Path(args.request).read_text())\n"
+        "attempt = request['attempts'][0]\n"
+        "output = Path(args.output)\n"
+        "batch = {'batch_id': request['batch_id'], 'planned_record_ids': [attempt['record_id']], "
+        "'completed_record_ids': [attempt['record_id']], 'running_record_id': None, "
+        "'not_started_record_ids': [], 'actual_components': []}\n"
+        "(output / 'batch.json').write_text(json.dumps(batch))\n"
+        "execution = {'id': attempt['execution_id'], 'batch_id': request['batch_id'], "
+        "'record_id': attempt['record_id'], 'case_id': attempt['case_id'], "
+        "'case_fingerprint': 'wrong', 'repeat_index': attempt['repeat_index'], "
+        "'retry_of': attempt['retry_of'], 'purpose': request['purpose'], "
+        "'revision_id': request['revision_id']}\n"
+        "record = {'id': attempt['record_id'], 'case_id': attempt['case_id'], 'execution': execution}\n"
+        "(output / 'records.jsonl').write_text(json.dumps(record) + '\\n')\n"
+    )
+    plan["runner_hash"] = digest(runner)
+    freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    with pytest.raises(ATKError, match="runner changed an attempt identity"):
+        run_evaluation(
+            root,
+            {
+                "dataset_id": dataset["id"],
+                "case_ids": ["case"],
+                "purpose": "evaluation",
+                "revision_id": round_data["baseline_revision_id"],
+                "round_id": round_data["id"],
+            },
+        )
+
+
+def test_batch_timeout_stops_runner_child_processes(tmp_path: Path) -> None:
+    started = tmp_path / "child-started"
+    leaked = tmp_path / "child-survived"
+    rows = [{"id": "case", "input": "task", "usage": "optimization", "source_group_id": "group"}]
+    repo, root, dataset, round_data, plan = project(tmp_path, "print('ok')\n", rows)
+    runner = root / "adapters" / "runner.py"
+    runner.write_text(
+        "import argparse, json, subprocess, sys, time\n"
+        "from pathlib import Path\n"
+        "parser = argparse.ArgumentParser()\n"
+        "parser.add_argument('--request')\n"
+        "parser.add_argument('--output')\n"
+        "args = parser.parse_args()\n"
+        "request = json.loads(Path(args.request).read_text())\n"
+        "attempt = request['attempts'][0]\n"
+        "batch = {'batch_id': request['batch_id'], 'planned_record_ids': [attempt['record_id']], "
+        "'completed_record_ids': [], 'running_record_id': attempt['record_id'], "
+        "'not_started_record_ids': [], 'actual_components': []}\n"
+        "(Path(args.output) / 'batch.json').write_text(json.dumps(batch))\n"
+        f"child = \"from pathlib import Path; import time; Path({str(started)!r}).write_text('yes'); "
+        f"time.sleep(3); Path({str(leaked)!r}).write_text('yes')\"\n"
+        "subprocess.Popen([sys.executable, '-c', child])\n"
+        "time.sleep(10)\n"
+    )
+    plan["runner_hash"] = digest(runner)
+    freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    batch = run_evaluation(
+        root,
+        {
+            "dataset_id": dataset["id"],
+            "case_ids": ["case"],
+            "purpose": "evaluation",
+            "revision_id": round_data["baseline_revision_id"],
+            "round_id": round_data["id"],
+            "batch_timeout_seconds": 2,
+        },
+    )
+    assert batch["status"] == "interrupted"
+    assert started.exists()
+    time.sleep(1.2)
+    assert not leaked.exists()
 
 
 def test_runner_untracked_output_blocks_pending_candidate_evidence(tmp_path: Path) -> None:

@@ -4,13 +4,28 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 import shutil
+import signal
 import subprocess
+from contextlib import suppress
 from importlib import resources
 from pathlib import Path
 
 from .checkpoints import execution_revision, git, tracked_paths, verify_repo
-from .core import ATKError, canonical, digest, locked, new_id, now, read_json, safe_id, validate_evidence, write_json
+from .core import (
+    ATKError,
+    atomic_write,
+    canonical,
+    digest,
+    locked,
+    new_id,
+    now,
+    read_json,
+    safe_id,
+    validate_evidence,
+    write_json,
+)
 
 
 def initialize_project(repo: Path, request: dict) -> dict:
@@ -358,6 +373,11 @@ def _reserve_run(
 
 
 def run_evaluation(root: Path, request: dict) -> dict:
+    with locked(root):
+        return _run_evaluation_locked(root, request)
+
+
+def _run_evaluation_locked(root: Path, request: dict) -> dict:
     project = json.loads((root / "project.json").read_text(encoding="utf-8"))
     repo = Path(project["workspace_path"])
     retry_batch_id = request.get("retry_batch_id")
@@ -475,16 +495,25 @@ def run_evaluation(root: Path, request: dict) -> dict:
         str(folder.resolve()),
     ]
     timed_out = False
+    runner_start_error = None
     component_drift = []
     batch_path = folder / "batch.json"
     with execution_revision(repo, root, request):
         try:
-            result = subprocess.run(
-                command, cwd=repo, capture_output=True, timeout=request.get("batch_timeout_seconds", 3600), check=False
-            )
-        except subprocess.TimeoutExpired:
-            timed_out = True
-            result = subprocess.CompletedProcess(command, 124, b"", b"")
+            with subprocess.Popen(
+                command, cwd=repo, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True
+            ) as process:
+                try:
+                    stdout, stderr = process.communicate(timeout=request.get("batch_timeout_seconds", 3600))
+                except subprocess.TimeoutExpired:
+                    timed_out = True
+                    with suppress(ProcessLookupError):
+                        os.killpg(process.pid, signal.SIGKILL)
+                    stdout, stderr = process.communicate()
+                result = subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
+        except OSError as exc:
+            runner_start_error = str(exc)
+            result = subprocess.CompletedProcess(command, 127, b"", b"")
         if batch_path.exists():
             for component in json.loads(batch_path.read_text(encoding="utf-8")).get("actual_components", []):
                 source = component.get("source_path")
@@ -506,36 +535,94 @@ def run_evaluation(root: Path, request: dict) -> dict:
                         }
                     )
     records_path = folder / "records.jsonl"
-    if timed_out and not batch_path.exists():
-        write_json(batch_path, {"batch_id": batch_id, "completed_record_ids": [], "actual_components": []})
-    if timed_out and not records_path.exists():
-        records_path.write_bytes(b"")
-    if not batch_path.exists() or not records_path.exists():
-        raise ATKError(
-            "INCOMPLETE_EVIDENCE", f"runner returned {result.returncode} without required batch artifacts: {folder}"
+    missing_artifacts = [
+        name for name, path in (("batch.json", batch_path), ("records.jsonl", records_path)) if not path.exists()
+    ]
+    if not batch_path.exists():
+        write_json(
+            batch_path,
+            {
+                "batch_id": batch_id,
+                "planned_record_ids": [attempt["record_id"] for attempt in attempts],
+                "completed_record_ids": [],
+                "running_record_id": None,
+                "not_started_record_ids": [attempt["record_id"] for attempt in attempts] if runner_start_error else [],
+                "actual_components": [],
+            },
         )
+    if not records_path.exists():
+        records_path.write_bytes(b"")
     batch = json.loads(batch_path.read_text(encoding="utf-8"))
-    records = [json.loads(line) for line in records_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    raw_records = records_path.read_bytes()
+    records = []
+    malformed_records = False
+    for line in raw_records.splitlines():
+        if line.strip():
+            try:
+                records.append(json.loads(line))
+            except (UnicodeDecodeError, ValueError):
+                malformed_records = True
+                break
+    if malformed_records:
+        atomic_write(folder / "records.incomplete.jsonl", raw_records, immutable=True)
+        atomic_write(records_path, b"\n".join(canonical(record) for record in records) + (b"\n" if records else b""))
     expected = {item["record_id"]: item for item in attempts}
+    if batch.get("batch_id") != batch_id or batch.get("planned_record_ids") != list(expected):
+        raise ATKError("INCOMPLETE_EVIDENCE", "runner changed planned attempt identities")
     observed = set()
     for record in records:
+        if not isinstance(record, dict):
+            raise ATKError("INCOMPLETE_EVIDENCE", "runner returned an invalid attempt record")
         record_id = record.get("id")
-        if record_id not in expected or record_id in observed:
+        if not isinstance(record_id, str) or record_id not in expected or record_id in observed:
             raise ATKError("INCOMPLETE_EVIDENCE", "runner returned unknown or duplicate record ID")
         observed.add(record_id)
         execution = record.get("execution") or {}
+        attempt = expected[record_id]
+        identity = {
+            "id": attempt["execution_id"],
+            "batch_id": batch_id,
+            "record_id": record_id,
+            "case_id": attempt["case_id"],
+            "case_fingerprint": attempt["case_fingerprint"],
+            "repeat_index": attempt["repeat_index"],
+            "retry_of": attempt["retry_of"],
+            "purpose": request["purpose"],
+            "revision_id": request["revision_id"],
+        }
         if (
-            execution.get("id") != expected[record_id]["execution_id"]
-            or execution.get("case_id") != expected[record_id]["case_id"]
+            not isinstance(execution, dict)
+            or record.get("case_id") != attempt["case_id"]
+            or any(execution.get(key) != value for key, value in identity.items())
         ):
             raise ATKError("INCOMPLETE_EVIDENCE", "runner changed an attempt identity")
-    if set(batch.get("completed_record_ids", [])) != observed:
-        raise ATKError("INCOMPLETE_EVIDENCE", "batch completion list disagrees with records")
+    for field in ("completed_record_ids", "not_started_record_ids"):
+        ids = batch.get(field, [])
+        if not isinstance(ids, list) or any(not isinstance(item, str) for item in ids) or len(ids) != len(set(ids)):
+            raise ATKError("INCOMPLETE_EVIDENCE", f"runner returned invalid {field}")
+    declared_completed = set(batch.get("completed_record_ids", []))
+    declared_not_started = set(batch.get("not_started_record_ids", []))
+    running_record_id = batch.get("running_record_id")
+    if declared_completed - set(expected) or (
+        running_record_id is not None and (not isinstance(running_record_id, str) or running_record_id not in expected)
+    ):
+        raise ATKError("INCOMPLETE_EVIDENCE", "runner returned unknown attempt status")
+    confirmed = declared_completed & observed
+    if running_record_id:
+        confirmed.discard(running_record_id)
+    not_started = declared_not_started - observed
+    if not_started - set(expected):
+        raise ATKError("INCOMPLETE_EVIDENCE", "runner returned unknown not-started attempt")
+    not_started -= declared_completed | ({running_record_id} if running_record_id else set())
+    unknown = set(expected) - confirmed - not_started
+    status_conflict = bool(declared_not_started & (declared_completed | observed)) or running_record_id in (
+        declared_completed | declared_not_started
+    )
     if retry_batch_id and batch.get("actual_components") != prior_manifest.get("actual_components"):
         raise ATKError("REVISION_MISMATCH", "component identity changed during retry")
     if prior_records:
         records = prior_records + records
-        records_path.write_bytes(b"\n".join(canonical(record) for record in records) + b"\n")
+        atomic_write(records_path, b"\n".join(canonical(record) for record in records) + b"\n")
     evidence_index = [
         {
             "evidence_id": record["id"],
@@ -573,9 +660,18 @@ def run_evaluation(root: Path, request: dict) -> dict:
         "status": "interrupted"
         if timed_out
         else "sealed"
-        if len(observed) == len(attempts) and result.returncode == 0 and not component_drift
+        if len(confirmed) == len(attempts)
+        and result.returncode == 0
+        and not component_drift
+        and not missing_artifacts
+        and not malformed_records
+        and not status_conflict
         else "partial",
         "runner_exit_code": result.returncode,
+        "runner_start_error": runner_start_error,
+        "missing_runner_artifacts": missing_artifacts,
+        "incomplete_records_sha256": digest(raw_records) if malformed_records else None,
+        "runner_status_conflict": status_conflict,
         "run_config_hash": digest(project),
         "runner_hash": digest(runner),
         "fixed_context_hash": digest(fixed_components),
@@ -583,6 +679,9 @@ def run_evaluation(root: Path, request: dict) -> dict:
         "post_run_component_drift": component_drift,
         "evidence_index": evidence_index,
         "missing_record_ids": sorted(set(expected) - observed),
+        "completed_record_ids": sorted(confirmed),
+        "not_started_record_ids": sorted(not_started),
+        "unknown_record_ids": sorted(unknown),
     }
     write_json(folder / "manifest.json", manifest, immutable=True)
     return manifest
