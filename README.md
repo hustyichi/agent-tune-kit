@@ -1,6 +1,6 @@
 # Agent Tune Kit
 
-最后更新：2026-09-28。状态：vNext 核心链路、10 Case 合成累积验收及中断批次／并发运行边界已验证；Magic Workspace 单 Case 已按严格加载路径门禁复验，真实多 Case 与完整验收待收口。详见 [实现与验收记录](docs/vnext-implementation-report.md)。
+最后更新：2026-09-28。状态：vNext 核心链路、10 Case 合成累积验收、中断批次／并发边界及 Python editable／Node 链接加载已在本地验证；Magic Workspace 单 Case 已按严格加载路径门禁复验，真实多 Case 与完整验收待收口。详见 [实现与验收记录](docs/vnext-implementation-report.md)。
 
 简体中文 | [English](README.en.md)
 
