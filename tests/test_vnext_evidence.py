@@ -205,6 +205,34 @@ def test_trace_bundle_joins_separate_observations_and_scores(tmp_path: Path) -> 
     assert event["runtime_metadata"]["usage"] == {"totalTokens": 2}
     assert "observation:obs-1" in index and "score:score-1" in index
     assert batch["mapping_version"] == "1" and batch["file_roles"] == request["file_roles"]
+    assessment = store_assessment(
+        root,
+        {
+            "batch_id": batch["id"],
+            "evaluation_spec": {
+                "version": "v1",
+                "boundary": "imported trace",
+                "dimensions": ["task_success"],
+                "dimension_rules": {"task_success": {"validity": "trace output present", "attribution": "unknown"}},
+                "denominator_rule": "one trace",
+            },
+            "judger": {"version": "v1", "readiness": "uncalibrated"},
+            "rows": [
+                {
+                    "record_id": record["id"],
+                    "dimension": "task_success",
+                    "validity": "valid",
+                    "validity_reason": "",
+                    "verdict": "pass",
+                    "score": None,
+                    "reason": "trace output present",
+                    "evidence_refs": [{"batch_id": batch["id"], "evidence_id": "observation:obs-1"}],
+                    "judger_kind": "deterministic",
+                }
+            ],
+        },
+    )
+    assert assessment.is_file()
     with pytest.raises(ATKError, match="unknown Trace"):
         (source / "scores.json").write_text(json.dumps([{"id": "score-1", "traceId": "missing", "value": 0.7}]))
         import_evidence(root, request)
@@ -241,6 +269,54 @@ def test_root_observation_mapping_requires_unique_named_root(tmp_path: Path) -> 
     ambiguous_record = next(iter(validate_evidence(root, ambiguous["id"])[1].values()))
     assert not ambiguous_record["output_present"]
     assert "trace_output" in ambiguous_record["missing"]
+
+
+def test_assessment_requires_evidence_for_its_own_record(tmp_path: Path) -> None:
+    source = tmp_path / "results.csv"
+    source.write_text("input,output\nfirst,one\nsecond,two\n")
+    root = tmp_path / "state"
+    batch = import_evidence(
+        root,
+        {
+            "source": str(source),
+            "source_kind": "batch_results",
+            "source_namespace": "sample",
+            "mapping_version": "1",
+            "mapping": {"input": "input", "output": "output"},
+        },
+    )
+    record_ids = list(validate_evidence(root, batch["id"])[1])
+    rows = [
+        {
+            "record_id": record_id,
+            "dimension": "task_success",
+            "validity": "valid",
+            "validity_reason": "",
+            "verdict": "pass",
+            "score": None,
+            "reason": "source output present",
+            "evidence_refs": [{"batch_id": batch["id"], "evidence_id": record_ids[1 - index]}],
+            "judger_kind": "deterministic",
+        }
+        for index, record_id in enumerate(record_ids)
+    ]
+    request = {
+        "batch_id": batch["id"],
+        "evaluation_spec": {
+            "version": "v1",
+            "boundary": "imported results",
+            "dimensions": ["task_success"],
+            "dimension_rules": {"task_success": {"validity": "output present", "attribution": "unknown"}},
+            "denominator_rule": "all rows",
+        },
+        "judger": {"version": "v1", "readiness": "uncalibrated"},
+        "rows": rows,
+    }
+    with pytest.raises(ATKError, match="own record"):
+        store_assessment(root, request)
+    for row in rows:
+        row["evidence_refs"].append({"batch_id": batch["id"], "evidence_id": row["record_id"]})
+    assert store_assessment(root, request).is_file()
 
 
 def test_artifact_id_cannot_escape_workspace() -> None:

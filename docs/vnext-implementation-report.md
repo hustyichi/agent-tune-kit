@@ -27,6 +27,8 @@ T10 补充：自定义 runner 写出无法解析的 `batch.json` 时保留原文
 
 T10／T43 补充：Execution 运行环境故障状态已统一为方案的 `infra_error`，正式对照将其视为证据不足，只有该状态或超时可按冻结额度重试。未知状态（包括旧拼写 `infrastructure_error`）会写入 `invalid_execution_status_ids` 并使批次保持 `partial`，不能以完整执行参与正式对照；即使错误评分器将该 Case 标为有效 fail、候选标为 pass，门禁仍返回 `insufficient`。
 
+T44 补充：Assessment 每条判定现在必须至少引用本 Record 自身的证据；可以额外引用同批次其他记录作上下文。合成双记录中互相错引且没有自身证据的判定被拒；Trace Record 引用其 Observation 的判定仍可保存。
+
 T25 补充：轮次冻结先落不可变计划、候选准备先落草稿时，若随后的 Round 状态写入失败，可分别核对同一计划或同一草稿并续写状态；不同内容的重试停止，不生成第二份草稿。两个分析轮次也不能先后冻结为两个活跃轮次。最终收尾的 Decision 先于 Round 状态落盘时，无论状态写入前还是写入后中断，同一请求均复用原 Decision；改动理由的重试被拒绝。候选封存分阶段写入时，先核对既有不可变清单、补丁及文件副本，再复用或创建 Revision 和 Candidate；模拟在 Revision 写入前、Candidate 写入前后中断的三条路径均可安全重试。重试时工作文件改变会阻断，封存副本被改写也会阻断后续 `keep`。
 
 Candidate 协议补充：替代方案现在保存经本轮候选清单和主要 Issue 核对的 `supersedes`，封存产物保存可定位的 `patch_ref`；关联 Issue 必须属于冻结计划。已拒绝候选的新方案保留原记录并消耗新的候选预算；`atk-optimize` 指引已改为先决策再创建替代候选，不再提示对已封存候选重新封存。
@@ -41,7 +43,7 @@ T45 补充：运行预算现在只在目标 Revision 的 Git 工作区核验通�
 
 ## 已运行的验证
 
-- 离线单测：`UV_OFFLINE=1 uv run --frozen python scripts/check-release.py` 全量 120 项通过，包含 Ruff、七个 Skill 包校验、wheel／sdist 构建与独立安装烟测。新增回归覆盖同文件更换映射／脱敏配置、Trace／Observation／Score 分文件关联、未知 Trace 引用、事件字段／时间规范化、token 用量与凭证区分，以及唯一根 Observation 的显式选择。此前还覆盖接入方基础设施退出码与普通 Agent 退出码区分、仅前者可重试、未知 Execution 状态不得封存完整批次、基础设施故障不可被错误评分器算作 Case 修复的测试，以及替代候选谱系及补丁引用测试、计划冻结／候选草稿／最终决策在 Round 状态写入失败后的续恢复和双活跃轮次阻断测试；覆盖执行前 Revision 异常不扣预算、候选文件恢复中断、末阶段收尾、Git `smudge` 真实文件字节漂移、合成远端服务运行版本前后核查、旧检查点复跑进程中断、准备命令超时清理子进程、单次 Agent 超时防止污染后续 Case、异常 runner 批次文件／组件清单测试、并发操作锁、磁盘写入失败、runner 提前退出与 JSONL 尾部截断、预分配身份校验、批次超时结束子进程组，以及 Python editable／Node 链接／误导入／旧 wheel 运行路径测试。此前覆盖还包括 Prompt 闭环、10 Case 四候选与最终 9/10、回退已采用后缀与重新验证、Case 输入变化后的双方重跑、跨轮换判据只重判原执行、跨进程提交恢复、Skill 直读／链接到源码／隔离副本／错误安装副本／过期构建／缺路径证据、已知故障配对、评分器校准、独立探针、固定组件漂移、暂存区与 HEAD 漂移、2 Case×2 次执行与授权重试、外部 Issue 新轮复验和 Git 中断恢复。新增的分布／覆盖统计在两 Case 重试、10 Case 最终对照和输入变化导致缺失配对的场景中通过断言。
+- 离线单测：`UV_OFFLINE=1 uv run --frozen pytest -q` 全量 121 项通过；前一阶段 `UV_OFFLINE=1 uv run --frozen python scripts/check-release.py` 在 120 项时通过 Ruff、七个 Skill 包校验、wheel／sdist 构建与独立安装烟测，本次只增加一条 Assessment 引用门禁测试，静态检查也通过。新增回归覆盖同文件更换映射／脱敏配置、Trace／Observation／Score 分文件关联、未知 Trace 引用、事件字段／时间规范化、token 用量与凭证区分、唯一根 Observation 的显式选择，以及 Assessment 必须引用自身记录的证据。此前还覆盖接入方基础设施退出码与普通 Agent 退出码区分、仅前者可重试、未知 Execution 状态不得封存完整批次、基础设施故障不可被错误评分器算作 Case 修复的测试，以及替代候选谱系及补丁引用测试、计划冻结／候选草稿／最终决策在 Round 状态写入失败后的续恢复和双活跃轮次阻断测试；覆盖执行前 Revision 异常不扣预算、候选文件恢复中断、末阶段收尾、Git `smudge` 真实文件字节漂移、合成远端服务运行版本前后核查、旧检查点复跑进程中断、准备命令超时清理子进程、单次 Agent 超时防止污染后续 Case、异常 runner 批次文件／组件清单测试、并发操作锁、磁盘写入失败、runner 提前退出与 JSONL 尾部截断、预分配身份校验、批次超时结束子进程组，以及 Python editable／Node 链接／误导入／旧 wheel 运行路径测试。此前覆盖还包括 Prompt 闭环、10 Case 四候选与最终 9/10、回退已采用后缀与重新验证、Case 输入变化后的双方重跑、跨轮换判据只重判原执行、跨进程提交恢复、Skill 直读／链接到源码／隔离副本／错误安装副本／过期构建／缺路径证据、已知故障配对、评分器校准、独立探针、固定组件漂移、暂存区与 HEAD 漂移、2 Case×2 次执行与授权重试、外部 Issue 新轮复验和 Git 中断恢复。新增的分布／覆盖统计在两 Case 重试、10 Case 最终对照和输入变化导致缺失配对的场景中通过断言。
 - 静态与打包：上述发布检查完整通过。Python 运行环境 3.13.13，uv 0.11.6；项目声明 Python >=3.11、运行时无第三方依赖。
 - 实际导出只读导入：`projects/magic-workspace/traces/20260926/onl/SES_2103665448775192576` 下 8 个 Langfuse Trace bundle，来源文件集合指纹 `76bcd1bc43705473d2a5da6b42c7d05a106fec56c8a2c33d1faedd93979cc946`。临时目录中生成 8 条 Trace Record、1666 条证据索引；重复导入返回原批次；修正根 Observation 无父节点误报后，8 条均无结构缺口。原始内容未提交到 ATK 仓库。
 - 导入器扩展后再用上述真实来源只读复验：仍为 8 条 Trace Record、1666 条证据索引、0 条结构不完整记录；同配置重复导入返回原批次。分文件关联与映射修订使用小型合成导出验证，尚无分文件的真实脱敏样例。

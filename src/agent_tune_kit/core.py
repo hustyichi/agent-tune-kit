@@ -219,6 +219,20 @@ def store_assessment(root: Path, request: dict) -> Path:
             )
         ):
             raise ATKError("INCOMPLETE_EVIDENCE", "assessment has an invalid evidence reference")
+        record = records[row["record_id"]]
+        if not any(
+            ref["evidence_id"] == row["record_id"]
+            or (
+                record.get("source_trace_id")
+                and evidence[ref["evidence_id"]].get("source_trace_id") == record["source_trace_id"]
+            )
+            or (
+                record.get("execution")
+                and evidence[ref["evidence_id"]].get("execution_id") == record["execution"].get("id")
+            )
+            for ref in refs
+        ):
+            raise ATKError("INCOMPLETE_EVIDENCE", "assessment must cite evidence for its own record")
     if keys != {(record_id, dimension) for record_id in records for dimension in dimensions}:
         raise ATKError("INCOMPLETE_EVIDENCE", "assessment does not cover every record and dimension")
     assessment_id = new_id("assessment")
