@@ -32,7 +32,9 @@ mapping version, filtered scope, and extra redaction keys. JSON, JSONL, CSV, and
 are supported; do not infer missing Trace parents, final output, or overall online
 success rate. For separate Trace, Observation, and Score files, classify every file
 with `file_roles` (`trace` / `observation` / `score`). Declare CSV nested fields in
-`json_columns`; use `mapping.root_observation_name` only when it uniquely identifies
+`json_columns`; declare changed source field names under `mapping.trace`,
+`mapping.observation`, or `mapping.score` as `{canonical_name: source_name}`.
+Use `mapping.root_observation_name` only when it uniquely identifies
 the final root Observation. Do not rerun the Agent when the request is reassess.
 
 Define versioned `evaluation_spec` and `judger` before scoring. Use deterministic

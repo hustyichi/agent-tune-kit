@@ -38,7 +38,7 @@ uvx --from agent-tune-kit atk install
 - **预算与对照**：冻结轮次按尝试预留最终 B0／累计版本复验额度；授权重试生成关联旧 Execution 的新批次，保留全部尝试而不挑最好一次。冻结计划必须说明确定性或波动性的判断依据；波动或未知场景默认双方最终各执行 3 次，缩至 2 次须说明原因。效率或成本门槛仅在预先冻结且指标齐全时判定。独立 holdout 按来源组和里程碑记录暴露，已暴露的组不能在后续轮次重用。
 - **运行身份**：冻结计划保存项目运行配置指纹，每批使用自己的配置快照。固定远端组件可声明只读 argv 数组 `version_command`、`expected_version` 和可选的 `version_timeout_seconds`；ATK 在批次前后执行并保存实际版本、命令指纹与失败原因。版本不符或批内漂移不能支持正式效果归因。正式对照要求固定组件身份可核验；未知身份或接入配置漂移返回证据不足或阻塞执行。
 - **批量结果导入**：CSV/JSON/JSONL 按保存的字段映射导入，不重新运行 Agent；缺少尝试边界时不伪造 Execution。
-- **Langfuse 文件导入**：支持 Trace bundle 和 Observation 行两种显式 profile。Trace／Observation／Score 分文件时，用 `file_roles` 按文件名声明 `trace`、`observation`、`score`；CSV 嵌套列用 `json_columns` 声明。只有 `mapping.root_observation_name` 唯一匹配根 Observation 时，才可从它补足缺失的 Trace 输入／输出。导入保留事件 ID、父子关系、原始与解析时间、来源、缺失与过滤范围；外部分数只当证据，不直接换算 ATK 的通过率。相同文件更换映射或脱敏规则会产生关联修订。原文件只读，默认遮蔽常见凭证字段；项目敏感字段需要追加脱敏键。
+- **Langfuse 文件导入**：支持 Trace bundle 和 Observation 行两种显式 profile。Trace／Observation／Score 分文件时，用 `file_roles` 按文件名声明 `trace`、`observation`、`score`；CSV 嵌套列用 `json_columns` 声明。非标准字段名用 `mapping.trace`、`mapping.observation` 或 `mapping.score` 的 `{标准字段名: 来源字段名}` 显式映射，冲突时拒绝导入。只有 `mapping.root_observation_name` 唯一匹配根 Observation 时，才可从它补足缺失的 Trace 输入／输出。导入保留事件 ID、父子关系、原始与解析时间、来源、缺失与过滤范围；外部分数只当证据，不直接换算 ATK 的通过率。相同文件更换映射或脱敏规则会产生关联修订。原文件只读，默认遮蔽常见凭证字段；项目敏感字段需要追加脱敏键。
 - **诊断与派生视图**：`record_source_contract` 将项目内少量源码／契约行脱敏封存为诊断证据，同时分别保留源码版本与实际制品身份；`render_assessment_html` 从权威 CSV 重建经过转义的本地 HTML，不另存可独立改分的明细。
 
 没有 Ground Truth 也能调查证据；只有具备固定判据的维度才能给出确定判定。`reassess` 创建新 Assessment，不重跑 Agent，不覆盖旧评分。只改评分规则时，可在旧轮关闭后显式复用相同 commit 与运行配置的 Revision，在新轮对原始执行统一重判。评分标准、被测边界、组件和运行条件变化会使旧对照失效；任务输入或固定运行条件变化时需要重新执行。

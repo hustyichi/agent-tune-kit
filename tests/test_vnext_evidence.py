@@ -157,7 +157,7 @@ def test_trace_bundle_joins_separate_observations_and_scores(tmp_path: Path) -> 
         json.dumps(
             [
                 {
-                    "id": "trace-1",
+                    "trace_key": "trace-1",
                     "input": None,
                     "output": "done",
                     "timestamp": "2026-09-26T09:59:59Z",
@@ -183,6 +183,7 @@ def test_trace_bundle_joins_separate_observations_and_scores(tmp_path: Path) -> 
         "source_namespace": "sample",
         "adapter_profile": "langfuse_trace_bundle",
         "mapping_version": "1",
+        "mapping": {"trace": {"id": "trace_key"}},
         "file_roles": {"traces.json": "trace", "observations.csv": "observation", "scores.json": "score"},
         "json_columns": ["usage"],
     }
@@ -279,6 +280,53 @@ def test_root_observation_mapping_requires_unique_named_root(tmp_path: Path) -> 
     ambiguous_record = next(iter(validate_evidence(root, ambiguous["id"])[1].values()))
     assert not ambiguous_record["output_present"]
     assert "trace_output" in ambiguous_record["missing"]
+
+
+def test_observation_rows_use_declared_field_aliases_and_reject_conflicts(tmp_path: Path) -> None:
+    source = tmp_path / "observations.json"
+    source.write_text(
+        json.dumps(
+            [
+                {
+                    "observation_key": "obs-1",
+                    "trace_key": "trace-1",
+                    "kind": "SPAN",
+                    "label": "agent",
+                    "started": "2026-09-26T10:00:00Z",
+                    "input": "task",
+                    "output": "done",
+                }
+            ]
+        )
+    )
+    root = tmp_path / "state"
+    request = {
+        "source": str(source),
+        "source_kind": "langfuse",
+        "source_namespace": "sample",
+        "adapter_profile": "langfuse_observation_rows",
+        "mapping_version": "2",
+        "mapping": {
+            "observation": {
+                "id": "observation_key",
+                "traceId": "trace_key",
+                "type": "kind",
+                "name": "label",
+                "startTime": "started",
+            },
+            "root_observation_name": "agent",
+        },
+    }
+    batch = import_evidence(root, request)
+    _, records, index = validate_evidence(root, batch["id"])
+    record = next(iter(records.values()))
+    assert record["source_trace_id"] == "trace-1"
+    assert record["input"] == "task" and record["output"] == "done"
+    assert record["events"][0]["started_at"] == "2026-09-26T10:00:00+00:00"
+    assert "observation:obs-1" in index
+    source.write_text(json.dumps([{"id": "wrong", "observation_key": "obs-1", "trace_key": "trace-1"}]))
+    with pytest.raises(ATKError, match="conflicting field mapping"):
+        import_evidence(root, request)
 
 
 def test_assessment_requires_evidence_for_its_own_record(tmp_path: Path) -> None:

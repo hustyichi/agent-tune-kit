@@ -159,6 +159,19 @@ def _alias(row: dict, *names: str):
     return None
 
 
+def _mapped_row(row: dict, fields: dict[str, str]) -> dict:
+    if not isinstance(row, dict):
+        raise ATKError("AMBIGUOUS_MAPPING", "mapped export row must be an object")
+    mapped = dict(row)
+    for canonical_name, source_name in fields.items():
+        if source_name not in row:
+            raise ATKError("AMBIGUOUS_MAPPING", f"declared field {source_name} is missing")
+        if canonical_name in row and row[canonical_name] != row[source_name]:
+            raise ATKError("AMBIGUOUS_MAPPING", f"conflicting field mapping for {canonical_name}")
+        mapped[canonical_name] = row[source_name]
+    return mapped
+
+
 def _normalize_csv_json_columns(rows: list[dict], columns: list[str]) -> list[dict]:
     for row in rows:
         for name in columns:
@@ -371,6 +384,12 @@ def import_evidence(root: Path, request: dict) -> dict:
         "root_observation_name" in mapping and not isinstance(mapping["root_observation_name"], str)
     ):
         raise ATKError("AMBIGUOUS_MAPPING", "mapping must contain field names or a root Observation name")
+    for role in ("trace", "observation", "score"):
+        fields = mapping.get(role, {})
+        if not isinstance(fields, dict) or any(
+            not isinstance(key, str) or not isinstance(value, str) for key, value in fields.items()
+        ):
+            raise ATKError("AMBIGUOUS_MAPPING", f"{role} field mapping must name source columns")
     extra_keys = set(request.get("redact_keys", []))
     files = _source_files(source)
     file_roles = request.get("file_roles", {})
@@ -431,6 +450,7 @@ def import_evidence(root: Path, request: dict) -> dict:
             for offset, row in enumerate(rows):
                 role = file_roles.get(file.name, "trace")
                 if role in {"observation", "score"}:
+                    row = _mapped_row(row, mapping.get(role, {}))
                     trace_id = _alias(row, "traceId", "trace_id")
                     if not trace_id or not row.get("id"):
                         raise ATKError("AMBIGUOUS_MAPPING", f"{role} requires traceId and id")
@@ -438,15 +458,18 @@ def import_evidence(root: Path, request: dict) -> dict:
                     target[str(trace_id)].append((row, f"{file}#/{offset}"))
                     continue
                 trace = row.get("trace", row)
-                if not isinstance(trace, dict) or "observations" not in trace and "id" not in trace:
+                if not isinstance(trace, dict):
+                    raise ATKError("AMBIGUOUS_MAPPING", f"not a Trace bundle: {file.name}")
+                mapped_trace = _mapped_row(trace, mapping.get("trace", {}))
+                if "observations" not in mapped_trace and "id" not in mapped_trace:
                     raise ATKError("AMBIGUOUS_MAPPING", f"not a Trace bundle: {file.name}")
                 locator = f"{file}#/trace" if "trace" in row else f"{file}#/{offset}"
-                traces.append((trace, locator))
-        trace_ids = {_alias(trace, "id", "traceId", "trace_id") for trace, _ in traces}
+                traces.append((mapped_trace, trace, locator))
+        trace_ids = {_alias(trace, "id", "traceId", "trace_id") for trace, _, _ in traces}
         for trace_id in observations_by_trace.keys() | scores_by_trace.keys():
             if trace_id not in trace_ids:
                 raise ATKError("AMBIGUOUS_MAPPING", f"separate row references unknown Trace: {trace_id}")
-        for trace, locator in traces:
+        for trace, original_trace, locator in traces:
             trace_id = str(_alias(trace, "id", "traceId", "trace_id"))
             joined = dict(trace)
             observation_locators = {}
@@ -455,7 +478,8 @@ def import_evidence(root: Path, request: dict) -> dict:
                 ("observations", observations_by_trace, observation_locators),
                 ("scores", scores_by_trace, score_locators),
             ):
-                values = list(trace.get(key) or [])
+                role = "observation" if key == "observations" else "score"
+                values = [_mapped_row(item, mapping.get(role, {})) for item in trace.get(key) or []]
                 if not isinstance(trace.get(key, []), (list, type(None))):
                     raise ATKError("AMBIGUOUS_MAPPING", f"{key} must be an array")
                 known = {item.get("id"): item for item in values if isinstance(item, dict)}
@@ -477,7 +501,7 @@ def import_evidence(root: Path, request: dict) -> dict:
                 observation_locators=observation_locators,
                 score_locators=score_locators,
                 root_observation_name=mapping.get("root_observation_name"),
-                trace_source=trace,
+                trace_source=original_trace,
             )
             records.append(record)
             evidence_index.extend(index)
@@ -485,6 +509,7 @@ def import_evidence(root: Path, request: dict) -> dict:
         grouped = defaultdict(list)
         for file, rows in rows_by_file:
             for offset, row in enumerate(rows):
+                row = _mapped_row(row, mapping.get("observation", {}))
                 trace_id = _alias(row, "traceId", "trace_id")
                 event_id = row.get("id")
                 if not trace_id or not event_id:
