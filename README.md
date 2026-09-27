@@ -1,6 +1,6 @@
 # Agent Tune Kit
 
-最后更新：2026-09-27。状态：vNext 核心链路已实现，真实业务接入与完整验收待收口。详见 [实现与验收记录](docs/vnext-implementation-report.md)。
+最后更新：2026-09-27。状态：vNext 核心链路和 Magic Workspace 单 Case 真实接入已验证，完整验收待收口。详见 [实现与验收记录](docs/vnext-implementation-report.md)。
 
 简体中文 | [English](README.en.md)
 
