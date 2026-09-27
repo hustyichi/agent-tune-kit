@@ -239,7 +239,9 @@ def test_unknown_runner_execution_status_cannot_seal_a_batch(tmp_path: Path) -> 
 
 def test_infra_error_cannot_be_counted_as_a_case_fix(tmp_path: Path) -> None:
     rows = [{"id": "case", "input": "case", "usage": "optimization", "source_group_id": "g"}]
-    script = "import sys\nfrom pathlib import Path\nif Path('prompt.txt').read_text() == 'old': sys.exit(75)\nprint('ok')\n"
+    script = (
+        "import sys\nfrom pathlib import Path\nif Path('prompt.txt').read_text() == 'old': sys.exit(75)\nprint('ok')\n"
+    )
     repo, root, dataset, round_data, plan = project(tmp_path, script, rows, infrastructure_exit_codes=[75])
     freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
     request = {

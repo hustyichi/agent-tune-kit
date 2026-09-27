@@ -30,7 +30,10 @@ mapping, or `source_kind=langfuse` with `adapter_profile` set to
 `langfuse_trace_bundle` or `langfuse_observation_rows`. Include source namespace,
 mapping version, filtered scope, and extra redaction keys. JSON, JSONL, CSV, and `.gz`
 are supported; do not infer missing Trace parents, final output, or overall online
-success rate. Do not rerun the Agent when the request is reassess.
+success rate. For separate Trace, Observation, and Score files, classify every file
+with `file_roles` (`trace` / `observation` / `score`). Declare CSV nested fields in
+`json_columns`; use `mapping.root_observation_name` only when it uniquely identifies
+the final root Observation. Do not rerun the Agent when the request is reassess.
 
 Define versioned `evaluation_spec` and `judger` before scoring. Use deterministic
 checks for hard constraints and the current Codex session for semantic judgments.

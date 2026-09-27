@@ -124,6 +124,121 @@ def test_root_observation_without_parent_is_complete(tmp_path: Path) -> None:
     assert next(iter(validate_evidence(tmp_path / "state", batch["id"])[1].values()))["missing"] == []
 
 
+def test_import_revisions_when_mapping_or_redaction_changes(tmp_path: Path) -> None:
+    source = tmp_path / "results.csv"
+    source.write_text("question,answer,alternate,private_note\nhello,first,second,customer name\n")
+    root = tmp_path / "state"
+    request = {
+        "source": str(source),
+        "source_kind": "batch_results",
+        "source_namespace": "sample",
+        "mapping_version": "1",
+        "mapping": {"input": "question", "output": "answer"},
+    }
+    first = import_evidence(root, request)
+    mapped = import_evidence(root, {**request, "mapping": {"input": "question", "output": "alternate"}})
+    assert mapped["id"] != first["id"]
+    assert mapped["supersedes_batch_id"] == first["id"]
+    assert next(iter(validate_evidence(root, mapped["id"])[1].values()))["output"] == "second"
+    assert (
+        import_evidence(root, {**request, "mapping": {"input": "question", "output": "alternate"}})["id"]
+        == mapped["id"]
+    )
+    redacted = import_evidence(root, {**request, "redact_keys": ["answer"]})
+    assert redacted["id"] != first["id"]
+    assert redacted["redaction"]["extra_keys"] == ["answer"]
+    assert next(iter(validate_evidence(root, redacted["id"])[1].values()))["output"] == "[REDACTED]"
+
+
+def test_trace_bundle_joins_separate_observations_and_scores(tmp_path: Path) -> None:
+    source = tmp_path / "export"
+    source.mkdir()
+    (source / "traces.json").write_text(
+        json.dumps(
+            [
+                {
+                    "id": "trace-1",
+                    "input": None,
+                    "output": "done",
+                    "metadata": {"accessToken": "secret", "totalTokens": 2},
+                }
+            ]
+        )
+    )
+    (source / "observations.csv").write_text(
+        "id,trace_id,parent_observation_id,type,name,start_time,end_time,level,status_message,model,usage\n"
+        'obs-1,trace-1,,GENERATION,answer,2026-09-26T10:00:00Z,not-a-time,ERROR,warning,model-x,"{""totalTokens"":2}"\n'
+    )
+    (source / "scores.json").write_text(
+        json.dumps([{"id": "score-1", "traceId": "trace-1", "name": "review", "value": 0.7}])
+    )
+    request = {
+        "source": str(source),
+        "source_kind": "langfuse",
+        "source_namespace": "sample",
+        "adapter_profile": "langfuse_trace_bundle",
+        "mapping_version": "1",
+        "file_roles": {"traces.json": "trace", "observations.csv": "observation", "scores.json": "score"},
+        "json_columns": ["usage"],
+    }
+    root = tmp_path / "state"
+    batch = import_evidence(root, request)
+    _, records, index = validate_evidence(root, batch["id"])
+    assert len(records) == 1
+    record = next(iter(records.values()))
+    assert record["input_present"] and record["input"] is None
+    assert record["runtime_metadata"]["metadata"] == {"accessToken": "[REDACTED]", "totalTokens": 2}
+    assert record["external_scores"] == [{"id": "score-1", "traceId": "trace-1", "name": "review", "value": 0.7}]
+    event = record["events"][0]
+    assert event["event_id"] == "obs-1"
+    assert event["parent_event_id"] is None
+    assert event["event_type"] == "GENERATION"
+    assert event["event_name"] == "answer"
+    assert event["started_at"] == "2026-09-26T10:00:00+00:00"
+    assert event["raw_started_at"] == "2026-09-26T10:00:00Z"
+    assert event["ended_at"] is None and event["raw_ended_at"] == "not-a-time"
+    assert event["source_status"] == {"level": "ERROR", "message": "warning"}
+    assert event["runtime_metadata"]["usage"] == {"totalTokens": 2}
+    assert "observation:obs-1" in index and "score:score-1" in index
+    assert batch["mapping_version"] == "1" and batch["file_roles"] == request["file_roles"]
+    with pytest.raises(ATKError, match="unknown Trace"):
+        (source / "scores.json").write_text(json.dumps([{"id": "score-1", "traceId": "missing", "value": 0.7}]))
+        import_evidence(root, request)
+
+
+def test_root_observation_mapping_requires_unique_named_root(tmp_path: Path) -> None:
+    source = tmp_path / "trace.json"
+    trace = {
+        "id": "trace-1",
+        "observations": [
+            {"id": "tool", "name": "tool", "type": "TOOL", "output": "not final"},
+            {"id": "agent", "name": "agent", "type": "SPAN", "input": "task", "output": "final"},
+        ],
+    }
+    source.write_text(json.dumps(trace))
+    root = tmp_path / "state"
+    request = {
+        "source": str(source),
+        "source_kind": "langfuse",
+        "source_namespace": "sample",
+        "adapter_profile": "langfuse_trace_bundle",
+        "mapping_version": "1",
+    }
+    default = import_evidence(root, request)
+    default_record = next(iter(validate_evidence(root, default["id"])[1].values()))
+    assert not default_record["output_present"]
+    mapped = import_evidence(root, {**request, "mapping": {"root_observation_name": "agent"}})
+    mapped_record = next(iter(validate_evidence(root, mapped["id"])[1].values()))
+    assert mapped_record["input"] == "task" and mapped_record["output"] == "final"
+    assert mapped_record["output_source"] == "observation:agent"
+    trace["observations"].append({"id": "other-agent", "name": "agent", "output": "ambiguous"})
+    source.write_text(json.dumps(trace))
+    ambiguous = import_evidence(root, {**request, "mapping": {"root_observation_name": "agent"}})
+    ambiguous_record = next(iter(validate_evidence(root, ambiguous["id"])[1].values()))
+    assert not ambiguous_record["output_present"]
+    assert "trace_output" in ambiguous_record["missing"]
+
+
 def test_artifact_id_cannot_escape_workspace() -> None:
     with pytest.raises(ATKError, match="unsafe artifact ID"):
         safe_id("../../outside")
