@@ -733,7 +733,40 @@ def finish_round(repo: Path, root: Path, request: dict) -> dict:
 def _finish_round_locked(repo: Path, root: Path, request: dict) -> dict:
     folder = _round_folder(root, request["round_id"])
     value = read_json(folder / "round.json")
+    final_actions = {"complete", "complete_with_override", "complete_external_fix", "close_without_adoption"}
+    saved = [
+        (path, decision)
+        for path in (folder / "decisions").glob("*.json")
+        if (decision := read_json(path)).get("action") in final_actions
+    ]
+    if len(saved) > 1:
+        raise ATKError("WORKSPACE_CONFLICT", "multiple final decisions need inspection")
+    previous = saved[0][1] if saved else None
+    if previous and (
+        previous.get("id") != saved[0][0].stem
+        or previous.get("round_id") != value["id"]
+        or previous.get("action") != request.get("action")
+        or previous.get("reason") != request.get("reason")
+        or previous.get("validation_id") != request.get("validation_id")
+        or previous.get("validation_missing_reason") != request.get("validation_missing_reason")
+        or previous.get("override_authorization")
+        != (request.get("override_authorization") if request.get("action") == "complete_with_override" else None)
+        or previous.get("after_commit") != value["current_commit"]
+    ):
+        raise ATKError("WORKSPACE_CONFLICT", "saved final decision differs from the retry")
     if value["status"] not in {"ready", "optimizing"}:
+        if (
+            previous
+            and value["status"]
+            == {
+                "complete": "completed",
+                "complete_with_override": "completed_with_override",
+                "complete_external_fix": "completed",
+                "close_without_adoption": "closed_without_adoption",
+            }[previous["action"]]
+        ):
+            verify_repo(repo, expected_head=value["current_commit"], expected_branch=value["branch"])
+            return previous
         raise ATKError("WORKSPACE_CONFLICT", "round cannot be closed from its current state")
     verify_repo(repo, expected_head=value["current_commit"], expected_branch=value["branch"])
     if value["pending_candidate_id"] or changed_paths(repo) != set(value["baseline_untracked"]):
@@ -806,6 +839,13 @@ def _finish_round_locked(repo: Path, root: Path, request: dict) -> dict:
         "override_authorization": request.get("override_authorization") if action == "complete_with_override" else None,
         "reason": request["reason"],
     }
-    write_json(folder / "decisions" / f"{decision['id']}.json", decision, immutable=True)
+    if previous:
+        if {key: val for key, val in previous.items() if key not in {"id", "created_at"}} != {
+            key: val for key, val in decision.items() if key not in {"id", "created_at"}
+        }:
+            raise ATKError("WORKSPACE_CONFLICT", "saved final decision differs from the retry")
+        decision = previous
+    else:
+        write_json(folder / "decisions" / f"{decision['id']}.json", decision, immutable=True)
     write_json(folder / "round.json", value)
     return decision

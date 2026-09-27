@@ -11,6 +11,7 @@ import pytest
 
 import agent_tune_kit.checkpoints as checkpoints
 import agent_tune_kit.core as core
+import agent_tune_kit.governance as governance
 from agent_tune_kit.checkpoints import (
     decide_candidate,
     freeze_round,
@@ -1198,6 +1199,36 @@ def test_prepare_candidate_reuses_draft_after_round_write_failure(
     assert prepare_candidate(repo, root, request)["id"] == orphan.parent.name
     assert read_json(folder / "round.json")["candidate_ids"] == [orphan.parent.name]
     assert len(list((folder / "candidates").glob("*/draft.json"))) == 1
+
+
+@pytest.mark.parametrize("after_write", [False, True])
+def test_finish_round_reuses_final_decision_after_status_write_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, after_write: bool
+) -> None:
+    rows = [{"id": "case", "input": "task", "usage": "optimization", "source_group_id": "group"}]
+    repo, root, _, round_data, plan = project(tmp_path, "print('ok')\n", rows)
+    freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    request = {"round_id": round_data["id"], "action": "close_without_adoption", "reason": "no candidate"}
+    original_write = governance.write_json
+
+    def interrupt(path: Path, value: dict, *, immutable: bool = False) -> None:
+        if path.name == "round.json":
+            if after_write:
+                original_write(path, value, immutable=immutable)
+            raise OSError("status write failed")
+        original_write(path, value, immutable=immutable)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(governance, "write_json", interrupt)
+        with pytest.raises(OSError, match="status write failed"):
+            finish_round(repo, root, request)
+    folder = root / "rounds" / round_data["id"]
+    saved = next((folder / "decisions").glob("*.json"))
+    with pytest.raises(ATKError, match="saved final decision differs"):
+        finish_round(repo, root, {**request, "reason": "different"})
+    assert finish_round(repo, root, request)["id"] == saved.stem
+    assert read_json(folder / "round.json")["status"] == "closed_without_adoption"
+    assert len(list((folder / "decisions").glob("*.json"))) == 1
 
 
 def test_interrupted_runner_keeps_running_and_not_started_attempts(tmp_path: Path) -> None:
