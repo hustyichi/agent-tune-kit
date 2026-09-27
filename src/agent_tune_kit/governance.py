@@ -37,6 +37,8 @@ def store_diagnosis(root: Path, request: dict) -> dict:
 def _store_diagnosis_locked(root: Path, request: dict) -> dict:
     folder = _round_folder(root, request["round_id"])
     round_data = read_json(folder / "round.json")
+    if round_data["status"] == "paused":
+        raise ATKError("WORKSPACE_CONFLICT", "resume the Round before updating diagnosis")
     issues = request["issues"]
     if not issues:
         raise ATKError("INCOMPLETE_EVIDENCE", "diagnosis requires at least one Issue")
@@ -436,10 +438,14 @@ def compare_and_gate(root: Path, request: dict) -> dict:
 def _compare_and_gate_locked(root: Path, request: dict) -> dict:
     folder = _round_folder(root, request["round_id"])
     round_data = read_json(folder / "round.json")
+    if round_data["status"] not in {"ready", "optimizing", "finalizing"}:
+        raise ATKError("WORKSPACE_CONFLICT", "Round is paused, unfrozen, or closed")
     plan = read_json(folder / "plan.json")
     if round_data.get("external_fix_identity"):
         raise ATKError("COMPARISON_INVALID", "external fix Round needs one-sided new B0 validation")
     mode = request["mode"]
+    if round_data["status"] == "finalizing" and mode != "final":
+        raise ATKError("WORKSPACE_CONFLICT", "finalizing Round cannot accept incremental validation")
     if mode not in {"incremental", "final"}:
         raise ATKError("COMPARISON_INVALID", "mode must be incremental or final")
     dimension = request.get("dimension", "task_success")
@@ -455,6 +461,8 @@ def _compare_and_gate_locked(root: Path, request: dict) -> dict:
     if plan.get("run_config_hash") and left_batch.get("run_config_hash") != plan["run_config_hash"]:
         raise ATKError("COMPARISON_INVALID", "runner configuration differs from the frozen Round")
     for batch in (left_batch, right_batch):
+        if batch.get("concurrency", 1) != plan.get("concurrency", 1):
+            raise ATKError("COMPARISON_INVALID", "execution concurrency differs from the frozen plan")
         if (
             batch.get("runner_hash") != plan["runner_hash"]
             or batch.get("fixed_context_hash") != plan["fixed_context_hash"]
@@ -700,7 +708,7 @@ def _validate_external_fix_locked(root: Path, request: dict) -> dict:
     folder = _round_folder(root, request["round_id"])
     round_data = read_json(folder / "round.json")
     plan = read_json(folder / "plan.json")
-    if not round_data.get("external_fix_identity") or round_data["status"] not in {"ready", "optimizing"}:
+    if not round_data.get("external_fix_identity") or round_data["status"] not in {"ready", "optimizing", "finalizing"}:
         raise ATKError("WORKSPACE_CONFLICT", "external fix validation needs an open linked Round")
     refs = request.get("direct_evidence_refs", [])
     if not isinstance(refs, list) or not refs or not request.get("direct_assessment_id"):
@@ -755,6 +763,7 @@ def _validate_external_fix_locked(root: Path, request: dict) -> dict:
     if (
         batch.get("status") != "sealed"
         or batch.get("phase") != "external_fix"
+        or batch.get("concurrency", 1) != plan.get("concurrency", 1)
         or batch.get("round_id") != round_data["id"]
         or batch.get("revision_id") != round_data["baseline_revision_id"]
         or batch.get("runner_hash") != plan["runner_hash"]
@@ -838,7 +847,7 @@ def _finish_round_locked(repo: Path, root: Path, request: dict) -> dict:
         or previous.get("after_commit") != value["current_commit"]
     ):
         raise ATKError("WORKSPACE_CONFLICT", "saved final decision differs from the retry")
-    if value["status"] not in {"ready", "optimizing"}:
+    if value["status"] not in {"analysis_only", "ready", "optimizing", "finalizing"}:
         if (
             previous
             and value["status"]
@@ -849,11 +858,17 @@ def _finish_round_locked(repo: Path, root: Path, request: dict) -> dict:
                 "close_without_adoption": "closed_without_adoption",
             }[previous["action"]]
         ):
-            verify_repo(repo, expected_head=value["current_commit"], expected_branch=value["branch"])
+            if value["baseline_commit"] is not None:
+                verify_repo(repo, expected_head=value["current_commit"], expected_branch=value["branch"])
             return previous
         raise ATKError("WORKSPACE_CONFLICT", "round cannot be closed from its current state")
-    verify_repo(repo, expected_head=value["current_commit"], expected_branch=value["branch"])
-    if value["pending_candidate_id"] or changed_paths(repo) != set(value["baseline_untracked"]):
+    if value["status"] == "analysis_only" and request.get("action") != "close_without_adoption":
+        raise ATKError("WORKSPACE_CONFLICT", "an analysis-only Round can only close without adoption")
+    if value["baseline_commit"] is not None:
+        verify_repo(repo, expected_head=value["current_commit"], expected_branch=value["branch"])
+    if value["pending_candidate_id"] or (
+        value["baseline_commit"] is not None and changed_paths(repo) != set(value["baseline_untracked"])
+    ):
         raise ATKError("WORKSPACE_CONFLICT", "pending candidate or extra workspace changes")
     action = request["action"]
     if action == "complete_external_fix":
@@ -899,9 +914,10 @@ def _finish_round_locked(repo: Path, root: Path, request: dict) -> dict:
             require_override(request, "retain_without_final_pass")
             value["status"] = "completed_with_override"
     elif action == "close_without_adoption" and not value["active_candidate_ids"]:
-        if value["current_revision_id"] != value["baseline_revision_id"] or git(
-            repo, "rev-parse", "HEAD^{tree}"
-        ) != git(repo, "rev-parse", f"{value['baseline_commit']}^{{tree}}"):
+        if value["baseline_commit"] is not None and (
+            value["current_revision_id"] != value["baseline_revision_id"]
+            or git(repo, "rev-parse", "HEAD^{tree}") != git(repo, "rev-parse", f"{value['baseline_commit']}^{{tree}}")
+        ):
             raise ATKError("WORKSPACE_CONFLICT", "empty Round does not match B0 content")
         value["status"] = "closed_without_adoption"
     else:

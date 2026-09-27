@@ -28,11 +28,22 @@ To try this checkout, run `uv run --frozen atk install` here and enable Agent Tu
 
 Flow: `atk-init → atk-dataset (as needed) → atk-eval → atk-diagnose → [atk-optimize → atk-validate → atk-decide]×N → final atk-validate → atk-decide`. Only one candidate is pending at a time. Passing candidates become local commits in the original worktree; rejected candidates retain evidence and restore their parent. ATK does not push, deploy, rewrite history, or edit another repository.
 
+Import-only projects can initialize with `analysis_only=true` without Git or a runner.
+Rounds inherit this mode and can import, assess, diagnose, and close without B0. Later,
+`configure_runtime=true` supplies runtime configuration; freezing binds a clean Git
+baseline while retaining existing evidence. `transition_round` records pause/resume
+reasons and checks operations, Git, and pending content before resuming. The first final
+run enters `finalizing`, which blocks new candidates and incremental runs.
+
 ## Evidence and artifacts
 
 Evaluation accepts a runnable Case dataset, existing batch results, or Langfuse JSON/JSONL/CSV/`.gz` exports. Langfuse Trace bundles and Observation rows use explicit mapping profiles. For separate Trace, Observation, and Score files, declare each filename and its role in `file_roles`; declare nested CSV fields in `json_columns`. Map changed field names under `mapping.trace`, `mapping.observation`, or `mapping.score` as `{canonical_name: source_name}`; conflicting values block import. `mapping.root_observation_name` may supply missing Trace input or output only when it selects one root Observation. Missing parents, final answers, or export completeness stay unknown. External Scores are preserved as evidence without silently becoming ATK pass/fail judgments. Reassessment creates another immutable Assessment without running the Agent again.
 
-The target runner uses the target project's Python environment and assigns one Execution to each planned attempt. Initialization requires an explicit `external_effects` declaration (`[]` after confirming no external writes); every declared write needs a recorded test environment, stub, or approved safeguard before replay. An attempt timeout stops its Agent process group before the next Case starts. An adapter may declare `infrastructure_exit_codes` so failures such as model authentication become retryable `infra_error` evidence rather than an Agent result. An unknown Execution status leaves the batch `partial`. For business Skills, an available file is distinct from evidence that the Agent actually loaded or invoked it; unverified loading blocks normal Skill validation. Raw export files remain read-only. Common credential fields are masked in imported copies; project-specific sensitive fields require explicit redaction rules.
+The target runner uses the target project's Python environment and assigns one Execution to each planned attempt. Initialization requires an explicit `external_effects` declaration (`[]` after confirming no external writes); every declared write needs a recorded test environment, stub, or approved safeguard before replay. Freeze a positive integer `concurrency` (default 1) and use it for each formal run.
+The default runner bounds active attempts, gives each a distinct output directory, and
+persists completed, running, and unstarted identities. Attempt or batch timeouts stop
+the relevant Agent process groups. Revisions remain serial; the target provides session
+and external-write isolation. An adapter may declare `infrastructure_exit_codes` so failures such as model authentication become retryable `infra_error` evidence rather than an Agent result. An unknown Execution status leaves the batch `partial`. For business Skills, an available file is distinct from evidence that the Agent actually loaded or invoked it; unverified loading blocks normal Skill validation. Raw export files remain read-only. Common credential fields are masked in imported copies; project-specific sensitive fields require explicit redaction rules.
 
 For a fixed remote component, project configuration may supply a read-only argv-array `version_command`, `expected_version`, and optional `version_timeout_seconds`. ATK probes the version before and after each batch and records the observed values, command fingerprint, and any identity failure. A changed or unverified version cannot support a formal improvement claim.
 

@@ -142,9 +142,18 @@ def _write_round(root: Path, round_data: dict) -> None:
 
 def create_round(repo: Path, root: Path, request: dict) -> dict:
     with locked(root):
-        verify_repo(repo)
-        if git(repo, "diff", "--name-only", "-z"):
-            raise ATKError("DIRTY_BASELINE", "tracked working tree must be clean for B0")
+        project_path = root / "project.json"
+        analysis_only = request.get(
+            "analysis_only", read_json(project_path).get("analysis_only", False) if project_path.exists() else False
+        )
+        if type(analysis_only) is not bool:
+            raise ATKError("INCOMPLETE_EVIDENCE", "analysis_only must be boolean")
+        if analysis_only and (request.get("reuse_revision") or request.get("external_fix_identity")):
+            raise ATKError("REVISION_MISMATCH", "Revision reuse and external fix verification require B0")
+        if not analysis_only:
+            verify_repo(repo)
+            if git(repo, "diff", "--name-only", "-z"):
+                raise ATKError("DIRTY_BASELINE", "tracked working tree must be clean for B0")
         previous_round_id = request.get("previous_round_id")
         if previous_round_id:
             previous = _round(root, previous_round_id)
@@ -165,8 +174,8 @@ def create_round(repo: Path, root: Path, request: dict) -> dict:
         for old in (root / "rounds").glob("*/round.json"):
             if read_json(old).get("status") in {"ready", "optimizing", "finalizing"}:
                 raise ATKError("WORKSPACE_CONFLICT", "another active round exists")
-        baseline = head(repo)
-        baseline_revision_id = new_id("revision")
+        baseline = None if analysis_only else head(repo)
+        baseline_revision_id = None if analysis_only else new_id("revision")
         if request.get("reuse_revision"):
             if (
                 not previous_round_id
@@ -189,12 +198,12 @@ def create_round(repo: Path, root: Path, request: dict) -> dict:
             "baseline_revision_id": baseline_revision_id,
             "current_commit": baseline,
             "current_revision_id": None,
-            "branch": branch(repo),
+            "branch": None if analysis_only else branch(repo),
             "issues": request.get("issue_ids", []),
             "candidate_ids": [],
             "active_candidate_ids": [],
             "pending_candidate_id": None,
-            "baseline_untracked": sorted(changed_paths(repo)),
+            "baseline_untracked": [] if analysis_only else sorted(changed_paths(repo)),
             "source_batch_ids": request.get("batch_ids", []),
             "source_assessment_ids": request.get("assessment_ids", []),
             "previous_round_id": request.get("previous_round_id"),
@@ -217,10 +226,29 @@ def freeze_round(repo: Path, root: Path, request: dict) -> dict:
             other = read_json(old)
             if other["id"] != value["id"] and other.get("status") in {"ready", "optimizing", "finalizing"}:
                 raise ATKError("WORKSPACE_CONFLICT", "another active round exists")
+        if read_json(root / "project.json").get("analysis_only"):
+            raise ATKError("NOT_REPLAYABLE", "configure the runtime before freezing an analysis-only Round")
+        plan = dict(request["plan"])
+        if value["baseline_commit"] is None:
+            verify_repo(repo)
+            plan_path = _round_path(root, value["id"]) / "plan.json"
+            baseline = (
+                read_json(plan_path)["baseline"]
+                if plan_path.exists()
+                else {
+                    "baseline_commit": head(repo),
+                    "baseline_revision_id": new_id("revision"),
+                    "branch": branch(repo),
+                    "baseline_untracked": sorted(changed_paths(repo)),
+                }
+            )
+            value.update(baseline)
+            value["current_commit"] = value["baseline_commit"]
+            value["current_revision_id"] = value["baseline_revision_id"]
+            plan["baseline"] = baseline
         verify_repo(repo, expected_head=value["baseline_commit"], expected_branch=value["branch"])
         if git(repo, "diff", "--name-only", "-z") or changed_paths(repo) != set(value["baseline_untracked"]):
             raise ATKError("DIRTY_BASELINE", "workspace changed since B0 was recorded")
-        plan = dict(request["plan"])
         required = {
             "allowed_paths",
             "protected_paths",
@@ -246,7 +274,11 @@ def freeze_round(repo: Path, root: Path, request: dict) -> dict:
             raise ATKError("INCOMPLETE_EVIDENCE", f"incomplete frozen plan: {sorted(required - plan.keys())}")
         if external_fix_round:
             previous_folder = _round_path(root, value["previous_round_id"])
-            previous_plan = read_json(previous_folder / "plan.json")
+            previous_plan = (
+                read_json(previous_folder / "plan.json")
+                if (previous_folder / "plan.json").exists()
+                else _round(root, value["previous_round_id"]).get("analysis_plan", {})
+            )
             affected = {
                 case_id
                 for issue_id in value["issues"]
@@ -258,7 +290,7 @@ def freeze_round(repo: Path, root: Path, request: dict) -> dict:
             if (
                 not affected
                 or not affected <= set(plan["case_ids"])
-                or not set(previous_plan["protection_case_ids"]) <= set(plan["protection_case_ids"])
+                or not set(previous_plan.get("protection_case_ids", [])) <= set(plan["protection_case_ids"])
             ):
                 raise ATKError("COMPARISON_INVALID", "external fix plan must retain affected and protection Cases")
         if (
@@ -280,6 +312,8 @@ def freeze_round(repo: Path, root: Path, request: dict) -> dict:
             and (not isinstance(plan.get("repeat_plan_basis"), str) or not plan["repeat_plan_basis"].strip())
         ):
             raise ATKError("COMPARISON_INVALID", "short stochastic repeat plan needs a recorded reason")
+        if type(plan.get("concurrency", 1)) is not int or plan.get("concurrency", 1) < 1:
+            raise ATKError("COMPARISON_INVALID", "concurrency must be a positive integer")
         budget = plan["budget"]
         if (
             not isinstance(budget, dict)
@@ -351,6 +385,83 @@ def freeze_round(repo: Path, root: Path, request: dict) -> dict:
         return value
 
 
+def _round_workspace_state(repo: Path, root: Path, value: dict) -> dict:
+    folder = _round_path(root, value["id"])
+    for path in (folder / "operations").glob("*.json"):
+        if read_json(path).get("stage") not in {"complete", "aborted"}:
+            raise ATKError("GIT_OPERATION_INTERRUPTED", f"recover operation before continuing: {path.stem}")
+    if value["baseline_commit"] is None:
+        return {}
+    verify_repo(repo, expected_head=value["current_commit"], expected_branch=value["branch"])
+    paths = set()
+    if value["pending_candidate_id"]:
+        candidate_folder = folder / "candidates" / value["pending_candidate_id"]
+        draft = read_json(candidate_folder / "draft.json")
+        paths = set(draft["declared_paths"])
+        if (candidate_folder / "candidate.json").exists():
+            _verify_sealed(repo, candidate_folder, read_json(candidate_folder / "candidate.json"))
+    actual = changed_paths(repo)
+    baseline = set(value["baseline_untracked"])
+    if actual - baseline - paths or baseline - actual:
+        raise ATKError("WORKSPACE_CONFLICT", "unaccounted workspace changes block Round transition")
+    return {name: digest(data) if (data := content(repo, name)) is not None else None for name in sorted(paths)}
+
+
+def transition_round(repo: Path, root: Path, request: dict) -> dict:
+    """Record a lifecycle transition atomically without editing source or Git."""
+    with locked(root):
+        value = _round(root, request["round_id"])
+        action = request.get("action")
+        reason = request.get("reason")
+        if action not in {"pause", "resume", "start_finalizing"} or not isinstance(reason, str) or not reason.strip():
+            raise ATKError("WORKSPACE_CONFLICT", "Round transition needs a supported action and reason")
+        before = value["status"]
+        if action == "pause":
+            if before not in {"analysis_only", "ready", "optimizing", "finalizing"}:
+                raise ATKError("WORKSPACE_CONFLICT", "Round cannot be paused from its current state")
+            snapshot, error = None, None
+            try:
+                snapshot = _round_workspace_state(repo, root, value)
+            except ATKError as exc:
+                error = {"code": exc.code, "reason": str(exc)}
+            value["pause"] = {"from_status": before, "reason": reason, "workspace": snapshot, "blocker": error}
+            value["status"] = "paused"
+        elif action == "resume":
+            if before != "paused":
+                raise ATKError("WORKSPACE_CONFLICT", "only a paused Round can resume")
+            for path in (root / "rounds").glob("*/round.json"):
+                other = read_json(path)
+                if other["id"] != value["id"] and other["status"] in {"ready", "optimizing", "finalizing"}:
+                    raise ATKError("WORKSPACE_CONFLICT", "pause or close the other active Round before resuming")
+            plan_path = _round_path(root, value["id"]) / "plan.json"
+            if plan_path.exists():
+                plan = read_json(plan_path)
+                if plan.get("run_config_hash") != digest(read_json(root / "project.json")) or plan[
+                    "runner_hash"
+                ] != digest(root / "adapters" / "runner.py"):
+                    raise ATKError("COMPARISON_INVALID", "frozen runtime changed while Round was paused")
+            pause = value["pause"]
+            snapshot = _round_workspace_state(repo, root, value)
+            if pause["workspace"] is not None and snapshot != pause["workspace"]:
+                raise ATKError("REVISION_MISMATCH", "pending draft changed while Round was paused")
+            value["status"] = pause["from_status"]
+            del value["pause"]
+        else:
+            if before not in {"ready", "optimizing", "finalizing"} or value["pending_candidate_id"]:
+                raise ATKError("WORKSPACE_CONFLICT", "final validation needs an active Round with no pending candidate")
+            if not value["active_candidate_ids"] and not value.get("external_fix_identity"):
+                raise ATKError("WORKSPACE_CONFLICT", "final validation needs an accepted Revision or external fix")
+            _round_workspace_state(repo, root, value)
+            if before == "finalizing":
+                return value
+            value["status"] = "finalizing"
+        value.setdefault("transitions", []).append(
+            {"action": action, "from_status": before, "to_status": value["status"], "reason": reason, "at": now()}
+        )
+        _write_round(root, value)
+        return value
+
+
 def _allowed(path: str, patterns: list[str]) -> bool:
     return any(path == prefix.rstrip("/") or path.startswith(prefix.rstrip("/") + "/") for prefix in patterns)
 
@@ -358,9 +469,9 @@ def _allowed(path: str, patterns: list[str]) -> bool:
 def prepare_candidate(repo: Path, root: Path, request: dict) -> dict:
     with locked(root):
         value = _round(root, request["round_id"])
-        plan = read_json(_round_path(root, value["id"]) / "plan.json")
         if value["status"] not in {"ready", "optimizing"} or value["pending_candidate_id"]:
             raise ATKError("WORKSPACE_CONFLICT", "round is not ready for another candidate")
+        plan = read_json(_round_path(root, value["id"]) / "plan.json")
         if value.get("external_fix_identity"):
             raise ATKError("WORKSPACE_CONFLICT", "external fix Round verifies its new B0 without an Agent candidate")
         exposure_path = root / "source-exposure.json"
@@ -477,6 +588,8 @@ def prepare_candidate(repo: Path, root: Path, request: dict) -> dict:
 def seal_candidate(repo: Path, root: Path, request: dict) -> dict:
     with locked(root):
         value = _round(root, request["round_id"])
+        if value["status"] != "optimizing":
+            raise ATKError("WORKSPACE_CONFLICT", "Round is not optimizing")
         candidate_id = value["pending_candidate_id"]
         if candidate_id != request["candidate_id"]:
             raise ATKError("WORKSPACE_CONFLICT", "candidate is not pending")
@@ -630,6 +743,8 @@ def _restore_parent(repo: Path, candidate: dict, files: dict) -> None:
 def decide_candidate(repo: Path, root: Path, request: dict) -> dict:
     with locked(root):
         value = _round(root, request["round_id"])
+        if value["status"] != "optimizing":
+            raise ATKError("WORKSPACE_CONFLICT", "Round is not optimizing")
         candidate_id = request["candidate_id"]
         if value["pending_candidate_id"] != candidate_id:
             raise ATKError("WORKSPACE_CONFLICT", "candidate is not pending")
@@ -810,6 +925,10 @@ def _recover_restoration_locked(repo: Path, root: Path, folder: Path, operation:
 def inspect_or_recover_operation(repo: Path, root: Path, request: dict) -> dict:
     """Reconcile a candidate operation with its exact Git and artifact state."""
     with locked(root):
+        for path in (root / "rounds").glob("*/round.json"):
+            other = read_json(path)
+            if other["id"] != request["round_id"] and other["status"] in {"ready", "optimizing", "finalizing"}:
+                raise ATKError("WORKSPACE_CONFLICT", "pause or close the other active Round before recovery")
         folder = _round_path(root, request["round_id"])
         operation = read_json(folder / "operations" / f"{safe_id(request['operation_id'])}.json")
         if operation.get("action") == "temporary_replay":
@@ -1088,6 +1207,10 @@ def _recover_rollback_locked(repo: Path, folder: Path, operation: dict) -> dict:
     value["active_candidate_ids"] = value["active_candidate_ids"][: operation["target_index"]]
     value["current_commit"] = head(repo)
     value["current_revision_id"] = operation["target_revision_id"]
+    if value["status"] == "paused":
+        value["pause"]["from_status"] = "optimizing"
+    else:
+        value["status"] = "optimizing"
     _write_round(folder.parent.parent, value)
     operation["stage"] = "complete"
     operation["after_commit"] = value["current_commit"]
@@ -1303,6 +1426,8 @@ def execution_revision(repo: Path, root: Path, request: dict):
             raise ATKError("WORKSPACE_CONFLICT", "runner changed unfrozen source or Git state")
         return
     value = _round(root, round_id)
+    if value["status"] not in {"analysis_only", "ready", "optimizing", "finalizing"}:
+        raise ATKError("WORKSPACE_CONFLICT", "Round is paused or closed")
     revision_id = request["revision_id"]
     if value["pending_candidate_id"]:
         folder = _round_path(root, round_id) / "candidates" / value["pending_candidate_id"]

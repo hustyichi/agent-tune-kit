@@ -16,6 +16,7 @@ from agent_tune_kit.checkpoints import (
     prepare_candidate,
     rollback_to,
     seal_candidate,
+    transition_round,
 )
 from agent_tune_kit.core import ATKError, digest, store_assessment, validate_evidence
 from agent_tune_kit.execution import initialize_project, run_evaluation, store_dataset
@@ -275,6 +276,23 @@ def test_local_prompt_candidate_is_compared_and_committed(tmp_path: Path, final_
         },
     )
     assert (repo / "prompt.txt").read_text() == "new"
+    state = json.loads((root / "rounds" / round_data["id"] / "round.json").read_text())
+    assert state["status"] == "finalizing"
+    assert (
+        transition_round(
+            repo, root, {"round_id": round_data["id"], "action": "start_finalizing", "reason": "final check"}
+        )["state_version"]
+        == state["state_version"]
+    )
+    with pytest.raises(ATKError, match="ready"):
+        prepare_candidate(repo, root, {"round_id": round_data["id"]})
+    transition_round(repo, root, {"round_id": round_data["id"], "action": "pause", "reason": "review final evidence"})
+    assert (
+        transition_round(repo, root, {"round_id": round_data["id"], "action": "resume", "reason": "continue final"})[
+            "status"
+        ]
+        == "finalizing"
+    )
     final_baseline_assessment = assessment_for(root, final_baseline, spec, judger, expected)
     final_current = run_evaluation(
         root,

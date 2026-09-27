@@ -15,6 +15,7 @@ from .checkpoints import (
     prepare_candidate,
     rollback_to,
     seal_candidate,
+    transition_round,
 )
 from .core import ATKError, render_assessment_html, store_assessment, write_json
 from .evidence import import_evidence, record_source_contract
@@ -49,6 +50,7 @@ def internal_main(argv: list[str]) -> int:
         "render_assessment_html": lambda: render_assessment_html(root, request["assessment_id"]),
         "create_round": lambda: create_round(repo, root, request),
         "freeze_round": lambda: freeze_round(repo, root, request),
+        "transition_round": lambda: transition_round(repo, root, request),
         "store_diagnosis": lambda: store_diagnosis(root, request),
         "store_knowledge": lambda: store_knowledge(root, request),
         "knowledge_applicability": lambda: knowledge_applicability(root, request),

@@ -96,12 +96,34 @@ def _probe_versions(
 def initialize_project(repo: Path, request: dict) -> dict:
     repo = repo.expanduser().resolve()
     root = repo / ".atk"
-    if root.exists():
+    analysis_only = request.get("analysis_only", False)
+    if type(analysis_only) is not bool:
+        raise ATKError("INCOMPLETE_EVIDENCE", "analysis_only must be boolean")
+    upgrade = False
+    if (root / "project.json").exists() and request.get("configure_runtime") is True and not analysis_only:
+        existing = read_json(root / "project.json")
+        upgrade = existing.get("schema_version") == 2 and existing.get("analysis_only") is True
+    if root.exists() and not upgrade:
         if (root / "project.json").exists():
             raise ATKError("WORKSPACE_CONFLICT", "ATK v2 project already exists; inspect before changing configuration")
         raise ATKError(
             "WORKSPACE_CONFLICT", "existing .atk data has no v2 project.json; preserve it and choose a clean project"
         )
+    if analysis_only:
+        project = {
+            "schema_version": 2,
+            "created_at": now(),
+            "workspace_path": str(repo),
+            "analysis_only": True,
+            "redact_keys": request.get("redact_keys", []),
+        }
+        write_json(root / "project.json", project, immutable=True)
+        return project
+    if upgrade and any(
+        read_json(path).get("status") in {"ready", "optimizing", "finalizing", "paused"}
+        for path in (root / "rounds").glob("*/round.json")
+    ):
+        raise ATKError("WORKSPACE_CONFLICT", "runtime setup requires inactive analysis Rounds")
     verify_repo(repo)
     if any(path == ".atk" or path.startswith(".atk/") for path in tracked_paths(repo)):
         raise ATKError("DIRTY_BASELINE", "tracked .atk files must be handled before initialization")
@@ -153,7 +175,7 @@ def initialize_project(repo: Path, request: dict) -> dict:
     previous = exclude.read_text(encoding="utf-8") if exclude.exists() else ""
     if ".atk/" not in previous.splitlines():
         exclude.write_text(previous.rstrip("\n") + "\n.atk/\n", encoding="utf-8")
-    root.mkdir()
+    root.mkdir(exist_ok=upgrade)
     project = {
         "schema_version": 2,
         "created_at": now(),
@@ -164,25 +186,25 @@ def initialize_project(repo: Path, request: dict) -> dict:
         "components": request["components"],
         "allowed_paths": request["allowed_paths"],
         "protected_paths": request["protected_paths"],
-        "redact_keys": request.get("redact_keys", []),
+        "redact_keys": request.get("redact_keys", existing.get("redact_keys", []) if upgrade else []),
         "loading_verification": request.get("loading_verification", {}),
         "external_effects": external_effects,
         "metric_sources": metric_sources,
     }
-    write_json(root / "project.json", project, immutable=True)
     (root / "runtime.md").write_text(request["runtime_notes"], encoding="utf-8")
     template = resources.files("agent_tune_kit").joinpath("plugin_payload/agent-tune-kit/templates/runner.py")
     if template.is_file():
         with resources.as_file(template) as source:
             runner_source = Path(source)
-            (root / "adapters").mkdir()
+            (root / "adapters").mkdir(exist_ok=True)
             shutil.copyfile(runner_source, root / "adapters" / "runner.py")
     else:
         runner_source = Path(__file__).resolve().parents[2] / "templates" / "runner.py"
         if not runner_source.exists():
             raise ATKError("WORKSPACE_CONFLICT", "bundled runner template is missing")
-        (root / "adapters").mkdir()
+        (root / "adapters").mkdir(exist_ok=True)
         shutil.copyfile(runner_source, root / "adapters" / "runner.py")
+    write_json(root / "project.json", project, immutable=not upgrade)
     return project
 
 
@@ -315,6 +337,8 @@ def _reserve_run(
         )
         if plan.get("run_config_hash") and plan["run_config_hash"] != digest(project):
             raise ATKError("COMPARISON_INVALID", "project runner configuration changed after Round freeze")
+        if request["purpose"] == "evaluation" and request.get("concurrency", 1) != plan.get("concurrency", 1):
+            raise ATKError("COMPARISON_INVALID", "execution concurrency differs from the frozen plan")
         budget = plan.get("budget", {})
         purpose = request["purpose"]
         probe_config = None
@@ -379,6 +403,8 @@ def _reserve_run(
         ):
             raise ATKError("COMPARISON_INVALID", "formal execution is outside the frozen Round")
         phase = request.get("phase", "incremental")
+        if round_data["status"] == "finalizing" and purpose == "evaluation" and phase == "incremental":
+            raise ATKError("WORKSPACE_CONFLICT", "finalizing Round cannot start incremental runs")
         if purpose == "evaluation" and phase not in {"incremental", "final", "external_fix"}:
             raise ATKError("COMPARISON_INVALID", "evaluation phase is not recognized")
         if purpose == "evaluation" and round_data.get("external_fix_identity") and phase != "external_fix":
@@ -489,6 +515,19 @@ def _reserve_run(
             )
             if limit - usage["executions"] - len(attempts) < max(0, final_needed - final_spent):
                 raise ATKError("BUDGET_EXHAUSTED", "run would consume the reserved final validation budget")
+        if purpose == "evaluation" and phase in {"final", "external_fix"} and round_data["status"] != "finalizing":
+            round_data.setdefault("transitions", []).append(
+                {
+                    "action": "start_finalizing",
+                    "from_status": round_data["status"],
+                    "to_status": "finalizing",
+                    "reason": "frozen final execution",
+                    "at": now(),
+                }
+            )
+            round_data["status"] = "finalizing"
+            round_data["state_version"] += 1
+            write_json(folder / "round.json", round_data)
         usage[counter] += len(attempts)
         usage["reservations"].append(
             {
@@ -520,6 +559,11 @@ def run_evaluation(root: Path, request: dict) -> dict:
 
 def _run_evaluation_locked(root: Path, request: dict) -> dict:
     project = json.loads((root / "project.json").read_text(encoding="utf-8"))
+    if project.get("analysis_only"):
+        raise ATKError("NOT_REPLAYABLE", "analysis-only project needs explicit runtime setup before execution")
+    concurrency = request.get("concurrency", 1)
+    if type(concurrency) is not int or concurrency < 1:
+        raise ATKError("INCOMPLETE_EVIDENCE", "concurrency must be a positive integer")
     for effect in project.get("external_effects", []):
         if not isinstance(effect, dict) or not isinstance(effect.get("name"), str):
             raise ATKError("NOT_REPLAYABLE", "external effect declaration is invalid")
@@ -663,8 +707,16 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
                 except subprocess.TimeoutExpired:
                     timed_out = True
                     with suppress(ProcessLookupError):
-                        os.killpg(process.pid, signal.SIGKILL)
-                    stdout, stderr = process.communicate()
+                        os.killpg(process.pid, signal.SIGTERM)
+                    try:
+                        stdout, stderr = process.communicate(timeout=2)
+                    except subprocess.TimeoutExpired:
+                        with suppress(ProcessLookupError):
+                            os.killpg(process.pid, signal.SIGKILL)
+                        stdout, stderr = process.communicate()
+                    finally:
+                        with suppress(ProcessLookupError):
+                            os.killpg(process.pid, signal.SIGKILL)
                 result = subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
         except OSError as exc:
             runner_start_error = str(exc)
@@ -832,7 +884,7 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
             "unknown",
         }:
             invalid_execution_status_ids.append(record_id)
-    for field in ("completed_record_ids", "not_started_record_ids"):
+    for field in ("completed_record_ids", "not_started_record_ids", "running_record_ids"):
         ids = batch.get(field, [])
         if not isinstance(ids, list) or any(not isinstance(item, str) for item in ids) or len(ids) != len(set(ids)):
             raise ATKError("INCOMPLETE_EVIDENCE", f"runner returned invalid {field}")
@@ -843,16 +895,19 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
         running_record_id is not None and (not isinstance(running_record_id, str) or running_record_id not in expected)
     ):
         raise ATKError("INCOMPLETE_EVIDENCE", "runner returned unknown attempt status")
-    confirmed = declared_completed & observed
+    running = set(batch.get("running_record_ids", []))
     if running_record_id:
-        confirmed.discard(running_record_id)
+        running.add(running_record_id)
+    if running - set(expected):
+        raise ATKError("INCOMPLETE_EVIDENCE", "runner returned unknown running attempt")
+    confirmed = (declared_completed & observed) - running
     not_started = declared_not_started - observed
     if not_started - set(expected):
         raise ATKError("INCOMPLETE_EVIDENCE", "runner returned unknown not-started attempt")
-    not_started -= declared_completed | ({running_record_id} if running_record_id else set())
+    not_started -= declared_completed | running
     unknown = set(expected) - confirmed - not_started
-    status_conflict = bool(declared_not_started & (declared_completed | observed)) or running_record_id in (
-        declared_completed | declared_not_started
+    status_conflict = bool(
+        declared_not_started & (declared_completed | observed) or running & (declared_completed | declared_not_started)
     )
     if retry_batch_id and actual_components != prior_manifest.get("actual_components"):
         raise ATKError("REVISION_MISMATCH", "component identity changed during retry")
@@ -878,6 +933,7 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
         "purpose": request["purpose"],
         "phase": request.get("phase", "incremental") if request["purpose"] == "evaluation" else None,
         "source_type": "local_runner",
+        "concurrency": concurrency,
         "dataset_id": request["dataset_id"],
         "round_id": request.get("round_id"),
         "probe_authorization_id": request.get("probe_authorization_id")

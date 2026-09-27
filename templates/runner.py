@@ -13,10 +13,24 @@ import os
 import re
 import signal
 import subprocess
+import threading
 import time
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
+
+_processes = set()
+_process_lock = threading.Lock()
+_stopping = threading.Event()
+
+
+def stop_processes() -> None:
+    _stopping.set()
+    with _process_lock:
+        for process in _processes:
+            with suppress(ProcessLookupError):
+                os.killpg(process.pid, signal.SIGKILL)
 
 
 def write_json(path: Path, value: dict) -> None:
@@ -48,14 +62,19 @@ def run_one(attempt: dict, case: dict, config: dict, output: Path, timeout: int)
             and hashlib.sha256(Path(config["script_path"]).read_bytes()).hexdigest() != config["script_sha256"]
         ):
             raise OSError("probe script changed after authorization")
-        with subprocess.Popen(
-            command,
-            cwd=config.get("working_directory", config["workspace_path"]),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            start_new_session=True,
-        ) as process:
+        with _process_lock:
+            if _stopping.is_set():
+                raise OSError("runner is stopping")
+            process = subprocess.Popen(
+                command,
+                cwd=config.get("working_directory", config["workspace_path"]),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                start_new_session=True,
+            )
+            _processes.add(process)
+        try:
             try:
                 response, stderr = process.communicate(timeout=timeout)
                 status = (
@@ -71,6 +90,10 @@ def run_one(attempt: dict, case: dict, config: dict, output: Path, timeout: int)
                     os.killpg(process.pid, signal.SIGKILL)
                 response, stderr = process.communicate()
                 status, returncode = "timeout", None
+        finally:
+            process.wait()
+            with _process_lock:
+                _processes.discard(process)
         response, stderr = redact_output(response), redact_output(stderr)
     except OSError as exc:
         status, response, stderr, returncode = "infra_error", "", redact_output(str(exc)), None
@@ -125,6 +148,11 @@ def main() -> int:
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     request = json.loads(args.request.read_text(encoding="utf-8"))
+    concurrency = request.get("concurrency", 1)
+    if type(concurrency) is not int or concurrency < 1:
+        raise ValueError("concurrency must be a positive integer")
+    for signum in (signal.SIGTERM, signal.SIGINT):
+        signal.signal(signum, lambda *_: _stopping.set())
     config = json.loads(Path(request["run_config_ref"]).read_text(encoding="utf-8"))
     config.update({key: request[key] for key in ("batch_id", "purpose", "revision_id")})
     if request["purpose"] == "diagnostic_probe":
@@ -142,6 +170,7 @@ def main() -> int:
         "planned_record_ids": [a["record_id"] for a in request["attempts"]],
         "completed_record_ids": completed,
         "running_record_id": None,
+        "running_record_ids": [],
         "not_started_record_ids": [a["record_id"] for a in request["attempts"]],
         "actual_components": [],
     }
@@ -150,8 +179,9 @@ def main() -> int:
         batch["not_started_record_ids"] = [
             record_id
             for record_id in batch["planned_record_ids"]
-            if record_id not in completed and record_id != batch["running_record_id"]
+            if record_id not in completed and record_id not in batch["running_record_ids"]
         ]
+        batch["running_record_id"] = batch["running_record_ids"][0] if len(batch["running_record_ids"]) == 1 else None
         write_json(output / "batch.json", batch)
 
     for component in config.get("components", []):
@@ -170,18 +200,38 @@ def main() -> int:
                 observed["identity_status"] = "available"
         batch["actual_components"].append(observed)
     save_batch()
-    with records.open("a", encoding="utf-8") as handle:
-        for attempt in request["attempts"]:
-            batch["running_record_id"] = attempt["record_id"]
-            save_batch()
-            record = run_one(attempt, cases[attempt["case_id"]], config, output, request["timeout_seconds"])
-            handle.write(json.dumps(record, ensure_ascii=False) + "\n")
-            handle.flush()
-            os.fsync(handle.fileno())
-            completed.append(attempt["record_id"])
-            batch["running_record_id"] = None
-            save_batch()
-    return 0
+    attempts = iter(request["attempts"])
+    pending = {}
+    pool = ThreadPoolExecutor(max_workers=min(concurrency, max(1, len(request["attempts"]))))
+    try:
+        with records.open("a", encoding="utf-8") as handle:
+            while True:
+                while len(pending) < concurrency and not _stopping.is_set():
+                    attempt = next(attempts, None)
+                    if attempt is None:
+                        break
+                    batch["running_record_ids"].append(attempt["record_id"])
+                    save_batch()
+                    future = pool.submit(
+                        run_one, attempt, cases[attempt["case_id"]], config, output, request["timeout_seconds"]
+                    )
+                    pending[future] = attempt["record_id"]
+                if _stopping.is_set() or not pending:
+                    break
+                done, _ = wait(pending, timeout=0.05, return_when=FIRST_COMPLETED)
+                for future in done:
+                    record = future.result()
+                    handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                    record_id = pending.pop(future)
+                    completed.append(record_id)
+                    batch["running_record_ids"].remove(record_id)
+                    save_batch()
+        return 1 if _stopping.is_set() else 0
+    finally:
+        stop_processes()
+        pool.shutdown(wait=True, cancel_futures=True)
 
 
 if __name__ == "__main__":

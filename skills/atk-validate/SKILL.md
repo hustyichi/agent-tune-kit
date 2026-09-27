@@ -7,6 +7,9 @@ description: Compare exact parent and candidate or B0 and cumulative Revision on
 
 Read `../WORKFLOW.md`. For incremental validation, evaluate the sealed Candidate and
 its parent on the Issue target Cases, protection Cases, and previously fixed Cases.
+The first final run enters `finalizing` automatically. If comparing existing final
+evidence, first use `transition_round: start_finalizing` with a reason. No candidate
+may remain pending, and no new candidate or incremental run is allowed in that stage.
 For final validation, evaluate B0 and the exact current accepted Revision on the full
 frozen set, using the repeat plan and `phase=final` on both sides. Use `run_evaluation` to replay known
 commits in the original directory; it restores the starting checkpoint afterward.

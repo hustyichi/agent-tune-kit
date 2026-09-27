@@ -6,6 +6,12 @@ description: Run, import, or reassess Agent evidence under an explicit calibrate
 # Evaluate evidence
 
 Read `../WORKFLOW.md`. Choose an explicit action: `run`, `import`, or `reassess`.
+For run, configure a runtime first. Set `concurrency` to the positive integer frozen
+in the Round plan (default 1). The default runner bounds active attempts and writes
+results as they complete. Inspect `running_record_ids`, `completed_record_ids`, and
+`not_started_record_ids` after interruption; legacy single-running adapters remain
+supported. Each attempt has a distinct output directory, but session and external-write
+isolation must still be provided by the target Agent.
 For run, use `run_evaluation` with a dataset ID, Case IDs, Revision ID, round ID (if
 frozen), repeat count, timeout, purpose, and `phase=incremental/final`. Final runs
 must use both frozen sides once; their attempts are reserved before candidate work.

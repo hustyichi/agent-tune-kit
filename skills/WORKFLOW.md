@@ -22,10 +22,30 @@ with its recorded parent, then committed or restored. Final validation compares 
 current cumulative Revision with frozen B0. No push, deployment, background run, or
 cross-repository edit is part of this workflow.
 
+For imported evidence only, initialize with `analysis_only=true`: no Git, command, or
+runner is required. `create_round` inherits that mode (or accepts it explicitly in a
+runtime project); B0 and Revision remain absent. Import, assess, diagnose, then call
+`finish_round` with `action=close_without_adoption` and a reason. To optimize later,
+configure a Git runtime with `initialize_project: configure_runtime=true` and the full
+runtime configuration; `freeze_round` then binds a clean B0 without discarding evidence.
+
+Use `transition_round` with `round_id`, `action=pause/resume/start_finalizing`, and a
+nonempty `reason`. Pause preserves the pending candidate and records any workspace
+blocker. A paused Round allows a new Round; pause or close any other active Round
+before resuming it. Resume also verifies the frozen project configuration and runner.
+While paused, no run, candidate change, comparison, diagnosis update, or close
+is allowed. Recover interrupted operations before resuming; resume verifies HEAD,
+branch, index, declared paths, and pending file contents. The first final/external-fix
+run automatically enters `finalizing`; explicit `start_finalizing` also supports
+existing evidence. This stage blocks new candidates and incremental runs. A rollback
+returns to optimizing (or keeps a paused Round paused until explicit resume).
+
 Before any candidate, record a finite plan with scope, protected paths, issue and case
 IDs, calibrated judger/spec/runner/fixed-context hashes, repeat plan, budget, commit
 authorization, rollback rule, and `replay_preparation` (`stateless` with reason, or a
 bounded command that rebuilds caches and artifacts at each checked-out Revision).
+Freeze `concurrency` as a positive integer (default 1) and use the same value in
+each formal run. Attempts share one Revision; different Revisions never run in parallel.
 Record `repeatability_basis`; treat an uncalibrated model-backed Agent as `unknown`,
 not deterministic. Stochastic or unknown plans use three final repeats per side by
 default; a two-repeat plan needs `repeat_plan_basis` and still makes no significance claim.

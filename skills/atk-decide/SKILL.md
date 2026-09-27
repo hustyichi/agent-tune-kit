@@ -20,7 +20,11 @@ failing or absent Validation visible; it never reports ordinary completion.
 If the final gate fails, follow the frozen rule: `rollback_to` B0 or an earlier recorded
 checkpoint, or pause for an explicit human exception. Rollback creates a normal
 restoration commit and withdraws the affected suffix; it never rewrites Git history.
-No adopted Candidate means `close_without_adoption`, with no empty commit. Report B0,
+For a pause, call `transition_round` with `action=pause` and a reason; later recover
+any interrupted operation and use `action=resume`. This preserves the candidate and
+blocks further work until workspace checks pass. Do not manually rewrite Round state.
+No adopted Candidate means `close_without_adoption`, with no empty commit. This also closes an unfrozen analysis-only Round, even without
+Git or B0. Report B0 when present,
 all accepted/rejected candidates, final commit, and limitations. Never push or deploy.
 For a linked external fix Round, use `finish_round: complete_external_fix` only with a
 passing external-fix Validation. Then append a resolved revision to the original Issue

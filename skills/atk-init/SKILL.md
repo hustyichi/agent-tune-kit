@@ -5,7 +5,12 @@ description: Inspect and connect an existing local Agent to ATK v2 without chang
 
 # Connect an existing Agent
 
-Read `../WORKFLOW.md`. Inspect the target project's source and instructions before
+Read `../WORKFLOW.md`. For import-only analysis, call `initialize_project` with
+`analysis_only=true` and optional `redact_keys`; no Git or runner is needed. Skip
+runtime investigation until execution is requested. Later, pass `configure_runtime=true`
+with the complete runtime configuration to upgrade that project while preserving its
+Rounds, evidence, and redaction keys. Resume any paused analysis Round before upgrading.
+For an executable project, inspect the target project's source and instructions before
 creating a runner. Confirm entry command, Python/Node environment, cwd, input mapping,
 session isolation, cache reset, external side effects, and logs. For business Skills,
 trace discovery directories, path base, actual load stage, caches, external copies,
