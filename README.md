@@ -30,9 +30,10 @@ uvx --from agent-tune-kit atk install
 
 核心顺序：`atk-init → atk-dataset（按需）→ atk-eval → atk-diagnose → [atk-optimize → atk-validate → atk-decide]×N → atk-validate（最终）→ atk-decide`。一轮只有一个未决候选；通过的候选在原工程形成一个本地 commit，失败候选保存证据后恢复父检查点。最终门禁以冻结的完整 Case、保护集与重复计划验证累计效果。不会自动 push、发布、部署、改写 Git 历史或修改其他仓库。
 
-## 三种证据入口
+## 证据入口与预算
 
 - **本地运行**：项目 `.atk/adapters/runner.py` 用目标项目的 Python 环境按显式尝试列表调用现有 Agent；每次尝试保存一个 Execution。Prompt、代码及业务 Skill 使用同一协议。Skill 的 `available`、`loaded`、`invoked` 状态分开记录，无法证明实际加载时不能正常通过 Skill 门禁。
+- **预算与对照**：冻结轮次按尝试预留最终 B0／累计版本复验额度；授权重试生成关联旧 Execution 的新批次，保留全部尝试而不挑最好一次。效率或成本门槛仅在预先冻结且指标齐全时判定。独立 holdout 按来源组和里程碑记录暴露，已暴露的组不能在后续轮次重用。
 - **批量结果导入**：CSV/JSON/JSONL 按保存的字段映射导入，不重新运行 Agent；缺少尝试边界时不伪造 Execution。
 - **Langfuse 文件导入**：支持 Trace bundle 和 Observation 行两种显式 profile。保留 Trace/Observation ID、父子关系、来源、缺失与过滤范围；外部分数只当证据，不直接换算 ATK 的通过率。原文件只读，默认遮蔽常见凭证字段；项目敏感字段需要追加脱敏键。
 
@@ -49,6 +50,7 @@ uvx --from agent-tune-kit atk install
 ├── evidence/<batch-id>/        # records.jsonl、来源索引、执行状态
 ├── assessments/<id>/           # manifest.json + 唯一权威 assessment.csv
 ├── rounds/<id>/                # 冻结计划、Issues、候选、验证、决策和操作日志
+├── source-exposure.json        # 跨轮 holdout 来源组暴露记录
 └── knowledge/<id>/             # 带适用性和证据的经验修订
 ```
 
@@ -63,4 +65,4 @@ python3 scripts/validate_skill_pack.py
 uv build --no-sources
 ```
 
-离线测试使用小型 Git 仓库和假 Agent。真实轨迹、真实自动加载业务 Skill、已知责任层案例和外部修复后复验须分别验收；离线测试通过不能替代这些结果。尚未确认安全隔离的目标 Agent 外部写操作不得在正式跑测中启动。
+离线测试使用小型 Git 仓库和假 Agent。Magic Workspace 的真实轨迹导入和单 Case 自动加载业务 Skill 已单独验证；已知责任层案例、外部修复后复验与多 Case 链路仍待验收。尚未确认安全隔离的目标 Agent 外部写操作不得在正式跑测中启动。

@@ -7,10 +7,16 @@ description: Run, import, or reassess Agent evidence under an explicit calibrate
 
 Read `../WORKFLOW.md`. Choose an explicit action: `run`, `import`, or `reassess`.
 For run, use `run_evaluation` with a dataset ID, Case IDs, Revision ID, round ID (if
-frozen), repeat count, timeout, and purpose. The target project's Python runs its
+frozen), repeat count, timeout, purpose, and `phase=incremental/final`. Final runs
+must use both frozen sides once; their attempts are reserved before candidate work.
+For an authorized infrastructure retry, pass `retry_batch_id` and the failed
+`retry_execution_ids`; keep the same Round, Revision, dataset, purpose and phase.
+The new batch retains every earlier Execution and adds linked retries. Never rerun a
+completed Agent failure or branch from an already continued batch. The target project's Python runs its
 `.atk/adapters/runner.py`; each attempt gets its own Execution ID. Inspect partial
 outputs, runner exit status, actual component hashes, and loading evidence. A diagnostic
-probe is not formal effect evidence.
+probe needs a frozen `probe_authorization_id` matching the command, runner, Cases and
+recorded isolation, plus separate probe budget. It is not formal effect evidence.
 
 For import, call `import_evidence` with `source_kind=batch_results` and explicit field
 mapping, or `source_kind=langfuse` with `adapter_profile` set to

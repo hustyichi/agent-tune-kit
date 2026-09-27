@@ -10,6 +10,8 @@ Read `../WORKFLOW.md`. If the Round is not frozen, call `create_round` and
 identity, calibrated scoring, target/protection Cases, final repeats, finite budget,
 commit authorization, and rollback rule. A blocked out-of-scope Issue cannot become
 a local fix. Do not modify ATK workflow, judge, dataset, or runner to pass a gate.
+The finite plan's execution budget must preserve both sides of final validation;
+`budget.candidates` limits drafts and `max_retries_per_slot` is zero unless authorized.
 
 Call `prepare_candidate` with the exact primary Issue and declared file paths.
 Edit the existing Agent's business Skill, Prompt, code, or config in its original

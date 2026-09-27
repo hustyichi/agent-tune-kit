@@ -142,7 +142,7 @@ def test_local_prompt_candidate_is_compared_and_committed(tmp_path: Path, final_
         "target_case_ids_by_issue": {"issue-prompt": ["target"]},
         "repeatability": "deterministic",
         "final_repeats": 1,
-        "budget": {"executions": 20},
+        "budget": {"executions": 20, "candidates": 2},
         "commit_authorized": True,
         "rollback_on_failure": "B0",
     }
@@ -262,6 +262,7 @@ def test_local_prompt_candidate_is_compared_and_committed(tmp_path: Path, final_
     final_baseline = run_evaluation(
         root,
         {
+            "phase": "final",
             "dataset_id": dataset["id"],
             "case_ids": ["target", "protect"],
             "repeats": 1,
@@ -275,6 +276,7 @@ def test_local_prompt_candidate_is_compared_and_committed(tmp_path: Path, final_
     final_current = run_evaluation(
         root,
         {
+            "phase": "final",
             "dataset_id": dataset["id"],
             "case_ids": ["target", "protect"],
             "repeats": 1,
@@ -283,6 +285,19 @@ def test_local_prompt_candidate_is_compared_and_committed(tmp_path: Path, final_
             "revision_id": sealed["revision_id"],
         },
     )
+    with pytest.raises(ATKError, match="already run"):
+        run_evaluation(
+            root,
+            {
+                "phase": "final",
+                "dataset_id": dataset["id"],
+                "case_ids": ["target", "protect"],
+                "repeats": 1,
+                "purpose": "evaluation",
+                "round_id": round_data["id"],
+                "revision_id": sealed["revision_id"],
+            },
+        )
     final_current_assessment = assessment_for(root, final_current, spec, judger, expected)
     final_validation = compare_and_gate(
         root,

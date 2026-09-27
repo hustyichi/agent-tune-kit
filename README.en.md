@@ -34,6 +34,8 @@ Evaluation accepts a runnable Case dataset, existing batch results, or Langfuse 
 
 The target runner uses the target project's Python environment and assigns one Execution to each planned attempt. For business Skills, an available file is distinct from evidence that the Agent actually loaded or invoked it; unverified loading blocks normal Skill validation. Raw export files remain read-only. Common credential fields are masked in imported copies; project-specific sensitive fields require explicit redaction rules.
 
+A frozen Round reserves both sides of final validation before candidate work. Authorized infrastructure retries create linked Executions without selecting the best attempt. Frozen gates require complete data for configured metric limits; independent holdout source groups are tracked across Rounds. The default runner can read cost and tool counts from a task sidecar, whose provenance must be checked before treating those values as trusted.
+
 ATK stores project configuration and runner under `.atk/`, immutable datasets under `datasets/<id>/`, evidence under `evidence/<batch-id>/`, the authoritative scoring CSV under `assessments/<id>/`, and Round plans, Issues, Candidates, Validations, Decisions, and recovery operations under `rounds/<id>/`. Objects are addressed by explicit IDs, never by a “latest vN” folder. The seven Skills call `atk internal <operation> --request <JSON> --output <JSON>`; it is an implementation interface, not an additional public tuning workflow.
 
 ## Development checks
@@ -45,4 +47,4 @@ python3 scripts/validate_skill_pack.py
 uv build --no-sources
 ```
 
-Offline tests use tiny Git repositories and a fake Agent. Real Trace compatibility, real automatic Skill loading, known-cause diagnosis, and post-service-fix verification require separate acceptance evidence. An Agent with unisolated external writes must not be replayed as a formal local evaluation.
+Offline tests use tiny Git repositories and a fake Agent. One real Magic Workspace Trace import and business Skill load have separate acceptance evidence; known-cause diagnosis, post-service-fix verification, and multi-Case evaluation remain open. An Agent with unisolated external writes must not be replayed as a formal local evaluation.

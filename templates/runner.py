@@ -11,6 +11,7 @@ import hashlib
 import json
 import re
 import subprocess
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -34,6 +35,7 @@ def run_one(attempt: dict, case: dict, config: dict, output: Path, timeout: int)
     variables = {"input": str(case["input"]), "input_file": str(input_file), "output_dir": str(task_dir)}
     command = [part.format_map(variables) for part in config["command"]]
     started = datetime.now(UTC).isoformat()
+    started_clock = time.monotonic()
     try:
         result = subprocess.run(
             command, cwd=config["workspace_path"], capture_output=True, text=True, timeout=timeout, check=False
@@ -48,9 +50,20 @@ def run_one(attempt: dict, case: dict, config: dict, output: Path, timeout: int)
         stderr = (exc.stderr or b"").decode(errors="replace") if isinstance(exc.stderr, bytes) else exc.stderr or ""
         response, stderr = redact_output(response), redact_output(stderr)
         returncode = None
+    except OSError as exc:
+        status, response, stderr, returncode = "infrastructure_error", "", redact_output(str(exc)), None
+    duration = time.monotonic() - started_clock
     (task_dir / "stderr.log").write_text(stderr, encoding="utf-8")
     loading_path = task_dir / "loading.json"
     loading = json.loads(loading_path.read_text(encoding="utf-8")) if loading_path.exists() else []
+    metrics_path = task_dir / "metrics.json"
+    try:
+        agent_metrics = json.loads(metrics_path.read_text(encoding="utf-8")) if metrics_path.exists() else {}
+    except (OSError, ValueError):
+        agent_metrics = {}
+    metrics = {"duration_seconds": duration}
+    if isinstance(agent_metrics, dict):
+        metrics.update({key: agent_metrics[key] for key in ("cost", "tool_calls") if key in agent_metrics})
     return {
         "id": attempt["record_id"],
         "case_id": case["id"],
@@ -59,6 +72,7 @@ def run_one(attempt: dict, case: dict, config: dict, output: Path, timeout: int)
         "output_present": bool(response),
         "output": response,
         "loading_evidence": loading,
+        "metrics": metrics,
         "source_locator": str(task_dir),
         "execution": {
             "id": attempt["execution_id"],

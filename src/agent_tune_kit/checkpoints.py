@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import subprocess
 from contextlib import contextmanager
 from pathlib import Path
@@ -143,6 +144,7 @@ def create_round(repo: Path, root: Path, request: dict) -> dict:
             "source_assessment_ids": request.get("assessment_ids", []),
             "previous_round_id": request.get("previous_round_id"),
             "external_fix_identity": request.get("external_fix_identity"),
+            "analysis_plan": request.get("analysis_plan", {}),
         }
         path = _round_path(root, round_id) / "round.json"
         value["current_revision_id"] = value["baseline_revision_id"]
@@ -177,11 +179,45 @@ def freeze_round(repo: Path, root: Path, request: dict) -> dict:
         }
         if required - plan.keys() or not plan["commit_authorized"] or not plan["allowed_paths"]:
             raise ATKError("INCOMPLETE_EVIDENCE", f"incomplete frozen plan: {sorted(required - plan.keys())}")
+        if (
+            not plan["case_ids"]
+            or len(plan["case_ids"]) != len(set(plan["case_ids"]))
+            or not set(plan["protection_case_ids"]) <= set(plan["case_ids"])
+        ):
+            raise ATKError("COMPARISON_INVALID", "frozen Case set is empty, duplicated, or inconsistent")
         if plan["repeatability"] not in {"deterministic", "stochastic", "unknown"}:
             raise ATKError("COMPARISON_INVALID", "repeatability is invalid")
         minimum = 1 if plan["repeatability"] == "deterministic" else 2
-        if plan["final_repeats"] < minimum:
+        if type(plan["final_repeats"]) is not int or plan["final_repeats"] < minimum:
             raise ATKError("BUDGET_EXHAUSTED", "final repeat plan is below required minimum")
+        budget = plan["budget"]
+        if (
+            not isinstance(budget, dict)
+            or type(budget.get("executions")) is not int
+            or budget["executions"] < 2 * len(set(plan["case_ids"])) * plan["final_repeats"]
+            or any(type(budget.get(key, 0)) is not int or budget.get(key, 0) < 0 for key in ("probes", "candidates"))
+        ):
+            raise ATKError("BUDGET_EXHAUSTED", "budget must reserve both sides of the final validation")
+        if type(plan.get("max_retries_per_slot", 0)) is not int or plan.get("max_retries_per_slot", 0) < 0:
+            raise ATKError("COMPARISON_INVALID", "max_retries_per_slot must be non-negative")
+        if plan.get("objective", "quality") not in {"quality", "efficiency"}:
+            raise ATKError("COMPARISON_INVALID", "objective must be quality or efficiency")
+        if plan.get("objective") == "efficiency" and plan.get("efficiency_metric") not in {
+            "cost",
+            "duration_seconds",
+            "tool_calls",
+        }:
+            raise ATKError("COMPARISON_INVALID", "efficiency objective needs a supported metric")
+        if not isinstance(plan.get("metric_limits", {}), dict):
+            raise ATKError("COMPARISON_INVALID", "metric_limits must be an object")
+        for key, value_to_check in {
+            **{key: plan[key] for key in ("min_primary_delta", "min_efficiency_delta") if key in plan},
+            **plan.get("metric_limits", {}),
+        }.items():
+            if type(value_to_check) not in {int, float} or not math.isfinite(value_to_check) or value_to_check < 0:
+                raise ATKError("COMPARISON_INVALID", f"{key} must be non-negative")
+        if set(plan.get("metric_limits", {})) - {"max_total_cost", "max_mean_duration_seconds", "max_mean_tool_calls"}:
+            raise ATKError("COMPARISON_INVALID", "unsupported metric limit")
         write_json(_round_path(root, value["id"]) / "plan.json", plan, immutable=True)
         value["status"] = "ready"
         _write_round(root, value)
@@ -198,6 +234,13 @@ def prepare_candidate(repo: Path, root: Path, request: dict) -> dict:
         plan = read_json(_round_path(root, value["id"]) / "plan.json")
         if value["status"] not in {"ready", "optimizing"} or value["pending_candidate_id"]:
             raise ATKError("WORKSPACE_CONFLICT", "round is not ready for another candidate")
+        exposure_path = root / "source-exposure.json"
+        if exposure_path.exists() and any(
+            entry["round_id"] == value["id"] for entry in read_json(exposure_path).get("groups", {}).values()
+        ):
+            raise ATKError("COMPARISON_INVALID", "holdout was exposed; start a new Round before editing")
+        if len(value["candidate_ids"]) >= plan["budget"].get("candidates", len(set(plan["issue_ids"]))):
+            raise ATKError("BUDGET_EXHAUSTED", "candidate budget is exhausted")
         verify_repo(repo, expected_head=value["current_commit"], expected_branch=value["branch"])
         if changed_paths(repo) != set(value["baseline_untracked"]):
             raise ATKError("DIRTY_BASELINE", "workspace has unaccounted changes before candidate")

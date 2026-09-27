@@ -11,6 +11,10 @@ contract, raw response, and runtime handoff. Compare credible explanations that 
 change the repair location. Use source/contract inspection first; run a bounded
 `diagnostic_probe` only with an approved command, isolation, and budget. Never treat a
 probe as an original execution or as effect validation.
+Record each probe permission in the frozen plan (or an `analysis_plan` before freeze):
+ID, configured command hash, runner hash, allowed Case IDs and isolation reference.
+Set a separate `budget.probes`; zero is the default. The reference records a checked
+setup and does not create an OS sandbox for the target Agent.
 
 Use `store_diagnosis` to record one or more Issues. Include symptom, supporting and
 contrary evidence, checks with `not_run/completed/failed/inconclusive`, mechanism refs,
