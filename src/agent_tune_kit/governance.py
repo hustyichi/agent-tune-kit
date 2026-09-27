@@ -40,8 +40,11 @@ def _store_diagnosis_locked(root: Path, request: dict) -> dict:
     issues = request["issues"]
     if not issues:
         raise ATKError("INCOMPLETE_EVIDENCE", "diagnosis requires at least one Issue")
-    saved = []
+    prepared = []
+    seen_ids = set()
     for issue in issues:
+        if not isinstance(issue, dict):
+            raise ATKError("INCOMPLETE_EVIDENCE", "Issue must be an object")
         required = {
             "id",
             "symptom",
@@ -62,6 +65,10 @@ def _store_diagnosis_locked(root: Path, request: dict) -> dict:
         }
         if required - issue.keys():
             raise ATKError("INCOMPLETE_EVIDENCE", f"Issue missing fields: {sorted(required - issue.keys())}")
+        safe_id(issue["id"])
+        if issue["id"] in seen_ids:
+            raise ATKError("INCOMPLETE_EVIDENCE", "duplicate Issue ID in one diagnosis")
+        seen_ids.add(issue["id"])
         if issue["root_cause_status"] not in {"hypothesis", "supported", "intervention_supported", "inconclusive"}:
             raise ATKError("INCOMPLETE_EVIDENCE", "invalid root-cause status")
         if issue["disposition"] not in {
@@ -165,9 +172,10 @@ def _store_diagnosis_locked(root: Path, request: dict) -> dict:
             "previous_revision": revision - 1 if revision > 1 else None,
         }
         path = issue_folder / f"revision-{revision}.json"
+        prepared.append((path, value))
+    for path, value in prepared:
         write_json(path, value, immutable=True)
-        saved.append(value)
-    return {"issues": saved}
+    return {"issues": [value for _, value in prepared]}
 
 
 def store_knowledge(root: Path, request: dict) -> dict:

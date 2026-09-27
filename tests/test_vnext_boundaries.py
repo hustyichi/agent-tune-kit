@@ -112,6 +112,21 @@ def test_supported_diagnosis_requires_check_evidence(tmp_path: Path) -> None:
     assert unresolved["issues"][0]["root_cause_status"] == "inconclusive"
 
 
+def test_multi_issue_diagnosis_validates_every_issue_before_writing(tmp_path: Path) -> None:
+    rows = [{"id": "case", "input": "task", "usage": "optimization", "source_group_id": "group"}]
+    _, root, _, round_data, _ = project(tmp_path, "print('ok')\n", rows, issue_ids=["tool-a", "tool-b"])
+    first = {**_handoff_issue(), "id": "tool-a"}
+    second = {**_handoff_issue(), "id": "tool-b", "root_cause_status": "supported"}
+    with pytest.raises(ATKError, match="duplicate Issue ID"):
+        store_diagnosis(root, {"round_id": round_data["id"], "issues": [first, first]})
+    with pytest.raises(ATKError, match="supported mechanism"):
+        store_diagnosis(root, {"round_id": round_data["id"], "issues": [first, second]})
+    assert not (root / "rounds" / round_data["id"] / "issues" / "tool-a").exists()
+    second["root_cause_status"] = "hypothesis"
+    saved = store_diagnosis(root, {"round_id": round_data["id"], "issues": [first, second]})["issues"]
+    assert [(issue["id"], issue["revision"]) for issue in saved] == [("tool-a", 1), ("tool-b", 1)]
+
+
 def test_external_issue_blocks_normal_keep_but_allows_authorized_workaround(tmp_path: Path) -> None:
     script = "from pathlib import Path\nprint('ok' if Path('prompt.txt').read_text()=='new' else 'bad')\n"
     rows = [{"id": "case", "input": "task", "usage": "optimization", "source_group_id": "group"}]
