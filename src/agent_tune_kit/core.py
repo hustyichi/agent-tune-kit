@@ -196,8 +196,13 @@ def store_assessment(root: Path, request: dict) -> Path:
         if row["validity"] != "valid" and row["verdict"] != "unknown":
             raise ATKError("JUDGER_INVALID", "invalid evidence cannot have a determinate verdict")
         refs = row["evidence_refs"]
-        if not isinstance(refs, list) or any(
-            ref.get("batch_id") != batch_id or ref.get("evidence_id") not in evidence for ref in refs
+        if (
+            not isinstance(refs, list)
+            or not refs
+            or any(
+                not isinstance(ref, dict) or ref.get("batch_id") != batch_id or ref.get("evidence_id") not in evidence
+                for ref in refs
+            )
         ):
             raise ATKError("INCOMPLETE_EVIDENCE", "assessment has an invalid evidence reference")
     if keys != {(record_id, dimension) for record_id in records for dimension in dimensions}:

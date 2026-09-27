@@ -37,8 +37,18 @@ def run_one(attempt: dict, case: dict, config: dict, output: Path, timeout: int)
     started = datetime.now(UTC).isoformat()
     started_clock = time.monotonic()
     try:
+        if (
+            config.get("script_path")
+            and hashlib.sha256(Path(config["script_path"]).read_bytes()).hexdigest() != config["script_sha256"]
+        ):
+            raise OSError("probe script changed after authorization")
         result = subprocess.run(
-            command, cwd=config["workspace_path"], capture_output=True, text=True, timeout=timeout, check=False
+            command,
+            cwd=config.get("working_directory", config["workspace_path"]),
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
         )
         status = "completed" if result.returncode == 0 else "agent_error"
         response = redact_output(result.stdout)
@@ -100,6 +110,8 @@ def main() -> int:
     request = json.loads(args.request.read_text(encoding="utf-8"))
     config = json.loads(Path(request["run_config_ref"]).read_text(encoding="utf-8"))
     config.update({key: request[key] for key in ("batch_id", "purpose", "revision_id")})
+    if request["purpose"] == "diagnostic_probe":
+        config.update(request["probe_config"])
     cases = {
         case["id"]: case
         for case in (json.loads(line) for line in Path(request["cases_path"]).read_text(encoding="utf-8").splitlines())

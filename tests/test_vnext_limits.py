@@ -225,6 +225,52 @@ def test_probe_permission_and_isolated_budget(tmp_path: Path) -> None:
         run_evaluation(root, {**request, "probe_authorization_id": "check-1"})
 
 
+def test_direct_probe_runs_frozen_script_instead_of_agent(tmp_path: Path) -> None:
+    rows = [{"id": "case", "input": "case", "usage": "optimization", "source_group_id": "g"}]
+    repo, root, dataset, round_data, plan = project(tmp_path, "print('agent')\n", rows)
+    scripts = root / "probes"
+    scripts.mkdir()
+    script = scripts / "tool.py"
+    script.write_text("print('tool')\n")
+    command = [sys.executable, ".atk/probes/tool.py"]
+    plan["budget"]["probes"] = 2
+    plan["probe_permissions"] = [
+        {
+            "id": "direct-tool",
+            "command": command,
+            "command_hash": digest(command),
+            "runner_hash": digest(root / "adapters/runner.py"),
+            "case_ids": ["case"],
+            "isolation_ref": "local read-only fixture",
+            "working_directory": ".",
+            "script_path": "tool.py",
+            "script_sha256": digest(script),
+            "timeout_seconds": 5,
+            "max_calls": 1,
+        }
+    ]
+    freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    request = {
+        "dataset_id": dataset["id"],
+        "case_ids": ["case"],
+        "purpose": "diagnostic_probe",
+        "revision_id": round_data["baseline_revision_id"],
+        "round_id": round_data["id"],
+        "probe_authorization_id": "direct-tool",
+        "command": [sys.executable, "agent.py"],
+    }
+    batch = run_evaluation(root, request)
+    _, records, _ = validate_evidence(root, batch["id"])
+    assert next(iter(records.values()))["output"].strip() == "tool"
+    assert batch["probe_config"]["command_hash"] == digest(command)
+    assert batch["probe_config"]["script_sha256"] == digest(script)
+    with pytest.raises(ATKError, match="max_calls"):
+        run_evaluation(root, request)
+    script.write_text("print('changed')\n")
+    with pytest.raises(ATKError, match="not authorized"):
+        run_evaluation(root, request)
+
+
 def test_efficiency_gate_and_missing_metric(tmp_path: Path) -> None:
     script = (
         "import json,sys\nfrom pathlib import Path\n"

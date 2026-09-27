@@ -8,7 +8,7 @@ import math
 from collections import defaultdict
 from pathlib import Path
 
-from .checkpoints import changed_paths, head, verify_repo
+from .checkpoints import changed_paths, git, head, require_override, verify_repo
 from .core import (
     ATKError,
     atomic_write,
@@ -126,10 +126,28 @@ def store_diagnosis(root: Path, request: dict) -> dict:
             if ref["evidence_id"] not in index:
                 raise ATKError("INCOMPLETE_EVIDENCE", "Issue evidence reference is missing")
         for check in issue["checks"]:
-            if check.get("status") not in {"not_run", "completed", "failed", "inconclusive"}:
+            if not isinstance(check, dict) or check.get("status") not in {
+                "not_run",
+                "completed",
+                "failed",
+                "inconclusive",
+            }:
                 raise ATKError("INCOMPLETE_EVIDENCE", "invalid diagnostic check status")
             if check["status"] == "not_run" and not check.get("reason"):
                 raise ATKError("INCOMPLETE_EVIDENCE", "unrun check needs a reason")
+            if check["status"] == "completed" and (
+                not check.get("expected") or not check.get("actual") or not check.get("evidence_refs")
+            ):
+                raise ATKError("INCOMPLETE_EVIDENCE", "completed check needs expected, actual, and evidence refs")
+            if not isinstance(check.get("evidence_refs", []), list):
+                raise ATKError("INCOMPLETE_EVIDENCE", "diagnostic check evidence refs must be a list")
+            for ref in check.get("evidence_refs", []):
+                if (
+                    not isinstance(ref, dict)
+                    or not ref.get("batch_id")
+                    or ref.get("evidence_id") not in validate_evidence(root, ref["batch_id"])[2]
+                ):
+                    raise ATKError("INCOMPLETE_EVIDENCE", "diagnostic check evidence reference is missing")
         issue_folder = folder / "issues" / safe_id(issue["id"])
         revision = 1 + len(list(issue_folder.glob("revision-*.json")))
         value = {
@@ -601,19 +619,45 @@ def _finish_round_locked(repo: Path, root: Path, request: dict) -> dict:
             or validation["mode"] != "external_fix"
             or validation["result"] != "pass"
             or validation["round_id"] != value["id"]
+            or validation["revision_id"] != value["current_revision_id"]
             or validation["component_identity"] != value["external_fix_identity"]
             or validation["final_commit"] != head(repo)
+            or validation["plan_hash"] != digest(read_json(folder / "plan.json"))
         ):
             raise ATKError("COMPARISON_INVALID", "external fix lacks passing direct and end-to-end checks")
         value["status"] = "completed"
-    elif action == "complete":
+    elif action in {"complete", "complete_with_override"}:
         if value.get("external_fix_identity"):
             raise ATKError("COMPARISON_INVALID", "external fix Round needs its dedicated completion gate")
-        validation = read_json(folder / "validations" / safe_id(request["validation_id"]) / "validation.json")
-        if validation["mode"] != "final" or validation["result"] != "pass" or validation["final_commit"] != head(repo):
-            raise ATKError("COMPARISON_INVALID", "current commit lacks passing final validation")
-        value["status"] = "completed"
+        validation_id = request.get("validation_id")
+        validation = (
+            read_json(folder / "validations" / safe_id(validation_id) / "validation.json") if validation_id else None
+        )
+        if validation and (
+            validation["mode"] != "final"
+            or validation["round_id"] != value["id"]
+            or validation["left_revision_id"] != value["baseline_revision_id"]
+            or validation["right_revision_id"] != value["current_revision_id"]
+            or validation["final_commit"] != head(repo)
+            or validation["plan_hash"] != digest(read_json(folder / "plan.json"))
+        ):
+            raise ATKError("COMPARISON_INVALID", "final Validation does not match current Round and Revision")
+        if action == "complete":
+            if not validation or validation["result"] != "pass":
+                raise ATKError("COMPARISON_INVALID", "current commit lacks passing final validation")
+            value["status"] = "completed"
+        else:
+            if not value["active_candidate_ids"] or (validation and validation["result"] == "pass"):
+                raise ATKError("COMPARISON_INVALID", "override is only for an unverified adopted Revision")
+            if not validation and not request.get("validation_missing_reason"):
+                raise ATKError("INCOMPLETE_EVIDENCE", "missing final Validation needs a recorded reason")
+            require_override(request, "retain_without_final_pass")
+            value["status"] = "completed_with_override"
     elif action == "close_without_adoption" and not value["active_candidate_ids"]:
+        if value["current_revision_id"] != value["baseline_revision_id"] or git(
+            repo, "rev-parse", "HEAD^{tree}"
+        ) != git(repo, "rev-parse", f"{value['baseline_commit']}^{{tree}}"):
+            raise ATKError("WORKSPACE_CONFLICT", "empty Round does not match B0 content")
         value["status"] = "closed_without_adoption"
     else:
         raise ATKError("WORKSPACE_CONFLICT", "unsupported final action")
@@ -626,6 +670,12 @@ def _finish_round_locked(repo: Path, root: Path, request: dict) -> dict:
         "action": action,
         "after_commit": value["current_commit"],
         "validation_id": request.get("validation_id"),
+        "validation_result": validation["result"]
+        if action in {"complete", "complete_with_override", "complete_external_fix"} and validation
+        else None,
+        "validation_missing_reason": request.get("validation_missing_reason"),
+        "override": action == "complete_with_override",
+        "override_authorization": request.get("override_authorization") if action == "complete_with_override" else None,
         "reason": request["reason"],
     }
     write_json(folder / "decisions" / f"{decision['id']}.json", decision, immutable=True)

@@ -44,7 +44,7 @@ def tracked_paths(repo: Path) -> set[str]:
 
 def safe_path(repo: Path, name: str) -> Path:
     relative = Path(name)
-    if not name or relative.is_absolute() or ".." in relative.parts or name.startswith(".git/") or name == ".git":
+    if not name or relative.is_absolute() or ".." in relative.parts or ".git" in relative.parts:
         raise ATKError("SCOPE_VIOLATION", f"unsafe path: {name}")
     path = repo / relative
     for parent in [path, *path.parents]:
@@ -396,7 +396,7 @@ def seal_candidate(repo: Path, root: Path, request: dict) -> dict:
                 target = folder / "files" / name
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes(data)
-        patch = git(repo, "diff", "--binary", "--no-ext-diff", "--", *sorted(actual))
+        patch = git(repo, "--literal-pathspecs", "diff", "--binary", "--no-ext-diff", "--", *sorted(actual))
         (folder / "changes.patch").write_bytes(patch)
         write_json(folder / "files.json", files, immutable=True)
         revision = {
@@ -429,6 +429,42 @@ def _verify_sealed(repo: Path, folder: Path, candidate: dict) -> dict:
         if (data is not None) != expected["exists"] or (data is not None and digest(data) != expected["sha256"]):
             raise ATKError("REVISION_MISMATCH", f"candidate changed after sealing: {name}")
     return files
+
+
+def _verify_candidate_commit(repo: Path, candidate: dict, files: dict, operation: dict) -> None:
+    if git(repo, "rev-list", "--parents", "-n", "1", "HEAD").decode().split()[1:] != [candidate["parent_commit"]]:
+        raise ATKError("COMMIT_FAILED", "candidate commit parent differs from its sealed checkpoint")
+    committed_paths = set(
+        filter(None, git(repo, "diff", "--name-only", "-z", "--no-renames", "HEAD^", "HEAD").decode().split("\0"))
+    )
+    if committed_paths != set(files):
+        raise ATKError("COMMIT_FAILED", "candidate commit contains unsealed paths")
+    message = git(repo, "log", "-1", "--format=%B").decode()
+    if (
+        f"ATK-Candidate: {candidate['id']}" not in message
+        or f"ATK-Operation: {operation['id']}" not in message
+        or f"ATK-Round: {candidate['round_id']}" not in message
+    ):
+        raise ATKError("COMMIT_FAILED", "candidate commit identity was changed")
+    for name, state in files.items():
+        committed = _git_file(repo, "HEAD", name)
+        if (committed is not None) != state["exists"] or (
+            committed is not None and digest(committed) != state["sha256"]
+        ):
+            raise ATKError("REVISION_MISMATCH", f"committed candidate content differs: {name}")
+
+
+def require_override(request: dict, action: str) -> dict:
+    authorization = request.get("override_authorization")
+    if (
+        not isinstance(authorization, dict)
+        or authorization.get("source") != "user"
+        or authorization.get("action") != action
+        or not authorization.get("reason")
+        or not authorization.get("risk")
+    ):
+        raise ATKError("WORKSPACE_CONFLICT", "override needs explicit user action, reason, and risk")
+    return authorization
 
 
 def _restore_parent(repo: Path, folder: Path, candidate: dict, files: dict) -> None:
@@ -472,8 +508,12 @@ def decide_candidate(repo: Path, root: Path, request: dict) -> dict:
             or validation.get("left_commit") != candidate["parent_commit"]
         ):
             raise ATKError("COMPARISON_INVALID", "validation does not match candidate and parent")
-        if action == "keep" and validation["result"] != "pass" and not request.get("override"):
+        override = request.get("override") is True
+        if override and action != "keep":
+            raise ATKError("WORKSPACE_CONFLICT", "trial override applies only to keep")
+        if action == "keep" and validation["result"] != "pass" and not override:
             raise ATKError("COMPARISON_INVALID", "keep requires a passing validation or explicit override")
+        authorization = require_override(request, "trial_commit") if override else None
         if action == "keep":
             blockers = [_latest_issue(root, value["id"], issue_id) for issue_id in candidate["blocked_by_issue_ids"]]
             if any(issue is None for issue in blockers):
@@ -486,12 +526,15 @@ def decide_candidate(repo: Path, root: Path, request: dict) -> dict:
         operation = {
             "id": new_id("operation"),
             "action": action,
+            "round_id": value["id"],
             "candidate_id": candidate_id,
             "parent_commit": candidate["parent_commit"],
             "files_hash": candidate["files_hash"],
             "validation_id": request["validation_id"],
             "reason": request["reason"],
-            "override": bool(request.get("override")),
+            "override": override,
+            "override_authorization": authorization,
+            "validation_result": validation["result"],
             "stage": "prepared",
             "created_at": now(),
         }
@@ -508,7 +551,14 @@ def decide_candidate(repo: Path, root: Path, request: dict) -> dict:
                 ):
                     raise ATKError("REVISION_MISMATCH", f"index content differs from sealed candidate: {name}")
             try:
-                git(repo, "commit", "-m", request.get("message", f"feat: [agent] ATK {candidate_id}"))
+                git(
+                    repo,
+                    "commit",
+                    "-m",
+                    request.get("message", f"feat: [agent] ATK {candidate_id}"),
+                    "-m",
+                    f"ATK-Round: {value['id']}\nATK-Candidate: {candidate_id}\nATK-Operation: {operation['id']}",
+                )
             except ATKError as exc:
                 raise ATKError(
                     "COMMIT_FAILED", f"commit failed; operation {operation['id']} needs inspection: {exc}"
@@ -516,16 +566,9 @@ def decide_candidate(repo: Path, root: Path, request: dict) -> dict:
             operation["stage"] = "committed"
             operation["commit"] = head(repo)
             write_json(op_path, operation)
-            if git(repo, "rev-list", "--parents", "-n", "1", "HEAD").decode().split()[1:] != [
-                candidate["parent_commit"]
-            ]:
-                raise ATKError("COMMIT_FAILED", "commit parent mismatch; operation requires inspection")
+            _verify_candidate_commit(repo, candidate, files, operation)
             if changed_paths(repo) != set(value["baseline_untracked"]) or staged_paths(repo):
                 raise ATKError("COMMIT_FAILED", "workspace not clean after commit; operation requires inspection")
-            for name, state in files.items():
-                committed = git(repo, "show", f"HEAD:{name}", ok=False) if state["exists"] else b""
-                if state["exists"] and digest(committed) != state["sha256"]:
-                    raise ATKError("REVISION_MISMATCH", f"committed content differs from validated file: {name}")
             value["current_commit"] = operation["commit"]
             value["current_revision_id"] = candidate["revision_id"]
             value["active_candidate_ids"].append(candidate_id)
@@ -544,7 +587,9 @@ def decide_candidate(repo: Path, root: Path, request: dict) -> dict:
             "action": action,
             "validation_id": request["validation_id"],
             "reason": request["reason"],
-            "override": bool(request.get("override")),
+            "override": override,
+            "override_authorization": authorization,
+            "validation_result": validation["result"],
             "operation_id": operation["id"],
             "before_commit": candidate["parent_commit"],
             "after_commit": value["current_commit"],
@@ -558,52 +603,94 @@ def decide_candidate(repo: Path, root: Path, request: dict) -> dict:
 
 
 def inspect_or_recover_operation(repo: Path, root: Path, request: dict) -> dict:
-    """Complete a commit whose Git write succeeded but state write was interrupted."""
+    """Reconcile a candidate operation with its exact Git and artifact state."""
     with locked(root):
         folder = _round_path(root, request["round_id"])
         operation = read_json(folder / "operations" / f"{safe_id(request['operation_id'])}.json")
+        if operation.get("action") == "rollback_to":
+            return _recover_rollback_locked(repo, folder, operation)
+        if operation.get("action") != "keep":
+            raise ATKError("GIT_OPERATION_INTERRUPTED", "restore operation needs manual content inspection")
         candidate_id = operation["candidate_id"]
         candidate_folder = folder / "candidates" / candidate_id
         decision_path = candidate_folder / "decision.json"
-        if decision_path.exists():
-            return {"stage": "complete", "decision": read_json(decision_path)}
-        if operation["action"] != "keep":
-            raise ATKError("GIT_OPERATION_INTERRUPTED", "restore operation needs manual content inspection")
         value = _round(root, request["round_id"])
+        if decision_path.exists() and value["pending_candidate_id"] != candidate_id:
+            decision = read_json(decision_path)
+            if (
+                operation.get("stage") != "complete"
+                or decision.get("operation_id") != operation["id"]
+                or decision.get("after_commit") != operation.get("commit")
+            ):
+                raise ATKError("GIT_OPERATION_INTERRUPTED", "completed operation identity is inconsistent")
+            return {"stage": "complete", "decision": decision}
+        if value["pending_candidate_id"] != candidate_id:
+            raise ATKError("GIT_OPERATION_INTERRUPTED", "operation is not the pending candidate")
         candidate = read_json(candidate_folder / "candidate.json")
         files = read_json(candidate_folder / "files.json")
-        actual_head = head(repo)
-        parents = git(repo, "rev-list", "--parents", "-n", "1", "HEAD").decode().split()[1:]
-        subject = git(repo, "log", "-1", "--format=%s").decode()
         if (
-            value["pending_candidate_id"] != candidate_id
-            or parents != [candidate["parent_commit"]]
-            or candidate_id not in subject
+            operation.get("parent_commit") != candidate["parent_commit"]
+            or operation.get("files_hash") != candidate["files_hash"]
+            or operation.get("round_id") != value["id"]
         ):
-            raise ATKError("GIT_OPERATION_INTERRUPTED", "HEAD cannot be attributed to the recorded candidate")
+            raise ATKError("GIT_OPERATION_INTERRUPTED", "operation identity differs from sealed candidate")
+        actual_head = head(repo)
+        if actual_head == candidate["parent_commit"] and not decision_path.exists():
+            if branch(repo) != value["branch"] or operation["stage"] not in {"prepared", "aborted"}:
+                raise ATKError("GIT_OPERATION_INTERRUPTED", "pre-commit operation state is unknown")
+            _verify_sealed(repo, candidate_folder, candidate)
+            if (changed_paths(repo) | staged_paths(repo)) - set(value["baseline_untracked"]) != set(files):
+                raise ATKError("GIT_OPERATION_INTERRUPTED", "candidate workspace changed during commit attempt")
+            staged = staged_paths(repo)
+            if staged - set(files):
+                raise ATKError("GIT_OPERATION_INTERRUPTED", "unknown staged paths require inspection")
+            for name in staged:
+                state = files[name]
+                indexed = _git_file(repo, "", name)
+                if (indexed is not None) != state["exists"] or (
+                    indexed is not None and digest(indexed) != state["sha256"]
+                ):
+                    raise ATKError("GIT_OPERATION_INTERRUPTED", "staged content differs from sealed candidate")
+            if staged:
+                git(repo, "--literal-pathspecs", "restore", "--staged", "--", *sorted(staged))
+            if staged_paths(repo):
+                raise ATKError("GIT_OPERATION_INTERRUPTED", "candidate index was not restored")
+            operation["stage"] = "aborted"
+            write_json(folder / "operations" / f"{operation['id']}.json", operation)
+            return {"stage": "aborted", "candidate_id": candidate_id}
+        if branch(repo) != value["branch"]:
+            raise ATKError("GIT_OPERATION_INTERRUPTED", "branch changed during candidate commit")
+        _verify_candidate_commit(repo, candidate, files, operation)
         if changed_paths(repo) != set(value["baseline_untracked"]) or staged_paths(repo):
             raise ATKError("GIT_OPERATION_INTERRUPTED", "workspace differs after candidate commit")
-        for name, state in files.items():
-            committed = _git_file(repo, "HEAD", name)
-            if (committed is not None) != state["exists"] or (
-                committed is not None and digest(committed) != state["sha256"]
-            ):
-                raise ATKError("GIT_OPERATION_INTERRUPTED", f"committed candidate content differs: {name}")
-        decision = {
-            "schema_version": 2,
-            "id": new_id("decision"),
-            "created_at": now(),
-            "round_id": value["id"],
-            "candidate_id": candidate_id,
-            "action": "keep",
-            "validation_id": operation["validation_id"],
-            "reason": operation["reason"],
-            "override": operation["override"],
-            "operation_id": operation["id"],
-            "before_commit": candidate["parent_commit"],
-            "after_commit": actual_head,
-        }
-        write_json(decision_path, decision, immutable=True)
+        decision = (
+            read_json(decision_path)
+            if decision_path.exists()
+            else {
+                "schema_version": 2,
+                "id": new_id("decision"),
+                "created_at": now(),
+                "round_id": value["id"],
+                "candidate_id": candidate_id,
+                "action": "keep",
+                "validation_id": operation["validation_id"],
+                "reason": operation["reason"],
+                "override": operation["override"],
+                "override_authorization": operation.get("override_authorization"),
+                "validation_result": operation.get("validation_result"),
+                "operation_id": operation["id"],
+                "before_commit": candidate["parent_commit"],
+                "after_commit": actual_head,
+            }
+        )
+        if (
+            decision["operation_id"] != operation["id"]
+            or decision["after_commit"] != actual_head
+            or decision["validation_id"] != operation["validation_id"]
+        ):
+            raise ATKError("GIT_OPERATION_INTERRUPTED", "saved Decision disagrees with candidate commit")
+        if not decision_path.exists():
+            write_json(decision_path, decision, immutable=True)
         value["pending_candidate_id"] = None
         value["current_commit"] = actual_head
         value["current_revision_id"] = candidate["revision_id"]
@@ -613,6 +700,108 @@ def inspect_or_recover_operation(repo: Path, root: Path, request: dict) -> dict:
         operation["stage"] = "complete"
         write_json(folder / "operations" / f"{operation['id']}.json", operation)
         return {"stage": "complete", "decision": decision}
+
+
+def _verify_rollback_commit(repo: Path, operation: dict) -> None:
+    if git(repo, "rev-list", "--parents", "-n", "1", "HEAD").decode().split()[1:] != [operation["before_commit"]]:
+        raise ATKError("GIT_OPERATION_INTERRUPTED", "rollback commit parent changed")
+    if git(repo, "rev-parse", "HEAD^{tree}") != git(repo, "rev-parse", f"{operation['target_commit']}^{{tree}}"):
+        raise ATKError("GIT_OPERATION_INTERRUPTED", "rollback commit tree differs from target checkpoint")
+    paths = set(
+        filter(None, git(repo, "diff", "--name-only", "-z", "--no-renames", "HEAD^", "HEAD").decode().split("\0"))
+    )
+    if paths != set(operation["paths"]):
+        raise ATKError("GIT_OPERATION_INTERRUPTED", "rollback commit contains unexpected paths")
+    message = git(repo, "log", "-1", "--format=%B").decode()
+    if f"ATK-Round: {operation['round_id']}" not in message or f"ATK-Rollback: {operation['id']}" not in message:
+        raise ATKError("GIT_OPERATION_INTERRUPTED", "rollback commit identity was changed")
+
+
+def _recover_rollback_locked(repo: Path, folder: Path, operation: dict) -> dict:
+    value = read_json(folder / "round.json")
+    decision_path = folder / "decisions" / f"{safe_id(operation['decision_id'])}.json"
+    if decision_path.exists() and value["current_commit"] != operation["before_commit"]:
+        decision = read_json(decision_path)
+        if (
+            operation.get("stage") != "complete"
+            or decision.get("operation_id") != operation["id"]
+            or decision.get("after_commit") != operation.get("after_commit")
+        ):
+            raise ATKError("GIT_OPERATION_INTERRUPTED", "completed rollback identity is inconsistent")
+        return {"stage": "complete", "decision": decision}
+    if value["current_commit"] != operation["before_commit"] or value["pending_candidate_id"]:
+        raise ATKError("GIT_OPERATION_INTERRUPTED", "Round changed during rollback")
+    if value["active_candidate_ids"][operation["target_index"] :] != operation["withdrawn_candidate_ids"]:
+        raise ATKError("GIT_OPERATION_INTERRUPTED", "accepted chain differs from rollback record")
+    if branch(repo) != value["branch"]:
+        raise ATKError("GIT_OPERATION_INTERRUPTED", "branch changed during rollback")
+    paths = operation["paths"]
+    if head(repo) == operation["before_commit"] and not decision_path.exists():
+        if operation["stage"] not in {"prepared", "aborted"}:
+            raise ATKError("GIT_OPERATION_INTERRUPTED", "rollback commit disappeared after recording")
+        if staged_paths(repo) - set(paths):
+            raise ATKError("GIT_OPERATION_INTERRUPTED", "unknown staged paths require inspection")
+        if (changed_paths(repo) | staged_paths(repo)) - set(value["baseline_untracked"]) - set(paths):
+            raise ATKError("GIT_OPERATION_INTERRUPTED", "unknown workspace changes appeared during rollback")
+        for name in paths:
+            known = {
+                _git_file(repo, operation["before_commit"], name),
+                _git_file(repo, operation["target_commit"], name),
+            }
+            if content(repo, name) not in known or (
+                name in staged_paths(repo) and _git_file(repo, "", name) not in known
+            ):
+                raise ATKError("GIT_OPERATION_INTERRUPTED", f"unknown rollback content requires inspection: {name}")
+        if paths:
+            git(
+                repo,
+                "--literal-pathspecs",
+                "restore",
+                f"--source={operation['before_commit']}",
+                "--worktree",
+                "--",
+                *paths,
+            )
+            staged = staged_paths(repo)
+            if staged:
+                git(repo, "--literal-pathspecs", "restore", "--staged", "--", *sorted(staged))
+        if changed_paths(repo) != set(value["baseline_untracked"]) or staged_paths(repo):
+            raise ATKError("GIT_OPERATION_INTERRUPTED", "rollback abort did not restore the starting checkpoint")
+        operation["stage"] = "aborted"
+        write_json(folder / "operations" / f"{operation['id']}.json", operation)
+        return {"stage": "aborted", "round_id": value["id"]}
+    _verify_rollback_commit(repo, operation)
+    if changed_paths(repo) != set(value["baseline_untracked"]) or staged_paths(repo):
+        raise ATKError("GIT_OPERATION_INTERRUPTED", "workspace differs after rollback commit")
+    decision = (
+        read_json(decision_path)
+        if decision_path.exists()
+        else {
+            "schema_version": 2,
+            "id": operation["decision_id"],
+            "created_at": now(),
+            "round_id": value["id"],
+            "action": "rollback_to",
+            "operation_id": operation["id"],
+            "before_commit": operation["before_commit"],
+            "after_commit": head(repo),
+            "rollback_to": operation["target_commit"],
+            "withdrawn_candidate_ids": operation["withdrawn_candidate_ids"],
+            "reason": operation["reason"],
+        }
+    )
+    if decision["after_commit"] != head(repo) or decision["operation_id"] != operation["id"]:
+        raise ATKError("GIT_OPERATION_INTERRUPTED", "saved rollback Decision disagrees with commit")
+    if not decision_path.exists():
+        write_json(decision_path, decision, immutable=True)
+    value["active_candidate_ids"] = value["active_candidate_ids"][: operation["target_index"]]
+    value["current_commit"] = head(repo)
+    value["current_revision_id"] = operation["target_revision_id"]
+    _write_round(folder.parent.parent, value)
+    operation["stage"] = "complete"
+    operation["after_commit"] = value["current_commit"]
+    write_json(folder / "operations" / f"{operation['id']}.json", operation)
+    return {"stage": "complete", "decision": decision}
 
 
 def rollback_to(repo: Path, root: Path, request: dict) -> dict:
@@ -648,12 +837,18 @@ def rollback_to(repo: Path, root: Path, request: dict) -> dict:
             raise ATKError("SCOPE_VIOLATION", "rollback diff includes paths outside candidate scope")
         operation = {
             "id": new_id("operation"),
+            "decision_id": new_id("decision"),
             "action": "rollback_to",
+            "round_id": value["id"],
             "stage": "prepared",
             "created_at": now(),
             "before_commit": value["current_commit"],
             "target_commit": target_commit,
+            "target_revision_id": match[0],
+            "target_index": match[1],
+            "withdrawn_candidate_ids": value["active_candidate_ids"][match[1] :],
             "paths": sorted(changed),
+            "reason": request["reason"],
         }
         op_path = folder / "operations" / f"{operation['id']}.json"
         write_json(op_path, operation, immutable=True)
@@ -670,38 +865,22 @@ def rollback_to(repo: Path, root: Path, request: dict) -> dict:
             git(repo, "--literal-pathspecs", "add", "-A", "--", *sorted(changed))
         if staged_paths(repo) != changed:
             raise ATKError("GIT_OPERATION_INTERRUPTED", "rollback index differs from expected paths")
-        if changed:
-            try:
-                git(repo, "commit", "-m", f"revert: [agent] ATK rollback {operation['id']}")
-            except ATKError as exc:
-                raise ATKError(
-                    "COMMIT_FAILED", f"rollback operation {operation['id']} needs inspection: {exc}"
-                ) from exc
-        if git(repo, "rev-parse", "HEAD^{tree}") != git(repo, "rev-parse", f"{target_commit}^{{tree}}"):
-            raise ATKError("GIT_OPERATION_INTERRUPTED", "rollback commit tree differs from target checkpoint")
-        withdrawn = value["active_candidate_ids"][match[1] :]
-        value["active_candidate_ids"] = value["active_candidate_ids"][: match[1]]
-        value["current_commit"] = head(repo)
-        value["current_revision_id"] = match[0]
-        _write_round(root, value)
-        decision = {
-            "schema_version": 2,
-            "id": new_id("decision"),
-            "created_at": now(),
-            "round_id": value["id"],
-            "action": "rollback_to",
-            "operation_id": operation["id"],
-            "before_commit": operation["before_commit"],
-            "after_commit": value["current_commit"],
-            "rollback_to": target_commit,
-            "withdrawn_candidate_ids": withdrawn,
-            "reason": request["reason"],
-        }
-        write_json(folder / "decisions" / f"{decision['id']}.json", decision, immutable=True)
-        operation["stage"] = "complete"
-        operation["after_commit"] = value["current_commit"]
+        try:
+            git(
+                repo,
+                "commit",
+                *(["--allow-empty"] if not changed else []),
+                "-m",
+                f"revert: [agent] ATK rollback {operation['id']}",
+                "-m",
+                f"ATK-Round: {value['id']}\nATK-Rollback: {operation['id']}",
+            )
+        except ATKError as exc:
+            raise ATKError("COMMIT_FAILED", f"rollback operation {operation['id']} needs inspection: {exc}") from exc
+        operation["stage"] = "committed"
         write_json(op_path, operation)
-        return decision
+        _verify_rollback_commit(repo, operation)
+        return _recover_rollback_locked(repo, folder, operation)["decision"]
 
 
 @contextmanager

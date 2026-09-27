@@ -11,6 +11,7 @@ from agent_tune_kit.checkpoints import (
     freeze_round,
     inspect_or_recover_operation,
     prepare_candidate,
+    rollback_to,
     seal_candidate,
     temporary_revision,
 )
@@ -54,6 +55,34 @@ def _handoff_issue() -> dict:
         "next_action": "reproduce direct tool call",
         "handoff": {"trigger_input": "task", "expected": "ok", "actual": "error"},
     }
+
+
+def test_supported_diagnosis_requires_check_evidence(tmp_path: Path) -> None:
+    rows = [{"id": "case", "input": "task", "usage": "optimization", "source_group_id": "group"}]
+    repo, root, dataset, round_data, _ = project(tmp_path, "print('tool error')\n", rows)
+    batch = run_evaluation(
+        root,
+        {
+            "dataset_id": dataset["id"],
+            "case_ids": ["case"],
+            "purpose": "evaluation",
+            "revision_id": round_data["baseline_revision_id"],
+            "revision_commit": git(repo, "rev-parse", "HEAD"),
+        },
+    )
+    ref = {"batch_id": batch["id"], "evidence_id": next(iter(validate_evidence(root, batch["id"])[2]))}
+    issue = {
+        **_handoff_issue(),
+        "root_cause_status": "supported",
+        "mechanism_evidence_refs": [ref],
+        "competing_explanations_addressed": "direct tool check rules out Agent input error",
+        "checks": [{"status": "completed", "expected": "tool error", "actual": "tool error"}],
+    }
+    with pytest.raises(ATKError, match="completed check needs"):
+        store_diagnosis(root, {"round_id": round_data["id"], "issues": [issue]})
+    issue["checks"][0]["evidence_refs"] = [ref]
+    stored = store_diagnosis(root, {"round_id": round_data["id"], "issues": [issue]})
+    assert stored["issues"][0]["root_cause_status"] == "supported"
 
 
 def test_external_issue_blocks_normal_keep_but_allows_authorized_workaround(tmp_path: Path) -> None:
@@ -151,7 +180,8 @@ def test_external_fix_new_baseline_needs_direct_and_end_to_end_evidence(tmp_path
                     "kind": "direct_component",
                     "component_identity": "tool@fixed",
                     "evaluation_spec_hash": digest(SPEC),
-                    "command_hash": digest(read_json(root / "project.json")["command"]),
+                    "command": [sys.executable, "-c", "print('ok')"],
+                    "command_hash": digest([sys.executable, "-c", "print('ok')"]),
                     "runner_hash": digest(root / "adapters" / "runner.py"),
                     "case_ids": ["case"],
                     "isolation_ref": "local fixture",
@@ -357,3 +387,368 @@ def test_commit_recovery_records_original_commit_once(tmp_path: Path, monkeypatc
         == "complete"
     )
     assert git(repo, "rev-parse", "HEAD") == committed
+
+
+def test_commit_hook_cannot_add_unsealed_path(tmp_path: Path) -> None:
+    rows = [{"id": "case", "input": "task", "usage": "optimization", "source_group_id": "group"}]
+    repo, root, _, round_data, plan = project(tmp_path, "print('ok')\n", rows)
+    freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    draft = prepare_candidate(
+        repo, root, {"round_id": round_data["id"], "primary_issue_id": "issue", "paths": ["prompt.txt"]}
+    )
+    (repo / "prompt.txt").write_text("new")
+    sealed = seal_candidate(repo, root, {"round_id": round_data["id"], "candidate_id": draft["id"]})
+    hook = repo / ".git" / "hooks" / "pre-commit"
+    hook.write_text("#!/bin/sh\necho changed > agent.py\ngit add agent.py\n")
+    hook.chmod(0o755)
+    with pytest.raises(ATKError, match="unsealed paths"):
+        decide_candidate(
+            repo,
+            root,
+            {
+                "round_id": round_data["id"],
+                "candidate_id": draft["id"],
+                "action": "keep",
+                "validation_id": _passing_validation(root, round_data, sealed),
+                "reason": "fixture",
+            },
+        )
+    stored = read_json(root / "rounds" / round_data["id"] / "round.json")
+    assert stored["current_commit"] == round_data["baseline_commit"]
+    assert stored["pending_candidate_id"] == draft["id"]
+    operation = next((root / "rounds" / round_data["id"] / "operations").glob("*.json"))
+    with pytest.raises(ATKError, match="unsealed paths"):
+        inspect_or_recover_operation(repo, root, {"round_id": round_data["id"], "operation_id": operation.stem})
+
+
+def test_rejected_commit_hook_can_unstage_only_sealed_paths(tmp_path: Path) -> None:
+    rows = [{"id": "case", "input": "task", "usage": "optimization", "source_group_id": "group"}]
+    repo, root, _, round_data, plan = project(tmp_path, "print('ok')\n", rows)
+    freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    draft = prepare_candidate(
+        repo, root, {"round_id": round_data["id"], "primary_issue_id": "issue", "paths": ["prompt.txt"]}
+    )
+    (repo / "prompt.txt").write_text("new")
+    sealed = seal_candidate(repo, root, {"round_id": round_data["id"], "candidate_id": draft["id"]})
+    hook = repo / ".git" / "hooks" / "pre-commit"
+    hook.write_text("#!/bin/sh\nexit 1\n")
+    hook.chmod(0o755)
+    request = {
+        "round_id": round_data["id"],
+        "candidate_id": draft["id"],
+        "action": "keep",
+        "validation_id": _passing_validation(root, round_data, sealed),
+        "reason": "fixture",
+    }
+    with pytest.raises(ATKError, match="commit failed"):
+        decide_candidate(repo, root, request)
+    operation = next((root / "rounds" / round_data["id"] / "operations").glob("*.json"))
+    result = inspect_or_recover_operation(repo, root, {"round_id": round_data["id"], "operation_id": operation.stem})
+    assert result["stage"] == "aborted"
+    assert git(repo, "diff", "--cached", "--name-only") == ""
+    assert (repo / "prompt.txt").read_text() == "new"
+    hook.unlink()
+    decision = decide_candidate(repo, root, request)
+    assert decision["action"] == "keep"
+
+
+def test_decision_written_before_round_update_can_recover(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    rows = [{"id": "case", "input": "task", "usage": "optimization", "source_group_id": "group"}]
+    repo, root, _, round_data, plan = project(tmp_path, "print('ok')\n", rows)
+    freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    draft = prepare_candidate(
+        repo, root, {"round_id": round_data["id"], "primary_issue_id": "issue", "paths": ["prompt.txt"]}
+    )
+    (repo / "prompt.txt").write_text("new")
+    sealed = seal_candidate(repo, root, {"round_id": round_data["id"], "candidate_id": draft["id"]})
+    with monkeypatch.context() as patch:
+        patch.setattr(checkpoints, "_write_round", lambda *_: (_ for _ in ()).throw(RuntimeError("interrupted")))
+        with pytest.raises(RuntimeError, match="interrupted"):
+            decide_candidate(
+                repo,
+                root,
+                {
+                    "round_id": round_data["id"],
+                    "candidate_id": draft["id"],
+                    "action": "keep",
+                    "validation_id": _passing_validation(root, round_data, sealed),
+                    "reason": "fixture",
+                },
+            )
+    operation = next((root / "rounds" / round_data["id"] / "operations").glob("*.json"))
+    result = inspect_or_recover_operation(repo, root, {"round_id": round_data["id"], "operation_id": operation.stem})
+    assert result["stage"] == "complete"
+    assert read_json(root / "rounds" / round_data["id"] / "round.json")["current_commit"] == git(
+        repo, "rev-parse", "HEAD"
+    )
+
+
+def test_final_completion_rejects_wrong_revision(tmp_path: Path) -> None:
+    rows = [{"id": "case", "input": "task", "usage": "optimization", "source_group_id": "group"}]
+    repo, root, _, round_data, plan = project(tmp_path, "print('ok')\n", rows)
+    freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    draft = prepare_candidate(
+        repo, root, {"round_id": round_data["id"], "primary_issue_id": "issue", "paths": ["prompt.txt"]}
+    )
+    (repo / "prompt.txt").write_text("new")
+    sealed = seal_candidate(repo, root, {"round_id": round_data["id"], "candidate_id": draft["id"]})
+    decide_candidate(
+        repo,
+        root,
+        {
+            "round_id": round_data["id"],
+            "candidate_id": draft["id"],
+            "action": "keep",
+            "validation_id": _passing_validation(root, round_data, sealed),
+            "reason": "fixture",
+        },
+    )
+    write_json(
+        root / "rounds" / round_data["id"] / "validations" / "wrong-final" / "validation.json",
+        {
+            "round_id": round_data["id"],
+            "mode": "final",
+            "result": "pass",
+            "left_revision_id": round_data["baseline_revision_id"],
+            "right_revision_id": "another-revision",
+            "final_commit": git(repo, "rev-parse", "HEAD"),
+            "plan_hash": digest(plan),
+        },
+    )
+    with pytest.raises(ATKError, match="does not match current Round"):
+        finish_round(
+            repo,
+            root,
+            {"round_id": round_data["id"], "action": "complete", "validation_id": "wrong-final", "reason": ""},
+        )
+
+
+def test_trial_override_keeps_original_result_and_cannot_claim_normal_completion(tmp_path: Path) -> None:
+    rows = [{"id": "case", "input": "task", "usage": "optimization", "source_group_id": "group"}]
+    repo, root, _, round_data, plan = project(tmp_path, "print('ok')\n", rows)
+    freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    draft = prepare_candidate(
+        repo, root, {"round_id": round_data["id"], "primary_issue_id": "issue", "paths": ["prompt.txt"]}
+    )
+    (repo / "prompt.txt").write_text("new")
+    sealed = seal_candidate(repo, root, {"round_id": round_data["id"], "candidate_id": draft["id"]})
+    validation_id = "not-proven"
+    write_json(
+        root / "rounds" / round_data["id"] / "validations" / validation_id / "validation.json",
+        {
+            "result": "no_effect",
+            "left_commit": draft["parent_commit"],
+            "right_revision_id": sealed["revision_id"],
+        },
+    )
+    request = {
+        "round_id": round_data["id"],
+        "candidate_id": draft["id"],
+        "action": "keep",
+        "validation_id": validation_id,
+        "reason": "trial",
+        "override": True,
+    }
+    with pytest.raises(ATKError, match="explicit user action"):
+        decide_candidate(repo, root, request)
+    authorization = {"source": "user", "action": "trial_commit", "reason": "trial", "risk": "no measured benefit"}
+    decision = decide_candidate(repo, root, {**request, "override_authorization": authorization})
+    assert decision["validation_result"] == "no_effect"
+    assert decision["override_authorization"] == authorization
+    with pytest.raises(ATKError, match="passing final validation"):
+        finish_round(repo, root, {"round_id": round_data["id"], "action": "complete", "reason": "trial"})
+    with pytest.raises(ATKError, match="explicit user action"):
+        finish_round(
+            repo,
+            root,
+            {
+                "round_id": round_data["id"],
+                "action": "complete_with_override",
+                "reason": "trial",
+                "validation_missing_reason": "final budget not spent",
+            },
+        )
+    retained = finish_round(
+        repo,
+        root,
+        {
+            "round_id": round_data["id"],
+            "action": "complete_with_override",
+            "reason": "trial",
+            "validation_missing_reason": "final budget not spent",
+            "override_authorization": {
+                "source": "user",
+                "action": "retain_without_final_pass",
+                "reason": "temporary local trial",
+                "risk": "no final validation",
+            },
+        },
+    )
+    assert retained["validation_result"] is None
+    assert retained["override"] is True
+    assert read_json(root / "rounds" / round_data["id"] / "round.json")["status"] == "completed_with_override"
+
+
+def test_interrupted_rollback_refuses_unknown_content_then_restores_start(tmp_path: Path) -> None:
+    rows = [{"id": "case", "input": "task", "usage": "optimization", "source_group_id": "group"}]
+    repo, root, _, round_data, plan = project(tmp_path, "print('ok')\n", rows)
+    freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    draft = prepare_candidate(
+        repo, root, {"round_id": round_data["id"], "primary_issue_id": "issue", "paths": ["prompt.txt"]}
+    )
+    (repo / "prompt.txt").write_text("new")
+    sealed = seal_candidate(repo, root, {"round_id": round_data["id"], "candidate_id": draft["id"]})
+    decide_candidate(
+        repo,
+        root,
+        {
+            "round_id": round_data["id"],
+            "candidate_id": draft["id"],
+            "action": "keep",
+            "validation_id": _passing_validation(root, round_data, sealed),
+            "reason": "fixture",
+        },
+    )
+    before = git(repo, "rev-parse", "HEAD")
+    hook = repo / ".git" / "hooks" / "pre-commit"
+    hook.write_text("#!/bin/sh\nexit 1\n")
+    hook.chmod(0o755)
+    with pytest.raises(ATKError, match="rollback operation"):
+        rollback_to(
+            repo,
+            root,
+            {"round_id": round_data["id"], "target_commit": round_data["baseline_commit"], "reason": "fixture"},
+        )
+    operation = next(
+        path
+        for path in (root / "rounds" / round_data["id"] / "operations").glob("*.json")
+        if read_json(path)["action"] == "rollback_to"
+    )
+    (repo / "prompt.txt").write_text("unknown")
+    with pytest.raises(ATKError, match="unknown rollback content"):
+        inspect_or_recover_operation(repo, root, {"round_id": round_data["id"], "operation_id": operation.stem})
+    assert (repo / "prompt.txt").read_text() == "unknown"
+    (repo / "prompt.txt").write_text("old")
+    result = inspect_or_recover_operation(repo, root, {"round_id": round_data["id"], "operation_id": operation.stem})
+    assert result["stage"] == "aborted"
+    assert git(repo, "rev-parse", "HEAD") == before
+    assert git(repo, "diff", "--cached", "--name-only") == ""
+    assert (repo / "prompt.txt").read_text() == "new"
+    hook.unlink()
+    restored = rollback_to(
+        repo,
+        root,
+        {"round_id": round_data["id"], "target_commit": round_data["baseline_commit"], "reason": "retry"},
+    )
+    assert restored["withdrawn_candidate_ids"] == [draft["id"]]
+
+
+def test_rollback_commit_recovery_keeps_one_restoration_commit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    rows = [{"id": "case", "input": "task", "usage": "optimization", "source_group_id": "group"}]
+    repo, root, _, round_data, plan = project(tmp_path, "print('ok')\n", rows)
+    freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    draft = prepare_candidate(
+        repo, root, {"round_id": round_data["id"], "primary_issue_id": "issue", "paths": ["prompt.txt"]}
+    )
+    (repo / "prompt.txt").write_text("new")
+    sealed = seal_candidate(repo, root, {"round_id": round_data["id"], "candidate_id": draft["id"]})
+    decide_candidate(
+        repo,
+        root,
+        {
+            "round_id": round_data["id"],
+            "candidate_id": draft["id"],
+            "action": "keep",
+            "validation_id": _passing_validation(root, round_data, sealed),
+            "reason": "fixture",
+        },
+    )
+
+    def interrupt_round(*_: object) -> None:
+        raise RuntimeError("rollback status interrupted")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(checkpoints, "_write_round", interrupt_round)
+        with pytest.raises(RuntimeError, match="rollback status interrupted"):
+            rollback_to(
+                repo,
+                root,
+                {"round_id": round_data["id"], "target_commit": round_data["baseline_commit"], "reason": "fixture"},
+            )
+    committed = git(repo, "rev-parse", "HEAD")
+    operation = next(
+        path
+        for path in (root / "rounds" / round_data["id"] / "operations").glob("*.json")
+        if read_json(path)["action"] == "rollback_to"
+    )
+    result = inspect_or_recover_operation(repo, root, {"round_id": round_data["id"], "operation_id": operation.stem})
+    assert result["stage"] == "complete"
+    assert result["decision"]["after_commit"] == committed
+    assert git(repo, "rev-parse", "HEAD") == committed
+    assert read_json(root / "rounds" / round_data["id"] / "round.json")["active_candidate_ids"] == []
+
+
+def test_literal_special_path_and_unknown_file_survive_candidate_gate(tmp_path: Path) -> None:
+    rows = [{"id": "case", "input": "task", "usage": "optimization", "source_group_id": "group"}]
+    repo, root, _, round_data, plan = project(tmp_path, "print('ok')\n", rows)
+    special = "literal [*] 中文.txt"
+    plan["allowed_paths"].append(special)
+    freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    unknown = repo / "unknown.txt"
+    unknown.write_text("do not touch")
+    with pytest.raises(ATKError, match="unaccounted"):
+        prepare_candidate(repo, root, {"round_id": round_data["id"], "primary_issue_id": "issue", "paths": [special]})
+    assert unknown.read_text() == "do not touch"
+    unknown.unlink()
+    draft = prepare_candidate(
+        repo, root, {"round_id": round_data["id"], "primary_issue_id": "issue", "paths": [special]}
+    )
+    (repo / special).write_text("new")
+    sealed = seal_candidate(repo, root, {"round_id": round_data["id"], "candidate_id": draft["id"]})
+    assert (root / "rounds" / round_data["id"] / "candidates" / draft["id"] / "files" / special).read_text() == "new"
+    decide_candidate(
+        repo,
+        root,
+        {
+            "round_id": round_data["id"],
+            "candidate_id": draft["id"],
+            "action": "keep",
+            "validation_id": _passing_validation(root, round_data, sealed),
+            "reason": "fixture",
+        },
+    )
+    assert git(repo, "show", f"HEAD:{special}") == "new"
+    rollback_to(
+        repo,
+        root,
+        {"round_id": round_data["id"], "target_commit": round_data["baseline_commit"], "reason": "fixture"},
+    )
+    assert not (repo / special).exists()
+
+
+def test_runner_commit_blocks_evaluation_without_advancing_round(tmp_path: Path) -> None:
+    script = (
+        "import subprocess\nfrom pathlib import Path\n"
+        "Path('prompt.txt').write_text('rogue')\n"
+        "subprocess.run(['git', 'add', 'prompt.txt'], check=True)\n"
+        "subprocess.run(['git', 'commit', '-m', 'rogue'], check=True, capture_output=True)\n"
+        "print('ok')\n"
+    )
+    rows = [{"id": "case", "input": "task", "usage": "optimization", "source_group_id": "group"}]
+    repo, root, dataset, round_data, plan = project(tmp_path, script, rows)
+    freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    with pytest.raises(ATKError, match="runner changed current checkpoint"):
+        run_evaluation(
+            root,
+            {
+                "dataset_id": dataset["id"],
+                "case_ids": ["case"],
+                "purpose": "evaluation",
+                "revision_id": round_data["baseline_revision_id"],
+                "round_id": round_data["id"],
+            },
+        )
+    assert (
+        read_json(root / "rounds" / round_data["id"] / "round.json")["current_commit"] == round_data["baseline_commit"]
+    )
+    assert git(repo, "rev-parse", "HEAD") != round_data["baseline_commit"]

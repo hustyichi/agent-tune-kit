@@ -34,7 +34,7 @@ uvx --from agent-tune-kit atk install
 
 ## 证据入口与预算
 
-- **本地运行**：项目 `.atk/adapters/runner.py` 用目标项目的 Python 环境按显式尝试列表调用现有 Agent；每次尝试保存一个 Execution。Prompt、代码及业务 Skill 使用同一协议。Skill 的 `available`、`loaded`、`invoked` 状态分开记录，无法证明实际加载时不能正常通过 Skill 门禁。
+- **本地运行**：项目 `.atk/adapters/runner.py` 用目标项目的 Python 环境按显式尝试列表调用现有 Agent；每次尝试保存一个 Execution。Prompt、代码及业务 Skill 使用同一协议。Skill 的 `available`、`loaded`、`invoked` 状态分开记录，无法证明实际加载时不能正常通过 Skill 门禁。诊断探针可在冻结许可内改用直接工具或项目测试命令；许可限定 argv、脚本指纹、工作目录、超时、Case、调用数和隔离依据，探针结果不参与正式效果对照。
 - **预算与对照**：冻结轮次按尝试预留最终 B0／累计版本复验额度；授权重试生成关联旧 Execution 的新批次，保留全部尝试而不挑最好一次。效率或成本门槛仅在预先冻结且指标齐全时判定。独立 holdout 按来源组和里程碑记录暴露，已暴露的组不能在后续轮次重用。
 - **批量结果导入**：CSV/JSON/JSONL 按保存的字段映射导入，不重新运行 Agent；缺少尝试边界时不伪造 Execution。
 - **Langfuse 文件导入**：支持 Trace bundle 和 Observation 行两种显式 profile。保留 Trace/Observation ID、父子关系、来源、缺失与过滤范围；外部分数只当证据，不直接换算 ATK 的通过率。原文件只读，默认遮蔽常见凭证字段；项目敏感字段需要追加脱敏键。
@@ -48,6 +48,7 @@ uvx --from agent-tune-kit atk install
 ├── project.json                # 项目运行配置与组件声明
 ├── runtime.md                  # 接入调查、加载证明和局限
 ├── adapters/runner.py          # 项目本地 runner
+├── probes/                     # 可选的授权诊断脚本
 ├── datasets/<id>/              # 不可变 Case 快照
 ├── evidence/<batch-id>/        # records.jsonl、来源索引、执行状态
 ├── assessments/<id>/           # manifest.json + 唯一权威 assessment.csv

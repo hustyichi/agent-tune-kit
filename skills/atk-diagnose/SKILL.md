@@ -12,9 +12,17 @@ change the repair location. Use source/contract inspection first; run a bounded
 `diagnostic_probe` only with an approved command, isolation, and budget. Never treat a
 probe as an original execution or as effect validation.
 Record each probe permission in the frozen plan (or an `analysis_plan` before freeze):
-ID, configured command hash, runner hash, allowed Case IDs and isolation reference.
+ID, command argv and its `command_hash`, runner hash, allowed Case IDs,
+`working_directory`, `timeout_seconds`, `max_calls`, and checked `isolation_ref`.
+If the command runs a diagnostic script, put it under `.atk/probes/` and record
+its path relative to that directory plus `script_sha256`. ATK checks the hash
+before and during execution. Use the frozen permission ID in the run request;
+request-supplied command changes are ignored. Record the Issue, competing
+explanations, check purpose, initial state, target component, original evidence,
+and replay limits with the diagnosis.
 For a post-fix direct check also freeze `kind=direct_component`, the repaired
-`component_identity`, and its `evaluation_spec_hash` in that permission.
+`component_identity`, and its `evaluation_spec_hash` in that permission. Its
+command must call the component directly, not the project's end-to-end Agent.
 Set a separate `budget.probes`; zero is the default. The reference records a checked
 setup and does not create an OS sandbox for the target Agent.
 

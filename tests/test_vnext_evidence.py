@@ -137,33 +137,33 @@ def test_assessment_csv_is_authoritative_and_tampering_is_rejected(tmp_path: Pat
     )
     _, records, _ = validate_evidence(root, batch["id"])
     record_id = next(iter(records))
-    path = store_assessment(
-        root,
-        {
-            "batch_id": batch["id"],
-            "evaluation_spec": {
-                "version": "v1",
-                "boundary": "imported result",
-                "dimensions": ["task_success"],
-                "dimension_rules": {"task_success": {"validity": "source present", "attribution": "unknown"}},
-                "denominator_rule": "valid imported records",
-            },
-            "judger": {"version": "v1", "readiness": "uncalibrated"},
-            "rows": [
-                {
-                    "record_id": record_id,
-                    "dimension": "task_success",
-                    "validity": "valid",
-                    "validity_reason": "",
-                    "verdict": "pass",
-                    "score": None,
-                    "reason": "reviewed",
-                    "evidence_refs": [{"batch_id": batch["id"], "evidence_id": record_id}],
-                    "judger_kind": "semantic",
-                }
-            ],
+    assessment_request = {
+        "batch_id": batch["id"],
+        "evaluation_spec": {
+            "version": "v1",
+            "boundary": "imported result",
+            "dimensions": ["task_success"],
+            "dimension_rules": {"task_success": {"validity": "source present", "attribution": "unknown"}},
+            "denominator_rule": "valid imported records",
         },
-    )
+        "judger": {"version": "v1", "readiness": "uncalibrated"},
+        "rows": [
+            {
+                "record_id": record_id,
+                "dimension": "task_success",
+                "validity": "valid",
+                "validity_reason": "",
+                "verdict": "pass",
+                "score": None,
+                "reason": "reviewed",
+                "evidence_refs": [{"batch_id": batch["id"], "evidence_id": record_id}],
+                "judger_kind": "semantic",
+            }
+        ],
+    }
+    with pytest.raises(ATKError, match="invalid evidence reference"):
+        store_assessment(root, {**assessment_request, "rows": [{**assessment_request["rows"][0], "evidence_refs": []}]})
+    path = store_assessment(root, assessment_request)
     manifest, rows = read_assessment(root, path.parent.name)
     assert manifest["judger_readiness"] == "uncalibrated"
     assert rows[0]["verdict"] == "pass"

@@ -150,7 +150,9 @@ def load_cases(root: Path, dataset_id: str) -> dict[str, dict]:
     return {case["id"]: case for case in (json.loads(line) for line in path.read_text().splitlines())}
 
 
-def _reserve_run(root: Path, request: dict, cases: dict, attempts: list[dict], batch_id: str, project: dict) -> None:
+def _reserve_run(
+    root: Path, request: dict, cases: dict, attempts: list[dict], batch_id: str, project: dict
+) -> dict | None:
     round_id = request.get("round_id")
     if not round_id:
         if request["purpose"] == "diagnostic_probe" or any(cases[a["case_id"]]["usage"] == "holdout" for a in attempts):
@@ -166,17 +168,63 @@ def _reserve_run(root: Path, request: dict, cases: dict, attempts: list[dict], b
         )
         budget = plan.get("budget", {})
         purpose = request["purpose"]
+        probe_config = None
         if purpose == "diagnostic_probe":
             permission_id = request.get("probe_authorization_id")
-            permission = next((p for p in plan.get("probe_permissions", []) if p.get("id") == permission_id), None)
+            permissions = plan.get("probe_permissions", [])
+            permission = (
+                next((p for p in permissions if isinstance(p, dict) and p.get("id") == permission_id), None)
+                if isinstance(permissions, list)
+                else None
+            )
+            probe_command = permission.get("command", project["command"]) if permission else None
+            workdir_ref = permission.get("working_directory", ".") if permission else None
+            workdir = (
+                (Path(project["workspace_path"]) / workdir_ref).resolve() if isinstance(workdir_ref, str) else None
+            )
+            timeout = permission.get("timeout_seconds", 120) if permission else None
+            max_calls = permission.get("max_calls", budget.get("probes", 0)) if permission else None
+            script_ref = permission.get("script_path") if permission else None
+            script_path = (root / "probes" / script_ref).resolve() if isinstance(script_ref, str) else None
+            script_hash = permission.get("script_sha256") if permission else None
             if (
                 not permission
-                or permission.get("command_hash") != digest(project["command"])
+                or not isinstance(probe_command, list)
+                or not probe_command
+                or any(not isinstance(part, str) for part in probe_command)
+                or permission.get("command_hash") != digest(probe_command)
+                or (permission.get("kind") == "direct_component" and probe_command == project["command"])
                 or permission.get("runner_hash") != digest(root / "adapters" / "runner.py")
                 or not set(a["case_id"] for a in attempts) <= set(permission.get("case_ids", []))
                 or not permission.get("isolation_ref")
+                or not workdir
+                or not workdir.is_dir()
+                or not workdir.is_relative_to(Path(project["workspace_path"]).resolve())
+                or type(timeout) is not int
+                or timeout < 1
+                or type(max_calls) is not int
+                or max_calls < 1
+                or (
+                    script_ref is not None
+                    and (
+                        not script_path
+                        or not script_path.is_relative_to((root / "probes").resolve())
+                        or not script_path.is_file()
+                        or digest(script_path) != script_hash
+                        or not any((workdir / part).resolve() == script_path for part in probe_command)
+                    )
+                )
             ):
                 raise ATKError("WORKSPACE_CONFLICT", "probe command, cases, or isolation are not authorized")
+            probe_config = {
+                "command": probe_command,
+                "command_hash": permission["command_hash"],
+                "working_directory": str(workdir),
+                "timeout_seconds": timeout,
+                "isolation_ref": permission["isolation_ref"],
+                "script_path": str(script_path) if script_path else None,
+                "script_sha256": script_hash,
+            }
         elif round_data["status"] == "analysis_only" or not set(a["case_id"] for a in attempts) <= set(
             plan["case_ids"]
         ):
@@ -259,6 +307,17 @@ def _reserve_run(root: Path, request: dict, cases: dict, attempts: list[dict], b
         limit = budget.get(counter, 0)
         if type(limit) is not int or limit < 0 or usage[counter] + len(attempts) > limit:
             raise ATKError("BUDGET_EXHAUSTED", f"{counter} budget cannot cover {len(attempts)} attempts")
+        if (
+            probe_config
+            and sum(
+                reservation["attempts"]
+                for reservation in usage["reservations"]
+                if reservation.get("probe_authorization_id") == permission_id
+            )
+            + len(attempts)
+            > max_calls
+        ):
+            raise ATKError("BUDGET_EXHAUSTED", "probe permission max_calls exceeded")
         if purpose == "evaluation" and phase not in {"final", "external_fix"}:
             final_needed = (
                 (1 if round_data.get("external_fix_identity") else 2)
@@ -280,6 +339,7 @@ def _reserve_run(root: Path, request: dict, cases: dict, attempts: list[dict], b
                 "phase": phase if purpose == "evaluation" else None,
                 "revision_id": request["revision_id"],
                 "retry_batch_id": request.get("retry_batch_id"),
+                "probe_authorization_id": permission_id if purpose == "diagnostic_probe" else None,
                 "attempts": len(attempts),
                 "at": now(),
             }
@@ -292,6 +352,7 @@ def _reserve_run(root: Path, request: dict, cases: dict, attempts: list[dict], b
                 )
                 entry["batch_ids"].append(batch_id)
             write_json(exposure_path, exposure)
+        return probe_config
 
 
 def run_evaluation(root: Path, request: dict) -> dict:
@@ -380,7 +441,7 @@ def run_evaluation(root: Path, request: dict) -> dict:
         raise ATKError("NOT_REPLAYABLE", f"project runner is missing: {runner}")
     if retry_batch_id and prior_manifest.get("runner_hash") != digest(runner):
         raise ATKError("COMPARISON_INVALID", "runner changed before retry")
-    _reserve_run(root, request, cases, attempts, batch_id, project)
+    probe_config = _reserve_run(root, request, cases, attempts, batch_id, project)
     folder = root / "evidence" / batch_id
     folder.mkdir(parents=True, exist_ok=False)
     runner_request = {
@@ -392,11 +453,13 @@ def run_evaluation(root: Path, request: dict) -> dict:
         "workspace_path": str(repo),
         "cases_path": str((root / "datasets" / safe_id(request["dataset_id"]) / "cases.jsonl").resolve()),
         "attempts": attempts,
-        "timeout_seconds": request.get("timeout_seconds", 120),
+        "timeout_seconds": probe_config["timeout_seconds"] if probe_config else request.get("timeout_seconds", 120),
         "concurrency": request.get("concurrency", 1),
         "run_config_ref": str(root / "project.json"),
         "output_dir": str(folder.resolve()),
     }
+    if probe_config:
+        runner_request["probe_config"] = probe_config
     request_path = folder / "request.json"
     write_json(request_path, runner_request, immutable=True)
     command = [
@@ -474,6 +537,7 @@ def run_evaluation(root: Path, request: dict) -> dict:
         "probe_authorization_id": request.get("probe_authorization_id")
         if request["purpose"] == "diagnostic_probe"
         else None,
+        "probe_config": probe_config,
         "supersedes_batch_id": retry_batch_id,
         "revision_id": request["revision_id"],
         "revision_commit": request.get("revision_commit"),
