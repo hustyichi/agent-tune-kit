@@ -116,11 +116,11 @@ def require_uv() -> str:
 
 
 def run_static_python_checks() -> None:
-    run(["uv", "run", "ruff", "format", "."])
-    run(["uv", "run", "ruff", "check", "--fix", "."])
-    run(["uv", "run", "ruff", "format", "--check", "."])
-    run(["uv", "run", "ruff", "check", "."])
-    run(["uv", "run", "python", "-m", "py_compile", *PYTHON_FILES], timeout=120)
+    run(["uv", "run", "--frozen", "ruff", "format", "."])
+    run(["uv", "run", "--frozen", "ruff", "check", "--fix", "."])
+    run(["uv", "run", "--frozen", "ruff", "format", "--check", "."])
+    run(["uv", "run", "--frozen", "ruff", "check", "."])
+    run(["uv", "run", "--frozen", "python", "-m", "py_compile", *PYTHON_FILES], timeout=120)
 
 
 def read_project_identity() -> ProjectIdentity:
@@ -260,10 +260,10 @@ def main() -> int:
     assert_versions_aligned(identity)
     clean_generated_artifacts()
     try:
-        run(["uv", "sync"], timeout=180)
+        run(["uv", "sync", "--frozen"], timeout=180)
         run_static_python_checks()
-        run(["uv", "run", "python", "scripts/validate_skill_pack.py"], timeout=120)
-        run(["uv", "run", "pytest", "-q"], timeout=240)
+        run(["uv", "run", "--frozen", "python", "scripts/validate_skill_pack.py"], timeout=120)
+        run(["uv", "run", "--frozen", "pytest", "-q"], timeout=240)
         with tempfile.TemporaryDirectory(prefix="atk-release-check-") as tmp:
             temp_dir = Path(tmp)
             wheel, sdist = build_distributions(temp_dir / "dist", identity)

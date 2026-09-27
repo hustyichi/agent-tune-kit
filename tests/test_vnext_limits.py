@@ -10,7 +10,7 @@ import pytest
 from agent_tune_kit.checkpoints import create_round, freeze_round, prepare_candidate, seal_candidate
 from agent_tune_kit.core import ATKError, digest, read_assessment, store_assessment, validate_evidence
 from agent_tune_kit.execution import initialize_project, run_evaluation, store_dataset
-from agent_tune_kit.governance import compare_and_gate, finish_round
+from agent_tune_kit.governance import compare_and_gate, finish_round, knowledge_applicability, store_knowledge
 from tests.test_vnext_flow import git
 
 SPEC = {
@@ -625,4 +625,97 @@ def test_holdout_exposure_cannot_be_reused_in_new_round(tmp_path: Path) -> None:
                 "revision_id": next_round["baseline_revision_id"],
                 "holdout_milestone_id": "milestone-2",
             },
+        )
+
+
+def test_holdout_evidence_used_for_knowledge_cannot_be_reused(tmp_path: Path) -> None:
+    rows = [{"id": "hold", "input": "case", "usage": "holdout", "source_group_id": "shared"}]
+    repo, root, dataset, round_data, plan = project(tmp_path, "print('ok')\n", rows)
+    plan["holdout_milestone_id"] = "milestone-1"
+    freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    request = {
+        "dataset_id": dataset["id"],
+        "case_ids": ["hold"],
+        "purpose": "evaluation",
+        "revision_id": round_data["baseline_revision_id"],
+        "round_id": round_data["id"],
+        "holdout_milestone_id": "milestone-1",
+    }
+    batch = run_evaluation(root, request)
+    knowledge = store_knowledge(
+        root,
+        {
+            "knowledge": {
+                "status": "provisional",
+                "applicability": "case",
+                "component_hashes": {"agent": "v1"},
+                "contract_hashes": {"task": "v1"},
+                "judger_hash": "v1",
+                "evidence_refs": [{"batch_id": batch["id"], "evidence_id": batch["evidence_index"][0]["evidence_id"]}],
+                "contrary_refs": [],
+                "candidate_ids": [],
+                "validation_ids": [],
+                "body": "The holdout result informed this rule.",
+            }
+        },
+    )
+    assert knowledge["optimization_source_group_ids"] == ["shared"]
+    with pytest.raises(ATKError, match="used for optimization"):
+        run_evaluation(root, request)
+
+
+def test_knowledge_input_scope_or_unknown_identity_needs_revalidation(tmp_path: Path) -> None:
+    rows = [{"id": "case", "input": "case", "usage": "optimization", "source_group_id": "g"}]
+    _, root, dataset, round_data, _ = project(tmp_path, "print('ok')\n", rows)
+    batch = run_evaluation(
+        root,
+        {
+            "dataset_id": dataset["id"],
+            "case_ids": ["case"],
+            "purpose": "evaluation",
+            "revision_id": round_data["baseline_revision_id"],
+            "revision_commit": round_data["baseline_commit"],
+        },
+    )
+    identity = {
+        "applicability": {"task_kind": "math"},
+        "component_hashes": {"agent": "v1"},
+        "contract_hashes": {"task": "v1"},
+        "judger_hash": "v1",
+    }
+    knowledge = store_knowledge(
+        root,
+        {
+            "knowledge": {
+                **identity,
+                "status": "validated_in_scope",
+                "evidence_refs": [{"batch_id": batch["id"], "evidence_id": batch["evidence_index"][0]["evidence_id"]}],
+                "contrary_refs": [],
+                "candidate_ids": [],
+                "validation_ids": [],
+                "body": "Applies to math tasks.",
+            }
+        },
+    )
+    request = {"knowledge_id": knowledge["id"], "current_identity": identity}
+    assert knowledge["applicability_hash"] == digest(identity["applicability"])
+    assert knowledge_applicability(root, request)["applicability"] == "validated_in_scope"
+    assert (
+        knowledge_applicability(
+            root, {**request, "current_identity": {**identity, "applicability": {"task_kind": "code"}}}
+        )["applicability"]
+        == "needs_revalidation"
+    )
+    assert knowledge_applicability(root, {**request, "current_identity": {}})["applicability"] == "needs_revalidation"
+
+
+def test_dataset_rejects_unhashable_source_group(tmp_path: Path) -> None:
+    rows = [{"id": "case", "input": "case", "usage": "optimization", "source_group_id": "g"}]
+    _, root, _, _, _ = project(tmp_path, "print('ok')\n", rows)
+    source = tmp_path / "bad.jsonl"
+    source.write_text(json.dumps({"id": "bad", "input": "case", "source_group_id": ["g"]}) + "\n")
+    with pytest.raises(ATKError, match="invalid source group"):
+        store_dataset(
+            root,
+            {"source": str(source), "mapping": {"id": "id", "input": "input", "source_group_id": "source_group_id"}},
         )

@@ -210,6 +210,8 @@ def store_dataset(root: Path, request: dict) -> dict:
         if mapping["input"] not in row:
             raise ATKError("AMBIGUOUS_MAPPING", f"missing input for {case_id}")
         source_group = row.get(mapping.get("source_group_id", ""))
+        if source_group is not None and not isinstance(source_group, str):
+            raise ATKError("AMBIGUOUS_MAPPING", f"invalid source group for {case_id}")
         usage = row.get(mapping.get("usage", "")) or "optimization"
         if usage not in {"optimization", "protection", "holdout"}:
             raise ATKError("AMBIGUOUS_MAPPING", f"invalid usage for {case_id}")
@@ -264,6 +266,25 @@ def load_cases(root: Path, dataset_id: str) -> dict[str, dict]:
     if digest(path) != manifest["cases_sha256"]:
         raise ATKError("INCOMPLETE_EVIDENCE", "dataset changed after sealing")
     return {case["id"]: case for case in (json.loads(line) for line in path.read_text().splitlines())}
+
+
+def source_groups_for_evidence(root: Path, refs: list[dict]) -> list[str]:
+    groups = set()
+    for ref in refs:
+        if not isinstance(ref, dict) or not ref.get("batch_id") or not ref.get("evidence_id"):
+            raise ATKError("INCOMPLETE_EVIDENCE", "Knowledge evidence reference is malformed")
+        manifest, records, index = validate_evidence(root, ref["batch_id"])
+        if ref["evidence_id"] not in index:
+            raise ATKError("INCOMPLETE_EVIDENCE", "Knowledge evidence reference is missing")
+        if manifest.get("source_type") != "local_runner" or ref["evidence_id"] not in records:
+            continue
+        case_id = records[ref["evidence_id"]].get("execution", {}).get("case_id")
+        case = load_cases(root, manifest["dataset_id"]).get(case_id)
+        if not case:
+            raise ATKError("INCOMPLETE_EVIDENCE", "Knowledge Execution has no matching Case")
+        if case and case.get("source_group_id"):
+            groups.add(case["source_group_id"])
+    return sorted(groups)
 
 
 def _reserve_run(
@@ -399,6 +420,15 @@ def _reserve_run(
                         raise ATKError(
                             "COMPARISON_INVALID", "holdout source group was used for optimization or protection"
                         )
+            for knowledge in (root / "knowledge").glob("*/revision-*.json"):
+                entry = read_json(knowledge)
+                used_groups = entry.get("optimization_source_group_ids")
+                if used_groups is None:
+                    used_groups = source_groups_for_evidence(
+                        root, entry.get("evidence_refs", []) + entry.get("contrary_refs", [])
+                    )
+                if groups.intersection(used_groups):
+                    raise ATKError("COMPARISON_INVALID", "holdout source group was used for optimization knowledge")
             exposure_path = root / "source-exposure.json"
             exposure = read_json(exposure_path) if exposure_path.exists() else {"groups": {}}
             for group in groups:

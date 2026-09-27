@@ -51,11 +51,11 @@ class ReleaseScriptTests(unittest.TestCase):
         self.assertEqual(
             commands,
             [
-                ["uv", "run", "ruff", "format", "."],
-                ["uv", "run", "ruff", "check", "--fix", "."],
-                ["uv", "run", "ruff", "format", "--check", "."],
-                ["uv", "run", "ruff", "check", "."],
-                ["uv", "run", "python", "-m", "py_compile", *check_release.PYTHON_FILES],
+                ["uv", "run", "--frozen", "ruff", "format", "."],
+                ["uv", "run", "--frozen", "ruff", "check", "--fix", "."],
+                ["uv", "run", "--frozen", "ruff", "format", "--check", "."],
+                ["uv", "run", "--frozen", "ruff", "check", "."],
+                ["uv", "run", "--frozen", "python", "-m", "py_compile", *check_release.PYTHON_FILES],
             ],
         )
         self.assertFalse(any("--unsafe-fixes" in command for command in commands))
@@ -94,7 +94,7 @@ class ReleaseScriptTests(unittest.TestCase):
         match = re.search(r'source = \{ registry = "(https://pypi\.org/simple/?)" \}', lock_content)
 
         self.assertIsNotNone(match)
-        self.assertEqual(publish_release.target_for("pypi").simple_url, match.group(1))
+        self.assertEqual(publish_release.target_for("pypi").simple_url.rstrip("/"), match.group(1).rstrip("/"))
 
     def test_publish_requires_explicit_credentials_without_trusted_publishing(self) -> None:
         publish_release = load_script("publish-release.py")

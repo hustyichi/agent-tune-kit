@@ -22,6 +22,7 @@ from .core import (
     validate_evidence,
     write_json,
 )
+from .execution import source_groups_for_evidence
 
 
 def _round_folder(root: Path, round_id: str) -> Path:
@@ -195,9 +196,14 @@ def _store_knowledge_locked(root: Path, request: dict) -> dict:
         "retired",
     }:
         raise ATKError("INCOMPLETE_EVIDENCE", "Knowledge metadata is incomplete")
-    for ref in value["evidence_refs"] + value["contrary_refs"]:
-        if ref.get("evidence_id") not in validate_evidence(root, ref["batch_id"])[2]:
-            raise ATKError("INCOMPLETE_EVIDENCE", "Knowledge evidence reference is missing")
+    if (
+        not value["applicability"]
+        or not value["component_hashes"]
+        or not value["contract_hashes"]
+        or not value["judger_hash"]
+    ):
+        raise ATKError("INCOMPLETE_EVIDENCE", "Knowledge applicability and identity fingerprints are required")
+    used_groups = source_groups_for_evidence(root, value["evidence_refs"] + value["contrary_refs"])
     knowledge_id = request.get("knowledge_id") or new_id("knowledge")
     folder = root / "knowledge" / safe_id(knowledge_id)
     revision = 1 + len(list(folder.glob("revision-*.json")))
@@ -209,6 +215,8 @@ def _store_knowledge_locked(root: Path, request: dict) -> dict:
             "revision": revision,
             "created_at": now(),
             "body_sha256": digest(value["body"].encode()),
+            "applicability_hash": digest(value["applicability"]),
+            "optimization_source_group_ids": used_groups,
             "previous_revision": revision - 1 if revision > 1 else None,
         }
     )
@@ -228,6 +236,8 @@ def knowledge_applicability(root: Path, request: dict) -> dict:
         "validated_in_scope"
         if value["status"] == "validated_in_scope"
         and all(value[key] == current.get(key) for key in ("component_hashes", "contract_hashes", "judger_hash"))
+        and current.get("applicability") is not None
+        and value.get("applicability_hash", digest(value["applicability"])) == digest(current["applicability"])
         else "needs_revalidation"
     )
     return {"knowledge_id": value["id"], "revision": value["revision"], "applicability": status}
