@@ -11,6 +11,12 @@ session isolation, cache reset, external side effects, and logs. For business Sk
 trace discovery directories, path base, actual load stage, caches, external copies,
 and how a candidate's file fingerprint can be observed as loaded or invoked. Record
 unknowns explicitly; file availability alone is not loading proof.
+For every required loaded component, have the target instrumentation write its actual
+absolute `resolved_path` alongside `component_id`, `state`, and `fingerprint` in each
+attempt's `loading.json`; copying the configured path into that field is not proof.
+If the Agent loads an isolated copy, the trusted adapter may also emit absolute
+`staged_from_path` from the observed copy step. Keep the loader event locator; do not
+infer the origin solely from equal file contents.
 
 Call `initialize_project` with `python`, argv-array `command`, `components`,
 `allowed_paths`, `protected_paths`, and detailed `runtime_notes`. It creates

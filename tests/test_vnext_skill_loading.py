@@ -4,6 +4,8 @@ import csv
 import sys
 from pathlib import Path
 
+import pytest
+
 from agent_tune_kit.checkpoints import create_round, freeze_round, prepare_candidate, seal_candidate
 from agent_tune_kit.core import digest
 from agent_tune_kit.execution import initialize_project, run_evaluation, store_dataset
@@ -11,7 +13,8 @@ from agent_tune_kit.governance import compare_and_gate
 from tests.test_vnext_flow import assessment_for, git
 
 
-def test_business_skill_must_be_loaded_at_each_revision(tmp_path: Path) -> None:
+@pytest.mark.parametrize("load_mode", ["direct", "wrong_install", "staged_copy", "missing_path"])
+def test_business_skill_must_be_loaded_at_each_revision(tmp_path: Path, load_mode: str) -> None:
     repo = tmp_path / "agent"
     (repo / "skills" / "reply").mkdir(parents=True)
     git(repo, "init", "-q")
@@ -19,13 +22,23 @@ def test_business_skill_must_be_loaded_at_each_revision(tmp_path: Path) -> None:
     git(repo, "config", "user.name", "ATK Test")
     skill = repo / "skills" / "reply" / "SKILL.md"
     skill.write_text("old")
+    installed_copy = tmp_path / "installed-copy" / "SKILL.md"
+    installed_copy.parent.mkdir()
+    installed_copy.write_text("new")
     (repo / "agent.py").write_text(
         "import hashlib,json,sys\nfrom pathlib import Path\n"
         "skill=Path('skills/reply/SKILL.md')\n"
-        "data=skill.read_bytes()\n"
+        f"installed=Path({str(installed_copy)!r})\n"
+        f"mode={load_mode!r}\n"
+        "if mode=='staged_copy' and skill.read_bytes()==b'new': installed.write_bytes(skill.read_bytes())\n"
+        "loaded=installed if mode!='direct' and skill.read_bytes()==b'new' else skill\n"
+        "data=loaded.read_bytes()\n"
         "out=Path(sys.argv[2])\n"
-        "(out/'loading.json').write_text(json.dumps([{'component_id':'business-skill','state':'loaded',"
-        "'fingerprint':hashlib.sha256(data).hexdigest()}]))\n"
+        "event={'component_id':'business-skill','state':'loaded','fingerprint':hashlib.sha256(data).hexdigest(),"
+        "'resolved_path':str(loaded.resolve())}\n"
+        "if mode=='missing_path': event.pop('resolved_path')\n"
+        "if mode=='staged_copy' and loaded==installed: event['staged_from_path']=str(skill.resolve())\n"
+        "(out/'loading.json').write_text(json.dumps([event]))\n"
         "print('hello' if data==b'new' else 'bad')\n"
     )
     git(repo, "add", "agent.py", "skills/reply/SKILL.md")
@@ -135,4 +148,4 @@ def test_business_skill_must_be_loaded_at_each_revision(tmp_path: Path) -> None:
             "left_commit": round_data["baseline_commit"],
         },
     )
-    assert validation["result"] == "pass"
+    assert validation["result"] == ("insufficient" if load_mode in {"wrong_install", "missing_path"} else "pass")

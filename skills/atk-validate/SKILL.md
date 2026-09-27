@@ -13,9 +13,11 @@ commits in the original directory; it restores the starting checkpoint afterward
 Reassess existing executions only when fixed input/environment allows it; do not
 select the best retry or omit unknowns.
 
-Check candidate loading evidence for business Skills, actual component identity,
-runner and fixed context, Case content, judgement calibration, and paired repeat
-slots. Apply the frozen quality or efficiency objective and metric limits; missing
+Check candidate loading evidence for business Skills: both sides need the loaded
+absolute path and fingerprint, or a staged copy linked to the declared source path.
+Also check actual component identity, runner and fixed context, Case content,
+judgement calibration, and paired repeat slots. Apply the frozen quality or
+efficiency objective and metric limits; missing
 required metrics yield `insufficient`. Cost includes all attempts, including retries.
 Verify the metric source before trusting cost or tool counts; the default runner's
 `metrics.json` sidecar alone does not prove that the target Agent could not edit them.

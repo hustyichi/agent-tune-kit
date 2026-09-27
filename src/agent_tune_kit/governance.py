@@ -279,6 +279,52 @@ def _fixed_identity_known(batch: dict) -> bool:
     )
 
 
+def _loaded_component_ids(root: Path, batch: dict, record: dict) -> set[str]:
+    config_path = root / "evidence" / safe_id(batch["id"]) / "run-config.json"
+    if not config_path.is_file():
+        return set()
+    config = read_json(config_path)
+    if (
+        digest(config) != batch.get("run_config_hash")
+        or Path(config["workspace_path"]).resolve() != root.parent.resolve()
+    ):
+        return set()
+    declared = {entry["component_id"]: entry for entry in config.get("components", [])}
+    observed = {entry["component_id"]: entry for entry in batch.get("actual_components", [])}
+    loaded = set()
+    for event in record.get("loading_evidence", []):
+        component_id = event.get("component_id")
+        component = observed.get(component_id)
+        source = declared.get(component_id, {}).get("source_path")
+        observed_path = event.get("resolved_path")
+        if (
+            not source
+            or not component
+            or component.get("source_path") != source
+            or not isinstance(observed_path, str)
+            or not Path(observed_path).is_absolute()
+            or event.get("state") not in {"loaded", "invoked"}
+            or event.get("fingerprint") != component.get("actual_sha256")
+        ):
+            continue
+        try:
+            source_path = (root.parent / source).resolve()
+            loaded_path = Path(observed_path).resolve()
+            staged_from = event.get("staged_from_path")
+            copied_from_source = (
+                isinstance(staged_from, str)
+                and Path(staged_from).is_absolute()
+                and Path(staged_from).resolve() == source_path
+                and loaded_path.is_file()
+                and digest(loaded_path) == component["actual_sha256"]
+            )
+            if loaded_path == source_path or copied_from_source:
+                loaded.add(component_id)
+        except OSError:
+            continue
+    return loaded
+
+
 def compare_and_gate(root: Path, request: dict) -> dict:
     folder = _round_folder(root, request["round_id"])
     round_data = read_json(folder / "round.json")
@@ -356,18 +402,9 @@ def compare_and_gate(root: Path, request: dict) -> dict:
         required_loaded = set(plan.get("required_loaded_component_ids", []))
         if required_loaded:
             for slots, batch in ((left_slots, left_batch), (right_slots, right_batch)):
-                actual_hashes = {
-                    entry["component_id"]: entry.get("actual_sha256") for entry in batch.get("actual_components", [])
-                }
                 selected = _selected_attempt(slots[key], max_retries)
                 for _, _, record in [selected] if selected else []:
-                    loaded = {
-                        entry.get("component_id")
-                        for entry in record.get("loading_evidence", [])
-                        if entry.get("state") in {"loaded", "invoked"}
-                        and entry.get("fingerprint") == actual_hashes.get(entry.get("component_id"))
-                    }
-                    if required_loaded - loaded:
+                    if required_loaded - _loaded_component_ids(root, batch, record):
                         result = "insufficient"
         if any(verdict not in {"pass", "fail"} for verdict in sides):
             result = "insufficient"
@@ -563,7 +600,6 @@ def validate_external_fix(root: Path, request: dict) -> dict:
     expected = {(case_id, repeat) for case_id in plan["case_ids"] for repeat in range(1, plan["final_repeats"] + 1)}
     if {(case_id, repeat) for case_id, _, repeat in slots} != expected or len(slots) != len(expected):
         raise ATKError("COMPARISON_INVALID", "external fix run lacks frozen Cases or repeats")
-    actual_hashes = {entry["component_id"]: entry.get("actual_sha256") for entry in batch.get("actual_components", [])}
     required_loaded = set(plan.get("required_loaded_component_ids", []))
     result = "pass"
     if not _fixed_identity_known(batch):
@@ -575,17 +611,11 @@ def validate_external_fix(root: Path, request: dict) -> dict:
             result = "insufficient"
             continue
         execution, row, record = selected
-        loaded = {
-            entry.get("component_id")
-            for entry in record.get("loading_evidence", [])
-            if entry.get("state") in {"loaded", "invoked"}
-            and entry.get("fingerprint") == actual_hashes.get(entry.get("component_id"))
-        }
         if (
             row["validity"] != "valid"
             or execution.get("status") in {"timeout", "infrastructure_error"}
             or row["verdict"] not in {"pass", "fail"}
-            or required_loaded - loaded
+            or required_loaded - _loaded_component_ids(root, batch, record)
         ):
             result = "insufficient"
         elif row["verdict"] == "fail" and result == "pass":
