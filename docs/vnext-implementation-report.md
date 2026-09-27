@@ -45,6 +45,8 @@ T45 指标来源补充：默认 runner 给自己测得的耗时标记 `runner_cl
 
 T46 知识与 holdout 补充：Knowledge 修订从本地 Execution 证据引用推导并封存参与优化的 `source_group_id`；导入的 Langfuse 等任务证据必须在知识引用上显式标注来源组，缺失时拒绝保存。后续同组 holdout 即使仍在原里程碑也被阻断，旧修订缺该字段时会从其引用重新推导。知识适用条件新增内容指纹，检索时与组件、契约、判定器身份一同核对；条件变化或身份未知返回 `needs_revalidation`。JSONL 数据集中的非字符串来源组现在返回显式映射错误。外部 Trace 的来源组归类仍由接入方核对；错误归类无法由工具自动识别。
 
+Knowledge 引用补充：`candidate_ids`、`validation_ids` 必须指向存在且身份／Schema 匹配的产物；`validated_in_scope` 至少需要支持证据或 Validation 引用，`contradicted` 至少需要反证引用。该门禁只核对结构和存在性，不替代经验内容及责任归属的语义复核。
+
 ## 新产物与兼容性
 
 `.atk/project.json` 使用 `schema_version=2`；`datasets/`、`evidence/`、`assessments/`、`rounds/`、`knowledge/` 以显式 ID 引用。Assessment 的 `assessment.csv` 是唯一权威评分明细，manifest 保存指纹。旧版 `.atk` 不自动迁移，遇到旧目录会停止。对外仍保留 `atk install`；七个 Skill 经 `atk internal <operation> --request ... --output ...` 调用本地确定性操作。旧版入口和模板已经删除，此 checkout 属于破坏兼容的开发状态，尚未发布。
@@ -52,7 +54,7 @@ T46 知识与 holdout 补充：Knowledge 修订从本地 Execution 证据引用�
 ## 已运行的验证
 
 - 离线单测：`UV_OFFLINE=1 uv run --frozen python scripts/check-release.py` 全量 136 项通过，同时通过 Ruff、七个 Skill 包校验、wheel／sdist 构建与独立安装烟测。新增回归覆盖 Agent sidecar 费用不得通过正式门禁、冻结的独立采集来源可通过效率门禁，以及候选路径别名与大小写冲突、初始化必须声明外部副作用、已声明写入缺保护记录时阻断重放。同文件更换映射／脱敏配置、Trace／Observation／Score 分文件关联、两种 profile 的非标准字段显式映射与冲突阻断、未知 Trace 引用、事件字段／时间规范化、token 用量与凭证区分、唯一根 Observation 的显式选择，以及 Assessment 必须引用自身记录的证据已有回归。此前还覆盖接入方基础设施退出码与普通 Agent 退出码区分、仅前者可重试、未知 Execution 状态不得封存完整批次、基础设施故障不可被错误评分器算作 Case 修复的测试，以及替代候选谱系及补丁引用测试、计划冻结／候选草稿／最终决策在 Round 状态写入失败后的续恢复和双活跃轮次阻断测试；覆盖执行前 Revision 异常不扣预算、候选文件恢复中断、末阶段收尾、Git `smudge` 真实文件字节漂移、合成远端服务运行版本前后核查、旧检查点复跑进程中断、准备命令超时清理子进程、单次 Agent 超时防止污染后续 Case、异常 runner 批次文件／组件清单测试、并发操作锁、磁盘写入失败、runner 提前退出与 JSONL 尾部截断、预分配身份校验、批次超时结束子进程组，以及 Python editable／Node 链接／误导入／旧 wheel 运行路径测试。此前覆盖还包括 Prompt 闭环、10 Case 四候选与最终 9/10、回退已采用后缀与重新验证、Case 输入变化后的双方重跑、跨轮换判据只重判原执行、跨进程提交恢复、Skill 直读／链接到源码／隔离副本／错误安装副本／过期构建／缺路径证据、已知故障配对、评分器校准、独立探针、固定组件漂移、暂存区与 HEAD 漂移、2 Case×2 次执行与授权重试、外部 Issue 新轮复验和 Git 中断恢复。新增的分布／覆盖统计在两 Case 重试、10 Case 最终对照和输入变化导致缺失配对的场景中通过断言。
-- 本轮 `python scripts/check-release.py`：140 项通过，Ruff、七个 Skill 包校验、wheel／sdist 构建及独立安装烟测均通过。发布检查改用 `uv sync --frozen` 和 `uv run --frozen`，不再因 uv 索引 URL 规范化而改写 `uv.lock`；发布地址测试将有无尾斜杠视为等价。新增回归验证 Knowledge 引用本地或外部证据后阻断同组 holdout、外部证据缺来源组时拒绝保存、适用条件变化触发复核和非法 JSONL 来源组显式报错。
+- 本轮 `python scripts/check-release.py`：141 项通过，Ruff、七个 Skill 包校验、wheel／sdist 构建及独立安装烟测均通过。发布检查改用 `uv sync --frozen` 和 `uv run --frozen`，不再因 uv 索引 URL 规范化而改写 `uv.lock`；发布地址测试将有无尾斜杠视为等价。新增回归验证 Knowledge 引用本地或外部证据后阻断同组 holdout、外部证据缺来源组时拒绝保存、适用条件变化触发复核、关联 Candidate／Validation 身份及状态门禁，以及非法 JSONL 来源组显式报错。
 - 静态与打包：上述发布检查完整通过。Python 运行环境 3.13.13，uv 0.11.6；项目声明 Python >=3.11、运行时无第三方依赖。
 - 实际导出只读导入：`projects/magic-workspace/traces/20260926/onl/SES_2103665448775192576` 下 8 个 Langfuse Trace bundle，来源文件集合指纹 `76bcd1bc43705473d2a5da6b42c7d05a106fec56c8a2c33d1faedd93979cc946`。临时目录中生成 8 条 Trace Record、1666 条证据索引；重复导入返回原批次；修正根 Observation 无父节点误报后，8 条均无结构缺口。原始内容未提交到 ATK 仓库。
 - 导入器扩展后再用上述真实来源只读复验：仍为 8 条 Trace Record、1666 条证据索引、0 条结构不完整记录；同配置重复导入返回原批次。分文件关联与映射修订使用小型合成导出验证，尚无分文件的真实脱敏样例。

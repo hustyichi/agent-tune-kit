@@ -49,4 +49,6 @@ Candidates or Validations. For imported task evidence, put the Case-equivalent
 sealed dataset. Knowledge that uses a holdout group makes that group ineligible
 for independent holdout claims. On reuse, call `knowledge_applicability` with
 current identities and input applicability; treat `needs_revalidation` as a
-research lead, not a verified conclusion.
+research lead, not a verified conclusion. Link only existing Candidate and
+Validation IDs; `validated_in_scope` needs supporting evidence or a Validation,
+and `contradicted` needs a contrary evidence ref.

@@ -769,3 +769,35 @@ def test_dataset_rejects_unhashable_source_group(tmp_path: Path) -> None:
             root,
             {"source": str(source), "mapping": {"id": "id", "input": "input", "source_group_id": "source_group_id"}},
         )
+
+
+def test_knowledge_rejects_missing_links_and_unsupported_validated_state(tmp_path: Path) -> None:
+    rows = [{"id": "case", "input": "case", "usage": "optimization", "source_group_id": "g"}]
+    _, root, _, round_data, _ = project(tmp_path, "print('ok')\n", rows)
+    knowledge = {
+        "status": "provisional",
+        "applicability": "case",
+        "component_hashes": {"agent": "v1"},
+        "contract_hashes": {"task": "v1"},
+        "judger_hash": "v1",
+        "evidence_refs": [],
+        "contrary_refs": [],
+        "candidate_ids": ["candidate-missing"],
+        "validation_ids": [],
+        "body": "A finding.",
+    }
+    with pytest.raises(ATKError, match="Candidate"):
+        store_knowledge(root, {"knowledge": knowledge})
+    fake = root / "rounds" / round_data["id"] / "candidates" / "candidate-missing" / "candidate.json"
+    fake.parent.mkdir(parents=True)
+    fake.write_text(json.dumps({"id": "candidate-missing"}))
+    with pytest.raises(ATKError, match="invalid identity"):
+        store_knowledge(root, {"knowledge": knowledge})
+    knowledge["candidate_ids"] = []
+    knowledge["validation_ids"] = ["validation-missing"]
+    with pytest.raises(ATKError, match="Validation"):
+        store_knowledge(root, {"knowledge": knowledge})
+    knowledge["validation_ids"] = []
+    knowledge["status"] = "validated_in_scope"
+    with pytest.raises(ATKError, match="supporting evidence"):
+        store_knowledge(root, {"knowledge": knowledge})

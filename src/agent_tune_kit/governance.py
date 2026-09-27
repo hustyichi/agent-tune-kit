@@ -198,11 +198,39 @@ def _store_knowledge_locked(root: Path, request: dict) -> dict:
         raise ATKError("INCOMPLETE_EVIDENCE", "Knowledge metadata is incomplete")
     if (
         not value["applicability"]
-        or not value["component_hashes"]
-        or not value["contract_hashes"]
+        or any(
+            not isinstance(value[key], dict)
+            or not value[key]
+            or any(not isinstance(item, str) or not item for item in value[key].values())
+            for key in ("component_hashes", "contract_hashes")
+        )
+        or not isinstance(value["judger_hash"], str)
         or not value["judger_hash"]
+        or not isinstance(value["body"], str)
+        or any(
+            not isinstance(value[key], list)
+            for key in ("evidence_refs", "contrary_refs", "candidate_ids", "validation_ids")
+        )
+        or any(not isinstance(item, str) for key in ("candidate_ids", "validation_ids") for item in value[key])
     ):
         raise ATKError("INCOMPLETE_EVIDENCE", "Knowledge applicability and identity fingerprints are required")
+    if value["status"] == "validated_in_scope" and not (value["evidence_refs"] or value["validation_ids"]):
+        raise ATKError("INCOMPLETE_EVIDENCE", "validated Knowledge needs supporting evidence")
+    if value["status"] == "contradicted" and not value["contrary_refs"]:
+        raise ATKError("INCOMPLETE_EVIDENCE", "contradicted Knowledge needs contrary evidence")
+    for key, folder_name, filename, label in (
+        ("candidate_ids", "candidates", "candidate.json", "Candidate"),
+        ("validation_ids", "validations", "validation.json", "Validation"),
+    ):
+        if len(value[key]) != len(set(value[key])):
+            raise ATKError("INCOMPLETE_EVIDENCE", f"duplicate Knowledge {label} reference")
+        for artifact_id in value[key]:
+            matches = list((root / "rounds").glob(f"*/{folder_name}/{safe_id(artifact_id)}/{filename}"))
+            if len(matches) != 1:
+                raise ATKError("INCOMPLETE_EVIDENCE", f"Knowledge {label} reference is missing")
+            linked = read_json(matches[0])
+            if linked.get("id") != artifact_id or linked.get("schema_version") != 2:
+                raise ATKError("INCOMPLETE_EVIDENCE", f"Knowledge {label} reference has invalid identity")
     used_groups = source_groups_for_evidence(root, value["evidence_refs"] + value["contrary_refs"])
     knowledge_id = request.get("knowledge_id") or new_id("knowledge")
     folder = root / "knowledge" / safe_id(knowledge_id)
