@@ -1,6 +1,6 @@
 {
   "name": "agent-tune-kit",
-  "version": "0.4.9",
+  "version": "1.0.0",
   "description": "Local Codex plugin for evidence-driven evaluation and checkpointed tuning of existing Agents.",
   "author": {
     "name": "hustyichi",

@@ -1,3 +1,3 @@
 """Agent Tune Kit package."""
 
-__version__ = "0.4.9"
+__version__ = "1.0.0"
