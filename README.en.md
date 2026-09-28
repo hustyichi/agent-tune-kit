@@ -1,74 +1,148 @@
 # Agent Tune Kit
 
-[简体中文](README.md) | English
+[简体中文](https://github.com/hustyichi/agent-tune-kit/blob/1.0.0/README.md) | English
 
-Agent Tune Kit (ATK) is a local Codex plugin for **existing Agents**. The current Codex session investigates evidence, makes semantic judgments, and edits the target. Deterministic Python operations import or run evidence, store assessments, compare revisions, and manage Git checkpoints. A target may be a business Skill, prompt, Agent code, or configuration.
+[![PyPI](https://img.shields.io/pypi/v/agent-tune-kit.svg)](https://pypi.org/project/agent-tune-kit/)
 
-> Version 1.0.0 ships the breaking [vNext design](https://github.com/hustyichi/agent-tune-kit/blob/1.0.0/docs/agent-tune-kit-vnext-refactor-plan.md). Old Skills and `.atk/results/vN/` data are not migrated or deleted. Initialization stops when it finds an existing legacy `.atk` directory. Real-world W8 acceptance is still incomplete; see the [implementation record](https://github.com/hustyichi/agent-tune-kit/blob/1.0.0/docs/vnext-implementation-report.md).
+Agent Tune Kit (ATK) is a **local Codex plugin** for evaluating an existing Agent, investigating failures, and checking whether changes to prompts, business Skills, code, or configuration improve its behavior.
 
-For the current workflow, see the [vNext usage guide](https://github.com/hustyichi/agent-tune-kit/blob/1.0.0/docs/vnext-usage-guide.md) (Chinese). The [old Skill pack guide](https://github.com/hustyichi/agent-tune-kit/blob/1.0.0/docs/skill-template-pack-usage.md) is historical.
+Describe your goal in Codex. The current session analyzes evidence and edits your project; ATK records results, compares revisions, and manages recoverable local Git checkpoints.
 
-## Install and workflow
+## When to use it
 
-Install the 1.0.0 package from PyPI:
+- You have a working Agent and want to understand which tasks fail and what to change.
+- You have batch results or Langfuse exports and want to investigate without running the Agent again.
+- You want to test a change while checking that previously working tasks still pass.
+
+ATK connects to your existing Agent without requiring a framework rewrite. Each candidate change keeps its evidence and decision, so you can review why it was accepted or rejected.
+
+## Install
+
+You need local Codex, Python 3.11+, and `uv`. Install version 1.0.0 in your terminal:
 
 ```sh
 uvx --from agent-tune-kit==1.0.0 atk install
 ```
 
-To install from a source checkout, run `uv run --frozen atk install` here, then enable Agent Tune Kit in Codex `/plugins`. Use the same package version for internal operations: `uvx --from agent-tune-kit==1.0.0 atk internal ...` for the PyPI package, or `uv run --frozen atk internal ...` for this checkout. vNext exposes exactly seven Skills:
+Then enter this in Codex:
 
-| Skill | Responsibility |
+```text
+/plugins
+```
+
+Enable **Agent Tune Kit** and open your own Agent project. The `$atk-*` examples below are **Skill calls entered in a Codex conversation**, not shell commands. Use them in your Agent project, not the ATK source repository.
+
+See [PyPI](https://pypi.org/project/agent-tune-kit/) for package versions and downloads.
+
+> **Upgrading from 0.x:** Version 1.0.0 changes the Skills and data layout. It does not migrate or delete old `.atk/results/vN/` data. Initialization stops if it finds a legacy `.atk` directory. Back up and decide how to preserve that data, or use a clean target project; do not overwrite the old directory.
+
+## First run: evaluate and improve an Agent
+
+Prepare the Agent's entry point, a few representative tasks, and criteria for judging the results. Formal evaluation and tuning require a clean Git working tree. Agents that write to databases, send messages, or perform other external writes also need a verified test environment or safeguards.
+
+Replace `scripts/agent.py` and `data/eval.csv` below with your actual paths. Run each step in Codex and wait for it to finish before continuing.
+
+### 1. Connect the project and prepare tasks
+
+```text
+$atk-init My Agent entry point is scripts/agent.py. Investigate how it runs and connect it. Allow changes to prompts/ only; protect other business files.
+$atk-dataset Build an evaluation dataset from data/eval.csv. Confirm inputs, expected results, and judging criteria. Include tasks that should remain unchanged to check for regressions.
+```
+
+Codex inspects dependencies, inputs and outputs, actual business Skill loading, and external side effects, then creates a local runner. Each task is a Case. Include both Cases you want to improve and already working Cases that protect against regressions.
+
+You can investigate without reference answers, but a dimension needs reliable criteria before it can receive a definite pass or fail. Do not treat the Agent's original answer as ground truth.
+
+### 2. Run a baseline and investigate
+
+```text
+$atk-eval Run a baseline evaluation after establishing this Round's criteria, repeat count, timeout, and budget.
+$atk-diagnose Investigate the failure evidence. Distinguish Agent behavior, tool, runtime, and data issues, and identify the priority issue.
+```
+
+The baseline captures behavior before changes. ATK saves actual outputs, individual judgments, and supporting evidence. Infrastructure failures such as model authentication errors cannot serve as valid evidence of Agent performance.
+
+### 3. Change, validate, and decide
+
+```text
+$atk-optimize Prepare one candidate for the confirmed priority issue, within the allowed paths.
+$atk-validate Compare the candidate with its parent. Check improvement on target tasks and regressions on protection tasks.
+$atk-decide Use the validation result to keep, reject, or defer this candidate.
+```
+
+Only one candidate can be pending at a time. Normal acceptance requires passing validation and creates a local commit in your project. Rejection or deferral preserves the evidence and restores the candidate's parent file contents.
+
+Repeat these three steps for additional issues. Before closing the Round, compare **all accepted changes against the original baseline**:
+
+```text
+$atk-validate Run final validation of the cumulative version against the original baseline, covering the full frozen task set and repeat plan.
+$atk-decide Close the Round based on final validation. List accepted changes, the final commit, and unresolved issues.
+```
+
+ATK does not automatically push, publish, or deploy.
+
+## Already have results? Start with analysis
+
+Import CSV, JSON, or JSONL batch results, or Langfuse JSON/JSONL/CSV/`.gz` exports, without configuring an Agent command or Git:
+
+```text
+$atk-init Use analysis_only mode for existing results. Do not run the Agent.
+$atk-eval Import data/traces.json. Confirm its format, field mapping, and redaction rules, then assess it against explicit criteria.
+$atk-diagnose Investigate failures and identify missing evidence and explanations that still need testing.
+$atk-decide Save the analysis and close this Round without adopting changes.
+```
+
+Importing does not rerun the Agent. External scores remain evidence rather than automatically becoming ATK pass rates. You can add runtime configuration and a Git baseline later while preserving existing evidence. See the [usage guide](https://github.com/hustyichi/agent-tune-kit/blob/1.0.0/docs/vnext-usage-guide.md) (Chinese) for formats.
+
+## Skill reference
+
+| Skill | What you want to do |
 | --- | --- |
-| `atk-init` | Inspect the existing Agent's entry point, runtime, side effects, and business Skill loading; create a local runner |
-| `atk-dataset` | Save versioned Cases, expected results, replay conditions, and source groups |
-| `atk-eval` | Explicitly run, import, or reassess local/batch/Langfuse evidence |
-| `atk-diagnose` | Investigate competing explanations, record Issues and local handoffs |
-| `atk-optimize` | Prepare and seal one scoped candidate on a clean Git baseline |
-| `atk-validate` | Compare each candidate with its parent and the final cumulative version with B0 |
-| `atk-decide` | Commit a passing candidate, restore a rejected one, roll back an accepted suffix, or close the Round |
+| `$atk-init` | Connect an existing Agent or initialize an import-only analysis project |
+| `$atk-dataset` | Organize tasks, expected results, attachments, and regression protection Cases |
+| `$atk-eval` | Run evaluations, import results, or reassess evidence without rerunning the Agent |
+| `$atk-diagnose` | Investigate failures and record issues and competing explanations |
+| `$atk-optimize` | Prepare one scoped candidate for an issue |
+| `$atk-validate` | Validate a candidate, cumulative changes, or an external component repair |
+| `$atk-decide` | Keep, reject, defer, roll back accepted changes, or close the Round |
 
-Flow: `atk-init → atk-dataset (as needed) → atk-eval → atk-diagnose → [atk-optimize → atk-validate → atk-decide]×N → final atk-validate → atk-decide`. Only one candidate is pending at a time. Passing candidates become local commits in the original worktree; rejected candidates retain evidence and restore their parent. ATK does not push, deploy, rewrite history, or edit another repository.
+For an external tool or service defect, use `$atk-diagnose` to save a local handoff and verification requirements. After repair, open a linked Round and check both the component directly and the Agent end to end. An Agent-side workaround does not establish that the external defect is fixed.
 
-A sealed candidate may be rejected or deferred before Validation if the Decision records both `reason` and `validation_missing_reason`; recovery restores its parent and retains the sealed evidence. Normal `keep` still requires a matching passing Validation. A post-repair direct component probe must cover every Case, repeat, and required assessment dimension frozen in its permission; the caller cannot pick a passing dimension during validation.
+## Where to find results
 
-Import-only projects can initialize with `analysis_only=true` without Git or a runner.
-Rounds inherit this mode and can import, assess, diagnose, and close without B0. Later,
-`configure_runtime=true` supplies runtime configuration; freezing binds a clean Git
-baseline while retaining existing evidence. `transition_round` records pause/resume
-reasons and checks operations, Git, and pending content before resuming. The first final
-run enters `finalizing`, which blocks new candidates and incremental runs.
-An unsealed draft can be released with `cancel_draft` after its workspace edits have
-been restored and checked; its candidate budget remains spent.
+Artifacts live under `.atk/` in **your Agent project**:
 
-## Evidence and artifacts
+| Location | Contents |
+| --- | --- |
+| `.atk/runtime.md` | Integration details, runtime conditions, and known limitations |
+| `.atk/datasets/<id>/` | Immutable task snapshots |
+| `.atk/evidence/<batch-id>/` | Actual or imported results, sources, and execution status |
+| `.atk/assessments/<id>/assessment.csv` | Per-record, per-dimension judgments and evidence references |
+| `.atk/rounds/<id>/` | Plans, issues, candidates, validations, and decisions |
+| `.atk/knowledge/<id>/` | Lessons with applicability conditions and evidence |
 
-Evaluation accepts a runnable Case dataset, existing batch results, or Langfuse JSON/JSONL/CSV/`.gz` exports. Langfuse Trace bundles and Observation rows use explicit mapping profiles. For separate Trace, Observation, and Score files, declare each filename and its role in `file_roles`; declare nested CSV fields in `json_columns`. Map changed field names under `mapping.trace`, `mapping.observation`, or `mapping.score` as `{canonical_name: source_name}`; conflicting values block import. `mapping.root_observation_name` may supply missing Trace input or output only when it selects one root Observation. Missing parents, final answers, or export completeness stay unknown. External Scores are preserved as evidence without silently becoming ATK pass/fail judgments. Reassessment creates another immutable Assessment without running the Agent again.
+Ask Codex to identify the files for your Round or generate a local HTML view from the assessment CSV. Reassessment creates a new Assessment and preserves previous judgments.
 
-Map Case `attachments` explicitly as a list of local file paths (or a JSON array in a CSV cell). ATK records the resolved path and actual SHA-256 in the Case fingerprint; changed or missing files block replay. The default runner writes a per-attempt `attachments.json` and exposes `{attachments_file}` to the Agent command. Configure the target Agent to read that file when attachments are needed.
+To stop midway, ask Codex to pause the Round and record why. Resume only after checking the workspace and runtime configuration. After an interruption, preserve the files and recover through the operation record instead of deleting `.atk/` or force-resetting Git.
 
-The target runner uses the target project's Python environment and assigns one Execution to each planned attempt. Initialization requires an explicit `external_effects` declaration (`[]` after confirming no external writes); every declared write needs a recorded test environment, stub, or approved safeguard before replay. Freeze a positive integer `concurrency` (default 1) and a positive finite `timeout_seconds` (default 120); both must match each formal run and retry.
-The primary assessment dimension is frozen. All specification dimensions are required
-unless the plan explicitly selects a subset. Unknown or invalid required verdicts
-block passage, and regression in a required dimension defeats a primary improvement.
-Candidate target Cases come from its recorded primary Issue, not a caller-selected ID.
-The default runner bounds active attempts, gives each a distinct output directory, and
-persists completed, running, and unstarted identities. Attempt or batch timeouts stop
-the relevant Agent process groups. Revisions remain serial; the target provides session
-and external-write isolation. An adapter may declare `infrastructure_exit_codes` so failures such as model authentication become retryable `infra_error` evidence rather than an Agent result. An unknown Execution status leaves the batch `partial`. For business Skills, an available file is distinct from evidence that the Agent actually loaded or invoked it; unverified loading blocks normal Skill validation. Raw export files remain read-only. Common credential fields are masked in imported copies; project-specific sensitive fields require explicit redaction rules.
+## Further reading
 
-For a fixed remote component, project configuration may supply a read-only argv-array `version_command`, `expected_version`, and optional `version_timeout_seconds`. ATK probes the version before and after each batch and records the observed values, command fingerprint, and any identity failure. A changed or unverified version cannot support a formal improvement claim.
+- [Usage guide](https://github.com/hustyichi/agent-tune-kit/blob/1.0.0/docs/vnext-usage-guide.md) (Chinese): attachments, budgets, concurrency, import mappings, recovery, and external repairs.
+- [Shared Skill workflow](https://github.com/hustyichi/agent-tune-kit/blob/1.0.0/skills/WORKFLOW.md): operation contracts and internal interfaces.
+- [Implementation and acceptance record](https://github.com/hustyichi/agent-tune-kit/blob/1.0.0/docs/vnext-implementation-report.md) (Chinese): implemented scope, evidence, and open acceptance work.
+- [Design](https://github.com/hustyichi/agent-tune-kit/blob/1.0.0/docs/agent-tune-kit-vnext-refactor-plan.md) (Chinese): data model and validation protocol.
 
-A frozen Round reserves both sides of final validation before candidate work. Authorized infrastructure retries create linked Executions without selecting the best attempt. Cost and tool-call gates require a frozen `metric_sources` declaration for an independent collector and a matching source on every Record; the default runner's Agent-written `metrics.json` values remain diagnostic only. Runner-measured duration may be used for duration gates. Independent holdout source groups are tracked across Rounds.
-Interrupted local batches continue through `continue_batch_id`: confirmed records are
-retained, unstarted slots may rerun, and unknown slots need recorded explicit user
-authorization. Continuations consume attempt budget and preserve prior batches.
+**Current limitations:** Real multi-Case gains, valid candidate acceptance commits, independent responsibility-layer diagnosis, and real external repair workflows still await acceptance. Passing offline tests does not prove improvement in your application; use your project's comparison results.
 
-ATK stores project configuration and runner under `.atk/`, immutable datasets under `datasets/<id>/`, evidence under `evidence/<batch-id>/`, the authoritative scoring CSV under `assessments/<id>/`, and Round plans, Issues, Candidates, Validations, Decisions, and recovery operations under `rounds/<id>/`. Objects are addressed by explicit IDs, never by a “latest vN” folder. The seven Skills call `atk internal <operation> --request <JSON> --output <JSON>`; it is an implementation interface, not an additional public tuning workflow.
+## Source development
 
-If a process exits during replay of an older checkpoint, the recorded operation can restore the current source and rerun the frozen cache or artifact preparation, provided no unknown file content has appeared.
+Install the plugin from this repository:
 
-## Development checks
+```sh
+uv run --frozen atk install
+```
+
+Run development checks:
 
 ```sh
 uv run --frozen pytest -q
@@ -77,4 +151,4 @@ python3 scripts/validate_skill_pack.py
 uv build --no-sources
 ```
 
-Offline tests use tiny Git repositories and a fake Agent. One real Magic Workspace Trace import and business Skill load have separate acceptance evidence; known-cause diagnosis, post-service-fix verification, and multi-Case evaluation remain open. An Agent with unisolated external writes must not be replayed as a formal local evaluation.
+`atk internal ...` is an interface used by the Skills. For manual troubleshooting, match the installed plugin version: use `uvx --from agent-tune-kit==1.0.0 atk internal ...` for PyPI, or `uv run --frozen atk internal ...` for a source installation.
