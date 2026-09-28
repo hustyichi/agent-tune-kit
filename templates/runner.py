@@ -47,16 +47,30 @@ def redact_output(value: str) -> str:
     return re.sub(r"(?i)(api[_-]?key|token|password|secret)\s*[:=]\s*[^\s,;]+", r"\1=[REDACTED]", value)
 
 
+def attachments_unchanged(attachments: list[dict]) -> bool:
+    return all(hashlib.sha256(Path(item["path"]).read_bytes()).hexdigest() == item["sha256"] for item in attachments)
+
+
 def run_one(attempt: dict, case: dict, config: dict, output: Path, timeout: int) -> dict:
     task_dir = output / "attempts" / attempt["execution_id"]
     task_dir.mkdir(parents=True, exist_ok=False)
     input_file = task_dir / "input.json"
     input_file.write_text(json.dumps(case["input"], ensure_ascii=False), encoding="utf-8")
-    variables = {"input": str(case["input"]), "input_file": str(input_file), "output_dir": str(task_dir)}
+    attachments = case.get("attachments", [])
+    attachments_file = task_dir / "attachments.json"
+    attachments_file.write_text(json.dumps(attachments, ensure_ascii=False), encoding="utf-8")
+    variables = {
+        "input": str(case["input"]),
+        "input_file": str(input_file),
+        "attachments_file": str(attachments_file),
+        "output_dir": str(task_dir),
+    }
     command = [part.format_map(variables) for part in config["command"]]
     started = datetime.now(UTC).isoformat()
     started_clock = time.monotonic()
     try:
+        if not attachments_unchanged(attachments):
+            raise OSError("Case attachment changed after dataset import")
         if (
             config.get("script_path")
             and hashlib.sha256(Path(config["script_path"]).read_bytes()).hexdigest() != config["script_sha256"]
@@ -95,6 +109,9 @@ def run_one(attempt: dict, case: dict, config: dict, output: Path, timeout: int)
             with _process_lock:
                 _processes.discard(process)
         response, stderr = redact_output(response), redact_output(stderr)
+        if not attachments_unchanged(attachments):
+            status = "infra_error"
+            stderr += "\nCase attachment changed during execution"
     except OSError as exc:
         status, response, stderr, returncode = "infra_error", "", redact_output(str(exc)), None
     duration = time.monotonic() - started_clock

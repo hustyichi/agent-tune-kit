@@ -263,7 +263,7 @@ def main() -> int:
         run(["uv", "sync", "--frozen"], timeout=180)
         run_static_python_checks()
         run(["uv", "run", "--frozen", "python", "scripts/validate_skill_pack.py"], timeout=120)
-        run(["uv", "run", "--frozen", "pytest", "-q"], timeout=240)
+        run(["uv", "run", "--frozen", "pytest", "-q"], timeout=360)
         with tempfile.TemporaryDirectory(prefix="atk-release-check-") as tmp:
             temp_dir = Path(tmp)
             wheel, sdist = build_distributions(temp_dir / "dist", identity)

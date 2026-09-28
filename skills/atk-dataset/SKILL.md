@@ -16,4 +16,10 @@ Rounds and blocks future independent reuse or further candidate editing in that 
 Call `store_dataset` with explicit column mapping. It writes an immutable
 `.atk/datasets/<dataset-id>/cases.jsonl` and manifest. A correction creates another
 dataset ID; old Assessments and Validations stay bound to their original Case content.
-Report gaps in environment or attachments before calling a Case replayable.
+Map `attachments` to a JSONL list of file paths (or a CSV cell containing a JSON
+list). Relative paths resolve beside the source dataset. ATK records each file's
+resolved path and SHA-256 in the Case fingerprint; the file must still exist with
+the same content at replay. The default runner writes `attachments.json` for each
+attempt and exposes its path as `{attachments_file}` in the command argv. Configure
+the target Agent to read it when attachments matter. Report gaps in environment or
+attachments before calling a Case replayable.

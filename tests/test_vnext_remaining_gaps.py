@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -14,9 +15,50 @@ from agent_tune_kit.checkpoints import (
     seal_candidate,
 )
 from agent_tune_kit.core import ATKError, digest, read_json, validate_evidence, write_json
-from agent_tune_kit.execution import initialize_project, run_evaluation, store_dataset
+from agent_tune_kit.execution import initialize_project, load_cases, run_evaluation, store_dataset
 from tests.test_vnext_flow import git
 from tests.test_vnext_limits import project
+
+
+def test_attachment_identity_and_runner_delivery(tmp_path: Path) -> None:
+    attachment = tmp_path / "document.txt"
+    attachment.write_text("first")
+    script = (
+        "import json,sys\nfrom pathlib import Path\n"
+        "files=json.loads(Path(sys.argv[3]).read_text())\n"
+        "print(Path(files[0]['path']).read_text())\n"
+    )
+    repo, root, _, rnd, plan = project(
+        tmp_path, script, [{"id": "case", "input": "task", "usage": "optimization", "source_group_id": "g"}]
+    )
+    config = read_json(root / "project.json")
+    config["command"].append("{attachments_file}")
+    write_json(root / "project.json", config)
+    source = tmp_path / "attached.jsonl"
+    source.write_text(json.dumps({"id": "case", "input": "task", "attachments": ["document.txt"]}) + "\n")
+    mapping = {"id": "id", "input": "input", "attachments": "attachments"}
+    dataset = store_dataset(root, {"source": str(source), "mapping": mapping})
+    first_fingerprint = load_cases(root, dataset["id"])["case"]["fingerprint"]
+    plan["dataset_id"] = dataset["id"]
+    freeze_round(repo, root, {"round_id": rnd["id"], "plan": plan})
+    request = {
+        "dataset_id": dataset["id"],
+        "case_ids": ["case"],
+        "purpose": "evaluation",
+        "round_id": rnd["id"],
+        "revision_id": rnd["baseline_revision_id"],
+    }
+    batch = run_evaluation(root, request)
+    record = next(iter(validate_evidence(root, batch["id"])[1].values()))
+    assert record["output"].strip() == "first"
+    attachment.write_text("other")
+    replacement = store_dataset(root, {"source": str(source), "mapping": mapping})
+    assert load_cases(root, replacement["id"])["case"]["fingerprint"] != first_fingerprint
+    with pytest.raises(ATKError, match="attachment"):
+        run_evaluation(root, request)
+    attachment.unlink()
+    with pytest.raises(ATKError, match="attachment"):
+        run_evaluation(root, request)
 
 
 @pytest.mark.parametrize("changed", ["input", "usage", "source_group_id"])

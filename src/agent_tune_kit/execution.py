@@ -238,6 +238,21 @@ def store_dataset(root: Path, request: dict) -> dict:
         usage = row.get(mapping.get("usage", "")) or "optimization"
         if usage not in {"optimization", "protection", "holdout"}:
             raise ATKError("AMBIGUOUS_MAPPING", f"invalid usage for {case_id}")
+        attachments = row.get(mapping.get("attachments", ""), []) if mapping.get("attachments") else []
+        if isinstance(attachments, str):
+            try:
+                attachments = json.loads(attachments) if attachments.strip() else []
+            except ValueError as exc:
+                raise ATKError("AMBIGUOUS_MAPPING", f"invalid attachments for {case_id}") from exc
+        if not isinstance(attachments, list) or any(not isinstance(item, str) or not item for item in attachments):
+            raise ATKError("AMBIGUOUS_MAPPING", f"attachments must be a list of file paths for {case_id}")
+        attachment_snapshots = []
+        for item in attachments:
+            path = Path(item).expanduser()
+            path = (source.parent / path).resolve() if not path.is_absolute() else path.resolve()
+            if not path.is_file():
+                raise ATKError("NOT_REPLAYABLE", f"attachment is missing for {case_id}: {path}")
+            attachment_snapshots.append({"path": str(path), "sha256": digest(path)})
         case = {
             "id": case_id,
             "input": row[mapping["input"]],
@@ -246,6 +261,7 @@ def store_dataset(root: Path, request: dict) -> dict:
             "source_group_id": source_group,
             "usage": usage,
             "initial_conditions": row.get(mapping.get("initial_conditions", "")),
+            "attachments": attachment_snapshots,
             "source": {"path": str(source), "row": index},
         }
         case["fingerprint"] = digest({key: value for key, value in case.items() if key != "source"})
@@ -282,13 +298,20 @@ def store_dataset(root: Path, request: dict) -> dict:
     return manifest
 
 
-def load_cases(root: Path, dataset_id: str) -> dict[str, dict]:
+def load_cases(root: Path, dataset_id: str, *, verify_attachments: bool = False) -> dict[str, dict]:
     folder = root / "datasets" / safe_id(dataset_id)
     manifest = json.loads((folder / "manifest.json").read_text(encoding="utf-8"))
     path = folder / "cases.jsonl"
     if digest(path) != manifest["cases_sha256"]:
         raise ATKError("INCOMPLETE_EVIDENCE", "dataset changed after sealing")
-    return {case["id"]: case for case in (json.loads(line) for line in path.read_text().splitlines())}
+    cases = {case["id"]: case for case in (json.loads(line) for line in path.read_text().splitlines())}
+    if verify_attachments:
+        for case in cases.values():
+            for attachment in case.get("attachments", []):
+                attachment_path = Path(attachment["path"])
+                if not attachment_path.is_file() or digest(attachment_path) != attachment["sha256"]:
+                    raise ATKError("NOT_REPLAYABLE", f"Case attachment changed or disappeared: {case['id']}")
+    return cases
 
 
 def source_groups_for_evidence(root: Path, refs: list[dict]) -> list[str]:
@@ -633,7 +656,7 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
             expected_value = request.get(key, "incremental") if key == "phase" else request.get(key)
             if expected_value != prior_manifest.get(key):
                 raise ATKError("REVISION_MISMATCH", f"continuation changes frozen {key}")
-    cases = load_cases(root, request["dataset_id"])
+    cases = load_cases(root, request["dataset_id"], verify_attachments=True)
     selected = request.get("case_ids", [])
     repeats = request.get("repeats", 1)
     if not predecessor_id and (

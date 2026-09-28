@@ -31,7 +31,10 @@ different request Issue is rejected. Assess all frozen required dimensions on bo
 sides and keep the same formal timeout. Do not choose a different dimension during
 comparison.
 For a linked external fix Round, call `validate_external_fix` with the new B0
-Assessment, passing direct-probe Assessment, and direct evidence refs. There is no
+Assessment, passing direct-probe Assessment, and refs covering every Case and repeat
+in the frozen direct-component permission. Every dimension in that permission's
+Assessment specification must pass unless the permission froze a narrower required
+set. Do not set a direct dimension in the validation request. There is no
 Agent Candidate or old-B0 comparison in this verification Round.
 Report `pass/no_effect/regression/insufficient/invalid` with fixed, regressed, stable,
 and unknown Cases. A single-run exploratory improvement is not final proof for a

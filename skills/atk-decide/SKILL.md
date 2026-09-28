@@ -10,7 +10,9 @@ authorization. `decide_candidate` with `keep` requires a matching passing increm
 Validation (or explicit recorded trial override with user source, action, reason,
 and risk); it stages only sealed paths and checks the commit parent, changed paths,
 trailers, and content. `reject` or `defer` preserves evidence and restores the
-Candidate's parent without making a failure commit. Inspect any interrupted operation
+Candidate's parent without making a failure commit. If no Validation exists, record
+both `reason` and `validation_missing_reason`; a present Validation must be referenced.
+Inspect any interrupted operation
 with `inspect_or_recover_operation` before retrying.
 For an unsealed draft with no remaining workspace edits, use `cancel_draft` with a
 reason; it records the cancellation and releases the pending slot without refunding

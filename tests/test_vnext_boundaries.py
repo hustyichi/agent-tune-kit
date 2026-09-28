@@ -21,11 +21,19 @@ from agent_tune_kit.checkpoints import (
     seal_candidate,
     temporary_revision,
 )
-from agent_tune_kit.core import ATKError, digest, read_assessment, read_json, validate_evidence, write_json
+from agent_tune_kit.core import (
+    ATKError,
+    digest,
+    read_assessment,
+    read_json,
+    store_assessment,
+    validate_evidence,
+    write_json,
+)
 from agent_tune_kit.execution import run_evaluation
 from agent_tune_kit.governance import compare_and_gate, finish_round, store_diagnosis, validate_external_fix
 from tests.test_vnext_flow import git
-from tests.test_vnext_limits import SPEC, assess, project
+from tests.test_vnext_limits import JUDGER, SPEC, assess, project
 
 
 def _passing_validation(root: Path, round_data: dict, candidate: dict) -> str:
@@ -311,22 +319,31 @@ def test_external_fix_new_baseline_needs_direct_and_end_to_end_evidence(tmp_path
         root,
         {"issue_ids": ["tool"], "previous_round_id": first["id"], "external_fix_identity": fixed_identity},
     )
+    direct_spec = {
+        **SPEC,
+        "dimensions": ["task_success", "contract_safety"],
+        "dimension_rules": {
+            **SPEC["dimension_rules"],
+            "contract_safety": {"validity": "completed response", "attribution": "tool"},
+        },
+    }
     plan.update(
         {
             "allowed_paths": [],
             "commit_authorized": False,
             "fixed_context_hash": fixed_context_hash(),
-            "budget": {"executions": 2, "probes": 1},
+            "budget": {"executions": 2, "probes": 2},
             "probe_permissions": [
                 {
                     "id": "direct-tool",
                     "kind": "direct_component",
                     "component_identity": fixed_identity,
-                    "evaluation_spec_hash": digest(SPEC),
+                    "evaluation_spec_hash": digest(direct_spec),
                     "command": command,
                     "command_hash": digest(command),
                     "runner_hash": digest(root / "adapters" / "runner.py"),
-                    "case_ids": ["case"],
+                    "case_ids": ["case", "protect"],
+                    "max_calls": 2,
                     "isolation_ref": "local fixture",
                 }
             ],
@@ -354,10 +371,33 @@ def test_external_fix_new_baseline_needs_direct_and_end_to_end_evidence(tmp_path
         )
     probe = run_evaluation(
         root,
-        {**base_request, "case_ids": ["case"], "purpose": "diagnostic_probe", "probe_authorization_id": "direct-tool"},
+        {**base_request, "purpose": "diagnostic_probe", "probe_authorization_id": "direct-tool"},
     )
-    direct_refs = [{"batch_id": probe["id"], "evidence_id": next(iter(validate_evidence(root, probe["id"])[2]))}]
-    failed_direct = assess(root, probe, {"case": "wrong"})
+    direct_refs = [
+        {"batch_id": probe["id"], "evidence_id": record_id} for record_id in validate_evidence(root, probe["id"])[2]
+    ]
+
+    def direct_assessment(task_verdict: str, safety_verdict: str) -> str:
+        rows = [
+            {
+                "record_id": record_id,
+                "dimension": dimension,
+                "validity": "valid",
+                "validity_reason": "",
+                "verdict": verdict,
+                "score": None,
+                "reason": "direct check",
+                "evidence_refs": [{"batch_id": probe["id"], "evidence_id": record_id}],
+                "judger_kind": "deterministic",
+            }
+            for record_id in validate_evidence(root, probe["id"])[2]
+            for dimension, verdict in (("task_success", task_verdict), ("contract_safety", safety_verdict))
+        ]
+        return store_assessment(
+            root, {"batch_id": probe["id"], "evaluation_spec": direct_spec, "judger": JUDGER, "rows": rows}
+        ).parent.name
+
+    failed_direct = direct_assessment("fail", "pass")
     with pytest.raises(ATKError, match="passing authorized"):
         validate_external_fix(
             root,
@@ -368,7 +408,39 @@ def test_external_fix_new_baseline_needs_direct_and_end_to_end_evidence(tmp_path
                 "direct_evidence_refs": direct_refs,
             },
         )
-    direct_assessment_id = assess(root, probe, {"case": "ok"})
+    unsafe_direct = direct_assessment("pass", "fail")
+    with pytest.raises(ATKError, match="passing authorized"):
+        validate_external_fix(
+            root,
+            {
+                "round_id": second["id"],
+                "assessment_id": assessment_id,
+                "direct_assessment_id": unsafe_direct,
+                "direct_evidence_refs": direct_refs,
+            },
+        )
+    with pytest.raises(ATKError, match="frozen by probe permission"):
+        validate_external_fix(
+            root,
+            {
+                "round_id": second["id"],
+                "assessment_id": assessment_id,
+                "direct_assessment_id": unsafe_direct,
+                "direct_dimension": "task_success",
+                "direct_evidence_refs": direct_refs,
+            },
+        )
+    direct_assessment_id = direct_assessment("pass", "pass")
+    with pytest.raises(ATKError, match="Case coverage"):
+        validate_external_fix(
+            root,
+            {
+                "round_id": second["id"],
+                "assessment_id": assessment_id,
+                "direct_assessment_id": direct_assessment_id,
+                "direct_evidence_refs": direct_refs[:1],
+            },
+        )
     validation = validate_external_fix(
         root,
         {
@@ -751,6 +823,42 @@ def test_decision_written_before_round_update_can_recover(tmp_path: Path, monkey
     assert read_json(root / "rounds" / round_data["id"] / "round.json")["current_commit"] == git(
         repo, "rev-parse", "HEAD"
     )
+
+
+@pytest.mark.parametrize("action", ["reject", "defer"])
+def test_unvalidated_candidate_can_be_restored_and_recovered(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, action: str
+) -> None:
+    rows = [{"id": "case", "input": "task", "usage": "optimization", "source_group_id": "group"}]
+    repo, root, _, round_data, plan = project(tmp_path, "print('ok')\n", rows)
+    freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
+    draft = prepare_candidate(
+        repo, root, {"round_id": round_data["id"], "primary_issue_id": "issue", "paths": ["prompt.txt"]}
+    )
+    (repo / "prompt.txt").write_text("new")
+    seal_candidate(repo, root, {"round_id": round_data["id"], "candidate_id": draft["id"]})
+    request = {
+        "round_id": round_data["id"],
+        "candidate_id": draft["id"],
+        "action": action,
+        "reason": "unsafe to continue",
+        "validation_missing_reason": "candidate inspection found a problem",
+    }
+    with pytest.raises(ATKError, match="recorded reason"):
+        decide_candidate(
+            repo, root, {key: value for key, value in request.items() if key != "validation_missing_reason"}
+        )
+    with monkeypatch.context() as patch:
+        patch.setattr(checkpoints, "_write_round", lambda *_: (_ for _ in ()).throw(RuntimeError("interrupted")))
+        with pytest.raises(RuntimeError, match="interrupted"):
+            decide_candidate(repo, root, request)
+    operation = next((root / "rounds" / round_data["id"] / "operations").glob("*.json"))
+    recovered = inspect_or_recover_operation(repo, root, {"round_id": round_data["id"], "operation_id": operation.stem})
+    assert recovered["stage"] == "complete"
+    assert recovered["decision"]["validation_id"] is None
+    assert recovered["decision"]["validation_missing_reason"] == request["validation_missing_reason"]
+    assert (repo / "prompt.txt").read_text() == "old"
+    assert read_json(root / "rounds" / round_data["id"] / "round.json")["pending_candidate_id"] is None
 
 
 @pytest.mark.parametrize("action", ["reject", "defer"])

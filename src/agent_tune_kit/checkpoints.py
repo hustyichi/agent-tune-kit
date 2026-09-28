@@ -319,7 +319,7 @@ def freeze_round(repo: Path, root: Path, request: dict) -> dict:
             raise ATKError("INCOMPLETE_EVIDENCE", "frozen plan needs a dataset_id")
         from .execution import load_cases
 
-        cases = load_cases(root, plan["dataset_id"])
+        cases = load_cases(root, plan["dataset_id"], verify_attachments=True)
         if not set(plan["case_ids"]) <= set(cases):
             raise ATKError("COMPARISON_INVALID", "frozen Cases are missing from the dataset")
         fingerprints = {case_id: cases[case_id]["fingerprint"] for case_id in plan["case_ids"]}
@@ -863,10 +863,29 @@ def decide_candidate(repo: Path, root: Path, request: dict) -> dict:
         if changed_paths(repo) - set(value["baseline_untracked"]) != set(files):
             raise ATKError("WORKSPACE_CONFLICT", "unknown workspace changes appeared after sealing")
         action = request["action"]
-        validation = read_json(
-            _round_path(root, value["id"]) / "validations" / safe_id(request["validation_id"]) / "validation.json"
+        if action not in {"keep", "reject", "defer"}:
+            raise ATKError("WORKSPACE_CONFLICT", f"unsupported candidate action: {action}")
+        if not isinstance(request.get("reason"), str) or not request["reason"].strip():
+            raise ATKError("INCOMPLETE_EVIDENCE", "candidate Decision needs a reason")
+        validation_id = request.get("validation_id")
+        missing_reason = request.get("validation_missing_reason")
+        if not validation_id and (
+            action == "keep" or not isinstance(missing_reason, str) or not missing_reason.strip()
+        ):
+            raise ATKError("INCOMPLETE_EVIDENCE", "missing candidate Validation needs a recorded reason")
+        if validation_id and missing_reason:
+            raise ATKError("COMPARISON_INVALID", "candidate Validation is present; missing reason is contradictory")
+        if not validation_id and any(
+            read_json(path).get("candidate_id") == candidate_id
+            for path in (_round_path(root, value["id"]) / "validations").glob("*/validation.json")
+        ):
+            raise ATKError("COMPARISON_INVALID", "existing candidate Validation must be referenced")
+        validation = (
+            read_json(_round_path(root, value["id"]) / "validations" / safe_id(validation_id) / "validation.json")
+            if validation_id
+            else None
         )
-        if (
+        if validation and (
             validation.get("right_revision_id") != candidate["revision_id"]
             or validation.get("left_commit") != candidate["parent_commit"]
             or validation.get("candidate_id") != candidate_id
@@ -887,8 +906,6 @@ def decide_candidate(repo: Path, root: Path, request: dict) -> dict:
             unresolved = [issue for issue in blockers if issue["resolution"] != "resolved"]
             if unresolved and (candidate["change_kind"] != "workaround" or validation["result"] != "pass"):
                 raise ATKError("WORKSPACE_CONFLICT", "unresolved external Issue blocks candidate adoption")
-        if action not in {"keep", "reject", "defer"}:
-            raise ATKError("WORKSPACE_CONFLICT", f"unsupported candidate action: {action}")
         operation = {
             "id": new_id("operation"),
             "action": action,
@@ -896,11 +913,12 @@ def decide_candidate(repo: Path, root: Path, request: dict) -> dict:
             "candidate_id": candidate_id,
             "parent_commit": candidate["parent_commit"],
             "files_hash": candidate["files_hash"],
-            "validation_id": request["validation_id"],
+            "validation_id": validation_id,
+            "validation_missing_reason": missing_reason if not validation else None,
             "reason": request["reason"],
             "override": override,
             "override_authorization": authorization,
-            "validation_result": validation["result"],
+            "validation_result": validation["result"] if validation else None,
             "stage": "prepared",
             "created_at": now(),
         }
@@ -951,11 +969,12 @@ def decide_candidate(repo: Path, root: Path, request: dict) -> dict:
             "round_id": value["id"],
             "candidate_id": candidate_id,
             "action": action,
-            "validation_id": request["validation_id"],
+            "validation_id": validation_id,
+            "validation_missing_reason": missing_reason if not validation else None,
             "reason": request["reason"],
             "override": override,
             "override_authorization": authorization,
-            "validation_result": validation["result"],
+            "validation_result": validation["result"] if validation else None,
             "operation_id": operation["id"],
             "before_commit": candidate["parent_commit"],
             "after_commit": value["current_commit"],
@@ -989,6 +1008,7 @@ def _recover_restoration_locked(repo: Path, root: Path, folder: Path, operation:
         "candidate_id": candidate_id,
         "action": operation["action"],
         "validation_id": operation["validation_id"],
+        "validation_missing_reason": operation.get("validation_missing_reason"),
         "operation_id": operation["id"],
         "before_commit": candidate["parent_commit"],
         "after_commit": candidate["parent_commit"],

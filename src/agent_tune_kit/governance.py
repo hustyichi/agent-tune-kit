@@ -801,8 +801,11 @@ def _validate_external_fix_locked(root: Path, request: dict) -> dict:
     direct_manifest, direct_rows = read_assessment(root, request["direct_assessment_id"])
     if direct_manifest["judger_readiness"] != "calibrated":
         raise ATKError("JUDGER_INVALID", "direct component check needs a calibrated Assessment")
-    direct_dimension = request.get("direct_dimension", "task_success")
+    if "direct_dimension" in request:
+        raise ATKError("COMPARISON_INVALID", "direct-check dimensions are frozen by probe permission")
     direct_batches = []
+    direct_slots = set()
+    direct_permission = None
     for ref in refs:
         if not isinstance(ref, dict) or not ref.get("batch_id") or not ref.get("evidence_id"):
             raise ATKError("INCOMPLETE_EVIDENCE", "direct-check evidence reference is malformed")
@@ -815,6 +818,13 @@ def _validate_external_fix_locked(root: Path, request: dict) -> dict:
             ),
             None,
         )
+        required_direct_dimensions = (
+            permission.get("required_dimensions", direct_manifest["evaluation_spec"]["dimensions"])
+            if permission
+            else []
+        )
+        record = direct_records.get(ref["evidence_id"], {})
+        execution = record.get("execution", {})
         if (
             direct_batch.get("purpose") != "diagnostic_probe"
             or direct_batch.get("round_id") != round_data["id"]
@@ -827,19 +837,46 @@ def _validate_external_fix_locked(root: Path, request: dict) -> dict:
             or direct_batch.get("runner_hash") != plan["runner_hash"]
             or direct_manifest["batch_id"] != direct_batch["id"]
             or ref["evidence_id"] not in index
-            or direct_records.get(ref["evidence_id"], {}).get("execution", {}).get("status") != "completed"
-            or not any(
-                row["record_id"] == ref["evidence_id"]
-                and row["dimension"] == direct_dimension
-                and row["validity"] == "valid"
-                and row["verdict"] == "pass"
-                for row in direct_rows
+            or execution.get("status") != "completed"
+            or not isinstance(required_direct_dimensions, list)
+            or not required_direct_dimensions
+            or any(not isinstance(item, str) for item in required_direct_dimensions)
+            or not set(required_direct_dimensions) <= set(direct_manifest["evaluation_spec"]["dimensions"])
+            or not isinstance(permission.get("case_ids"), list)
+            or not permission["case_ids"]
+            or any(not isinstance(item, str) for item in permission["case_ids"])
+            or len(permission["case_ids"]) != len(set(permission["case_ids"]))
+            or type(permission.get("required_repeats", 1)) is not int
+            or permission.get("required_repeats", 1) < 1
+            or direct_permission is not None
+            and permission["id"] != direct_permission["id"]
+            or any(
+                not any(
+                    row["record_id"] == ref["evidence_id"]
+                    and row["dimension"] == dimension
+                    and row["validity"] == "valid"
+                    and row["verdict"] == "pass"
+                    for row in direct_rows
+                )
+                for dimension in required_direct_dimensions
             )
         ):
             raise ATKError(
                 "INCOMPLETE_EVIDENCE", "direct check needs a passing authorized component probe on the new B0"
             )
+        direct_permission = permission
+        slot = (execution["case_id"], execution["repeat_index"])
+        if slot in direct_slots or plan["case_fingerprints"].get(slot[0]) != execution["case_fingerprint"]:
+            raise ATKError("INCOMPLETE_EVIDENCE", "direct check lacks frozen Case coverage")
+        direct_slots.add(slot)
         direct_batches.append(direct_batch)
+    expected_direct_slots = {
+        (case_id, repeat)
+        for case_id in direct_permission["case_ids"]
+        for repeat in range(1, direct_permission.get("required_repeats", 1) + 1)
+    }
+    if direct_slots != expected_direct_slots:
+        raise ATKError("INCOMPLETE_EVIDENCE", "direct check lacks frozen Case coverage")
     dimension = plan["primary_dimension"]
     manifest, batch, slots = _assessment_slots(root, request["assessment_id"], dimension)
     required_dimensions = _required_dimensions(plan, manifest["evaluation_spec"], request.get("dimension"))
