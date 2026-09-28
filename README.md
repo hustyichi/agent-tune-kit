@@ -1,6 +1,6 @@
 # Agent Tune Kit
 
-最后更新：2026-09-28。状态：vNext W1–W7 主体及已确认的三处协议缺口现已补齐本地实现：外部修复直接检查完整门禁、Case 附件身份与交付、无 Validation 的封存候选拒绝／暂缓。W8 真实多 Case 收益、真实有效候选提交、独立语义诊断和真实外部修复仍待验收；最近一次正式两 Case 基线受模型认证失败阻断，本次未复查认证状态。详见[实现与验收记录](docs/vnext-implementation-report.md)。
+最后更新：2026-09-28。状态：[PyPI 1.0.0](https://pypi.org/project/agent-tune-kit/1.0.0/) 已发布；vNext W1–W7 主体及已确认的三处协议缺口已补齐本地实现：外部修复直接检查完整门禁、Case 附件身份与交付、无 Validation 的封存候选拒绝／暂缓。W8 真实多 Case 收益、真实有效候选提交、独立语义诊断和真实外部修复仍待验收；最近一次正式两 Case 基线受模型认证失败阻断，本次未复查认证状态。详见[实现与验收记录](docs/vnext-implementation-report.md)。
 
 2026-09-28 已补齐纯分析轮、暂停／恢复与最终阶段、默认 runner 并发、前五组门禁／收尾缺口，以及冻结 Case 身份、候选在场父版本复跑、无 Revision 探针和上述三处协议缺口。下一步按[开发顺序](docs/vnext-implementation-report.md#下一步开发顺序)收口真实业务与发布验收，不将离线门禁通过视为需求全部完成或线上收益证明。
 

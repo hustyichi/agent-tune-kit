@@ -10,6 +10,12 @@
 
 W1–W7 主体、前五组门禁／收尾修复，以及两轮对账确认的六处协议缺口均已完成本地实现与回归。W8 仍是**部分完成**：已有真实导出与单 Case 自动加载／拒绝恢复验证，尚无有效的真实多 Case 收益、真实有效候选采用提交、独立审核的业务责任层配对及真实外部组件修复闭环。以下结果不表示达到最终 Definition of Done。
 
+## 1.0.0 发布（2026-09-28）
+
+按用户明确要求，破坏兼容的 vNext 作为 `agent-tune-kit==1.0.0` 发布到 [PyPI](https://pypi.org/project/agent-tune-kit/1.0.0/)。发布提交 `7771402`、标签 `1.0.0` 及 `main` 已推送；PyPI 提供 wheel 和 sdist。发布前完整检查通过 180 项测试、Ruff、Skill 包校验、构建及隔离安装；版本升级后再次通过 180 项测试与 Skill 包校验。公开索引的无缓存安装返回 `agent-tune-kit 1.0.0`。
+
+本次发布不改变 W8 的部分验收结论，也不证明真实业务收益或最终 Definition of Done 已达成。旧 `.atk` 数据不自动迁移，用户安装与业务运行仍须按使用指南核对边界。
+
 ## 本轮开发结果（2026-09-28）
 
 | 缺口 | 已实现行为 | 核验 |
@@ -170,7 +176,7 @@ T35–T39 语义复核：另用不含责任层标签的六份临时合成材料�
 
 ## 新产物与兼容性
 
-`.atk/project.json` 使用 `schema_version=2`；`datasets/`、`evidence/`、`assessments/`、`rounds/`、`knowledge/` 以显式 ID 引用。Assessment 的 `assessment.csv` 是唯一权威评分明细，manifest 保存指纹。旧版 `.atk` 不自动迁移，遇到旧目录会停止。对外仍保留 `atk install`；七个 Skill 经 `atk internal <operation> --request ... --output ...` 调用本地确定性操作。旧版入口和模板已经删除，此 checkout 属于破坏兼容的开发状态，尚未发布。
+`.atk/project.json` 使用 `schema_version=2`；`datasets/`、`evidence/`、`assessments/`、`rounds/`、`knowledge/` 以显式 ID 引用。Assessment 的 `assessment.csv` 是唯一权威评分明细，manifest 保存指纹。旧版 `.atk` 不自动迁移，遇到旧目录会停止。对外仍保留 `atk install`；七个 Skill 经 `atk internal <operation> --request ... --output ...` 调用本地确定性操作。旧版入口和模板已经删除；1.0.0 发布见本页顶部。
 
 ## 已运行的验证
 
@@ -203,4 +209,4 @@ T35–T39 语义复核：另用不含责任层标签的六份临时合成材料�
 
 1. 准备独立审核的责任层配对材料及真实本地组件故障案例，完成 T35–T39、T42；继续核对操作中断矩阵、安装布局、服务制品版本、副作用隔离和可信指标来源。
 2. 在认证恢复且真实执行范围获授权后，新开 Magic Round 完成有效多 Case／保护集、真实候选 keep／commit、最终重复验收，并补齐真实非 Skill 和多问题多候选场景。认证未恢复期间不重复已知失败的付费调用。
-3. 在干净用户环境验证发布包与七入口，核对 W8 和最终 DoD 后再作发布决策。无需新增公开 Skill、独立模型 Backend、后台调度或 worktree 管理；它们不属于本期缺失需求。
+3. 在干净用户环境继续验证 1.0.0 发布包与七入口，核对 W8 和最终 DoD 后再决定是否声明真实业务验收完成。无需新增公开 Skill、独立模型 Backend、后台调度或 worktree 管理；它们不属于本期缺失需求。
