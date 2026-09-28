@@ -1,6 +1,6 @@
 # Agent Tune Kit Local Plugin and Skill Pack Usage
 
-> 历史 v1 文档，已由 [vNext 改造方案](agent-tune-kit-vnext-refactor-plan.md) 和根目录 README 取代。以下旧 Skill、目录和产物不适用于当前开发 checkout。
+> 历史 v1 文档。当前操作请使用 [vNext 使用指南](vnext-usage-guide.md)；目标设计见 [vNext 改造方案](agent-tune-kit-vnext-refactor-plan.md)。以下旧 Skill、目录和产物不适用于当前开发 checkout。
 
 Agent Tune Kit provides a local Codex plugin for the manual Agent tuning loop described in `docs/codex_agent_tuning_prd.md`. The supported setup path is the local plugin installer; do not split-copy individual `skills/*` directories because they reference shared pack assets by relative path.
 

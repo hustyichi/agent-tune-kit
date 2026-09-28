@@ -27,6 +27,9 @@ and replay limits with the diagnosis.
 For a post-fix direct check also freeze `kind=direct_component`, the repaired
 `component_identity`, and its `evaluation_spec_hash` in that permission. Its
 command must call the component directly, not the project's end-to-end Agent.
+The permission's Case IDs, `required_repeats`, and optional `required_dimensions`
+define the complete direct-check gate; missing, unknown, or failed required rows
+cannot support a repaired-component claim.
 Set a separate `budget.probes`; zero is the default. The reference records a checked
 setup and does not create an OS sandbox for the target Agent.
 

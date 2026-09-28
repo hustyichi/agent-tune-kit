@@ -6,6 +6,8 @@ Agent Tune Kit (ATK) is a local Codex plugin for **existing Agents**. The curren
 
 > This checkout is implementing the [vNext design](docs/agent-tune-kit-vnext-refactor-plan.md). It is a breaking, unpublished development state. Old Skills and `.atk/results/vN/` data are not migrated or deleted. Initialization stops when it finds an existing legacy `.atk` directory.
 
+For the current workflow, see the [vNext usage guide](docs/vnext-usage-guide.md) (Chinese). The [old Skill pack guide](docs/skill-template-pack-usage.md) is historical.
+
 ## Install and workflow
 
 The command for the currently published package remains:
@@ -14,7 +16,7 @@ The command for the currently published package remains:
 uvx --from agent-tune-kit atk install
 ```
 
-To try this checkout, run `uv run --frozen atk install` here and enable Agent Tune Kit in Codex `/plugins`. vNext exposes exactly seven Skills:
+To try this checkout, run `uv run --frozen atk install` here and enable Agent Tune Kit in Codex `/plugins`. Run development `atk internal` operations through this checkout with `uv run --frozen atk internal ...` so an older global `atk` is not used. vNext exposes exactly seven Skills:
 
 | Skill | Responsibility |
 | --- | --- |
@@ -28,6 +30,8 @@ To try this checkout, run `uv run --frozen atk install` here and enable Agent Tu
 
 Flow: `atk-init → atk-dataset (as needed) → atk-eval → atk-diagnose → [atk-optimize → atk-validate → atk-decide]×N → final atk-validate → atk-decide`. Only one candidate is pending at a time. Passing candidates become local commits in the original worktree; rejected candidates retain evidence and restore their parent. ATK does not push, deploy, rewrite history, or edit another repository.
 
+A sealed candidate may be rejected or deferred before Validation if the Decision records both `reason` and `validation_missing_reason`; recovery restores its parent and retains the sealed evidence. Normal `keep` still requires a matching passing Validation. A post-repair direct component probe must cover every Case, repeat, and required assessment dimension frozen in its permission; the caller cannot pick a passing dimension during validation.
+
 Import-only projects can initialize with `analysis_only=true` without Git or a runner.
 Rounds inherit this mode and can import, assess, diagnose, and close without B0. Later,
 `configure_runtime=true` supplies runtime configuration; freezing binds a clean Git
@@ -40,6 +44,8 @@ been restored and checked; its candidate budget remains spent.
 ## Evidence and artifacts
 
 Evaluation accepts a runnable Case dataset, existing batch results, or Langfuse JSON/JSONL/CSV/`.gz` exports. Langfuse Trace bundles and Observation rows use explicit mapping profiles. For separate Trace, Observation, and Score files, declare each filename and its role in `file_roles`; declare nested CSV fields in `json_columns`. Map changed field names under `mapping.trace`, `mapping.observation`, or `mapping.score` as `{canonical_name: source_name}`; conflicting values block import. `mapping.root_observation_name` may supply missing Trace input or output only when it selects one root Observation. Missing parents, final answers, or export completeness stay unknown. External Scores are preserved as evidence without silently becoming ATK pass/fail judgments. Reassessment creates another immutable Assessment without running the Agent again.
+
+Map Case `attachments` explicitly as a list of local file paths (or a JSON array in a CSV cell). ATK records the resolved path and actual SHA-256 in the Case fingerprint; changed or missing files block replay. The default runner writes a per-attempt `attachments.json` and exposes `{attachments_file}` to the Agent command. Configure the target Agent to read that file when attachments are needed.
 
 The target runner uses the target project's Python environment and assigns one Execution to each planned attempt. Initialization requires an explicit `external_effects` declaration (`[]` after confirming no external writes); every declared write needs a recorded test environment, stub, or approved safeguard before replay. Freeze a positive integer `concurrency` (default 1) and a positive finite `timeout_seconds` (default 120); both must match each formal run and retry.
 The primary assessment dimension is frozen. All specification dimensions are required

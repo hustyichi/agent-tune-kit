@@ -5,11 +5,12 @@ description: Commit a validated candidate, restore a failed one, roll back an ac
 
 # Decide and checkpoint
 
-Read `../WORKFLOW.md`. Identify the exact Round, Candidate, Validation, and frozen
-authorization. `decide_candidate` with `keep` requires a matching passing incremental
-Validation (or explicit recorded trial override with user source, action, reason,
-and risk); it stages only sealed paths and checks the commit parent, changed paths,
-trailers, and content. `reject` or `defer` preserves evidence and restores the
+Read `../WORKFLOW.md`. Identify the exact Round, Candidate, available Validation,
+and frozen authorization. `decide_candidate` with `keep` requires a matching
+incremental Validation that passes (or an explicit recorded trial override with
+user source, action, reason, and risk); it stages only sealed paths and checks the
+commit parent, changed paths, trailers, and content. `reject` or `defer` preserves
+evidence and restores the
 Candidate's parent without making a failure commit. If no Validation exists, record
 both `reason` and `validation_missing_reason`; a present Validation must be referenced.
 Inspect any interrupted operation

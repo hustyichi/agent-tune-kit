@@ -12,6 +12,8 @@ Agent Tune Kit（ATK）是用于**已有本地 Agent** 的 Codex 插件。当前
 
 > 本仓库正在实现 [vNext 改造方案](docs/agent-tune-kit-vnext-refactor-plan.md)。这是破坏兼容的开发状态，未发布为 PyPI 新版本。旧版 `.atk/results/vN/` 和旧 Skill 不自动迁移或删除；新版初始化遇到旧 `.atk` 会停止。
 
+首次使用请按[当前 vNext 使用指南](docs/vnext-usage-guide.md)选择纯导入、正式评测或外部组件修复路径。旧版[Skill 包使用说明](docs/skill-template-pack-usage.md)仅供追溯。
+
 ## 安装与入口
 
 已发布版本的本地插件安装命令仍为：
@@ -20,7 +22,7 @@ Agent Tune Kit（ATK）是用于**已有本地 Agent** 的 Codex 插件。当前
 uvx --from agent-tune-kit atk install
 ```
 
-要试用此开发 checkout，请在本仓库执行 `uv run --frozen atk install`，再在 Codex 的 `/plugins` 中启用 Agent Tune Kit。只有七个公开 Skill：
+要试用此开发 checkout，请在本仓库执行 `uv run --frozen atk install`，再在 Codex 的 `/plugins` 中启用 Agent Tune Kit。开发版内部命令也应通过本仓库的 `uv run --frozen atk internal ...` 运行，避免误用旧版全局 `atk`。只有七个公开 Skill：
 
 | Skill | 职责 |
 | --- | --- |
@@ -35,6 +37,8 @@ uvx --from agent-tune-kit atk install
 核心顺序：`atk-init → atk-dataset（按需）→ atk-eval → atk-diagnose → [atk-optimize → atk-validate → atk-decide]×N → atk-validate（最终）→ atk-decide`。一轮只有一个未决候选；通过的候选在原工程形成一个本地 commit，失败候选保存证据后恢复父检查点。最终门禁以冻结的完整 Case、保护集与重复计划验证累计效果。不会自动 push、发布、部署、改写 Git 历史或修改其他仓库。
 
 范围外组件修复后，可将关闭的交接 Round 链接到新 Round，登记修复制品身份，在新 B0 分别执行获授权的组件直接探针与受影响 Case／保护集的端到端复验。两份 Assessment 都通过后才能完成新 Round 并把原 Issue 标为已解决；Agent 端规避仍保留原缺陷为开放。旧 Revision 在原目录复跑前须冻结缓存／制品重建命令或无状态依据。
+
+直接探针还必须覆盖冻结许可中的全部 Case／重复次数及必需判定维度；验证请求不能临时选择通过维度。封存候选即使尚无 Validation，也可记录 `reason` 和 `validation_missing_reason` 后执行 `reject/defer`，恢复父版本并保留决策记录；正常 `keep` 仍需匹配的通过 Validation。
 
 纯导入分析可用 `initialize_project` 的 `analysis_only=true` 初始化，无需 Git 或运行命令；若需执行诊断探针，可在无 Git 项目配置 runner 和 `analysis_plan` 中的探针许可，以空 Revision 执行有预算的 `diagnostic_probe`。正式评测仍需 Git B0。需要优化时，以 `configure_runtime=true` 补齐运行配置，`freeze_round` 再绑定干净的 B0，保留已有证据和 Issue。
 

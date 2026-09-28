@@ -1,6 +1,6 @@
 # Shared Versioning and Confirmation Rules
 
-> 历史 v1 文档，已由 [vNext 改造方案](agent-tune-kit-vnext-refactor-plan.md) 取代。当前开发 checkout 不再使用 `results/vN` 版本协议。
+> 历史 v1 文档。当前操作请使用 [vNext 使用指南](vnext-usage-guide.md)，设计依据见 [vNext 改造方案](agent-tune-kit-vnext-refactor-plan.md)。当前开发 checkout 不再使用 `results/vN` 版本协议。
 
 This document is the single source of truth for the Agent Tune Kit Skills. It extracts the version rules and uncertainty-confirmation behavior from `docs/codex_agent_tuning_prd.md` so every Skill uses the same terms when the repo is loaded as a local Codex plugin.
 

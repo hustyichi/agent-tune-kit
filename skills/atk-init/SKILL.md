@@ -25,6 +25,11 @@ If the Agent loads an isolated copy, the trusted adapter may also emit absolute
 `staged_from_path` from the observed copy step. Keep the loader event locator; do not
 infer the origin solely from equal file contents.
 
+If Cases include file attachments, configure the Agent command to consume the
+default runner's `{attachments_file}` argument. The file is a per-attempt JSON
+manifest of resolved paths and SHA-256 values; the Agent must not receive expected
+answers or judging rules as input.
+
 Call `initialize_project` with `python`, argv-array `command`, `components`,
 `allowed_paths`, `protected_paths`, `external_effects` (use `[]` only after
 checking that no external writes occur), and detailed `runtime_notes`. It creates
