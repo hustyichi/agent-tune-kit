@@ -101,7 +101,7 @@ def initialize_project(repo: Path, request: dict) -> dict:
     if type(analysis_only) is not bool:
         raise ATKError("INCOMPLETE_EVIDENCE", "analysis_only must be boolean")
     upgrade = False
-    if (root / "project.json").exists() and request.get("configure_runtime") is True and not analysis_only:
+    if (root / "project.json").exists() and request.get("configure_runtime") is True:
         existing = read_json(root / "project.json")
         upgrade = existing.get("schema_version") == 2 and existing.get("analysis_only") is True
     if root.exists() and not upgrade:
@@ -110,7 +110,10 @@ def initialize_project(repo: Path, request: dict) -> dict:
         raise ATKError(
             "WORKSPACE_CONFLICT", "existing .atk data has no v2 project.json; preserve it and choose a clean project"
         )
-    if analysis_only:
+    runtime_requested = any(
+        key in request for key in ("python", "command", "components", "external_effects", "configure_runtime")
+    )
+    if analysis_only and not runtime_requested:
         project = {
             "schema_version": 2,
             "created_at": now(),
@@ -125,18 +128,13 @@ def initialize_project(repo: Path, request: dict) -> dict:
         for path in (root / "rounds").glob("*/round.json")
     ):
         raise ATKError("WORKSPACE_CONFLICT", "runtime setup requires inactive analysis Rounds")
-    verify_repo(repo)
-    if any(path == ".atk" or path.startswith(".atk/") for path in tracked_paths(repo)):
-        raise ATKError("DIRTY_BASELINE", "tracked .atk files must be handled before initialization")
-    required = {
-        "python",
-        "command",
-        "components",
-        "allowed_paths",
-        "protected_paths",
-        "runtime_notes",
-        "external_effects",
-    }
+    if not analysis_only:
+        verify_repo(repo)
+        if any(path == ".atk" or path.startswith(".atk/") for path in tracked_paths(repo)):
+            raise ATKError("DIRTY_BASELINE", "tracked .atk files must be handled before initialization")
+    required = {"python", "command", "components", "runtime_notes", "external_effects"}
+    if not analysis_only:
+        required |= {"allowed_paths", "protected_paths"}
     if required - request.keys() or not isinstance(request["command"], list) or not request["command"]:
         raise ATKError("INCOMPLETE_EVIDENCE", f"project configuration missing: {sorted(required - request.keys())}")
     infrastructure_codes = request.get("infrastructure_exit_codes", [])
@@ -168,25 +166,27 @@ def initialize_project(repo: Path, request: dict) -> dict:
     ):
         raise ATKError("INCOMPLETE_EVIDENCE", "cost and tool-call metrics need a named independent collector")
     _version_commands(request["components"])
-    git_dir = Path(git(repo, "rev-parse", "--git-dir").decode().strip())
-    if not git_dir.is_absolute():
-        git_dir = repo / git_dir
-    exclude = git_dir / "info" / "exclude"
-    exclude.parent.mkdir(parents=True, exist_ok=True)
-    previous = exclude.read_text(encoding="utf-8") if exclude.exists() else ""
-    if ".atk/" not in previous.splitlines():
-        exclude.write_text(previous.rstrip("\n") + "\n.atk/\n", encoding="utf-8")
+    if not analysis_only:
+        git_dir = Path(git(repo, "rev-parse", "--git-dir").decode().strip())
+        if not git_dir.is_absolute():
+            git_dir = repo / git_dir
+        exclude = git_dir / "info" / "exclude"
+        exclude.parent.mkdir(parents=True, exist_ok=True)
+        previous = exclude.read_text(encoding="utf-8") if exclude.exists() else ""
+        if ".atk/" not in previous.splitlines():
+            exclude.write_text(previous.rstrip("\n") + "\n.atk/\n", encoding="utf-8")
     root.mkdir(exist_ok=upgrade)
     project = {
         "schema_version": 2,
         "created_at": now(),
         "workspace_path": str(repo),
+        "analysis_only": analysis_only,
         "python": request["python"],
         "command": request["command"],
         "infrastructure_exit_codes": infrastructure_codes,
         "components": request["components"],
-        "allowed_paths": request["allowed_paths"],
-        "protected_paths": request["protected_paths"],
+        "allowed_paths": request.get("allowed_paths", []),
+        "protected_paths": request.get("protected_paths", []),
         "redact_keys": request.get("redact_keys", existing.get("redact_keys", []) if upgrade else []),
         "loading_verification": request.get("loading_verification", {}),
         "external_effects": external_effects,
@@ -336,6 +336,13 @@ def _reserve_run(
         plan = (
             read_json(folder / "plan.json") if (folder / "plan.json").exists() else round_data.get("analysis_plan", {})
         )
+        if request["purpose"] == "evaluation" and (
+            not plan.get("case_fingerprints")
+            or any(
+                plan["case_fingerprints"].get(attempt["case_id"]) != attempt["case_fingerprint"] for attempt in attempts
+            )
+        ):
+            raise ATKError("COMPARISON_INVALID", "formal run Cases differ from the frozen dataset")
         if plan.get("run_config_hash") and plan["run_config_hash"] != digest(project):
             raise ATKError("COMPARISON_INVALID", "project runner configuration changed after Round freeze")
         if request["purpose"] == "evaluation" and request.get("concurrency", 1) != plan.get("concurrency", 1):
@@ -572,8 +579,10 @@ def run_evaluation(root: Path, request: dict) -> dict:
 
 def _run_evaluation_locked(root: Path, request: dict) -> dict:
     project = json.loads((root / "project.json").read_text(encoding="utf-8"))
-    if project.get("analysis_only"):
+    if project.get("analysis_only") and request.get("purpose") != "diagnostic_probe":
         raise ATKError("NOT_REPLAYABLE", "analysis-only project needs explicit runtime setup before execution")
+    if project.get("analysis_only") and not all(key in project for key in ("python", "command", "components")):
+        raise ATKError("NOT_REPLAYABLE", "analysis-only probe needs explicit runtime setup")
     concurrency = request.get("concurrency", 1)
     if type(concurrency) is not int or concurrency < 1:
         raise ATKError("INCOMPLETE_EVIDENCE", "concurrency must be a positive integer")

@@ -96,6 +96,7 @@ def test_business_skill_must_be_loaded_at_each_revision(tmp_path: Path, load_mod
         ],
     }
     plan = {
+        "dataset_id": dataset["id"],
         "allowed_paths": ["skills/reply"],
         "protected_paths": ["agent.py"],
         "issue_ids": ["skill-rule"],

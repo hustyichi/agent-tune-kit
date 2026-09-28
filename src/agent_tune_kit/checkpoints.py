@@ -92,6 +92,22 @@ def _verify_restored_content(repo: Path, revision: str, paths: Iterable[str]) ->
             raise ATKError("GIT_OPERATION_INTERRUPTED", f"restored content differs from checkpoint: {name}")
 
 
+def _write_replay_file(repo: Path, name: str, data: bytes | None, commit: str | None = None) -> None:
+    path = safe_path(repo, name)
+    if data is None:
+        path.unlink(missing_ok=True)
+    elif commit:
+        git(repo, "--literal-pathspecs", "restore", f"--source={commit}", "--worktree", "--", name)
+    else:
+        atomic_write(path, data)
+
+
+def _sealed_replay_content(repo: Path, name: str, commit: str, folder: Path | None, files: dict) -> bytes | None:
+    if name not in files:
+        return _git_file(repo, commit, name)
+    return (folder / "files" / name).read_bytes() if files[name]["exists"] else None
+
+
 def _check_regular_parent(repo: Path, name: str) -> None:
     listing = git(repo, "ls-tree", "HEAD", "--", name).decode().strip()
     if listing:
@@ -299,6 +315,17 @@ def freeze_round(repo: Path, root: Path, request: dict) -> dict:
             or not set(plan["protection_case_ids"]) <= set(plan["case_ids"])
         ):
             raise ATKError("COMPARISON_INVALID", "frozen Case set is empty, duplicated, or inconsistent")
+        if not plan.get("dataset_id"):
+            raise ATKError("INCOMPLETE_EVIDENCE", "frozen plan needs a dataset_id")
+        from .execution import load_cases
+
+        cases = load_cases(root, plan["dataset_id"])
+        if not set(plan["case_ids"]) <= set(cases):
+            raise ATKError("COMPARISON_INVALID", "frozen Cases are missing from the dataset")
+        fingerprints = {case_id: cases[case_id]["fingerprint"] for case_id in plan["case_ids"]}
+        if plan.get("case_fingerprints", fingerprints) != fingerprints:
+            raise ATKError("COMPARISON_INVALID", "frozen Case content differs from the dataset")
+        plan["case_fingerprints"] = fingerprints
         if plan["repeatability"] not in {"deterministic", "stochastic", "unknown"}:
             raise ATKError("COMPARISON_INVALID", "repeatability is invalid")
         if not isinstance(plan["repeatability_basis"], str) or not plan["repeatability_basis"].strip():
@@ -1154,11 +1181,26 @@ def _recover_temporary_replay_locked(repo: Path, root: Path, folder: Path, opera
         for candidate_id in value["active_candidate_ids"]
     )
     preparation = read_json(folder / "plan.json").get("replay_preparation")
+    candidate_id = value["pending_candidate_id"]
+    candidate_folder = folder / "candidates" / candidate_id if candidate_id else None
+    candidate = read_json(candidate_folder / "candidate.json") if candidate_folder else None
+    files = read_json(candidate_folder / "files.json") if candidate else {}
+    if candidate and (
+        operation.get("candidate_id") != candidate_id
+        or operation.get("files_hash") != candidate["files_hash"]
+        or digest(files) != candidate["files_hash"]
+        or any(
+            not (candidate_folder / "files" / name).is_file()
+            or digest(candidate_folder / "files" / name) != expected["sha256"]
+            for name, expected in files.items()
+            if expected["exists"]
+        )
+    ):
+        raise ATKError("GIT_OPERATION_INTERRUPTED", "sealed replay source changed")
     if (
-        value["pending_candidate_id"]
+        operation.get("candidate_id") != candidate_id
         or operation.get("before_commit") != value["current_commit"]
         or target not in known
-        or target == value["current_commit"]
         or not preparation
         or operation.get("replay_preparation_hash") != digest(preparation)
     ):
@@ -1167,27 +1209,28 @@ def _recover_temporary_replay_locked(repo: Path, root: Path, folder: Path, opera
     expected_paths = set(
         filter(None, git(repo, "diff", "--name-only", "-z", target, value["current_commit"]).decode().split("\0"))
     )
-    if paths != expected_paths:
+    if paths != expected_paths | set(files):
         raise ATKError("GIT_OPERATION_INTERRUPTED", "replay paths differ from the current checkpoint")
     verify_repo(repo, expected_head=value["current_commit"], expected_branch=value["branch"])
     if changed_paths(repo) - set(value["baseline_untracked"]) - paths:
         raise ATKError("GIT_OPERATION_INTERRUPTED", "unknown workspace changes appeared during replay")
     for name in paths:
-        if content(repo, name) not in {_git_file(repo, target, name), _git_file(repo, value["current_commit"], name)}:
+        before = _sealed_replay_content(repo, name, value["current_commit"], candidate_folder, files)
+        if content(repo, name) not in {_git_file(repo, target, name), before}:
             raise ATKError("GIT_OPERATION_INTERRUPTED", f"replay source has unknown content: {name}")
-    if paths:
-        git(
+    for name in sorted(paths):
+        _write_replay_file(
             repo,
-            "--literal-pathspecs",
-            "restore",
-            f"--source={value['current_commit']}",
-            "--worktree",
-            "--",
-            *sorted(paths),
+            name,
+            _sealed_replay_content(repo, name, value["current_commit"], candidate_folder, files),
+            value["current_commit"] if name not in files else None,
         )
     _prepare_replay(repo, preparation)
-    _verify_restored_content(repo, value["current_commit"], paths)
-    if changed_paths(repo) != set(value["baseline_untracked"]) or staged_paths(repo):
+    if candidate:
+        _verify_sealed(repo, candidate_folder, candidate)
+    else:
+        _verify_restored_content(repo, value["current_commit"], paths)
+    if changed_paths(repo) != set(value["baseline_untracked"]) | set(files) or staged_paths(repo):
         raise ATKError("GIT_OPERATION_INTERRUPTED", "replay recovery did not restore the starting checkpoint")
     operation["stage"] = "aborted"
     write_json(folder / "operations" / f"{operation['id']}.json", operation)
@@ -1387,22 +1430,28 @@ def temporary_revision(repo: Path, root: Path, round_id: str, target_commit: str
     """Replay a known checkpoint in the same directory without moving HEAD or index."""
     with locked(root):
         value = _round(root, round_id)
-        if value["pending_candidate_id"]:
-            raise ATKError("WORKSPACE_CONFLICT", "temporary replay needs no pending candidate")
+        candidate_id = value["pending_candidate_id"]
+        candidate_folder = _round_path(root, round_id) / "candidates" / candidate_id if candidate_id else None
+        if candidate_folder and not (candidate_folder / "candidate.json").is_file():
+            raise ATKError("WORKSPACE_CONFLICT", "temporary replay needs a sealed candidate")
+        candidate = read_json(candidate_folder / "candidate.json") if candidate_folder else None
+        files = _verify_sealed(repo, candidate_folder, candidate) if candidate else {}
         verify_repo(repo, expected_head=value["current_commit"], expected_branch=value["branch"])
-        if changed_paths(repo) != set(value["baseline_untracked"]):
+        if changed_paths(repo) != set(value["baseline_untracked"]) | set(files):
             raise ATKError("WORKSPACE_CONFLICT", "unaccounted changes block temporary replay")
         known = {value["baseline_commit"]}
-        for candidate_id in value["active_candidate_ids"]:
-            decision = read_json(_round_path(root, round_id) / "candidates" / candidate_id / "decision.json")
+        for active_id in value["active_candidate_ids"]:
+            decision = read_json(_round_path(root, round_id) / "candidates" / active_id / "decision.json")
             known.add(decision["after_commit"])
         if target_commit not in known:
             raise ATKError("REVISION_MISMATCH", "temporary replay target is not a recorded checkpoint")
-        paths = set(filter(None, git(repo, "diff", "--name-only", "-z", target_commit, "HEAD").decode().split("\0")))
+        paths = set(
+            filter(None, git(repo, "diff", "--name-only", "-z", target_commit, "HEAD").decode().split("\0"))
+        ) | set(files)
         for name in paths:
-            current = _git_file(repo, "HEAD", name)
+            current = _sealed_replay_content(repo, name, value["current_commit"], candidate_folder, files)
             if content(repo, name) != current:
-                raise ATKError("WORKSPACE_CONFLICT", f"replay path differs from current commit: {name}")
+                raise ATKError("WORKSPACE_CONFLICT", f"replay path differs from sealed source: {name}")
         preparation = read_json(_round_path(root, round_id) / "plan.json").get("replay_preparation")
         if not preparation:
             raise ATKError("NOT_REPLAYABLE", "Round has no frozen replay preparation")
@@ -1415,6 +1464,8 @@ def temporary_revision(repo: Path, root: Path, round_id: str, target_commit: str
             "before_commit": value["current_commit"],
             "target_commit": target_commit,
             "paths": sorted(paths),
+            "candidate_id": candidate_id,
+            "files_hash": candidate["files_hash"] if candidate else None,
             "replay_preparation_hash": digest(preparation),
         }
         op_path = _round_path(root, round_id) / "operations" / f"{operation['id']}.json"
@@ -1423,23 +1474,20 @@ def temporary_revision(repo: Path, root: Path, round_id: str, target_commit: str
         try:
             operation["stage"] = "switching"
             write_json(op_path, operation)
-            if paths:
-                git(
-                    repo,
-                    "--literal-pathspecs",
-                    "restore",
-                    f"--source={target_commit}",
-                    "--worktree",
-                    "--",
-                    *sorted(paths),
-                )
+            for name in sorted(paths):
+                _write_replay_file(repo, name, _git_file(repo, target_commit, name), target_commit)
             if any(content(repo, name) != _git_file(repo, target_commit, name) for name in paths):
                 raise ATKError("GIT_OPERATION_INTERRUPTED", "target source differs after replay switch")
             _prepare_replay(repo, preparation)
+            target_changes = {
+                name
+                for name in paths
+                if _git_file(repo, target_commit, name) != _git_file(repo, value["current_commit"], name)
+            }
             if (
                 head(repo) != value["current_commit"]
                 or staged_paths(repo)
-                or changed_paths(repo) != paths | set(value["baseline_untracked"])
+                or changed_paths(repo) != target_changes | set(value["baseline_untracked"])
                 or any(content(repo, name) != _git_file(repo, target_commit, name) for name in paths)
             ):
                 raise ATKError("GIT_OPERATION_INTERRUPTED", "replay preparation changed source or Git state")
@@ -1452,23 +1500,26 @@ def temporary_revision(repo: Path, root: Path, round_id: str, target_commit: str
                 raise ATKError("GIT_OPERATION_INTERRUPTED", "HEAD or index changed during temporary replay")
             if any(
                 content(repo, name)
-                not in {_git_file(repo, target_commit, name), _git_file(repo, value["current_commit"], name)}
+                not in {
+                    _git_file(repo, target_commit, name),
+                    _sealed_replay_content(repo, name, value["current_commit"], candidate_folder, files),
+                }
                 for name in paths
             ):
                 raise ATKError("GIT_OPERATION_INTERRUPTED", "replay source has unknown content; inspection required")
-            if paths:
-                git(
+            for name in sorted(paths):
+                _write_replay_file(
                     repo,
-                    "--literal-pathspecs",
-                    "restore",
-                    f"--source={value['current_commit']}",
-                    "--worktree",
-                    "--",
-                    *sorted(paths),
+                    name,
+                    _sealed_replay_content(repo, name, value["current_commit"], candidate_folder, files),
+                    value["current_commit"] if name not in files else None,
                 )
             _prepare_replay(repo, preparation)
-            _verify_restored_content(repo, value["current_commit"], paths)
-            if changed_paths(repo) != set(value["baseline_untracked"]):
+            if candidate:
+                _verify_sealed(repo, candidate_folder, candidate)
+            else:
+                _verify_restored_content(repo, value["current_commit"], paths)
+            if changed_paths(repo) != set(value["baseline_untracked"]) | set(files):
                 raise ATKError("GIT_OPERATION_INTERRUPTED", "temporary replay did not restore starting checkpoint")
             operation["stage"] = "complete" if ready else "aborted"
             write_json(op_path, operation)
@@ -1513,11 +1564,27 @@ def execution_revision(repo: Path, root: Path, request: dict):
     if value["status"] not in {"analysis_only", "ready", "optimizing", "finalizing"}:
         raise ATKError("WORKSPACE_CONFLICT", "Round is paused or closed")
     revision_id = request["revision_id"]
+    if value["baseline_commit"] is None:
+        if request["purpose"] != "diagnostic_probe" or revision_id is not None:
+            raise ATKError("REVISION_MISMATCH", "unfrozen analysis only permits a probe without source Revision")
+        yield
+        return
     if value["pending_candidate_id"]:
         folder = _round_path(root, round_id) / "candidates" / value["pending_candidate_id"]
         candidate = read_json(folder / "candidate.json")
         if candidate["revision_id"] != revision_id:
-            raise ATKError("REVISION_MISMATCH", "pending candidate Revision differs from run request")
+            checkpoints = {value["baseline_revision_id"]: value["baseline_commit"]}
+            for active_id in value["active_candidate_ids"]:
+                active = _round_path(root, round_id) / "candidates" / active_id
+                checkpoints[read_json(active / "candidate.json")["revision_id"]] = read_json(active / "decision.json")[
+                    "after_commit"
+                ]
+            target = checkpoints.get(revision_id)
+            if not target:
+                raise ATKError("REVISION_MISMATCH", "run request names an unknown Revision")
+            with temporary_revision(repo, root, round_id, target):
+                yield
+            return
         verify_repo(repo, expected_head=candidate["parent_commit"], expected_branch=value["branch"])
         _verify_sealed(repo, folder, candidate)
         if changed_paths(repo) - set(value["baseline_untracked"]) != set(candidate["changed_paths"]):

@@ -120,6 +120,7 @@ def project(
             },
         )
     plan = {
+        "dataset_id": dataset["id"],
         "allowed_paths": ["prompt.txt"],
         "protected_paths": ["agent.py"],
         "issue_ids": issue_ids,

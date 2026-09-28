@@ -162,6 +162,7 @@ def test_local_prompt_candidate_is_compared_and_committed(tmp_path: Path, final_
         ],
     }
     plan = {
+        "dataset_id": dataset["id"],
         "allowed_paths": ["prompt.txt"],
         "protected_paths": ["agent.py"],
         "issue_ids": ["issue-prompt"],

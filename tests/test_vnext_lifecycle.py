@@ -17,7 +17,7 @@ from agent_tune_kit.checkpoints import (
 from agent_tune_kit.cli import internal_main
 from agent_tune_kit.core import ATKError, digest, read_json, store_assessment, validate_evidence, write_json
 from agent_tune_kit.evidence import import_evidence
-from agent_tune_kit.execution import initialize_project, run_evaluation
+from agent_tune_kit.execution import initialize_project, run_evaluation, store_dataset
 from agent_tune_kit.governance import finish_round, store_diagnosis
 from tests.test_vnext_boundaries import _handoff_issue
 from tests.test_vnext_flow import git
@@ -113,7 +113,17 @@ def test_analysis_can_bind_clean_b0_without_losing_evidence(tmp_path: Path, monk
         },
     )
     assert read_json(root / "project.json")["redact_keys"] == ["private_field"]
+    cases = tmp_path / "cases.csv"
+    cases.write_text("id,input,usage,source_group_id\ncase,case,optimization,g\n")
+    dataset = store_dataset(
+        root,
+        {
+            "source": str(cases),
+            "mapping": {"id": "id", "input": "input", "usage": "usage", "source_group_id": "source_group_id"},
+        },
+    )
     plan = {
+        "dataset_id": dataset["id"],
         "allowed_paths": ["prompt.txt"],
         "protected_paths": [],
         "issue_ids": ["tool"],

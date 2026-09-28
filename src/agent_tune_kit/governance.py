@@ -473,6 +473,8 @@ def _compare_and_gate_locked(root: Path, request: dict) -> dict:
     if round_data["status"] not in {"ready", "optimizing", "finalizing"}:
         raise ATKError("WORKSPACE_CONFLICT", "Round is paused, unfrozen, or closed")
     plan = read_json(folder / "plan.json")
+    if not plan.get("case_fingerprints"):
+        raise ATKError("COMPARISON_INVALID", "Round has no frozen Case content identities")
     if round_data.get("external_fix_identity"):
         raise ATKError("COMPARISON_INVALID", "external fix Round needs one-sided new B0 validation")
     mode = request["mode"]
@@ -520,6 +522,13 @@ def _compare_and_gate_locked(root: Path, request: dict) -> dict:
     if set(left_slots) != set(right_slots):
         result = "insufficient"
         limitations.append("paired Case slots differ between baseline and candidate")
+    if any(
+        plan["case_fingerprints"].get(case_id) != fingerprint
+        for slots in (left_slots, right_slots)
+        for case_id, fingerprint, _ in slots
+    ):
+        result = "insufficient"
+        limitations.append("execution Case content differs from the frozen dataset")
     candidate = None
     issue_id = None
     if mode == "incremental":
@@ -782,6 +791,8 @@ def _validate_external_fix_locked(root: Path, request: dict) -> dict:
     folder = _round_folder(root, request["round_id"])
     round_data = read_json(folder / "round.json")
     plan = read_json(folder / "plan.json")
+    if not plan.get("case_fingerprints"):
+        raise ATKError("COMPARISON_INVALID", "Round has no frozen Case content identities")
     if not round_data.get("external_fix_identity") or round_data["status"] not in {"ready", "optimizing", "finalizing"}:
         raise ATKError("WORKSPACE_CONFLICT", "external fix validation needs an open linked Round")
     refs = request.get("direct_evidence_refs", [])
@@ -850,7 +861,11 @@ def _validate_external_fix_locked(root: Path, request: dict) -> dict:
     ):
         raise ATKError("COMPARISON_INVALID", "external fix run differs from the frozen new B0")
     expected = {(case_id, repeat) for case_id in plan["case_ids"] for repeat in range(1, plan["final_repeats"] + 1)}
-    if {(case_id, repeat) for case_id, _, repeat in slots} != expected or len(slots) != len(expected):
+    if (
+        {(case_id, repeat) for case_id, _, repeat in slots} != expected
+        or len(slots) != len(expected)
+        or any(plan["case_fingerprints"].get(case_id) != fingerprint for case_id, fingerprint, _ in slots)
+    ):
         raise ATKError("COMPARISON_INVALID", "external fix run lacks frozen Cases or repeats")
     required_loaded = set(plan.get("required_loaded_component_ids", []))
     result = "pass"

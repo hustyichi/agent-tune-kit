@@ -819,24 +819,25 @@ def test_changed_case_input_needs_new_execution_on_both_sides(tmp_path: Path) ->
     )
     (repo / "prompt.txt").write_text("new")
     sealed = seal_candidate(repo, root, {"round_id": first["id"], "candidate_id": draft["id"]})
-    new_right = assessed(new_dataset["id"], first["id"], sealed["revision_id"])
+    with pytest.raises(ATKError, match="frozen dataset"):
+        assessed(new_dataset["id"], first["id"], sealed["revision_id"])
+    old_right = assessed(old_dataset["id"], first["id"], sealed["revision_id"])
+    plan_path = root / "rounds" / first["id"] / "plan.json"
+    altered_plan = read_json(plan_path)
+    altered_plan["case_fingerprints"]["case"] = "untrusted-content"
+    write_json(plan_path, altered_plan)
     request = {
         "round_id": first["id"],
         "mode": "incremental",
         "issue_id": "issue",
         "candidate_id": draft["id"],
         "left_assessment_id": old_left,
-        "right_assessment_id": new_right,
+        "right_assessment_id": old_right,
         "left_commit": first["baseline_commit"],
     }
     mismatch = compare_and_gate(root, request)
     assert mismatch["result"] == "insufficient"
-    assert mismatch["case_distributions"]["case"] == {
-        "left": {"pass": 0, "fail": 0, "unknown": 1},
-        "right": {"pass": 0, "fail": 0, "unknown": 1},
-    }
-    assert mismatch["outcome_counts"]["unknown"] == 1
-    assert mismatch["coverage"] == {"complete_cases": 0, "planned_cases": 1, "planned_repeats_per_case": 1}
+    assert "execution Case content differs from the frozen dataset" in mismatch["limitations"]
     decide_candidate(
         repo,
         root,
@@ -854,7 +855,7 @@ def test_changed_case_input_needs_new_execution_on_both_sides(tmp_path: Path) ->
 
     second = create_round(repo, root, {"issue_ids": ["issue"], "previous_round_id": first["id"]})
     record_local_issue(root, second["id"], "issue", ["case"])
-    freeze_round(repo, root, {"round_id": second["id"], "plan": plan})
+    freeze_round(repo, root, {"round_id": second["id"], "plan": {**plan, "dataset_id": new_dataset["id"]}})
     fresh_left = assessed(new_dataset["id"], second["id"], second["baseline_revision_id"])
     rebuilt = prepare_candidate(
         repo, root, {"round_id": second["id"], "primary_issue_id": "issue", "paths": ["prompt.txt"]}

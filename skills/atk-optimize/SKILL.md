@@ -6,7 +6,7 @@ description: Prepare and seal one scoped local Agent candidate on the current ac
 # Optimize one Issue
 
 Read `../WORKFLOW.md`. If the Round is not frozen, call `create_round` and
-`freeze_round` only after recording a clean B0, protected/allowed paths, component
+`freeze_round` only after recording a clean B0, `dataset_id`, protected/allowed paths, component
 identity, calibrated scoring, target/protection Cases, final repeats, finite budget,
 commit authorization, and rollback rule. A blocked out-of-scope Issue cannot become
 a local fix. Freeze Issue blockers and any authorized workaround IDs. A workaround is

@@ -6,8 +6,10 @@ description: Inspect and connect an existing local Agent to ATK v2 without chang
 # Connect an existing Agent
 
 Read `../WORKFLOW.md`. For import-only analysis, call `initialize_project` with
-`analysis_only=true` and optional `redact_keys`; no Git or runner is needed. Skip
-runtime investigation until execution is requested. Later, pass `configure_runtime=true`
+`analysis_only=true` and optional `redact_keys`; no Git or runner is needed. For an
+authorized probe without Git, include `python`, `command`, `components`,
+`external_effects`, and `runtime_notes`, then freeze permission and budget in a
+Round's `analysis_plan`. Later, pass `configure_runtime=true`
 with the complete runtime configuration to upgrade that project while preserving its
 Rounds, evidence, and redaction keys. Resume any paused analysis Round before upgrading.
 For an executable project, inspect the target project's source and instructions before

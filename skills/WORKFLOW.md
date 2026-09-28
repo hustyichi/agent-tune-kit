@@ -23,7 +23,10 @@ current cumulative Revision with frozen B0. No push, deployment, background run,
 cross-repository edit is part of this workflow.
 
 For imported evidence only, initialize with `analysis_only=true`: no Git, command, or
-runner is required. `create_round` inherits that mode (or accepts it explicitly in a
+runner is required. An authorized diagnostic probe may instead configure a runtime
+without Git, create a Round with `analysis_plan` probe permissions and budget, and run
+with `revision_id=null`; formal evaluation still requires a frozen Git B0.
+`create_round` inherits that mode (or accepts it explicitly in a
 runtime project); B0 and Revision remain absent. Import, assess, diagnose, then call
 `finish_round` with `action=close_without_adoption` and a reason. To optimize later,
 configure a Git runtime with `initialize_project: configure_runtime=true` and the full
@@ -40,7 +43,8 @@ run automatically enters `finalizing`; explicit `start_finalizing` also supports
 existing evidence. This stage blocks new candidates and incremental runs. A rollback
 returns to optimizing (or keeps a paused Round paused until explicit resume).
 
-Before any candidate, record a finite plan with scope, protected paths, issue and case
+Before any candidate, record a finite plan with `dataset_id` (freezing each Case's
+content, usage, and source-group fingerprint), scope, protected paths, issue and case
 IDs, calibrated judger/spec/runner/fixed-context hashes, repeat plan, budget, commit
 authorization, rollback rule, and `replay_preparation` (`stateless` with reason, or a
 bounded command that rebuilds caches and artifacts at each checked-out Revision).
@@ -59,7 +63,7 @@ default; a two-repeat plan needs `repeat_plan_basis` and still makes no signific
 When only the judging rule changes, close the old Round and link a new one with
 `reuse_revision=true` only if its B0 commit and project run config match the old
 current Revision. Reassess the original batch under the new calibrated rule;
-changed Case input or fixed execution context requires a fresh run.
+changed Case content, usage, source group, or fixed execution context requires a fresh Round.
 If an operation is interrupted, use `inspect_or_recover_operation` and inspect the
 recorded operation before another edit; unknown Git or file state remains blocked.
 
