@@ -190,8 +190,6 @@ class ReleaseScriptTests(unittest.TestCase):
                 encoding="utf-8",
             )
             (root / "tests" / "test_install_plugin.py").write_text('"agent-tune-kit 0.3.8"\n', encoding="utf-8")
-            (root / "scripts" / "validate_skill_pack.py").write_text('\'"version": "0.3.8"\'\n', encoding="utf-8")
-
             changed = release_version.update_version_files(root, "0.4.0")
 
             self.assertEqual(
@@ -199,7 +197,6 @@ class ReleaseScriptTests(unittest.TestCase):
                 [
                     ".codex-plugin/plugin.json",
                     "pyproject.toml",
-                    "scripts/validate_skill_pack.py",
                     "src/agent_tune_kit/__init__.py",
                     "tests/test_install_plugin.py",
                     "tests/test_release_scripts.py",
@@ -236,7 +233,6 @@ class ReleaseScriptTests(unittest.TestCase):
                 "add",
                 ".codex-plugin/plugin.json",
                 "pyproject.toml",
-                "scripts/validate_skill_pack.py",
                 "src/agent_tune_kit/__init__.py",
                 "tests/test_install_plugin.py",
                 "tests/test_release_scripts.py",
