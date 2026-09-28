@@ -1,6 +1,6 @@
 # Agent Tune Kit vNext 使用指南
 
-最后核对：2026-09-28。适用于本仓库的开发 checkout；当前 PyPI 已发布版本仍使用旧协议。产品约束以[正式改造方案](agent-tune-kit-vnext-refactor-plan.md)为准，已实现范围及真实验收状态以[实现记录](vnext-implementation-report.md)为准。
+最后核对：2026-09-28。适用于 PyPI 的 1.0.0 版本及本仓库 checkout。产品约束以[正式改造方案](agent-tune-kit-vnext-refactor-plan.md)为准，已实现范围及真实验收状态以[实现记录](vnext-implementation-report.md)为准。
 
 ## 1. 选择入口
 
@@ -20,7 +20,7 @@ ATK 面向**已有** Agent。用户通过七个 Codex Skill 表达目标；当�
 3. 准备 Case、判据及正反校准例。输入可来自 CSV、JSONL 或明确映射的原始结果；不要把 Agent 的原答案直接当 Ground Truth。保护集和独立 holdout 要按来源任务／会话分组。
 4. 在冻结 Round 前写明允许修改的路径、保护路径、Issue 与 Case 集合、组件身份、重复次数、超时、并发、预算、回退规则，以及旧 Revision 重放时的缓存／制品准备方式。波动或未知的 Agent 默认最终每侧运行三次；缩至两次需要记录依据。
 
-本 checkout 可在仓库目录用 `uv run --frozen atk install` 安装开发版插件，再在 Codex `/plugins` 启用。`uvx --from agent-tune-kit atk install` 安装的是当前已发布包，**不能据此认为已启用 vNext**。开发版内部命令也应从本 checkout 用 `uv run --frozen atk internal ...` 执行，避免调用到旧版全局 `atk`。
+从 PyPI 安装请运行 `uvx --from agent-tune-kit==1.0.0 atk install`，再在 Codex `/plugins` 启用。源码 checkout 可在仓库目录运行 `uv run --frozen atk install`。内部命令须与插件版本一致：PyPI 1.0.0 使用 `uvx --from agent-tune-kit==1.0.0 atk internal ...`，checkout 使用 `uv run --frozen atk internal ...`，避免调用到旧版全局 `atk`。
 
 旧 `.atk/results/vN/` 不自动迁移或删除。目标工程若已有旧 `.atk`，初始化会停止；先保留旧目录并人工决定迁移方案，或改用干净的目标工程，不要覆盖旧数据。
 
@@ -71,7 +71,13 @@ Skill 会生成 JSON 请求并调用 `atk internal <operation> --request <文件
 {"project_path":"/absolute/path/to/agent","analysis_only":true}
 ```
 
-再从本 checkout 执行：
+PyPI 1.0.0 可执行：
+
+```sh
+uvx --from agent-tune-kit==1.0.0 atk internal initialize_project --request /absolute/init-request.json --output /absolute/init-response.json
+```
+
+从本 checkout 则执行：
 
 ```sh
 uv run --frozen atk internal initialize_project --request /absolute/init-request.json --output /absolute/init-response.json

@@ -11,9 +11,10 @@ Run deterministic operations with a JSON request file and explicit output file:
 atk internal <operation> --request /absolute/request.json --output /absolute/response.json
 ```
 
-For this unpublished checkout, invoke internal commands as
-`uv run --frozen atk internal ...` from the ATK repository so an older installed
-`atk` is not selected.
+Use the same `atk` version as the installed plugin. For PyPI 1.0.0, invoke
+`uvx --from agent-tune-kit==1.0.0 atk internal ...`; from this checkout, invoke
+`uv run --frozen atk internal ...` in the ATK repository. Do not select an older
+globally installed `atk`.
 
 Every request includes `project_path`. Read `status`, `error_code`, and
 `next_required_action`; a zero exit code alone never proves a valid artifact. Resolve

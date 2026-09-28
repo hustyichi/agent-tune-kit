@@ -4,19 +4,19 @@
 
 Agent Tune Kit (ATK) is a local Codex plugin for **existing Agents**. The current Codex session investigates evidence, makes semantic judgments, and edits the target. Deterministic Python operations import or run evidence, store assessments, compare revisions, and manage Git checkpoints. A target may be a business Skill, prompt, Agent code, or configuration.
 
-> This checkout is implementing the [vNext design](docs/agent-tune-kit-vnext-refactor-plan.md). It is a breaking, unpublished development state. Old Skills and `.atk/results/vN/` data are not migrated or deleted. Initialization stops when it finds an existing legacy `.atk` directory.
+> Version 1.0.0 ships the breaking [vNext design](https://github.com/hustyichi/agent-tune-kit/blob/1.0.0/docs/agent-tune-kit-vnext-refactor-plan.md). Old Skills and `.atk/results/vN/` data are not migrated or deleted. Initialization stops when it finds an existing legacy `.atk` directory. Real-world W8 acceptance is still incomplete; see the [implementation record](https://github.com/hustyichi/agent-tune-kit/blob/1.0.0/docs/vnext-implementation-report.md).
 
-For the current workflow, see the [vNext usage guide](docs/vnext-usage-guide.md) (Chinese). The [old Skill pack guide](docs/skill-template-pack-usage.md) is historical.
+For the current workflow, see the [vNext usage guide](https://github.com/hustyichi/agent-tune-kit/blob/1.0.0/docs/vnext-usage-guide.md) (Chinese). The [old Skill pack guide](https://github.com/hustyichi/agent-tune-kit/blob/1.0.0/docs/skill-template-pack-usage.md) is historical.
 
 ## Install and workflow
 
-The command for the currently published package remains:
+Install the 1.0.0 package from PyPI:
 
 ```sh
-uvx --from agent-tune-kit atk install
+uvx --from agent-tune-kit==1.0.0 atk install
 ```
 
-To try this checkout, run `uv run --frozen atk install` here and enable Agent Tune Kit in Codex `/plugins`. Run development `atk internal` operations through this checkout with `uv run --frozen atk internal ...` so an older global `atk` is not used. vNext exposes exactly seven Skills:
+To install from a source checkout, run `uv run --frozen atk install` here, then enable Agent Tune Kit in Codex `/plugins`. Use the same package version for internal operations: `uvx --from agent-tune-kit==1.0.0 atk internal ...` for the PyPI package, or `uv run --frozen atk internal ...` for this checkout. vNext exposes exactly seven Skills:
 
 | Skill | Responsibility |
 | --- | --- |

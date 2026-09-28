@@ -10,19 +10,19 @@
 
 Agent Tune Kit（ATK）是用于**已有本地 Agent** 的 Codex 插件。当前会话负责调查、语义判断和修改；本地 Python 工具负责证据导入、运行记录、判定明细、对照门禁和 Git 检查点。可调资产是业务 Skill、Prompt、Agent 代码或配置；ATK 自己的流程 Skill 不属于候选资产。
 
-> 本仓库正在实现 [vNext 改造方案](docs/agent-tune-kit-vnext-refactor-plan.md)。这是破坏兼容的开发状态，未发布为 PyPI 新版本。旧版 `.atk/results/vN/` 和旧 Skill 不自动迁移或删除；新版初始化遇到旧 `.atk` 会停止。
+> 1.0.0 发布破坏兼容的 [vNext 方案](docs/agent-tune-kit-vnext-refactor-plan.md)。旧版 `.atk/results/vN/` 和旧 Skill 不自动迁移或删除；新版初始化遇到旧 `.atk` 会停止。W8 真实业务验收仍未完成，详见[实现与验收记录](docs/vnext-implementation-report.md)。
 
 首次使用请按[当前 vNext 使用指南](docs/vnext-usage-guide.md)选择纯导入、正式评测或外部组件修复路径。旧版[Skill 包使用说明](docs/skill-template-pack-usage.md)仅供追溯。
 
 ## 安装与入口
 
-已发布版本的本地插件安装命令仍为：
+从 PyPI 安装 1.0.0 版本的本地插件：
 
 ```sh
-uvx --from agent-tune-kit atk install
+uvx --from agent-tune-kit==1.0.0 atk install
 ```
 
-要试用此开发 checkout，请在本仓库执行 `uv run --frozen atk install`，再在 Codex 的 `/plugins` 中启用 Agent Tune Kit。开发版内部命令也应通过本仓库的 `uv run --frozen atk internal ...` 运行，避免误用旧版全局 `atk`。只有七个公开 Skill：
+从源码 checkout 安装可在本仓库执行 `uv run --frozen atk install`；然后在 Codex 的 `/plugins` 中启用 Agent Tune Kit。内部命令应使用与插件一致的版本：PyPI 安装用 `uvx --from agent-tune-kit==1.0.0 atk internal ...`，源码 checkout 用 `uv run --frozen atk internal ...`，避免误用旧版全局 `atk`。只有七个公开 Skill：
 
 | Skill | 职责 |
 | --- | --- |
