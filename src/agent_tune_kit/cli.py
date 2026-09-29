@@ -29,7 +29,16 @@ from .governance import (
     store_knowledge,
     validate_external_fix,
 )
-from .installer import main as installer_main
+from .installer import (
+    DEFAULT_PLUGIN_STORE,
+    PLUGIN_NAME,
+    InstallError,
+    package_version,
+    validate_manifest_payload,
+)
+from .installer import (
+    main as installer_main,
+)
 
 
 def internal_main(argv: list[str]) -> int:
@@ -37,6 +46,7 @@ def internal_main(argv: list[str]) -> int:
     parser.add_argument("operation")
     parser.add_argument("--request", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--plugin-root", type=Path, default=DEFAULT_PLUGIN_STORE / PLUGIN_NAME)
     args = parser.parse_args(argv)
     request = json.loads(args.request.read_text(encoding="utf-8"))
     repo = Path(request["project_path"]).expanduser().resolve()
@@ -65,14 +75,25 @@ def internal_main(argv: list[str]) -> int:
         "inspect_or_recover_operation": lambda: inspect_or_recover_operation(repo, root, request),
         "finish_round": lambda: finish_round(repo, root, request),
     }
+    warnings: list[str] = []
     try:
+        try:
+            plugin_version = validate_manifest_payload(args.plugin_root.expanduser())["version"]
+        except (InstallError, OSError, json.JSONDecodeError) as exc:
+            warnings.append(f"could not check installed plugin version: {exc}")
+        else:
+            cli_version = package_version()
+            if plugin_version != cli_version:
+                warnings.append(
+                    f"installed plugin {plugin_version} differs from CLI {cli_version}; consider atk install"
+                )
         if args.operation not in operations:
             parser.error(f"unknown operation: {args.operation}")
         value = operations[args.operation]()
         response = {
             "status": "ok",
             "artifact_refs": [str(value)] if isinstance(value, Path) else [value],
-            "warnings": [],
+            "warnings": warnings,
             "error_code": None,
             "next_required_action": None,
         }
@@ -80,7 +101,7 @@ def internal_main(argv: list[str]) -> int:
         response = {
             "status": "error",
             "artifact_refs": [],
-            "warnings": [],
+            "warnings": warnings,
             "error_code": exc.code,
             "next_required_action": str(exc),
         }

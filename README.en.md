@@ -18,11 +18,16 @@ ATK connects to your existing Agent without requiring a framework rewrite. Each 
 
 ## Install
 
-You need local Codex, Python 3.11+, and `uv`. Install version 1.0.0 in your terminal:
+You need local Codex, Python 3.11+, and `uv`. Install the persistent CLI, then let it install the matching Skills:
 
 ```sh
-uvx --from agent-tune-kit==1.0.0 atk install
+uv tool install agent-tune-kit
+atk install
+atk status
 ```
+
+To upgrade the CLI, run `uv tool upgrade agent-tune-kit`. Running `atk install` afterward to update the Skills is recommended, but can be deferred.
+If the shell cannot find `atk`, run `uv tool update-shell` and open a new terminal.
 
 Then enter this in Codex:
 
@@ -151,4 +156,4 @@ python3 scripts/validate_skill_pack.py
 uv build --no-sources
 ```
 
-`atk internal ...` is an interface used by the Skills. For manual troubleshooting, match the installed plugin version: use `uvx --from agent-tune-kit==1.0.0 atk internal ...` for PyPI, or `uv run --frozen atk internal ...` for a source installation.
+`atk internal ...` is an interface used by the Skills. Each Skill passes its plugin root. If versions differ, the CLI warns and continues; run `atk install` when you want to update the Skills.

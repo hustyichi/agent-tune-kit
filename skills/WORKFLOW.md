@@ -8,13 +8,14 @@ another model: the current Codex session makes semantic judgments and edits the 
 Run deterministic operations with a JSON request file and explicit output file:
 
 ```sh
-atk internal <operation> --request /absolute/request.json --output /absolute/response.json
+atk internal <operation> --plugin-root /absolute/path/to/loaded/agent-tune-kit --request /absolute/request.json --output /absolute/response.json
 ```
 
-Use the same `atk` version as the installed plugin. For PyPI 1.0.0, invoke
-`uvx --from agent-tune-kit==1.0.0 atk internal ...`; from this checkout, invoke
-`uv run --frozen atk internal ...` in the ATK repository. Do not select an older
-globally installed `atk`.
+Resolve `--plugin-root` from this loaded `WORKFLOW.md`: it is the parent of the
+`skills/` directory. The CLI reports a version difference in `warnings` but still
+runs the operation. If `atk` is missing, ask the user to install the CLI with
+`uv tool install agent-tune-kit` and run `atk install`. If versions differ,
+recommend `atk install` when convenient; do not require it before continuing.
 
 Every request includes `project_path`. Read `status`, `error_code`, and
 `next_required_action`; a zero exit code alone never proves a valid artifact. Resolve

@@ -243,7 +243,20 @@ def test_transition_cli_and_atomic_pause(tmp_path: Path, monkeypatch: pytest.Mon
     assert read_json(root / "rounds" / rnd["id"] / "round.json")["status"] == "analysis_only"
     req, out = tmp_path / "request.json", tmp_path / "response.json"
     write_json(req, {"project_path": str(repo), "round_id": rnd["id"], "action": "pause", "reason": "review"})
-    assert internal_main(["transition_round", "--request", str(req), "--output", str(out)]) == 0
+    assert (
+        internal_main(
+            [
+                "transition_round",
+                "--plugin-root",
+                str(Path(__file__).resolve().parents[1]),
+                "--request",
+                str(req),
+                "--output",
+                str(out),
+            ]
+        )
+        == 0
+    )
     assert read_json(out)["artifact_refs"][0]["status"] == "paused"
     assert (
         transition_round(repo, root, {"round_id": rnd["id"], "action": "resume", "reason": "continue"})["status"]

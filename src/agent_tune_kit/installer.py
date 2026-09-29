@@ -144,6 +144,8 @@ def resolve_payload_source(*, install_mode_hint: str | None = None) -> PayloadSo
     version = package_version()
     if dev_root is not None:
         manifest = validate_manifest_payload(dev_root)
+        if manifest["version"] != version:
+            raise InstallError(f"CLI {version} and bundled plugin {manifest['version']} differ")
         mode = install_mode_hint or "symlink-dev"
         return PayloadSource(
             kind="dev-root",
@@ -159,6 +161,8 @@ def resolve_payload_source(*, install_mode_hint: str | None = None) -> PayloadSo
     for part in PAYLOAD_PACKAGE_PATH:
         root = root.joinpath(part)
     manifest = validate_manifest_payload(root)
+    if manifest["version"] != version:
+        raise InstallError(f"CLI {version} and bundled plugin {manifest['version']} differ")
     return PayloadSource(
         kind="package-resource",
         package_version=version,
@@ -333,7 +337,17 @@ def target_state(target: Path, payload_source: PayloadSource | None = None) -> T
 
 def plugin_store_conflict(target: Path, payload_source: PayloadSource) -> bool:
     state = target_state(target, payload_source)
-    return state.exists and not state.resolves_to_current_source
+    marker = read_install_marker(target) if state.kind == "directory" else None
+    owned_copy = marker is not None and all(
+        marker.get(key) == value
+        for key, value in {
+            "plugin_name": PLUGIN_NAME,
+            "package_name": PACKAGE_NAME,
+            "marketplace_source_path": SOURCE_PATH,
+            "install_mode": "copy",
+        }.items()
+    )
+    return state.exists and not state.resolves_to_current_source and not owned_copy
 
 
 def prompt_confirm(message: str) -> bool:
@@ -542,10 +556,18 @@ def collect_status(
 
     state = target_state(target, payload_source)
     target_manifest_ok = state.has_agent_tune_kit_manifest
+    installed_version = current_manifest_version(target) if target_manifest_ok else None
     facts["plugin_store_target_exists"] = state.exists
     facts["plugin_store_target_resolved"] = state.exists and target_manifest_ok
+    facts["plugin_version_matches_cli"] = installed_version == payload_source.package_version
     lines.append(f"plugin-store target exists: {'yes' if state.exists else 'no'} ({target})")
     lines.append(f"plugin-store target resolved: {'yes' if target_manifest_ok else 'no'}")
+    lines.append(
+        f"plugin version matches CLI: {'yes' if facts['plugin_version_matches_cli'] else 'no'} "
+        f"(plugin {installed_version or 'missing'}, CLI {payload_source.package_version})"
+    )
+    if installed_version and not facts["plugin_version_matches_cli"]:
+        lines.append("recommended: run atk install to update Skills when convenient")
     lines.append(
         "local availability: should be visible/available in /plugins after Codex UI refresh when marketplace and target checks are yes"
     )
@@ -602,6 +624,8 @@ def smoke_check(
     facts, status_lines = collect_status(marketplace_path, plugin_store, payload_source)
     if not dry_run and not facts.get("plugin_store_target_resolved"):
         raise InstallError("status failed to resolve plugin-store target")
+    if not dry_run and not facts["plugin_version_matches_cli"]:
+        raise InstallError("installed plugin version differs from CLI; run atk install")
     if not any("/plugins" in line for line in status_lines):
         raise InstallError("status output missing /plugins next-step guidance")
     if backup_dir:
@@ -703,12 +727,13 @@ def run_install(args: argparse.Namespace) -> int:
     authorize_conflicts(conflicts, yes=args.yes, force=args.force, no_input=args.no_input)
 
     backup_id = backup_dir = None
-    if conflicts:
+    state = target_state(target, payload_source)
+    if conflicts or state.exists and not state.resolves_to_current_source:
         backup_id, backup_dir = make_backup(
             marketplace_path=marketplace_path,
             plugin_target=target,
             backup_root=args.backup_root,
-            operation="install replace conflicts",
+            operation="install replace plugin state",
             dry_run=False,
             payload_source=payload_source,
         )
@@ -755,9 +780,10 @@ def run_status(args: argparse.Namespace) -> int:
     print(f"payload origin: {payload_source.resource_origin}")
     print(f"marketplace: {args.marketplace_path.expanduser()}")
     print(f"plugin store: {args.plugin_store.expanduser()}")
-    for line in collect_status(args.marketplace_path, args.plugin_store, payload_source)[1]:
+    facts, lines = collect_status(args.marketplace_path, args.plugin_store, payload_source)
+    for line in lines:
         print(f"- {line}")
-    return 0
+    return 0 if all(value for key, value in facts.items() if key != "plugin_version_matches_cli") else 1
 
 
 def backup_dir_from_args(args: argparse.Namespace) -> Path:

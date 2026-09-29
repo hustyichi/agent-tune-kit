@@ -119,6 +119,63 @@ class InstallPluginCliTests(unittest.TestCase):
             self.assertEqual(entry["policy"]["installation"], "AVAILABLE")
             self.assertTrue((base / "plugins" / "agent-tune-kit" / ".codex-plugin" / "plugin.json").exists())
 
+    def test_cli_warns_on_mismatched_skill_and_repairs_owned_install(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            plugin = base / "plugins" / "agent-tune-kit"
+            common = [
+                "--marketplace-path",
+                str(base / "marketplace.json"),
+                "--plugin-store",
+                str(base / "plugins"),
+                "--backup-root",
+                str(base / "backups"),
+            ]
+            self.assertEqual(run_cli("install", "--copy", *common).returncode, 0)
+            manifest_path = plugin / ".codex-plugin" / "plugin.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["version"] = "0.9.9"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            project = base / "project"
+            project.mkdir()
+            request = base / "request.json"
+            output = base / "response.json"
+            request.write_text(json.dumps({"project_path": str(project), "analysis_only": True}), encoding="utf-8")
+            internal = [
+                "internal",
+                "initialize_project",
+                "--plugin-root",
+                str(plugin),
+                "--request",
+                str(request),
+                "--output",
+                str(output),
+            ]
+            mismatch = run_cli(*internal)
+            self.assertEqual(mismatch.returncode, 0, mismatch.stderr)
+            mismatch_response = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual(mismatch_response["status"], "ok")
+            self.assertIn("consider atk install", mismatch_response["warnings"][0])
+            self.assertTrue((project / ".atk" / "project.json").exists())
+            status = run_cli("status", *common)
+            self.assertEqual(status.returncode, 0)
+            self.assertIn("plugin version matches CLI: no", status.stdout)
+            self.assertIn("run atk install to update Skills when convenient", status.stdout)
+
+            reinstall = run_cli("install", "--copy", *common, "--no-input")
+            self.assertEqual(reinstall.returncode, 0, reinstall.stderr)
+            self.assertIn("backup:", reinstall.stdout)
+            self.assertEqual(json.loads(manifest_path.read_text(encoding="utf-8"))["version"], "1.0.0")
+            second_project = base / "second-project"
+            second_project.mkdir()
+            request.write_text(
+                json.dumps({"project_path": str(second_project), "analysis_only": True}), encoding="utf-8"
+            )
+            self.assertEqual(run_cli(*internal).returncode, 0)
+            response = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual(response["status"], "ok")
+            self.assertEqual(response["warnings"], [])
+
     def test_status_semantics_are_local_and_conservative(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)
@@ -528,6 +585,32 @@ class InstallPluginCliTests(unittest.TestCase):
         )
         self.assertEqual(status.returncode, 0, status.stderr)
         self.assertIn("plugin-store target resolved: yes", status.stdout)
+        project = run_dir / "project"
+        project.mkdir()
+        request = run_dir / "request.json"
+        output = run_dir / "response.json"
+        request.write_text(json.dumps({"project_path": str(project), "analysis_only": True}), encoding="utf-8")
+        internal = subprocess.run(
+            [
+                str(atk),
+                "internal",
+                "initialize_project",
+                "--plugin-root",
+                str(target),
+                "--request",
+                str(request),
+                "--output",
+                str(output),
+            ],
+            cwd=run_dir,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=20,
+            check=False,
+        )
+        self.assertEqual(internal.returncode, 0, internal.stderr)
+        self.assertEqual(json.loads(output.read_text(encoding="utf-8"))["status"], "ok")
 
 
 if __name__ == "__main__":

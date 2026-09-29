@@ -18,11 +18,16 @@ ATK 接入你现有的 Agent，不要求重写成另一套框架。每次修改�
 
 ## 安装
 
-需要本地 Codex、Python 3.11+ 和可用的 `uv`。在终端安装当前 1.0.0 版本：
+需要本地 Codex、Python 3.11+ 和可用的 `uv`。先持久安装 CLI，再由 CLI 安装同版本 Skill：
 
 ```sh
-uvx --from agent-tune-kit==1.0.0 atk install
+uv tool install agent-tune-kit
+atk install
+atk status
 ```
+
+升级 CLI 时运行 `uv tool upgrade agent-tune-kit`；建议随后运行 `atk install` 更新 Skill，也可以暂时沿用旧 Skill。
+如果终端找不到 `atk`，先运行 `uv tool update-shell`，再打开新终端。
 
 然后在 Codex 中输入：
 
@@ -151,4 +156,4 @@ python3 scripts/validate_skill_pack.py
 uv build --no-sources
 ```
 
-`atk internal ...` 是供 Skill 调用的内部接口。手动排查时，应使用与插件一致的版本：PyPI 安装对应 `uvx --from agent-tune-kit==1.0.0 atk internal ...`，源码安装对应 `uv run --frozen atk internal ...`。
+`atk internal ...` 是供 Skill 调用的内部接口。Skill 会传入自身插件根目录；版本不一致时 CLI 会给出提醒，但仍执行操作。可按需运行 `atk install` 更新 Skill。

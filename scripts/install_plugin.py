@@ -4,8 +4,9 @@
 Recommended path:
     atk install
 
-For no-clone installs, use:
-    uvx --from agent-tune-kit atk install
+For persistent installs, use:
+    uv tool install agent-tune-kit
+    atk install
 
 This wrapper is kept for contributors running from a source checkout.
 """

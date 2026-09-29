@@ -710,6 +710,8 @@ def test_commit_recovery_records_original_commit_once(tmp_path: Path, monkeypatc
             "agent_tune_kit.cli",
             "internal",
             "inspect_or_recover_operation",
+            "--plugin-root",
+            str(Path(__file__).resolve().parents[1]),
             "--request",
             str(request_path),
             "--output",
