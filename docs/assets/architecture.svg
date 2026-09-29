@@ -1,0 +1,121 @@
+<svg viewBox="0 0 1050 388" role="img" lang="zh-CN" aria-labelledby="archify-diagram-title archify-diagram-description" xmlns="http://www.w3.org/2000/svg" width="1050" height="388">
+  <title id="archify-diagram-title">Agent Tune Kit · 让每次修改都有依据</title>
+  <desc id="archify-diagram-description">沿用现有 Agent 和测试任务，在 Codex 中评测现状、定位失败原因、尝试修改、验证改善与退化。验证通过并采用则保存本地 Git 版本，拒绝或暂缓则恢复文件；ATK 在本地保留证据和决策记录。</desc>
+  <style>
+    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+    .t-primary { fill: #172c3d; } .t-muted, .t-dim { fill: #526779; }
+    .t-backend { fill: #087f69; } .t-database { fill: #7254c7; }
+    .c-mask { fill: #fff; }
+    .c-lane { fill: #f8fafc; stroke: #d8e2ea; }
+    .c-external { fill: #f1f5f9; stroke: #8496a8; }
+    .c-backend { fill: #ecfdf5; stroke: #149679; }
+    .c-security { fill: #eff6ff; stroke: #3b82c4; }
+    .c-database { fill: #ecfdf5; stroke: #149679; }
+    .a-default, .a-emphasis, .a-dashed { fill: none; stroke-linejoin: round; }
+    .a-default { stroke: #8496a8; } .m-default { fill: #8496a8; }
+    .a-emphasis { stroke: #149679; } .m-emphasis { fill: #149679; }
+    .a-dashed { stroke: #8496a8; stroke-dasharray: 5 4; } .m-dashed { fill: #8496a8; }
+    .semantic-sigil { fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+    .s-external { stroke: #8496a8; } .s-backend, .s-database { stroke: #149679; } .s-security { stroke: #3b82c4; }
+</style>
+  <rect width="1050" height="388" rx="14" fill="#ffffff" />
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" class="m-default" />
+    </marker>
+    <marker id="arrowhead-emphasis" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" class="m-emphasis" />
+    </marker>
+    <marker id="arrowhead-security" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" class="m-security" />
+    </marker>
+    <marker id="arrowhead-dashed" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" class="m-dashed" />
+    </marker>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" class="c-grid" stroke-width="0.5" />
+    </pattern>
+  </defs>
+  <rect x="40" y="52" width="982" height="104" rx="10" class="c-lane" stroke-width="1" />
+  <text x="54" y="74" class="t-dim" font-size="12" font-weight="600">01 / Codex 对话中完成调优</text>
+  <rect x="40" y="176" width="982" height="104" rx="10" class="c-lane" stroke-width="1" />
+  <text x="54" y="198" class="t-dim" font-size="12" font-weight="600">02 / $atk-decide · 依据验证结果决策</text>
+  <path d="M 380 119 L 408 119" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)" />
+  <path d="M 740 119 L 768 119" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)" />
+  <path d="M 560 119 L 588 119" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)" />
+  <path d="M 920 119 L 1034 119 L 1034 243 L 920 243" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)" />
+  <path d="M 844 145 L 844 166 L 664 166 L 664 217" class="a-dashed" stroke-width="1.4" marker-end="url(#arrowhead-dashed)" />
+  <path d="M 200 119 L 228 119" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)" />
+  <g id="node-existing">
+    <title>接入 Agent 与任务 · $atk-init / $atk-dataset · Codex 对话中完成调优</title>
+    <rect x="48" y="93" width="152" height="52" rx="6" class="c-mask" />
+    <rect x="48" y="93" width="152" height="52" rx="6" class="c-external" stroke-width="1.5" />
+    <text x="124" y="114" class="t-primary" font-size="15" font-weight="600" text-anchor="middle">接入 Agent 与任务</text>
+    <text x="124" y="131" class="t-muted" font-size="12" text-anchor="middle">$atk-init / $atk-dataset</text>
+  </g>
+  <g id="node-baseline">
+    <title>评测现状 · $atk-eval · Codex 对话中完成调优</title>
+    <rect x="228" y="93" width="152" height="52" rx="6" class="c-mask" />
+    <rect x="228" y="93" width="152" height="52" rx="6" class="c-backend" stroke-width="1.5" />
+    <text x="304" y="114" class="t-primary" font-size="15" font-weight="600" text-anchor="middle">评测现状</text>
+    <text x="304" y="131" class="t-muted" font-size="12" text-anchor="middle">$atk-eval</text>
+  </g>
+  <g id="node-cause">
+    <title>定位失败原因 · $atk-diagnose · Codex 对话中完成调优</title>
+    <rect x="408" y="93" width="152" height="52" rx="6" class="c-mask" />
+    <rect x="408" y="93" width="152" height="52" rx="6" class="c-backend" stroke-width="1.5" />
+    <text x="484" y="114" class="t-primary" font-size="15" font-weight="600" text-anchor="middle">定位失败原因</text>
+    <text x="484" y="131" class="t-muted" font-size="12" text-anchor="middle">$atk-diagnose</text>
+  </g>
+  <g id="node-candidate">
+    <title>尝试修改 · $atk-optimize · Codex 对话中完成调优</title>
+    <rect x="588" y="93" width="152" height="52" rx="6" class="c-mask" />
+    <rect x="588" y="93" width="152" height="52" rx="6" class="c-backend" stroke-width="1.5" />
+    <text x="664" y="114" class="t-primary" font-size="15" font-weight="600" text-anchor="middle">尝试修改</text>
+    <text x="664" y="131" class="t-muted" font-size="12" text-anchor="middle">$atk-optimize</text>
+  </g>
+  <g id="node-comparison">
+    <title>验证改善与退化 · $atk-validate · Codex 对话中完成调优</title>
+    <rect x="768" y="93" width="152" height="52" rx="6" class="c-mask" />
+    <rect x="768" y="93" width="152" height="52" rx="6" class="c-security" stroke-width="1.5" />
+    <text x="844" y="114" class="t-primary" font-size="15" font-weight="600" text-anchor="middle">验证改善与退化</text>
+    <text x="844" y="131" class="t-muted" font-size="12" text-anchor="middle">$atk-validate</text>
+  </g>
+  <g id="node-restore">
+    <title>拒绝或暂缓 · 恢复修改前的文件 · $atk-decide · 依据验证结果决策</title>
+    <rect x="588" y="217" width="152" height="52" rx="6" class="c-mask" />
+    <rect x="588" y="217" width="152" height="52" rx="6" class="c-external" stroke-width="1.5" />
+    <text x="664" y="238" class="t-primary" font-size="15" font-weight="600" text-anchor="middle">拒绝或暂缓</text>
+    <text x="664" y="255" class="t-muted" font-size="12" text-anchor="middle">恢复修改前的文件</text>
+  </g>
+  <g id="node-adopt">
+    <title>保留修改 · 记录本地 Git 版本 · $atk-decide · 依据验证结果决策</title>
+    <rect x="768" y="217" width="152" height="52" rx="6" class="c-mask" />
+    <rect x="768" y="217" width="152" height="52" rx="6" class="c-database" stroke-width="1.5" />
+    <text x="844" y="238" class="t-primary" font-size="15" font-weight="600" text-anchor="middle">保留修改</text>
+    <text x="844" y="255" class="t-muted" font-size="12" text-anchor="middle">记录本地 Git 版本</text>
+  </g>
+  <g>
+    <rect x="938.4" y="99" width="77.2" height="14" rx="3" class="c-mask" />
+    <text x="977" y="109" class="t-backend" font-size="8" text-anchor="middle">验证通过并采用</text>
+  </g>
+  <g>
+    <rect x="734.6" y="146" width="38.8" height="14" rx="3" class="c-mask" />
+    <text x="754" y="156" class="t-database" font-size="8" text-anchor="middle">不采用</text>
+  </g>
+  <text x="40" y="30" class="t-primary" font-size="20" font-weight="700">Agent Tune Kit · 让每次修改都有依据</text>
+  <text x="64" y="238" class="t-primary" font-size="17" font-weight="600">找出为什么失败，验证修改是否有效</text>
+  <text x="64" y="261" class="t-muted" font-size="12">评测证据与决策记录，始终保留在本地</text>
+  <rect x="40" y="300" width="318" height="66" rx="8" fill="#f8fafc" stroke="#d8e2ea" />
+  <circle cx="57" cy="323" r="3" fill="#8496a8" />
+  <text x="69" y="328" class="t-primary" font-size="15" font-weight="600">你的 Agent</text>
+  <text x="56" y="351" class="t-muted" font-size="12">沿用现有框架、模型与工具</text>
+  <rect x="372" y="300" width="318" height="66" rx="8" fill="#f8fafc" stroke="#d8e2ea" />
+  <circle cx="389" cy="323" r="3" fill="#3b82c4" />
+  <text x="401" y="328" class="t-primary" font-size="15" font-weight="600">Codex + ATK Skills</text>
+  <text x="388" y="351" class="t-muted" font-size="12">分析失败原因 · 提出并实施修改</text>
+  <rect x="704" y="300" width="318" height="66" rx="8" fill="#f8fafc" stroke="#d8e2ea" />
+  <circle cx="721" cy="323" r="3" fill="#149679" />
+  <text x="733" y="328" class="t-primary" font-size="15" font-weight="600">本地 ATK 工具</text>
+  <text x="720" y="351" class="t-muted" font-size="12">运行评测 · 留存证据 · 管理版本</text>
+</svg>

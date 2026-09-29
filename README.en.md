@@ -25,9 +25,7 @@ ATK is for **an existing Agent or existing execution results**. If you are build
 
 ## How it works
 
-```text
-Your Agent + test tasks → Evaluate → Diagnose → Try a change → Validate → Decide
-```
+![ATK architecture and core Skills: connect your Agent and prepare tasks, evaluate, diagnose, try a change, validate gains and regressions, then keep or restore the change. Codex Skills handle analysis and edits; local tools manage evaluations, evidence, and versions.](docs/assets/architecture.en.svg)
 
 ATK connects this workflow to your existing project:
 

@@ -1,0 +1,121 @@
+<svg viewBox="0 0 1050 388" role="img" lang="en" aria-labelledby="archify-diagram-title archify-diagram-description" xmlns="http://www.w3.org/2000/svg" width="1050" height="388">
+  <title id="archify-diagram-title">Agent Tune Kit · Evidence for every change</title>
+  <desc id="archify-diagram-description">Use your existing Agent and test tasks to evaluate a baseline, diagnose failures, try a change, and check improvements and regressions in Codex. Adopt a validated change as a local Git commit, or reject or defer it and restore the previous files. ATK keeps evidence and decision records locally.</desc>
+  <style>
+    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+    .t-primary { fill: #172c3d; } .t-muted, .t-dim { fill: #526779; }
+    .t-backend { fill: #087f69; } .t-database { fill: #7254c7; }
+    .c-mask { fill: #fff; }
+    .c-lane { fill: #f8fafc; stroke: #d8e2ea; }
+    .c-external { fill: #f1f5f9; stroke: #8496a8; }
+    .c-backend { fill: #ecfdf5; stroke: #149679; }
+    .c-security { fill: #eff6ff; stroke: #3b82c4; }
+    .c-database { fill: #ecfdf5; stroke: #149679; }
+    .a-default, .a-emphasis, .a-dashed { fill: none; stroke-linejoin: round; }
+    .a-default { stroke: #8496a8; } .m-default { fill: #8496a8; }
+    .a-emphasis { stroke: #149679; } .m-emphasis { fill: #149679; }
+    .a-dashed { stroke: #8496a8; stroke-dasharray: 5 4; } .m-dashed { fill: #8496a8; }
+    .semantic-sigil { fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+    .s-external { stroke: #8496a8; } .s-backend, .s-database { stroke: #149679; } .s-security { stroke: #3b82c4; }
+</style>
+  <rect width="1050" height="388" rx="14" fill="#ffffff" />
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" class="m-default" />
+    </marker>
+    <marker id="arrowhead-emphasis" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" class="m-emphasis" />
+    </marker>
+    <marker id="arrowhead-security" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" class="m-security" />
+    </marker>
+    <marker id="arrowhead-dashed" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" class="m-dashed" />
+    </marker>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" class="c-grid" stroke-width="0.5" />
+    </pattern>
+  </defs>
+  <rect x="40" y="52" width="982" height="104" rx="10" class="c-lane" stroke-width="1" />
+  <text x="54" y="74" class="t-dim" font-size="12" font-weight="600">01 / Tune in a Codex conversation</text>
+  <rect x="40" y="176" width="982" height="104" rx="10" class="c-lane" stroke-width="1" />
+  <text x="54" y="198" class="t-dim" font-size="12" font-weight="600">02 / $atk-decide · Decide from validation results</text>
+  <path d="M 380 119 L 408 119" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)" />
+  <path d="M 740 119 L 768 119" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)" />
+  <path d="M 560 119 L 588 119" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)" />
+  <path d="M 920 119 L 1034 119 L 1034 243 L 920 243" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)" />
+  <path d="M 844 145 L 844 166 L 664 166 L 664 217" class="a-dashed" stroke-width="1.4" marker-end="url(#arrowhead-dashed)" />
+  <path d="M 200 119 L 228 119" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)" />
+  <g id="node-existing">
+    <title>Connect &amp; prepare · $atk-init / $atk-dataset · Tune in a Codex conversation</title>
+    <rect x="48" y="93" width="152" height="52" rx="6" class="c-mask" />
+    <rect x="48" y="93" width="152" height="52" rx="6" class="c-external" stroke-width="1.5" />
+    <text x="124" y="114" class="t-primary" font-size="15" font-weight="600" text-anchor="middle">Connect &amp; prepare</text>
+    <text x="124" y="131" class="t-muted" font-size="12" text-anchor="middle">$atk-init / $atk-dataset</text>
+  </g>
+  <g id="node-baseline">
+    <title>Evaluate baseline · $atk-eval · Tune in a Codex conversation</title>
+    <rect x="228" y="93" width="152" height="52" rx="6" class="c-mask" />
+    <rect x="228" y="93" width="152" height="52" rx="6" class="c-backend" stroke-width="1.5" />
+    <text x="304" y="114" class="t-primary" font-size="15" font-weight="600" text-anchor="middle">Evaluate baseline</text>
+    <text x="304" y="131" class="t-muted" font-size="12" text-anchor="middle">$atk-eval</text>
+  </g>
+  <g id="node-cause">
+    <title>Diagnose failures · $atk-diagnose · Tune in a Codex conversation</title>
+    <rect x="408" y="93" width="152" height="52" rx="6" class="c-mask" />
+    <rect x="408" y="93" width="152" height="52" rx="6" class="c-backend" stroke-width="1.5" />
+    <text x="484" y="114" class="t-primary" font-size="15" font-weight="600" text-anchor="middle">Diagnose failures</text>
+    <text x="484" y="131" class="t-muted" font-size="12" text-anchor="middle">$atk-diagnose</text>
+  </g>
+  <g id="node-candidate">
+    <title>Try a change · $atk-optimize · Tune in a Codex conversation</title>
+    <rect x="588" y="93" width="152" height="52" rx="6" class="c-mask" />
+    <rect x="588" y="93" width="152" height="52" rx="6" class="c-backend" stroke-width="1.5" />
+    <text x="664" y="114" class="t-primary" font-size="15" font-weight="600" text-anchor="middle">Try a change</text>
+    <text x="664" y="131" class="t-muted" font-size="12" text-anchor="middle">$atk-optimize</text>
+  </g>
+  <g id="node-comparison">
+    <title>Gains &amp; regressions · $atk-validate · Tune in a Codex conversation</title>
+    <rect x="768" y="93" width="152" height="52" rx="6" class="c-mask" />
+    <rect x="768" y="93" width="152" height="52" rx="6" class="c-security" stroke-width="1.5" />
+    <text x="844" y="114" class="t-primary" font-size="15" font-weight="600" text-anchor="middle">Gains &amp; regressions</text>
+    <text x="844" y="131" class="t-muted" font-size="12" text-anchor="middle">$atk-validate</text>
+  </g>
+  <g id="node-restore">
+    <title>Reject or defer · Restore previous files · $atk-decide · Decide from validation results</title>
+    <rect x="588" y="217" width="152" height="52" rx="6" class="c-mask" />
+    <rect x="588" y="217" width="152" height="52" rx="6" class="c-external" stroke-width="1.5" />
+    <text x="664" y="238" class="t-primary" font-size="15" font-weight="600" text-anchor="middle">Reject or defer</text>
+    <text x="664" y="255" class="t-muted" font-size="12" text-anchor="middle">Restore previous files</text>
+  </g>
+  <g id="node-adopt">
+    <title>Keep the change · Create a local Git commit · $atk-decide · Decide from validation results</title>
+    <rect x="768" y="217" width="152" height="52" rx="6" class="c-mask" />
+    <rect x="768" y="217" width="152" height="52" rx="6" class="c-database" stroke-width="1.5" />
+    <text x="844" y="238" class="t-primary" font-size="15" font-weight="600" text-anchor="middle">Keep the change</text>
+    <text x="844" y="255" class="t-muted" font-size="12" text-anchor="middle">Create a local Git commit</text>
+  </g>
+  <g>
+    <rect x="938.4" y="99" width="77.2" height="14" rx="3" class="c-mask" />
+    <text x="977" y="109" class="t-backend" font-size="8" text-anchor="middle">Pass &amp; adopt</text>
+  </g>
+  <g>
+    <rect x="727" y="146" width="54" height="14" rx="3" class="c-mask" />
+    <text x="754" y="156" class="t-database" font-size="8" text-anchor="middle">Not adopted</text>
+  </g>
+  <text x="40" y="30" class="t-primary" font-size="20" font-weight="700">Agent Tune Kit · Evidence for every change</text>
+  <text x="64" y="238" class="t-primary" font-size="17" font-weight="600">Find the cause. Verify the improvement.</text>
+  <text x="64" y="261" class="t-muted" font-size="12">Evidence and decision records stay local.</text>
+  <rect x="40" y="300" width="318" height="66" rx="8" fill="#f8fafc" stroke="#d8e2ea" />
+  <circle cx="57" cy="323" r="3" fill="#8496a8" />
+  <text x="69" y="328" class="t-primary" font-size="15" font-weight="600">Your Agent</text>
+  <text x="56" y="351" class="t-muted" font-size="12">Keep your framework, models, and tools</text>
+  <rect x="372" y="300" width="318" height="66" rx="8" fill="#f8fafc" stroke="#d8e2ea" />
+  <circle cx="389" cy="323" r="3" fill="#3b82c4" />
+  <text x="401" y="328" class="t-primary" font-size="15" font-weight="600">Codex + ATK Skills</text>
+  <text x="388" y="351" class="t-muted" font-size="12">Analyze failures · Propose and apply changes</text>
+  <rect x="704" y="300" width="318" height="66" rx="8" fill="#f8fafc" stroke="#d8e2ea" />
+  <circle cx="721" cy="323" r="3" fill="#149679" />
+  <text x="733" y="328" class="t-primary" font-size="15" font-weight="600">Local ATK tools</text>
+  <text x="720" y="351" class="t-muted" font-size="12">Run evaluations · Save evidence · Manage versions</text>
+</svg>
