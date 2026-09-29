@@ -20,7 +20,7 @@ ATK 面向**已有** Agent。用户通过七个 Codex Skill 表达目标；当�
 3. 准备 Case、判据及正反校准例。输入可来自 CSV、JSONL 或明确映射的原始结果；不要把 Agent 的原答案直接当 Ground Truth。保护集和独立 holdout 要按来源任务／会话分组。
 4. 在冻结 Round 前写明允许修改的路径、保护路径、Issue 与 Case 集合、组件身份、重复次数、超时、并发、预算、回退规则，以及旧 Revision 重放时的缓存／制品准备方式。波动或未知的 Agent 默认最终每侧运行三次；缩至两次需要记录依据。
 
-从 PyPI 安装请运行 `uv tool install agent-tune-kit`、`atk install` 和 `atk status`，再在 Codex `/plugins` 启用。升级 CLI 时运行 `uv tool upgrade agent-tune-kit`；建议随后运行 `atk install` 更新 Skill，也可以稍后再做。源码 checkout 可在仓库目录运行 `uv run --frozen atk install`。Skill 调用 CLI 时传入自身插件根目录；版本不同只提示，不阻止执行。
+从 PyPI 安装请运行 `uv tool install agent-tune-kit@latest`、`atk install` 和 `atk status`，再在 Codex `/plugins` 启用。以后重复运行 `uv tool install agent-tune-kit@latest`，未安装则安装，已有新版本则升级；建议随后运行 `atk install` 更新 Skill，也可以稍后再做。源码 checkout 可在仓库目录运行 `uv run --frozen atk install`。Skill 调用 CLI 时传入自身插件根目录；版本不同只提示，不阻止执行。
 
 旧 `.atk/results/vN/` 不自动迁移或删除。目标工程若已有旧 `.atk`，初始化会停止；先保留旧目录并人工决定迁移方案，或改用干净的目标工程，不要覆盖旧数据。
 

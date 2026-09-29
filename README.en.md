@@ -21,12 +21,12 @@ ATK connects to your existing Agent without requiring a framework rewrite. Each 
 You need local Codex, Python 3.11+, and `uv`. Install the persistent CLI, then let it install the matching Skills:
 
 ```sh
-uv tool install agent-tune-kit
+uv tool install agent-tune-kit@latest
 atk install
 atk status
 ```
 
-To upgrade the CLI, run `uv tool upgrade agent-tune-kit`. Running `atk install` afterward to update the Skills is recommended, but can be deferred.
+Run `uv tool install agent-tune-kit@latest` again later: it installs the CLI if missing or upgrades it when a newer version is available. Updating the Skills with `atk install` afterward is recommended, but can be deferred.
 If the shell cannot find `atk`, run `uv tool update-shell` and open a new terminal.
 
 Then enter this in Codex:
