@@ -6,7 +6,7 @@ This document is the single source of truth for the Agent Tune Kit Skills. It ex
 
 ## Delivery boundary
 
-This repository ships a local Codex plugin: `.codex-plugin/plugin.json`, complete `SKILL.md` files, reusable script templates, docs, safe personal marketplace installer/smoke/status/rollback tooling, and static validation. Individual Skill directories depend on shared `docs/` and `templates/` assets unless a future packaging pass inlines them.
+This repository ships a local Codex plugin: `.codex-plugin/plugin.json`, complete `SKILL.md` files, reusable script templates, docs, safe personal marketplace installer and status tooling, and static validation. Individual Skill directories depend on shared `docs/` and `templates/` assets unless a future packaging pass inlines them.
 
 Non-goals for this pass:
 
@@ -29,8 +29,8 @@ Non-goals for this pass:
 - Default marketplace `source.path`: `./plugins/agent-tune-kit`.
 - Main install command: `atk install`.
 - Status command: `atk status`.
-- Installer rollback command: `atk rollback --backup <backup-id>`.
-- Contributor fallback: `python3 scripts/install_plugin.py install`, `python3 scripts/install_plugin.py status`, and `python3 scripts/install_plugin.py rollback --backup <backup-id>` remain wrappers around the packaged CLI.
+- The installer replaces plugin files without retaining historical backups or providing an installer rollback command.
+- Contributor fallback: `python3 scripts/install_plugin.py install` and `python3 scripts/install_plugin.py status` remain wrappers around the packaged CLI.
 
 ## Canonical paths
 

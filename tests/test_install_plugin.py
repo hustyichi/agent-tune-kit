@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import builtins
+import io
 import json
 import os
 import shutil
@@ -54,14 +55,11 @@ class InstallPluginCliTests(unittest.TestCase):
                 str(base / "marketplace.json"),
                 "--plugin-store",
                 str(base / "plugins"),
-                "--backup-root",
-                str(base / "backups"),
             ]
-            result = run_cli("preview", "--smoke", *common)
+            result = run_cli("preview", *common)
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("mode: preview", result.stdout)
-            self.assertIn("payload source: dev-root", result.stdout)
-            self.assertIn("marketplace write: skipped", result.stdout)
+            self.assertIn("Will install Agent Tune Kit", result.stdout)
+            self.assertIn("No files changed", result.stdout)
             self.assertFalse((base / "marketplace.json").exists())
             self.assertFalse((base / "plugins" / "agent-tune-kit").exists())
             self.assertFalse((base / "backups").exists())
@@ -75,13 +73,11 @@ class InstallPluginCliTests(unittest.TestCase):
         self.assertIn("install", help_result.stdout)
         self.assertIn("preview", help_result.stdout)
         self.assertIn("status", help_result.stdout)
-        self.assertIn("rollback", help_result.stdout)
+        for removed in ("rollback", "--backup-root", "--smoke", "--no-smoke", "--verbose"):
+            self.assertNotIn(removed, help_result.stdout)
         self.assertIn("version", help_result.stdout)
         self.assertNotIn("--dry-run", help_result.stdout)
         self.assertNotIn("--apply", help_result.stdout)
-        rollback_help = run_cli("rollback", "--help")
-        self.assertEqual(rollback_help.returncode, 0)
-        self.assertIn("--backup", rollback_help.stdout)
 
     def test_version_flag_and_subcommand_print_package_version(self) -> None:
         for args in [("--version",), ("version",)]:
@@ -104,20 +100,67 @@ class InstallPluginCliTests(unittest.TestCase):
                 str(base / "marketplace.json"),
                 "--plugin-store",
                 str(base / "plugins"),
-                "--backup-root",
-                str(base / "backups"),
             )
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("mode: install", result.stdout)
-            self.assertIn("payload source: dev-root", result.stdout)
-            self.assertIn("smoke:", result.stdout)
-            self.assertIn("status:", result.stdout)
+            self.assertIn("installed locally for Codex", result.stdout)
+            self.assertLessEqual(len(result.stdout.splitlines()), 3)
+            for detail in ("payload", "smoke", "backup", "rollback", "status:"):
+                self.assertNotIn(detail, result.stdout)
             self.assertIn("/plugins", result.stdout)
             data = json.loads((base / "marketplace.json").read_text())
             entry = next(item for item in data["plugins"] if item["name"] == "agent-tune-kit")
             self.assertEqual(entry["source"]["path"], "./plugins/agent-tune-kit")
             self.assertEqual(entry["policy"]["installation"], "AVAILABLE")
             self.assertTrue((base / "plugins" / "agent-tune-kit" / ".codex-plugin" / "plugin.json").exists())
+
+    def test_failed_check_does_not_report_success(self) -> None:
+        from agent_tune_kit import installer
+
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            stdout, stderr = io.StringIO(), io.StringIO()
+            with (
+                mock.patch.object(installer, "check_installation", side_effect=installer.InstallError("check failed")),
+                mock.patch("sys.stdout", stdout),
+                mock.patch("sys.stderr", stderr),
+            ):
+                result = installer.main(
+                    [
+                        "install",
+                        "--copy",
+                        "--marketplace-path",
+                        str(base / "marketplace.json"),
+                        "--plugin-store",
+                        str(base / "plugins"),
+                    ]
+                )
+            self.assertEqual(result, 1)
+            self.assertNotIn("installed locally", stdout.getvalue())
+            self.assertIn("check failed", stderr.getvalue())
+
+    def test_copy_failure_preserves_existing_installation(self) -> None:
+        from agent_tune_kit import installer
+
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            args = [
+                "install",
+                "--copy",
+                "--marketplace-path",
+                str(base / "marketplace.json"),
+                "--plugin-store",
+                str(base / "plugins"),
+            ]
+            self.assertEqual(run_cli(*args).returncode, 0)
+            target = base / "plugins" / "agent-tune-kit"
+            original = (target / ".codex-plugin" / "plugin.json").read_bytes()
+            with (
+                mock.patch.object(installer, "copy_payload_tree", side_effect=OSError("disk full")),
+                mock.patch("sys.stderr", io.StringIO()),
+            ):
+                self.assertEqual(installer.main(args), 1)
+            self.assertEqual((target / ".codex-plugin" / "plugin.json").read_bytes(), original)
+            self.assertEqual(list((base / "plugins").iterdir()), [target])
 
     def test_cli_warns_on_mismatched_skill_and_repairs_owned_install(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -128,9 +171,9 @@ class InstallPluginCliTests(unittest.TestCase):
                 str(base / "marketplace.json"),
                 "--plugin-store",
                 str(base / "plugins"),
-                "--backup-root",
-                str(base / "backups"),
             ]
+            other = {"name": "other-plugin", "source": {"source": "local", "path": "./plugins/other"}}
+            (base / "marketplace.json").write_text(json.dumps({"plugins": [other]}), encoding="utf-8")
             self.assertEqual(run_cli("install", "--copy", *common).returncode, 0)
             manifest_path = plugin / ".codex-plugin" / "plugin.json"
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -159,12 +202,16 @@ class InstallPluginCliTests(unittest.TestCase):
             self.assertTrue((project / ".atk" / "project.json").exists())
             status = run_cli("status", *common)
             self.assertEqual(status.returncode, 0)
-            self.assertIn("plugin version matches CLI: no", status.stdout)
+            self.assertIn("CLI version is 1.0.0", status.stdout)
             self.assertIn("run atk install to update Skills when convenient", status.stdout)
 
             reinstall = run_cli("install", "--copy", *common, "--no-input")
             self.assertEqual(reinstall.returncode, 0, reinstall.stderr)
-            self.assertIn("backup:", reinstall.stdout)
+            self.assertNotIn("backup", reinstall.stdout)
+            self.assertFalse((base / "backups").exists())
+            entries = json.loads((base / "marketplace.json").read_text())["plugins"]
+            self.assertIn(other, entries)
+            self.assertEqual(len(entries), 2)
             self.assertEqual(json.loads(manifest_path.read_text(encoding="utf-8"))["version"], "1.0.0")
             second_project = base / "second-project"
             second_project.mkdir()
@@ -184,23 +231,14 @@ class InstallPluginCliTests(unittest.TestCase):
                 str(base / "marketplace.json"),
                 "--plugin-store",
                 str(base / "plugins"),
-                "--backup-root",
-                str(base / "backups"),
             ]
             self.assertEqual(run_cli("install", *common).returncode, 0)
             status = run_cli("status", *common)
             self.assertEqual(status.returncode, 0, status.stderr)
-            for phrase in [
-                "payload source: dev-root",
-                "manifest valid: yes",
-                "marketplace registered: yes",
-                "source.path ok: yes",
-                "plugin-store target resolved: yes",
-                "installer does not modify or observe hidden Codex UI enablement state",
-                "open /plugins",
-                "$atk-* autocomplete",
-            ]:
-                self.assertIn(phrase, status.stdout)
+            self.assertIn("is installed locally.", status.stdout)
+            self.assertIn("Open /plugins", status.stdout)
+            self.assertIn("check whether Agent Tune Kit is enabled", status.stdout)
+            self.assertLessEqual(len(status.stdout.splitlines()), 3)
             self.assertNotIn("repo:", status.stdout)
             self.assertNotIn("status should change from Available to Installed", status.stdout)
 
@@ -220,8 +258,6 @@ class InstallPluginCliTests(unittest.TestCase):
                 str(base / "marketplace.json"),
                 "--plugin-store",
                 str(base / "plugins"),
-                "--backup-root",
-                str(base / "backups"),
             ]
             for extra in [["--no-input"], ["--yes"], ["--force"]]:
                 result = run_cli(*common, *extra, timeout=2)
@@ -229,8 +265,6 @@ class InstallPluginCliTests(unittest.TestCase):
                 self.assertIn("atk: error:", result.stderr)
             success = run_cli(*common, "--yes", "--force")
             self.assertEqual(success.returncode, 0, success.stderr)
-            self.assertIn("backup:", success.stdout)
-            self.assertIn("rollback: atk rollback", success.stdout)
             self.assertTrue((base / "plugins" / "agent-tune-kit" / ".codex-plugin" / "plugin.json").exists())
 
     def test_interactive_prompt_can_authorize_conflict(self) -> None:
@@ -242,209 +276,6 @@ class InstallPluginCliTests(unittest.TestCase):
             mock.patch.object(builtins, "input", return_value="y"),
         ):
             authorize_conflicts(["plugin-store target exists"], yes=False, force=False, no_input=False)
-
-    def test_backup_manifest_and_rollback_restore_directory_and_refuse_unrelated(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            base = Path(tmp)
-            target = base / "plugins" / "agent-tune-kit"
-            target.mkdir(parents=True)
-            (target / "stale.txt").write_text("stale", encoding="utf-8")
-            original_market = {
-                "plugins": [{"name": "agent-tune-kit", "source": {"source": "local", "path": "./plugins/old"}}]
-            }
-            (base / "marketplace.json").write_text(json.dumps(original_market), encoding="utf-8")
-            common = [
-                "--marketplace-path",
-                str(base / "marketplace.json"),
-                "--plugin-store",
-                str(base / "plugins"),
-                "--backup-root",
-                str(base / "backups"),
-            ]
-            install = run_cli("install", *common, "--yes", "--force")
-            self.assertEqual(install.returncode, 0, install.stderr)
-            backup_dirs = list((base / "backups").iterdir())
-            self.assertEqual(len(backup_dirs), 1)
-            metadata = json.loads((backup_dirs[0] / "manifest.json").read_text())
-            for key in [
-                "id",
-                "timestamp",
-                "marketplace_path",
-                "plugin_store_target",
-                "prior_existence",
-                "prior_target_type",
-                "copied_backup_path",
-                "operation",
-                "plugin_name",
-                "schema_version",
-                "package_name",
-                "package_version",
-                "manifest_version",
-                "payload_source_kind",
-                "payload_resource_origin",
-                "install_mode",
-            ]:
-                self.assertIn(key, metadata)
-            self.assertEqual(metadata["prior_target_type"], "directory")
-
-            current_market = json.loads((base / "marketplace.json").read_text())
-            current_market["plugins"].append(
-                {"name": "other-plugin", "source": {"source": "local", "path": "./plugins/other"}}
-            )
-            (base / "marketplace.json").write_text(json.dumps(current_market), encoding="utf-8")
-            blocked_market = run_cli("rollback", "--backup", metadata["id"], "--backup-root", str(base / "backups"))
-            self.assertNotEqual(blocked_market.returncode, 0)
-            self.assertIn("newer unrelated state", blocked_market.stderr)
-
-            current_market["plugins"].pop()
-            (base / "marketplace.json").write_text(json.dumps(current_market), encoding="utf-8")
-
-            if target.is_symlink() or target.is_file():
-                target.unlink()
-            else:
-                shutil.rmtree(target)
-            target.write_text("new unrelated", encoding="utf-8")
-            blocked = run_cli("rollback", "--backup", metadata["id"], "--backup-root", str(base / "backups"))
-            self.assertNotEqual(blocked.returncode, 0)
-            self.assertIn("newer unrelated state", blocked.stderr)
-
-            rollback = run_cli(
-                "rollback", "--backup", metadata["id"], "--backup-root", str(base / "backups"), "--force"
-            )
-            self.assertEqual(rollback.returncode, 0, rollback.stderr)
-            self.assertIn("rollback complete", rollback.stdout)
-            self.assertEqual(json.loads((base / "marketplace.json").read_text()), original_market)
-            self.assertEqual((target / "stale.txt").read_text(encoding="utf-8"), "stale")
-
-    def test_rollback_refuses_newer_valid_copied_payload_without_force(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            base = Path(tmp)
-            target = base / "plugins" / "agent-tune-kit"
-            target.mkdir(parents=True)
-            (target / "stale.txt").write_text("stale", encoding="utf-8")
-            (base / "marketplace.json").write_text(
-                '{"plugins":[{"name":"agent-tune-kit","source":{"source":"local","path":"./plugins/old"}}]}',
-                encoding="utf-8",
-            )
-            common = [
-                "--marketplace-path",
-                str(base / "marketplace.json"),
-                "--plugin-store",
-                str(base / "plugins"),
-                "--backup-root",
-                str(base / "backups"),
-                "--copy",
-            ]
-            install = run_cli("install", *common, "--yes", "--force")
-            self.assertEqual(install.returncode, 0, install.stderr)
-            backup_id = next((base / "backups").iterdir()).name
-
-            manifest_path = target / ".codex-plugin" / "plugin.json"
-            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-            manifest["version"] = "9.9.9"
-            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
-
-            blocked = run_cli("rollback", "--backup", backup_id, "--backup-root", str(base / "backups"))
-            self.assertNotEqual(blocked.returncode, 0)
-            self.assertIn("newer unrelated state", blocked.stderr)
-
-            forced = run_cli("rollback", "--backup", backup_id, "--backup-root", str(base / "backups"), "--force")
-            self.assertEqual(forced.returncode, 0, forced.stderr)
-            self.assertEqual((target / "stale.txt").read_text(encoding="utf-8"), "stale")
-
-    def test_rollback_restores_missing_file_and_symlink_targets(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            base = Path(tmp)
-            common = [
-                "--marketplace-path",
-                str(base / "marketplace.json"),
-                "--plugin-store",
-                str(base / "plugins"),
-                "--backup-root",
-                str(base / "backups"),
-            ]
-            (base / "marketplace.json").write_text(
-                '{"plugins":[{"name":"agent-tune-kit","source":{"source":"local","path":"./plugins/old"}}]}',
-                encoding="utf-8",
-            )
-            install = run_cli("install", *common, "--yes", "--force")
-            self.assertEqual(install.returncode, 0, install.stderr)
-            backup_id = next((base / "backups").iterdir()).name
-            rollback = run_cli("rollback", "--backup", backup_id, "--backup-root", str(base / "backups"))
-            self.assertEqual(rollback.returncode, 0, rollback.stderr)
-            self.assertFalse((base / "plugins" / "agent-tune-kit").exists())
-
-        with tempfile.TemporaryDirectory() as tmp:
-            base = Path(tmp)
-            real = base / "real-plugin"
-            real.mkdir()
-            target = base / "plugins" / "agent-tune-kit"
-            target.parent.mkdir()
-            target.symlink_to(real, target_is_directory=True)
-            (base / "marketplace.json").write_text(
-                '{"plugins":[{"name":"agent-tune-kit","source":{"source":"local","path":"./plugins/old"}}]}',
-                encoding="utf-8",
-            )
-            common = [
-                "--marketplace-path",
-                str(base / "marketplace.json"),
-                "--plugin-store",
-                str(base / "plugins"),
-                "--backup-root",
-                str(base / "backups"),
-            ]
-            install = run_cli("install", *common, "--yes", "--force")
-            self.assertEqual(install.returncode, 0, install.stderr)
-            backup_id = next((base / "backups").iterdir()).name
-            rollback = run_cli("rollback", "--backup", backup_id, "--backup-root", str(base / "backups"))
-            self.assertEqual(rollback.returncode, 0, rollback.stderr)
-            self.assertTrue(target.is_symlink())
-            self.assertEqual(Path(os.readlink(target)), real)
-
-        with tempfile.TemporaryDirectory() as tmp:
-            base = Path(tmp)
-            target = base / "plugins" / "agent-tune-kit"
-            target.parent.mkdir()
-            target.write_text("old file", encoding="utf-8")
-            (base / "marketplace.json").write_text(
-                '{"plugins":[{"name":"agent-tune-kit","source":{"source":"local","path":"./plugins/old"}}]}',
-                encoding="utf-8",
-            )
-            common = [
-                "--marketplace-path",
-                str(base / "marketplace.json"),
-                "--plugin-store",
-                str(base / "plugins"),
-                "--backup-root",
-                str(base / "backups"),
-            ]
-            install = run_cli("install", *common, "--yes", "--force")
-            self.assertEqual(install.returncode, 0, install.stderr)
-            backup_id = next((base / "backups").iterdir()).name
-            rollback = run_cli("rollback", "--backup", backup_id, "--backup-root", str(base / "backups"))
-            self.assertEqual(rollback.returncode, 0, rollback.stderr)
-            self.assertTrue(target.is_file())
-            self.assertEqual(target.read_text(encoding="utf-8"), "old file")
-
-    def test_smoke_failure_returns_nonzero(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            base = Path(tmp)
-            (base / "marketplace.json").write_text(
-                '{"plugins":[{"name":"agent-tune-kit","source":{"source":"local","path":"./plugins/wrong"},"policy":{"installation":"AVAILABLE","authentication":"ON_INSTALL"},"category":"Coding"}]}',
-                encoding="utf-8",
-            )
-            result = run_cli(
-                "preview",
-                "--smoke",
-                "--marketplace-path",
-                str(base / "marketplace.json"),
-                "--plugin-store",
-                str(base / "plugins"),
-                "--backup-root",
-                str(base / "backups"),
-            )
-            self.assertNotEqual(result.returncode, 0)
-            self.assertIn("source.path must be ./plugins/agent-tune-kit", result.stderr)
 
     @unittest.skipUnless(shutil.which("uv"), "uv is required for distribution smoke tests")
     def test_distribution_archives_and_installed_cli_use_package_resource_payload(self) -> None:
@@ -534,11 +365,9 @@ class InstallPluginCliTests(unittest.TestCase):
             str(run_dir / "marketplace.json"),
             "--plugin-store",
             str(run_dir / "plugins"),
-            "--backup-root",
-            str(run_dir / "backups"),
         ]
         preview = subprocess.run(
-            [str(atk), "preview", "--smoke", *common],
+            [str(atk), "preview", *common],
             cwd=run_dir,
             text=True,
             stdout=subprocess.PIPE,
@@ -547,7 +376,7 @@ class InstallPluginCliTests(unittest.TestCase):
             check=False,
         )
         self.assertEqual(preview.returncode, 0, preview.stderr)
-        self.assertIn("payload source: package-resource", preview.stdout)
+        self.assertIn("No files changed", preview.stdout)
         install_cli = subprocess.run(
             [str(atk), "install", *common],
             cwd=run_dir,
@@ -558,7 +387,7 @@ class InstallPluginCliTests(unittest.TestCase):
             check=False,
         )
         self.assertEqual(install_cli.returncode, 0, install_cli.stderr)
-        self.assertIn("payload source: package-resource", install_cli.stdout)
+        self.assertIn("installed locally for Codex", install_cli.stdout)
         target = run_dir / "plugins" / "agent-tune-kit"
         self.assertFalse(target.is_symlink())
         self.assertTrue((target / ".codex-plugin" / "plugin.json").exists())
@@ -584,7 +413,7 @@ class InstallPluginCliTests(unittest.TestCase):
             check=False,
         )
         self.assertEqual(status.returncode, 0, status.stderr)
-        self.assertIn("plugin-store target resolved: yes", status.stdout)
+        self.assertIn("is installed locally.", status.stdout)
         project = run_dir / "project"
         project.mkdir()
         request = run_dir / "request.json"

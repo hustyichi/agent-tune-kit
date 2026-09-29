@@ -9,7 +9,6 @@ import shutil
 import sys
 import tempfile
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from importlib import metadata, resources
 from importlib.resources.abc import Traversable
 from pathlib import Path
@@ -22,7 +21,6 @@ PACKAGE_NAME = "agent-tune-kit"
 SOURCE_PATH = f"./plugins/{PLUGIN_NAME}"
 DEFAULT_MARKETPLACE = Path("~/.agents/plugins/marketplace.json").expanduser()
 DEFAULT_PLUGIN_STORE = Path("~/plugins").expanduser()
-DEFAULT_BACKUP_ROOT = Path("~/.agents/plugins/backups") / PLUGIN_NAME
 PAYLOAD_PACKAGE_PATH = ("plugin_payload", PLUGIN_NAME)
 DEV_PAYLOAD_NAMES = [".codex-plugin", "skills", "templates", "docs", "README.md", "README.en.md"]
 COPY_IGNORE_NAMES = {".git", ".omx", "__pycache__", ".DS_Store", "build", "dist", ".venv", "*.egg-info"}
@@ -30,15 +28,13 @@ INSTALL_MARKER = ".codex-plugin/agent-tune-kit-install.json"
 
 
 class InstallError(RuntimeError):
-    """Raised for unsafe install, rollback, or smoke-check failures."""
+    """Raised when installation is unsafe or incomplete."""
 
 
 @dataclass(frozen=True)
 class PayloadSource:
     kind: str
     package_version: str
-    manifest_version: str
-    resource_origin: str
     install_mode: str
     root: Path | Traversable
     dev_root: Path | None = None
@@ -48,9 +44,7 @@ class PayloadSource:
 class TargetState:
     exists: bool
     kind: str
-    symlink_target: str | None = None
     resolves_to_current_source: bool = False
-    has_agent_tune_kit_manifest: bool = False
 
 
 PayloadRoot = Path | Traversable
@@ -150,8 +144,6 @@ def resolve_payload_source(*, install_mode_hint: str | None = None) -> PayloadSo
         return PayloadSource(
             kind="dev-root",
             package_version=version,
-            manifest_version=str(manifest.get("version", "unknown")),
-            resource_origin=str(dev_root),
             install_mode=mode,
             root=dev_root,
             dev_root=dev_root,
@@ -166,8 +158,6 @@ def resolve_payload_source(*, install_mode_hint: str | None = None) -> PayloadSo
     return PayloadSource(
         kind="package-resource",
         package_version=version,
-        manifest_version=str(manifest.get("version", "unknown")),
-        resource_origin="importlib.resources:agent_tune_kit/" + "/".join(PAYLOAD_PACKAGE_PATH),
         install_mode="copy",
         root=root,
         dev_root=None,
@@ -212,13 +202,8 @@ def install_marker_path(target: Path) -> Path:
 
 def install_marker(payload_source: PayloadSource) -> dict[str, Any]:
     return {
-        "schema_version": 1,
         "plugin_name": PLUGIN_NAME,
         "package_name": PACKAGE_NAME,
-        "package_version": payload_source.package_version,
-        "manifest_version": payload_source.manifest_version,
-        "payload_source_kind": payload_source.kind,
-        "payload_resource_origin": payload_source.resource_origin,
         "install_mode": payload_source.install_mode,
         "marketplace_source_path": SOURCE_PATH,
     }
@@ -237,28 +222,6 @@ def read_install_marker(target: Path) -> dict[str, Any] | None:
     except (json.JSONDecodeError, OSError):
         return None
     return data if isinstance(data, dict) else None
-
-
-def marker_matches_backup(marker: dict[str, Any], backup_metadata: dict[str, Any]) -> bool:
-    expected_pairs = {
-        "plugin_name": PLUGIN_NAME,
-        "package_name": backup_metadata.get("package_name"),
-        "package_version": backup_metadata.get("package_version"),
-        "manifest_version": backup_metadata.get("manifest_version"),
-        "payload_source_kind": backup_metadata.get("payload_source_kind"),
-        "payload_resource_origin": backup_metadata.get("payload_resource_origin"),
-        "install_mode": backup_metadata.get("install_mode"),
-        "marketplace_source_path": SOURCE_PATH,
-    }
-    return all(marker.get(key) == value for key, value in expected_pairs.items() if value is not None)
-
-
-def current_manifest_version(target: Path) -> str | None:
-    try:
-        manifest = validate_manifest(target / ".codex-plugin" / "plugin.json")
-    except (InstallError, json.JSONDecodeError, OSError):
-        return None
-    return str(manifest.get("version", "unknown"))
 
 
 def marketplace_entry() -> dict[str, Any]:
@@ -287,16 +250,16 @@ def marketplace_conflict(data: dict[str, Any]) -> bool:
     return existing_path != SOURCE_PATH
 
 
-def update_marketplace(data: dict[str, Any]) -> tuple[dict[str, Any], str]:
+def update_marketplace(data: dict[str, Any]) -> dict[str, Any]:
     plugins = data["plugins"]
     entry = marketplace_entry()
     found = find_marketplace_entry(data)
     if found:
         index, _ = found
         plugins[index] = entry
-        return data, "update marketplace entry"
+        return data
     plugins.append(entry)
-    return data, "add marketplace entry"
+    return data
 
 
 def same_path(left: Path, right: Path) -> bool:
@@ -306,33 +269,13 @@ def same_path(left: Path, right: Path) -> bool:
         return False
 
 
-def target_has_valid_manifest(target: Path) -> bool:
-    manifest_at_target = target / ".codex-plugin" / "plugin.json"
-    if not manifest_at_target.exists():
-        return False
-    try:
-        validate_manifest(manifest_at_target)
-        return True
-    except (InstallError, json.JSONDecodeError, OSError):
-        return False
-
-
 def target_state(target: Path, payload_source: PayloadSource | None = None) -> TargetState:
-    target = target.expanduser()
-    resolves = False
-    if payload_source and payload_source.dev_root is not None:
-        resolves = same_path(target, payload_source.dev_root)
-    has_manifest = target_has_valid_manifest(target) if target.exists() or target.is_symlink() else False
+    resolves = bool(payload_source and payload_source.dev_root and same_path(target, payload_source.dev_root))
     if target.is_symlink():
-        link = os.readlink(target)
-        return TargetState(True, "symlink", link, resolves, has_manifest)
+        return TargetState(True, "symlink", resolves)
     if target.is_dir():
-        return TargetState(True, "directory", None, resolves, has_manifest)
-    if target.is_file():
-        return TargetState(True, "file", None, resolves, has_manifest)
-    if target.exists():
-        return TargetState(True, "other", None, resolves, has_manifest)
-    return TargetState(False, "missing")
+        return TargetState(True, "directory", resolves)
+    return TargetState(target.exists(), "other", resolves)
 
 
 def plugin_store_conflict(target: Path, payload_source: PayloadSource) -> bool:
@@ -368,84 +311,8 @@ def authorize_conflicts(conflicts: list[str], *, yes: bool, force: bool, no_inpu
         raise InstallError(f"conflict requires interactive confirmation or --yes --force: {summary}")
     if yes and force:
         return
-    if not prompt_confirm(f"Replace existing {PLUGIN_NAME} installer state ({summary})?"):
+    if not prompt_confirm(f"Replace existing files/registration ({summary})? This cannot be undone."):
         raise InstallError("replacement cancelled")
-
-
-def copy_state(source: Path, backup_dir: Path) -> str | None:
-    if not source.exists() and not source.is_symlink():
-        return None
-    if source.is_symlink():
-        return None
-    payload = backup_dir / "plugin_store_payload"
-    if source.is_dir():
-        shutil.copytree(source, payload, symlinks=True)
-    else:
-        payload.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, payload)
-    return str(payload)
-
-
-def make_backup(
-    *,
-    marketplace_path: Path,
-    plugin_target: Path,
-    backup_root: Path,
-    operation: str,
-    dry_run: bool,
-    payload_source: PayloadSource,
-) -> tuple[str | None, str | None]:
-    if dry_run:
-        return None, None
-    backup_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    backup_dir = backup_root.expanduser() / backup_id
-    suffix = 1
-    while backup_dir.exists():
-        suffix += 1
-        backup_dir = backup_root.expanduser() / f"{backup_id}-{suffix}"
-    backup_dir.mkdir(parents=True, exist_ok=False)
-
-    market_backup_path: str | None = None
-    if marketplace_path.exists():
-        market_backup = backup_dir / "marketplace.json"
-        shutil.copy2(marketplace_path, market_backup)
-        market_backup_path = str(market_backup)
-
-    state = target_state(plugin_target, payload_source)
-    payload = copy_state(plugin_target, backup_dir)
-    metadata: dict[str, Any] = {
-        "schema_version": 2,
-        "id": backup_dir.name,
-        "timestamp": datetime.now(UTC).isoformat(),
-        "marketplace_path": str(marketplace_path),
-        "plugin_store_target": str(plugin_target),
-        "prior_existence": state.exists,
-        "prior_target_type": state.kind,
-        "symlink_target": state.symlink_target,
-        "copied_backup_path": payload,
-        "operation": operation,
-        "plugin_name": PLUGIN_NAME,
-        "package_name": PACKAGE_NAME,
-        "package_version": payload_source.package_version,
-        "manifest_version": payload_source.manifest_version,
-        "payload_source_kind": payload_source.kind,
-        "payload_resource_origin": payload_source.resource_origin,
-        "install_mode": payload_source.install_mode,
-        "marketplace": {
-            "existed": marketplace_path.exists(),
-            "backup_path": market_backup_path,
-        },
-        "plugin_store": {
-            "existed": state.exists,
-            "type": state.kind,
-            "symlink_target": state.symlink_target,
-            "copied_backup_path": payload,
-        },
-    }
-    if payload_source.dev_root is not None:
-        metadata["repo_root"] = str(payload_source.dev_root)
-    write_json_atomic(backup_dir / "manifest.json", metadata)
-    return backup_dir.name, str(backup_dir)
 
 
 def remove_path(path: Path) -> None:
@@ -484,225 +351,37 @@ def copy_payload_tree(payload_source: PayloadSource, target: Path) -> None:
     copy_traversable(payload_source.root, target)
 
 
-def ensure_plugin_store(target: Path, *, use_copy: bool, dry_run: bool, payload_source: PayloadSource) -> str:
-    target = target.expanduser()
-    state = target_state(target, payload_source)
-    if state.resolves_to_current_source:
-        if target.is_symlink():
-            return f"existing symlink is current: {target} -> {payload_source.resource_origin}"
-        return f"plugin store already points at payload source: {target}"
-
-    if state.exists:
-        if dry_run:
-            return f"would replace existing plugin-store path: {target}"
-        remove_path(target)
-
-    if dry_run:
-        mode = "copy" if (use_copy or payload_source.kind == "package-resource") else "symlink-dev"
-        return f"would create {mode}: {target} from {payload_source.resource_origin}"
-
+def ensure_plugin_store(target: Path, *, use_copy: bool, payload_source: PayloadSource) -> None:
+    if target_state(target, payload_source).resolves_to_current_source:
+        return
     target.parent.mkdir(parents=True, exist_ok=True)
-    if payload_source.kind == "package-resource" or use_copy:
-        copy_payload_tree(payload_source, target)
-        write_install_marker(target, payload_source)
-        return f"copied payload to {target}"
-
-    if not payload_source.dev_root:
-        raise InstallError("symlink-dev install requires a source checkout payload")
-    try:
-        target.symlink_to(payload_source.dev_root, target_is_directory=True)
-        return f"created symlink: {target} -> {payload_source.dev_root}"
-    except OSError as exc:
-        raise InstallError(f"symlink failed ({exc}); rerun with --copy for explicit copy fallback") from exc
-
-
-def collect_status(
-    marketplace_path: Path, plugin_store: Path, payload_source: PayloadSource | None = None
-) -> tuple[dict[str, bool], list[str]]:
-    payload_source = payload_source or resolve_payload_source()
-    target = plugin_store.expanduser() / PLUGIN_NAME
-    facts: dict[str, bool] = {}
-    lines: list[str] = []
-
-    lines.append(f"payload source: {payload_source.kind}")
-    lines.append(f"package: {PACKAGE_NAME} {payload_source.package_version}")
-    lines.append(f"payload origin: {payload_source.resource_origin}")
-    try:
-        manifest = validate_manifest_payload(payload_source.root)
-        facts["manifest_valid"] = True
-        lines.append(f"manifest valid: yes ({manifest['name']} {manifest['version']})")
-    except (InstallError, json.JSONDecodeError) as exc:
-        facts["manifest_valid"] = False
-        lines.append(f"manifest valid: no ({exc})")
-
-    marketplace_path = marketplace_path.expanduser()
-    try:
-        data = load_json(marketplace_path)
-        found = find_marketplace_entry(data)
-        registered = bool(found)
-        source_ok = False
-        if found:
-            _, entry = found
-            source = entry.get("source")
-            source_ok = isinstance(source, dict) and source.get("path") == SOURCE_PATH
-        facts["marketplace_registered"] = registered
-        facts["source_path_ok"] = source_ok
-        lines.append(f"marketplace registered: {'yes' if registered else 'no'}")
-        lines.append(f"source.path ok: {'yes' if source_ok else 'no'} ({SOURCE_PATH})")
-    except (InstallError, json.JSONDecodeError) as exc:
-        facts["marketplace_registered"] = False
-        facts["source_path_ok"] = False
-        lines.append(f"marketplace readable: no ({exc})")
-
-    state = target_state(target, payload_source)
-    target_manifest_ok = state.has_agent_tune_kit_manifest
-    installed_version = current_manifest_version(target) if target_manifest_ok else None
-    facts["plugin_store_target_exists"] = state.exists
-    facts["plugin_store_target_resolved"] = state.exists and target_manifest_ok
-    facts["plugin_version_matches_cli"] = installed_version == payload_source.package_version
-    lines.append(f"plugin-store target exists: {'yes' if state.exists else 'no'} ({target})")
-    lines.append(f"plugin-store target resolved: {'yes' if target_manifest_ok else 'no'}")
-    lines.append(
-        f"plugin version matches CLI: {'yes' if facts['plugin_version_matches_cli'] else 'no'} "
-        f"(plugin {installed_version or 'missing'}, CLI {payload_source.package_version})"
-    )
-    if installed_version and not facts["plugin_version_matches_cli"]:
-        lines.append("recommended: run atk install to update Skills when convenient")
-    lines.append(
-        "local availability: should be visible/available in /plugins after Codex UI refresh when marketplace and target checks are yes"
-    )
-    lines.append("Codex UI boundary: installer does not modify or observe hidden Codex UI enablement state")
-    lines.append(
-        "next step: open /plugins, enable Agent Tune Kit if needed, then restart/open a new session if $atk-* autocomplete is missing"
-    )
-    return facts, lines
-
-
-def smoke_check(
-    marketplace_path: Path,
-    plugin_store: Path,
-    *,
-    dry_run: bool,
-    backup_dir: str | None = None,
-    payload_source: PayloadSource | None = None,
-) -> list[str]:
-    payload_source = payload_source or resolve_payload_source()
-    target = plugin_store.expanduser() / PLUGIN_NAME
-    manifest = (
-        validate_manifest_payload(payload_source.root)
-        if dry_run
-        else validate_manifest(target / ".codex-plugin" / "plugin.json")
-    )
-
-    if not dry_run and not target.exists():
-        raise InstallError(f"marketplace source path does not resolve to an installed plugin: {target}")
-
-    if dry_run:
-        preview_data = load_json(marketplace_path.expanduser())
-        marketplace_data = preview_data if find_marketplace_entry(preview_data) else update_marketplace(preview_data)[0]
-    elif marketplace_path.expanduser().exists():
-        marketplace_data = load_json(marketplace_path.expanduser())
-    else:
-        marketplace_data = {"plugins": [marketplace_entry()]}
-    entries = [
-        entry
-        for entry in marketplace_data.get("plugins", [])
-        if isinstance(entry, dict) and entry.get("name") == PLUGIN_NAME
-    ]
-    if not entries:
-        raise InstallError("marketplace entry missing")
-    entry = entries[-1]
-    if entry.get("source", {}).get("path") != SOURCE_PATH:
-        raise InstallError(f"marketplace entry source.path must be {SOURCE_PATH}")
-    if entry.get("policy", {}).get("installation") != "AVAILABLE":
-        raise InstallError("marketplace policy.installation must be AVAILABLE")
-    if entry.get("policy", {}).get("authentication") != "ON_INSTALL":
-        raise InstallError("marketplace policy.authentication must be ON_INSTALL")
-    if entry.get("category") != "Coding":
-        raise InstallError("marketplace category must be Coding")
-
-    facts, status_lines = collect_status(marketplace_path, plugin_store, payload_source)
-    if not dry_run and not facts.get("plugin_store_target_resolved"):
-        raise InstallError("status failed to resolve plugin-store target")
-    if not dry_run and not facts["plugin_version_matches_cli"]:
-        raise InstallError("installed plugin version differs from CLI; run atk install")
-    if not any("/plugins" in line for line in status_lines):
-        raise InstallError("status output missing /plugins next-step guidance")
-    if backup_dir:
-        manifest_file = Path(backup_dir) / "manifest.json"
-        if not manifest_file.exists():
-            raise InstallError(f"backup manifest missing: {manifest_file}")
-        backup_metadata = json.loads(manifest_file.read_text(encoding="utf-8"))
-        required_new = [
-            "id",
-            "timestamp",
-            "marketplace_path",
-            "plugin_store_target",
-            "prior_target_type",
-            "operation",
-            "plugin_name",
-            "schema_version",
-            "package_name",
-            "package_version",
-            "manifest_version",
-            "payload_source_kind",
-            "payload_resource_origin",
-            "install_mode",
-        ]
-        required_legacy = [
-            "id",
-            "timestamp",
-            "marketplace_path",
-            "plugin_store_target",
-            "prior_target_type",
-            "operation",
-            "repo_root",
-            "plugin_name",
-        ]
-        if not all(key in backup_metadata for key in required_new) and not all(
-            key in backup_metadata for key in required_legacy
-        ):
-            missing = [key for key in required_new if key not in backup_metadata]
-            raise InstallError(f"backup manifest missing package-era keys: {', '.join(missing)}")
-
-    return [
-        f"manifest ok: {manifest['name']} {manifest['version']}",
-        f"skills path ok: {manifest.get('skills')}",
-        f"payload source ok: {payload_source.kind}",
-        f"marketplace source.path ok: {SOURCE_PATH}",
-        "marketplace policy/category ok: AVAILABLE/ON_INSTALL/Coding",
-        f"smoke-resolved plugin path: {target}",
-        "status guidance ok: /plugins and Codex UI boundary present",
-    ] + ([f"backup metadata ok: {backup_dir}"] if backup_dir else [])
+    # Prepare the new files before replacing the installation, so copy failures preserve the old files.
+    with tempfile.TemporaryDirectory(prefix=".atk-install-", dir=target.parent) as tmp:
+        staged = Path(tmp) / PLUGIN_NAME
+        if payload_source.kind == "package-resource" or use_copy:
+            copy_payload_tree(payload_source, staged)
+            write_install_marker(staged, payload_source)
+        else:
+            if not payload_source.dev_root:
+                raise InstallError("developer install requires a source checkout")
+            try:
+                staged.symlink_to(payload_source.dev_root, target_is_directory=True)
+            except OSError as exc:
+                raise InstallError(f"could not link plugin files ({exc}); rerun with --copy") from exc
+        validate_manifest(staged / ".codex-plugin" / "plugin.json")
+        remove_path(target)
+        staged.rename(target)
 
 
 def run_preview(args: argparse.Namespace) -> int:
-    marketplace_path = args.marketplace_path.expanduser()
-    plugin_store = args.plugin_store.expanduser()
     payload_source = resolve_payload_source(install_mode_hint="copy" if args.copy else None)
-    target = plugin_store / PLUGIN_NAME
-    validate_manifest_payload(payload_source.root)
-    marketplace = load_json(marketplace_path)
-    marketplace, market_action = update_marketplace(marketplace)
-    store_action = ensure_plugin_store(target, use_copy=args.copy, dry_run=True, payload_source=payload_source)
-
-    print("mode: preview")
-    print(f"payload source: {payload_source.kind}")
-    print(f"package: {PACKAGE_NAME} {payload_source.package_version}")
-    print(f"manifest version: {payload_source.manifest_version}")
-    print(f"payload origin: {payload_source.resource_origin}")
-    print(f"marketplace: {marketplace_path}")
-    print(f"plugin store: {plugin_store}")
-    print(f"marketplace source.path: {SOURCE_PATH}")
-    print(f"marketplace action: would {market_action}")
-    print(f"plugin-store action: {store_action}")
-    print("marketplace write: skipped")
-    print("backup: skipped for preview")
-    if args.smoke:
-        print("smoke:")
-        for line in smoke_check(marketplace_path, plugin_store, dry_run=True, payload_source=payload_source):
-            print(f"- {line}")
-        print("temp smoke cleanup: no temporary files created")
+    target = args.plugin_store.expanduser() / PLUGIN_NAME
+    marketplace = load_json(args.marketplace_path.expanduser())
+    print(f"Will install Agent Tune Kit {payload_source.package_version} for Codex.")
+    print(f"Location: {target}")
+    if marketplace_conflict(marketplace) or plugin_store_conflict(target, payload_source):
+        print("Existing files or registration conflict with this installation; replacement requires confirmation.")
+    print("No files changed. Run atk install to install.")
     return 0
 
 
@@ -711,201 +390,40 @@ def run_install(args: argparse.Namespace) -> int:
     plugin_store = args.plugin_store.expanduser()
     payload_source = resolve_payload_source(install_mode_hint="copy" if args.copy else None)
     target = plugin_store / PLUGIN_NAME
-
-    validate_manifest_payload(payload_source.root)
     marketplace = load_json(marketplace_path)
     conflicts: list[str] = []
     if marketplace_conflict(marketplace):
-        found = find_marketplace_entry(marketplace)
-        existing_path = None
-        if found:
-            source = found[1].get("source")
-            existing_path = source.get("path") if isinstance(source, dict) else None
-        conflicts.append(f"marketplace entry points to {existing_path!r}")
+        conflicts.append(f"Agent Tune Kit is registered at another location in {marketplace_path}")
     if plugin_store_conflict(target, payload_source):
-        conflicts.append(f"plugin-store target exists at {target}")
+        conflicts.append(f"{target} contains files not managed by this installer")
     authorize_conflicts(conflicts, yes=args.yes, force=args.force, no_input=args.no_input)
 
-    backup_id = backup_dir = None
-    state = target_state(target, payload_source)
-    if conflicts or state.exists and not state.resolves_to_current_source:
-        backup_id, backup_dir = make_backup(
-            marketplace_path=marketplace_path,
-            plugin_target=target,
-            backup_root=args.backup_root,
-            operation="install replace plugin state",
-            dry_run=False,
-            payload_source=payload_source,
-        )
-
-    marketplace, market_action = update_marketplace(marketplace)
-    store_action = ensure_plugin_store(target, use_copy=args.copy, dry_run=False, payload_source=payload_source)
-    write_json_atomic(marketplace_path, marketplace)
-
-    print("mode: install")
-    print(f"payload source: {payload_source.kind}")
-    print(f"package: {PACKAGE_NAME} {payload_source.package_version}")
-    print(f"manifest version: {payload_source.manifest_version}")
-    print(f"payload origin: {payload_source.resource_origin}")
-    print(f"marketplace: {marketplace_path}")
-    print(f"plugin store: {plugin_store}")
-    print(f"marketplace source.path: {SOURCE_PATH}")
-    print(f"marketplace action: {market_action}")
-    print(f"plugin-store action: {store_action}")
-    print("marketplace write: complete")
-    if backup_id:
-        print(f"backup: {backup_id} at {backup_dir}")
-        print(f"rollback: atk rollback --backup {backup_id} --backup-root {args.backup_root}")
-    else:
-        print("backup: not needed")
-
-    if args.smoke:
-        print("smoke:")
-        for line in smoke_check(
-            marketplace_path, plugin_store, dry_run=False, backup_dir=backup_dir, payload_source=payload_source
-        ):
-            print(f"- {line}")
-
-    print("status:")
-    for line in collect_status(marketplace_path, plugin_store, payload_source)[1]:
-        print(f"- {line}")
+    ensure_plugin_store(target, use_copy=args.copy, payload_source=payload_source)
+    write_json_atomic(marketplace_path, update_marketplace(marketplace))
+    manifest = check_installation(marketplace_path, target)
+    if manifest.get("version") != payload_source.package_version:
+        raise InstallError("installed plugin version differs from CLI; run atk install again")
+    print(f"Agent Tune Kit {payload_source.package_version} installed locally for Codex.")
+    print("Next: open /plugins in Codex and enable Agent Tune Kit if needed.")
+    print("If $atk-* skills are missing, start a new Codex session.")
     return 0
 
 
+def check_installation(marketplace_path: Path, target: Path) -> dict[str, Any]:
+    found = find_marketplace_entry(load_json(marketplace_path))
+    if not found or any(found[1].get(key) != value for key, value in marketplace_entry().items()):
+        raise InstallError("plugin registration is missing or invalid; run atk install")
+    return validate_manifest(target / ".codex-plugin" / "plugin.json")
+
+
 def run_status(args: argparse.Namespace) -> int:
-    payload_source = resolve_payload_source(install_mode_hint="copy" if args.copy else None)
-    print("mode: status")
-    print(f"payload source: {payload_source.kind}")
-    print(f"package: {PACKAGE_NAME} {payload_source.package_version}")
-    print(f"payload origin: {payload_source.resource_origin}")
-    print(f"marketplace: {args.marketplace_path.expanduser()}")
-    print(f"plugin store: {args.plugin_store.expanduser()}")
-    facts, lines = collect_status(args.marketplace_path, args.plugin_store, payload_source)
-    for line in lines:
-        print(f"- {line}")
-    return 0 if all(value for key, value in facts.items() if key != "plugin_version_matches_cli") else 1
-
-
-def backup_dir_from_args(args: argparse.Namespace) -> Path:
-    backup = Path(args.backup).expanduser()
-    if backup.is_absolute() and backup.exists():
-        return backup
-    return args.backup_root.expanduser() / args.backup
-
-
-def expected_marketplace_after_install(metadata: dict[str, Any]) -> dict[str, Any]:
-    market = metadata.get("marketplace", {})
-    backup_path = market.get("backup_path")
-    if market.get("existed") and backup_path:
-        base = load_json(Path(backup_path))
-    else:
-        base = {"name": "personal", "interface": {"displayName": "Personal"}, "plugins": []}
-    return update_marketplace(base)[0]
-
-
-def target_is_current_installer_state(target: Path, metadata: dict[str, Any]) -> bool:
-    state = target_state(target)
-    if not state.exists:
-        return False
-
-    repo_root = metadata.get("repo_root")
-    if repo_root and target.is_symlink() and same_path(target, Path(repo_root)):
-        return True
-
-    marker = read_install_marker(target)
-    if not marker or not marker_matches_backup(marker, metadata):
-        return False
-    return current_manifest_version(target) == marker.get("manifest_version")
-
-
-def current_state_is_expected_for_rollback(
-    marketplace_path: Path, target: Path, metadata: dict[str, Any]
-) -> tuple[bool, list[str]]:
-    reasons: list[str] = []
-    try:
-        if marketplace_path.exists():
-            current = load_json(marketplace_path)
-            expected = expected_marketplace_after_install(metadata)
-            if current != expected:
-                found = find_marketplace_entry(current)
-                if found:
-                    source = found[1].get("source")
-                    path = source.get("path") if isinstance(source, dict) else None
-                    if path != SOURCE_PATH:
-                        reasons.append(f"marketplace entry now points to {path!r}")
-                    else:
-                        reasons.append("marketplace JSON changed since installer backup")
-                else:
-                    reasons.append("marketplace entry is missing before rollback")
-        elif metadata.get("marketplace", {}).get("existed"):
-            reasons.append("marketplace JSON is missing before rollback")
-    except (InstallError, json.JSONDecodeError) as exc:
-        reasons.append(f"marketplace unreadable: {exc}")
-    state = target_state(target)
-    if state.exists and not target_is_current_installer_state(target, metadata):
-        reasons.append(f"plugin-store target is not current installer state: {target}")
-    return not reasons, reasons
-
-
-def restore_plugin_store(metadata: dict[str, Any], target: Path) -> str:
-    if target.exists() or target.is_symlink():
-        remove_path(target)
-    kind = metadata.get("prior_target_type")
-    if kind == "missing" or not metadata.get("prior_existence"):
-        return f"restored missing plugin-store target: {target}"
-    target.parent.mkdir(parents=True, exist_ok=True)
-    if kind == "symlink":
-        link = metadata.get("symlink_target")
-        if not link:
-            raise InstallError("backup metadata missing symlink_target")
-        target.symlink_to(link, target_is_directory=True)
-        return f"restored symlink: {target} -> {link}"
-    payload = metadata.get("copied_backup_path")
-    if not payload:
-        raise InstallError("backup metadata missing copied_backup_path")
-    payload_path = Path(payload)
-    if kind == "directory":
-        shutil.copytree(payload_path, target, symlinks=True)
-        return f"restored directory: {target}"
-    if kind == "file":
-        shutil.copy2(payload_path, target)
-        return f"restored file: {target}"
-    raise InstallError(f"unsupported prior target type in backup: {kind}")
-
-
-def run_rollback(args: argparse.Namespace) -> int:
-    backup_dir = backup_dir_from_args(args)
-    manifest_path = backup_dir / "manifest.json"
-    if not manifest_path.exists():
-        raise InstallError(f"backup manifest not found: {manifest_path}")
-    backup_metadata = json.loads(manifest_path.read_text(encoding="utf-8"))
-    if backup_metadata.get("plugin_name") != PLUGIN_NAME:
-        raise InstallError(f"backup is not for {PLUGIN_NAME}")
-
-    marketplace_path = Path(backup_metadata["marketplace_path"]).expanduser()
-    target = Path(backup_metadata["plugin_store_target"]).expanduser()
-    ok, reasons = current_state_is_expected_for_rollback(marketplace_path, target, backup_metadata)
-    if not ok and not args.force:
-        raise InstallError("rollback would overwrite newer unrelated state; use --force. " + "; ".join(reasons))
-
-    market = backup_metadata.get("marketplace", {})
-    market_backup = market.get("backup_path")
-    if market.get("existed") and market_backup:
-        marketplace_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(Path(market_backup), marketplace_path)
-        market_result = f"restored marketplace JSON: {marketplace_path}"
-    else:
-        if marketplace_path.exists():
-            marketplace_path.unlink()
-        market_result = f"restored missing marketplace JSON: {marketplace_path}"
-
-    store_result = restore_plugin_store(backup_metadata, target)
-    print("mode: rollback")
-    print(f"backup: {backup_metadata.get('id')} at {backup_dir}")
-    print(market_result)
-    print(store_result)
-    print("result: rollback complete")
-    print("next step: run status, then refresh /plugins if needed")
+    target = args.plugin_store.expanduser() / PLUGIN_NAME
+    manifest = check_installation(args.marketplace_path.expanduser(), target)
+    print(f"Agent Tune Kit {manifest.get('version', 'unknown')} is installed locally.")
+    print(f"Location: {target}")
+    if manifest.get("version") != package_version():
+        print(f"CLI version is {package_version()}; run atk install to update Skills when convenient.")
+    print("Open /plugins in Codex to check whether Agent Tune Kit is enabled.")
     return 0
 
 
@@ -923,41 +441,19 @@ def add_common_flags(parser: argparse.ArgumentParser) -> None:
         "--force",
         action="store_true",
         default=argparse.SUPPRESS,
-        help="allow replacement when paired with confirmation; noninteractive destructive replacement also requires --yes",
+        help="allow replacing conflicting files with --yes",
     )
     parser.add_argument(
-        "--yes",
-        action="store_true",
-        default=argparse.SUPPRESS,
-        help="answer yes for noninteractive operations; destructive replacement also requires --force",
+        "--yes", action="store_true", default=argparse.SUPPRESS, help="confirm replacement with --force"
     )
-    parser.add_argument(
-        "--no-input",
-        action="store_true",
-        default=argparse.SUPPRESS,
-        help="never prompt; fail instead of waiting when confirmation is required",
-    )
-    parser.add_argument("--marketplace-path", type=Path, default=argparse.SUPPRESS, help="marketplace.json path")
-    parser.add_argument(
-        "--plugin-store", type=Path, default=argparse.SUPPRESS, help="directory containing personal plugins"
-    )
-    parser.add_argument(
-        "--backup-root", type=Path, default=argparse.SUPPRESS, help="directory containing installer backups"
-    )
+    parser.add_argument("--no-input", action="store_true", default=argparse.SUPPRESS, help="fail instead of prompting")
+    parser.add_argument("--marketplace-path", type=Path, default=argparse.SUPPRESS, help="local plugin registry file")
+    parser.add_argument("--plugin-store", type=Path, default=argparse.SUPPRESS, help="plugin installation directory")
     parser.add_argument(
         "--copy",
         action="store_true",
         default=argparse.SUPPRESS,
-        help="copy the resolved payload instead of creating a developer checkout symlink",
-    )
-    parser.add_argument(
-        "--smoke",
-        action="store_true",
-        default=argparse.SUPPRESS,
-        help="run manifest, marketplace, status, and path smoke checks",
-    )
-    parser.add_argument(
-        "--no-smoke", action="store_true", default=argparse.SUPPRESS, help="skip install's default smoke checks"
+        help="copy plugin files instead of linking a developer checkout",
     )
 
 
@@ -969,20 +465,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--version", action="version", version=version_text(), help="print package version and exit")
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("version", help="print package version and exit")
-    subparsers.add_parser(
-        "preview", parents=[common], help="preview planned marketplace/plugin-store changes without writing"
-    )
-    subparsers.add_parser("install", parents=[common], help="install locally, then run smoke/status by default")
-    subparsers.add_parser(
-        "status", parents=[common], help="print read-only local install status and Codex UI boundary guidance"
-    )
-    rollback = subparsers.add_parser(
-        "rollback", parents=[common], help="restore marketplace/plugin-store state from an installer backup"
-    )
-    rollback.add_argument(
-        "--backup", required=True, help="backup id under --backup-root, or an absolute backup directory"
-    )
-
+    subparsers.add_parser("preview", parents=[common], help="preview installation without changing files")
+    subparsers.add_parser("install", parents=[common], help="install or update Skills for Codex")
+    subparsers.add_parser("status", parents=[common], help="check the local installation")
     args = parser.parse_args(argv)
     for name, value in {
         "force": False,
@@ -990,18 +475,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         "no_input": False,
         "marketplace_path": DEFAULT_MARKETPLACE,
         "plugin_store": DEFAULT_PLUGIN_STORE,
-        "backup_root": DEFAULT_BACKUP_ROOT.expanduser(),
         "copy": False,
-        "smoke": False,
-        "no_smoke": False,
     }.items():
         if not hasattr(args, name):
             setattr(args, name, value)
-
-    if args.command == "preview":
-        args.smoke = bool(args.smoke)
-    elif args.command == "install":
-        args.smoke = not args.no_smoke if not args.smoke else True
     return args
 
 
@@ -1016,8 +493,6 @@ def main(argv: list[str] | None = None) -> int:
             return run_install(args)
         if args.command == "status":
             return run_status(args)
-        if args.command == "rollback":
-            return run_rollback(args)
         raise InstallError(f"unknown command: {args.command}")
     except (InstallError, json.JSONDecodeError, OSError) as exc:
         print(f"atk: error: {exc}", file=sys.stderr)

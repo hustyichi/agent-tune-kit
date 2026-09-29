@@ -176,7 +176,7 @@ Evaluation records and Git checkpoints are stored locally. Analysis uses your cu
 
 **How do I upgrade or troubleshoot installation?**
 
-Rerun both installation commands to update the CLI and Skills. `atk install` shows a brief result by default; use `atk install --verbose` for diagnostics. It backs up files before replacement and shows an available recovery command if checks fail.
+Rerun both installation commands to update the CLI and Skills. `atk install` checks the installation automatically and shows only the result and activation guidance. It does not keep historical backups or manage installation versions.
 
 **Can I continue from version 0.x?**
 
