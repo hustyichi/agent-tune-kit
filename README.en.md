@@ -4,156 +4,209 @@
 
 [![PyPI](https://img.shields.io/pypi/v/agent-tune-kit.svg)](https://pypi.org/project/agent-tune-kit/)
 
-Agent Tune Kit (ATK) is a **local Codex plugin** for evaluating an existing Agent, investigating failures, and checking whether changes to prompts, business Skills, code, or configuration improve its behavior.
+**Find out why your Agent fails, and check whether each change actually helps.**
 
-Describe your goal in Codex. The current session analyzes evidence and edits your project; ATK records results, compares revisions, and manages recoverable local Git checkpoints.
+Agent Tune Kit (ATK) is a local Codex plugin. Bring your Agent project and test tasks to a Codex conversation to evaluate its behavior, investigate failures, try changes, and compare results before and after.
 
-## When to use it
+Use it to improve an existing Agent's prompts, business Skills, code, or configuration. No migration to a new Agent framework is required.
 
-- You have a working Agent and want to understand which tasks fail and what to change.
-- You have batch results or Langfuse exports and want to investigate without running the Agent again.
-- You want to test a change while checking that previously working tasks still pass.
+[Install](#install) · [Quick start](#quick-start-evaluate-and-improve-your-agent) · [Analyze existing results](#already-have-results-start-there) · [FAQ](#faq)
 
-ATK connects to your existing Agent without requiring a framework rewrite. Each candidate change keeps its evidence and decision, so you can review why it was accepted or rejected.
+## What can it help with?
+
+| Your question | What you can do with ATK |
+| --- | --- |
+| My Agent sometimes fails. Where should I start? | Evaluate representative tasks and investigate failures using outputs and execution records |
+| A prompt change fixed a few examples. What about the rest? | Compare versions and check that previously working tasks still pass |
+| I've tried many changes. Which ones helped? | Keep results and adoption decisions, with support for restoring recorded versions |
+| I already have batch results or Langfuse exports | Import them for analysis before setting up Agent execution |
+
+ATK is for **an existing Agent or existing execution results**. If you are building an Agent from scratch, get it to complete a real task first, then use ATK to evaluate and improve it.
+
+## How it works
+
+```text
+Your Agent + test tasks → Evaluate → Diagnose → Try a change → Validate → Decide
+```
+
+ATK connects this workflow to your existing project:
+
+| Part | Responsibility | Benefit |
+| --- | --- | --- |
+| Your Agent | Runs tasks through its existing entry point | Keep your framework, models, and tools |
+| ATK Skills in Codex | Guide the current session through analysis and changes | Work in natural language without writing internal operation commands |
+| Local ATK tools | Run evaluations, save evidence, compare versions, and manage Git checkpoints | Review the basis for decisions and restore changes you do not adopt |
+
+You set the evaluation criteria and allowed scope of changes. ATK preserves inconclusive results too, helping you distinguish changes worth keeping from those that need more evidence.
 
 ## Install
 
-You need local Codex, Python 3.11+, and `uv`. Install the persistent CLI, then let it install the matching Skills:
+You need **local Codex, Python 3.11+, and [uv](https://docs.astral.sh/uv/getting-started/installation/)**.
+
+**1. Run in your terminal:**
 
 ```sh
 uv tool install agent-tune-kit@latest
 atk install
-atk status
 ```
 
-Run `uv tool install agent-tune-kit@latest` again later: it installs the CLI if missing or upgrades it when a newer version is available. Updating the Skills with `atk install` afterward is recommended, but can be deferred.
-If the shell cannot find `atk`, run `uv tool update-shell` and open a new terminal.
+**2. Enter `/plugins` in Codex, then find and enable Agent Tune Kit.**
 
-Then enter this in Codex:
+**3. Open your own Agent project in Codex and enter `$atk-init` to begin.**
+
+All `$atk-*` examples below are Skill calls entered **in a Codex conversation**, not terminal commands. You do not need to download this repository to use ATK.
+
+If your shell cannot find `atk`, run `uv tool update-shell` and open a new terminal. If Skills are missing in Codex, refresh the plugin list and open a new session. Run `atk status` in your terminal to check installation status.
+
+## Quick start: evaluate and improve your Agent
+
+Choose a small goal, such as reducing incorrect refund-policy answers in a support Agent. Prepare:
+
+- **An Agent entry point:** how to start it, including dependencies and credentials.
+- **A few representative tasks:** include failures and tasks that already work and should keep working.
+- **Judging criteria:** expected answers, business rules, or confirmed examples of good and bad results.
+
+Formal evaluation and tuning require a clean Git working tree; commit or safely set aside existing changes first. Evaluation runs your Agent and may consume model or tool credits. Use a test environment for actions such as sending messages or writing to databases.
+
+Replace the example paths below with your own. **Send one call at a time and wait for it to finish.**
+
+### 1. Connect your Agent and prepare tasks
 
 ```text
-/plugins
+$atk-init My Agent entry point is scripts/agent.py. Check how it runs and connect it. Only allow changes to prompts/ in this round.
 ```
-
-Enable **Agent Tune Kit** and open your own Agent project. The `$atk-*` examples below are **Skill calls entered in a Codex conversation**, not shell commands. Use them in your Agent project, not the ATK source repository.
-
-See [PyPI](https://pypi.org/project/agent-tune-kit/) for package versions and downloads.
-
-> **Upgrading from 0.x:** Version 1.0.0 changes the Skills and data layout. It does not migrate or delete old `.atk/results/vN/` data. Initialization stops if it finds a legacy `.atk` directory. Back up and decide how to preserve that data, or use a clean target project; do not overwrite the old directory.
-
-## First run: evaluate and improve an Agent
-
-Prepare the Agent's entry point, a few representative tasks, and criteria for judging the results. Formal evaluation and tuning require a clean Git working tree. Agents that write to databases, send messages, or perform other external writes also need a verified test environment or safeguards.
-
-Replace `scripts/agent.py` and `data/eval.csv` below with your actual paths. Run each step in Codex and wait for it to finish before continuing.
-
-### 1. Connect the project and prepare tasks
 
 ```text
-$atk-init My Agent entry point is scripts/agent.py. Investigate how it runs and connect it. Allow changes to prompts/ only; protect other business files.
-$atk-dataset Build an evaluation dataset from data/eval.csv. Confirm inputs, expected results, and judging criteria. Include tasks that should remain unchanged to check for regressions.
+$atk-dataset Use the tasks in data/eval.csv. Help confirm inputs, expected results, and judging criteria. Keep already working tasks to check for regressions.
 ```
 
-Codex inspects dependencies, inputs and outputs, actual business Skill loading, and external side effects, then creates a local runner. Each task is a Case. Include both Cases you want to improve and already working Cases that protect against regressions.
+This establishes how to run your Agent, which files may change, and how results should be judged. If you do not have a dataset file yet, give `$atk-dataset` real task examples to organize.
 
-You can investigate without reference answers, but a dimension needs reliable criteria before it can receive a definite pass or fail. Do not treat the Agent's original answer as ground truth.
-
-### 2. Run a baseline and investigate
+### 2. Evaluate current behavior and choose a problem
 
 ```text
-$atk-eval Run a baseline evaluation after establishing this Round's criteria, repeat count, timeout, and budget.
-$atk-diagnose Investigate the failure evidence. Distinguish Agent behavior, tool, runtime, and data issues, and identify the priority issue.
+$atk-eval Confirm repeat count, timeout, and budget, then evaluate the current version as a baseline for comparison.
 ```
-
-The baseline captures behavior before changes. ATK saves actual outputs, individual judgments, and supporting evidence. Infrastructure failures such as model authentication errors cannot serve as valid evidence of Agent performance.
-
-### 3. Change, validate, and decide
 
 ```text
-$atk-optimize Prepare one candidate for the confirmed priority issue, within the allowed paths.
-$atk-validate Compare the candidate with its parent. Check improvement on target tasks and regressions on protection tasks.
-$atk-decide Use the validation result to keep, reject, or defer this candidate.
+$atk-diagnose Investigate failed tasks. Identify the most useful problem to address first, with evidence and remaining uncertainties.
 ```
 
-Only one candidate can be pending at a time. Normal acceptance requires passing validation and creates a local commit in your project. Rejection or deferral preserves the evidence and restores the candidate's parent file contents.
+You receive task-level judgments and a failure analysis. The cause may be a prompt, tool, data, or runtime issue. Locate the cause before choosing what to change.
 
-Repeat these three steps for additional issues. Before closing the Round, compare **all accepted changes against the original baseline**:
+### 3. Try a change, validate it, and decide
 
 ```text
-$atk-validate Run final validation of the cumulative version against the original baseline, covering the full frozen task set and repeat plan.
-$atk-decide Close the Round based on final validation. List accepted changes, the final commit, and unresolved issues.
+$atk-optimize Prepare one change for the confirmed problem, within the allowed scope.
 ```
-
-ATK does not automatically push, publish, or deploy.
-
-## Already have results? Start with analysis
-
-Import CSV, JSON, or JSONL batch results, or Langfuse JSON/JSONL/CSV/`.gz` exports, without configuring an Agent command or Git:
 
 ```text
-$atk-init Use analysis_only mode for existing results. Do not run the Agent.
-$atk-eval Import data/traces.json. Confirm its format, field mapping, and redaction rules, then assess it against explicit criteria.
-$atk-diagnose Investigate failures and identify missing evidence and explanations that still need testing.
-$atk-decide Save the analysis and close this Round without adopting changes.
+$atk-validate Compare results before and after the change. Check whether the target problem improves and previously working tasks regress.
 ```
 
-Importing does not rerun the Agent. External scores remain evidence rather than automatically becoming ATK pass rates. You can add runtime configuration and a Git baseline later while preserving existing evidence. See the [usage guide](https://github.com/hustyichi/agent-tune-kit/blob/1.0.0/docs/vnext-usage-guide.md) (Chinese) for formats.
+```text
+$atk-decide Use the validation results to keep, reject, or defer this change. Explain the decision.
+```
 
-## Skill reference
+Normal acceptance requires passing validation and creates a local Git commit in your project. Rejection or deferral preserves evaluation records and restores the previous file contents. ATK does not automatically push, publish, or deploy.
 
-| Skill | What you want to do |
+Repeat step 3 for additional problems. Before finishing, check the combined effect of all changes:
+
+```text
+$atk-validate Run final validation, comparing all accepted changes with the version at the start of this round.
+```
+
+```text
+$atk-decide Close this round based on final validation. Summarize accepted changes, their effects, and unresolved issues.
+```
+
+## Already have results? Start there
+
+Import CSV, JSON, or JSONL batch results, or Langfuse exports, directly for analysis. Import-only analysis needs neither an Agent execution command nor Git.
+
+Send these calls in Codex, one at a time:
+
+```text
+$atk-init Only analyze existing results for now. Do not run the Agent.
+```
+
+```text
+$atk-eval Import data/traces.json. Confirm field meanings, redaction rules, and judging criteria, then assess the results.
+```
+
+```text
+$atk-diagnose Summarize the main failure causes, supporting evidence, and information still needed.
+```
+
+```text
+$atk-decide Save the analysis and close this round without adopting changes.
+```
+
+To test improvements later, add Agent runtime configuration and a Git baseline while keeping existing evidence. See the [usage guide](https://github.com/hustyichi/agent-tune-kit/blob/1.0.0/docs/vnext-usage-guide.md) for import formats and mappings.
+
+## Review results and continue
+
+Results are saved under `.atk/` **in your Agent project**. Ask Codex to help review them:
+
+```text
+Summarize this round: which tasks failed, what improved, and did anything regress? Link the evidence files and generate a local HTML evaluation report.
+```
+
+ATK keeps tasks, actual outputs, judgments, changes, and decisions. To stop midway, ask Codex to pause and record progress. When resuming, ask it to check the current project state first.
+
+| What you want to do | Skill |
 | --- | --- |
-| `$atk-init` | Connect an existing Agent or initialize an import-only analysis project |
-| `$atk-dataset` | Organize tasks, expected results, attachments, and regression protection Cases |
-| `$atk-eval` | Run evaluations, import results, or reassess evidence without rerunning the Agent |
-| `$atk-diagnose` | Investigate failures and record issues and competing explanations |
-| `$atk-optimize` | Prepare one scoped candidate for an issue |
-| `$atk-validate` | Validate a candidate, cumulative changes, or an external component repair |
-| `$atk-decide` | Keep, reject, defer, roll back accepted changes, or close the Round |
+| Connect a project | `$atk-init` |
+| Prepare or add test tasks | `$atk-dataset` |
+| Run evaluations, import results, or reassess them | `$atk-eval` |
+| Investigate failures | `$atk-diagnose` |
+| Try a change | `$atk-optimize` |
+| Check its effects | `$atk-validate` |
+| Keep, reject, defer, roll back changes, or close a round | `$atk-decide` |
 
-For an external tool or service defect, use `$atk-diagnose` to save a local handoff and verification requirements. After repair, open a linked Round and check both the component directly and the Agent end to end. An Agent-side workaround does not establish that the external defect is fixed.
+## FAQ
 
-## Where to find results
+**Can I use it without reference answers?**
 
-Artifacts live under `.atk/` in **your Agent project**:
+Yes, starting with analysis. Independently verifiable requirements can be assessed; judgments without reliable evidence remain unknown. The Agent's original answer is not automatically a correct reference answer.
 
-| Location | Contents |
-| --- | --- |
-| `.atk/runtime.md` | Integration details, runtime conditions, and known limitations |
-| `.atk/datasets/<id>/` | Immutable task snapshots |
-| `.atk/evidence/<batch-id>/` | Actual or imported results, sources, and execution status |
-| `.atk/assessments/<id>/assessment.csv` | Per-record, per-dimension judgments and evidence references |
-| `.atk/rounds/<id>/` | Plans, issues, candidates, validations, and decisions |
-| `.atk/knowledge/<id>/` | Lessons with applicability conditions and evidence |
+**Does “local plugin” mean fully offline?**
 
-Ask Codex to identify the files for your Round or generate a local HTML view from the assessment CSV. Reassessment creates a new Assessment and preserves previous judgments.
+Evaluation records and Git checkpoints are stored locally. Analysis uses your current Codex session, and your Agent may call external models or services. Handle input data according to those services' data policies.
 
-To stop midway, ask Codex to pause the Round and record why. Resume only after checking the workspace and runtime configuration. After an interruption, preserve the files and recover through the operation record instead of deleting `.atk/` or force-resetting Git.
+**How do I upgrade or troubleshoot installation?**
+
+Rerun both installation commands to update the CLI and Skills. `atk install` shows a brief result by default; use `atk install --verbose` for diagnostics. It backs up files before replacement and shows an available recovery command if checks fail.
+
+**Can I continue from version 0.x?**
+
+Version 1.0.0 does not automatically migrate old `.atk` data. Initialization stops if it finds a legacy directory. Back it up and decide how to preserve it, or start in a clean target project. Do not overwrite it.
+
+**Does passing validation guarantee better production results?**
+
+Validation applies to the tasks and criteria used. Real multi-task gains, valid change-adoption commits, and external repair workflows still await full acceptance. Start with a small comparison in your own project; see the [acceptance record](https://github.com/hustyichi/agent-tune-kit/blob/1.0.0/docs/vnext-implementation-report.md).
 
 ## Further reading
 
-- [Usage guide](https://github.com/hustyichi/agent-tune-kit/blob/1.0.0/docs/vnext-usage-guide.md) (Chinese): attachments, budgets, concurrency, import mappings, recovery, and external repairs.
-- [Shared Skill workflow](https://github.com/hustyichi/agent-tune-kit/blob/1.0.0/skills/WORKFLOW.md): operation contracts and internal interfaces.
-- [Implementation and acceptance record](https://github.com/hustyichi/agent-tune-kit/blob/1.0.0/docs/vnext-implementation-report.md) (Chinese): implemented scope, evidence, and open acceptance work.
-- [Design](https://github.com/hustyichi/agent-tune-kit/blob/1.0.0/docs/agent-tune-kit-vnext-refactor-plan.md) (Chinese): data model and validation protocol.
+The following detailed documents are in Chinese:
 
-**Current limitations:** Real multi-Case gains, valid candidate acceptance commits, independent responsibility-layer diagnosis, and real external repair workflows still await acceptance. Passing offline tests does not prove improvement in your application; use your project's comparison results.
+- [Usage guide](https://github.com/hustyichi/agent-tune-kit/blob/1.0.0/docs/vnext-usage-guide.md): data, attachments, budgets, imports, and pause/resume workflows.
+- [Architecture and design](https://github.com/hustyichi/agent-tune-kit/blob/1.0.0/docs/agent-tune-kit-vnext-refactor-plan.md): data model, version management, and validation mechanisms.
+- [Implementation and acceptance record](https://github.com/hustyichi/agent-tune-kit/blob/1.0.0/docs/vnext-implementation-report.md): implemented capabilities and remaining acceptance work.
 
-## Source development
+<details>
+<summary>Contributing</summary>
 
-Install the plugin from this repository:
+Install from this repository and run development checks:
 
 ```sh
 uv run --frozen atk install
-```
-
-Run development checks:
-
-```sh
 uv run --frozen pytest -q
 uv run --frozen ruff check .
 python3 scripts/validate_skill_pack.py
 uv build --no-sources
 ```
 
-`atk internal ...` is an interface used by the Skills. Each Skill passes its plugin root. If versions differ, the CLI warns and continues; run `atk install` when you want to update the Skills.
+For Skill development and internal interfaces, read the [shared Skill workflow](https://github.com/hustyichi/agent-tune-kit/blob/1.0.0/skills/WORKFLOW.md).
+
+</details>
