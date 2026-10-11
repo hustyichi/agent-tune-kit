@@ -189,7 +189,12 @@ class ReleaseScriptTests(unittest.TestCase):
                 'self.assertEqual(identity.version, "0.3.8")\nexample_version = "1.2.3"\n',
                 encoding="utf-8",
             )
-            (root / "tests" / "test_install_plugin.py").write_text('"agent-tune-kit 0.3.8"\n', encoding="utf-8")
+            (root / "tests" / "test_install_plugin.py").write_text(
+                '"agent-tune-kit 0.3.8"\n'
+                'self.assertIn("CLI 版本为 0.3.8", status.stdout)\n'
+                'self.assertEqual(json.loads(manifest_path.read_text(encoding="utf-8"))["version"], "0.3.8")\n',
+                encoding="utf-8",
+            )
             changed = release_version.update_version_files(root, "0.4.0")
 
             self.assertEqual(
