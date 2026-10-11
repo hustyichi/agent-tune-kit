@@ -28,7 +28,7 @@ def head(repo: Path) -> str:
 def branch(repo: Path) -> str:
     name = git(repo, "symbolic-ref", "--quiet", "--short", "HEAD", ok=False).decode().strip()
     if not name:
-        raise ATKError("UNSUPPORTED_GIT_STATE", "detached HEAD is unsupported")
+        raise ATKError("UNSUPPORTED_GIT_STATE", "不支持游离 HEAD")
     return name
 
 
@@ -48,7 +48,7 @@ def tracked_paths(repo: Path) -> set[str]:
 
 def safe_path(repo: Path, name: str) -> Path:
     if not isinstance(name, str) or not name or "\0" in name:
-        raise ATKError("SCOPE_VIOLATION", f"unsafe path: {name}")
+        raise ATKError("SCOPE_VIOLATION", f"不安全的路径：{name}")
     relative = Path(name)
     windows = PureWindowsPath(name)
     if (
@@ -59,13 +59,13 @@ def safe_path(repo: Path, name: str) -> Path:
         or ".." in relative.parts
         or any(part.casefold() in {".git", ".atk"} for part in relative.parts)
     ):
-        raise ATKError("SCOPE_VIOLATION", f"unsafe path: {name}")
+        raise ATKError("SCOPE_VIOLATION", f"不安全的路径：{name}")
     path = repo / relative
     for parent in [path, *path.parents]:
         if parent == repo.parent:
             break
         if parent.is_symlink():
-            raise ATKError("SCOPE_VIOLATION", f"symlink path: {name}")
+            raise ATKError("SCOPE_VIOLATION", f"符号链接路径：{name}")
     return path
 
 
@@ -74,10 +74,10 @@ def content(repo: Path, name: str) -> bytes | None:
     if not path.exists():
         return None
     if not path.is_file() or path.stat().st_mode & 0o111:
-        raise ATKError("SCOPE_VIOLATION", f"only regular non-executable text files are supported: {name}")
+        raise ATKError("SCOPE_VIOLATION", f"仅支持非可执行的普通文本文件：{name}")
     data = path.read_bytes()
     if b"\0" in data:
-        raise ATKError("SCOPE_VIOLATION", f"binary file is unsupported: {name}")
+        raise ATKError("SCOPE_VIOLATION", f"不支持二进制文件：{name}")
     return data
 
 
@@ -89,7 +89,7 @@ def _git_file(repo: Path, revision: str, name: str) -> bytes | None:
 def _verify_restored_content(repo: Path, revision: str, paths: Iterable[str]) -> None:
     for name in paths:
         if content(repo, name) != _git_file(repo, revision, name):
-            raise ATKError("GIT_OPERATION_INTERRUPTED", f"restored content differs from checkpoint: {name}")
+            raise ATKError("GIT_OPERATION_INTERRUPTED", f"恢复内容与检查点不一致：{name}")
 
 
 def _write_replay_file(repo: Path, name: str, data: bytes | None, commit: str | None = None) -> None:
@@ -113,28 +113,28 @@ def _check_regular_parent(repo: Path, name: str) -> None:
     if listing:
         mode = listing.split()[0]
         if mode not in {"100644"}:
-            raise ATKError("SCOPE_VIOLATION", f"unsupported parent file mode: {name} ({mode})")
+            raise ATKError("SCOPE_VIOLATION", f"不支持的父文件模式：{name}（{mode}）")
 
 
 def verify_repo(repo: Path, *, expected_head: str | None = None, expected_branch: str | None = None) -> None:
     if git(repo, "rev-parse", "--is-inside-work-tree").strip() != b"true":
-        raise ATKError("UNSUPPORTED_GIT_STATE", "not a Git worktree")
+        raise ATKError("UNSUPPORTED_GIT_STATE", "不是 Git 工作区")
     common = Path(git(repo, "rev-parse", "--git-dir").decode().strip())
     if not common.is_absolute():
         common = repo / common
     for name in ("MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "rebase-apply", "rebase-merge"):
         if (common / name).exists():
-            raise ATKError("UNSUPPORTED_GIT_STATE", f"Git operation in progress: {name}")
+            raise ATKError("UNSUPPORTED_GIT_STATE", f"Git 操作正在进行：{name}")
     if git(repo, "ls-files", "-u", "-z"):
-        raise ATKError("UNSUPPORTED_GIT_STATE", "unmerged index entries")
+        raise ATKError("UNSUPPORTED_GIT_STATE", "暂存区存在未合并项")
     if expected_head and head(repo) != expected_head:
-        raise ATKError("BASELINE_DRIFT", "HEAD differs from recorded checkpoint")
+        raise ATKError("BASELINE_DRIFT", "HEAD 与记录的检查点不一致")
     if expected_branch and branch(repo) != expected_branch:
-        raise ATKError("BASELINE_DRIFT", "branch differs from frozen round")
+        raise ATKError("BASELINE_DRIFT", "分支与冻结 Round 不一致")
     if staged_paths(repo):
-        raise ATKError("DIRTY_BASELINE", "staged changes must be resolved before checkpoint operation")
+        raise ATKError("DIRTY_BASELINE", "检查点操作前必须处理暂存修改")
     if any(path == ".atk" or path.startswith(".atk/") for path in tracked_paths(repo)):
-        raise ATKError("DIRTY_BASELINE", "tracked .atk artifacts must be removed from the index before a round")
+        raise ATKError("DIRTY_BASELINE", "开始 Round 前必须从暂存区移除已跟踪的 .atk 产物")
 
 
 def _round_path(root: Path, round_id: str) -> Path:
@@ -163,13 +163,13 @@ def create_round(repo: Path, root: Path, request: dict) -> dict:
             "analysis_only", read_json(project_path).get("analysis_only", False) if project_path.exists() else False
         )
         if type(analysis_only) is not bool:
-            raise ATKError("INCOMPLETE_EVIDENCE", "analysis_only must be boolean")
+            raise ATKError("INCOMPLETE_EVIDENCE", "analysis_only 必须是布尔值")
         if analysis_only and (request.get("reuse_revision") or request.get("external_fix_identity")):
-            raise ATKError("REVISION_MISMATCH", "Revision reuse and external fix verification require B0")
+            raise ATKError("REVISION_MISMATCH", "Revision 复用和外部修复验证需要 B0")
         if not analysis_only:
             verify_repo(repo)
             if git(repo, "diff", "--name-only", "-z"):
-                raise ATKError("DIRTY_BASELINE", "tracked working tree must be clean for B0")
+                raise ATKError("DIRTY_BASELINE", "记录 B0 时已跟踪工作区必须干净")
         previous_round_id = request.get("previous_round_id")
         if previous_round_id:
             previous = _round(root, previous_round_id)
@@ -182,14 +182,12 @@ def create_round(repo: Path, root: Path, request: dict) -> dict:
                     for issue_id in set(request.get("issue_ids", [])) & set(previous["issues"])
                 )
             ):
-                raise ATKError(
-                    "INCOMPLETE_EVIDENCE", "external fix Round needs a closed source Round and open handoff Issue"
-                )
+                raise ATKError("INCOMPLETE_EVIDENCE", "外部修复 Round 需要已关闭来源 Round 和未解决交接 Issue")
         elif request.get("external_fix_identity"):
-            raise ATKError("INCOMPLETE_EVIDENCE", "external fix needs a linked previous Round")
+            raise ATKError("INCOMPLETE_EVIDENCE", "外部修复需要关联此前 Round")
         for old in (root / "rounds").glob("*/round.json"):
             if read_json(old).get("status") in {"ready", "optimizing", "finalizing"}:
-                raise ATKError("WORKSPACE_CONFLICT", "another active round exists")
+                raise ATKError("WORKSPACE_CONFLICT", "已有另一个活跃 Round")
         baseline = None if analysis_only else head(repo)
         baseline_revision_id = None if analysis_only else new_id("revision")
         if request.get("reuse_revision"):
@@ -201,7 +199,7 @@ def create_round(repo: Path, root: Path, request: dict) -> dict:
                 or read_json(_round_path(root, previous_round_id) / "plan.json").get("run_config_hash")
                 != digest(read_json(root / "project.json"))
             ):
-                raise ATKError("REVISION_MISMATCH", "prior Revision cannot be reused across this Round boundary")
+                raise ATKError("REVISION_MISMATCH", "此前 Revision 不能跨此 Round 边界复用")
             baseline_revision_id = previous["current_revision_id"]
         round_id = new_id("round")
         value = {
@@ -237,13 +235,13 @@ def freeze_round(repo: Path, root: Path, request: dict) -> dict:
     with locked(root):
         value = _round(root, request["round_id"])
         if value["status"] != "analysis_only":
-            raise ATKError("WORKSPACE_CONFLICT", "round is already frozen")
+            raise ATKError("WORKSPACE_CONFLICT", "Round 已冻结")
         for old in (root / "rounds").glob("*/round.json"):
             other = read_json(old)
             if other["id"] != value["id"] and other.get("status") in {"ready", "optimizing", "finalizing"}:
-                raise ATKError("WORKSPACE_CONFLICT", "another active round exists")
+                raise ATKError("WORKSPACE_CONFLICT", "已有另一个活跃 Round")
         if read_json(root / "project.json").get("analysis_only"):
-            raise ATKError("NOT_REPLAYABLE", "configure the runtime before freezing an analysis-only Round")
+            raise ATKError("NOT_REPLAYABLE", "冻结仅分析 Round 前先配置 runtime")
         plan = dict(request["plan"])
         if value["baseline_commit"] is None:
             verify_repo(repo)
@@ -264,7 +262,7 @@ def freeze_round(repo: Path, root: Path, request: dict) -> dict:
             plan["baseline"] = baseline
         verify_repo(repo, expected_head=value["baseline_commit"], expected_branch=value["branch"])
         if git(repo, "diff", "--name-only", "-z") or changed_paths(repo) != set(value["baseline_untracked"]):
-            raise ATKError("DIRTY_BASELINE", "workspace changed since B0 was recorded")
+            raise ATKError("DIRTY_BASELINE", "记录 B0 后工作区已改变")
         required = {
             "allowed_paths",
             "protected_paths",
@@ -287,7 +285,7 @@ def freeze_round(repo: Path, root: Path, request: dict) -> dict:
         if required - plan.keys() or (
             not external_fix_round and (not plan["commit_authorized"] or not plan["allowed_paths"])
         ):
-            raise ATKError("INCOMPLETE_EVIDENCE", f"incomplete frozen plan: {sorted(required - plan.keys())}")
+            raise ATKError("INCOMPLETE_EVIDENCE", f"冻结计划不完整：{sorted(required - plan.keys())}")
         if external_fix_round:
             previous_folder = _round_path(root, value["previous_round_id"])
             previous_plan = (
@@ -308,50 +306,50 @@ def freeze_round(repo: Path, root: Path, request: dict) -> dict:
                 or not affected <= set(plan["case_ids"])
                 or not set(previous_plan.get("protection_case_ids", [])) <= set(plan["protection_case_ids"])
             ):
-                raise ATKError("COMPARISON_INVALID", "external fix plan must retain affected and protection Cases")
+                raise ATKError("COMPARISON_INVALID", "外部修复计划必须保留受影响和保护 Case")
         if (
             not plan["case_ids"]
             or len(plan["case_ids"]) != len(set(plan["case_ids"]))
             or not set(plan["protection_case_ids"]) <= set(plan["case_ids"])
         ):
-            raise ATKError("COMPARISON_INVALID", "frozen Case set is empty, duplicated, or inconsistent")
+            raise ATKError("COMPARISON_INVALID", "冻结 Case 集为空、重复或不一致")
         if not plan.get("dataset_id"):
-            raise ATKError("INCOMPLETE_EVIDENCE", "frozen plan needs a dataset_id")
+            raise ATKError("INCOMPLETE_EVIDENCE", "冻结计划需要 dataset_id")
         from .execution import load_cases
 
         cases = load_cases(root, plan["dataset_id"], verify_attachments=True)
         if not set(plan["case_ids"]) <= set(cases):
-            raise ATKError("COMPARISON_INVALID", "frozen Cases are missing from the dataset")
+            raise ATKError("COMPARISON_INVALID", "数据集缺少冻结 Case")
         fingerprints = {case_id: cases[case_id]["fingerprint"] for case_id in plan["case_ids"]}
         if plan.get("case_fingerprints", fingerprints) != fingerprints:
-            raise ATKError("COMPARISON_INVALID", "frozen Case content differs from the dataset")
+            raise ATKError("COMPARISON_INVALID", "冻结 Case 内容与数据集不一致")
         plan["case_fingerprints"] = fingerprints
         if plan["repeatability"] not in {"deterministic", "stochastic", "unknown"}:
-            raise ATKError("COMPARISON_INVALID", "repeatability is invalid")
+            raise ATKError("COMPARISON_INVALID", "重复性状态无效")
         if not isinstance(plan["repeatability_basis"], str) or not plan["repeatability_basis"].strip():
-            raise ATKError("COMPARISON_INVALID", "repeatability needs a recorded evidence basis")
+            raise ATKError("COMPARISON_INVALID", "重复性需要已记录的证据依据")
         minimum = 1 if plan["repeatability"] == "deterministic" else 2
         if type(plan["final_repeats"]) is not int or plan["final_repeats"] < minimum:
-            raise ATKError("BUDGET_EXHAUSTED", "final repeat plan is below required minimum")
+            raise ATKError("BUDGET_EXHAUSTED", "最终重复计划低于最低要求")
         if (
             plan["repeatability"] != "deterministic"
             and plan["final_repeats"] < 3
             and (not isinstance(plan.get("repeat_plan_basis"), str) or not plan["repeat_plan_basis"].strip())
         ):
-            raise ATKError("COMPARISON_INVALID", "short stochastic repeat plan needs a recorded reason")
+            raise ATKError("COMPARISON_INVALID", "较短随机重复计划需要记录原因")
         if type(plan.get("concurrency", 1)) is not int or plan.get("concurrency", 1) < 1:
-            raise ATKError("COMPARISON_INVALID", "concurrency must be a positive integer")
+            raise ATKError("COMPARISON_INVALID", "concurrency 必须是正整数")
         if (
             type(plan.get("timeout_seconds", 120)) not in {int, float}
             or not math.isfinite(plan.get("timeout_seconds", 120))
             or plan.get("timeout_seconds", 120) <= 0
         ):
-            raise ATKError("COMPARISON_INVALID", "formal timeout must be positive and finite")
+            raise ATKError("COMPARISON_INVALID", "正式超时必须是有限正数")
         plan.setdefault("timeout_seconds", 120)
         if not isinstance(plan.get("primary_dimension", "task_success"), str) or not plan.get(
             "primary_dimension", "task_success"
         ):
-            raise ATKError("COMPARISON_INVALID", "primary dimension is invalid")
+            raise ATKError("COMPARISON_INVALID", "主维度无效")
         plan.setdefault("primary_dimension", "task_success")
         required_dimensions = plan.get("required_dimensions", [])
         if (
@@ -359,7 +357,7 @@ def freeze_round(repo: Path, root: Path, request: dict) -> dict:
             or any(not isinstance(item, str) or not item for item in required_dimensions)
             or len(required_dimensions) != len(set(required_dimensions))
         ):
-            raise ATKError("COMPARISON_INVALID", "required dimensions are invalid")
+            raise ATKError("COMPARISON_INVALID", "必需维度无效")
         budget = plan["budget"]
         if (
             not isinstance(budget, dict)
@@ -368,32 +366,32 @@ def freeze_round(repo: Path, root: Path, request: dict) -> dict:
             < (1 if external_fix_round else 2) * len(set(plan["case_ids"])) * plan["final_repeats"]
             or any(type(budget.get(key, 0)) is not int or budget.get(key, 0) < 0 for key in ("probes", "candidates"))
         ):
-            raise ATKError("BUDGET_EXHAUSTED", "budget must reserve the frozen final validation")
+            raise ATKError("BUDGET_EXHAUSTED", "预算必须预留冻结的最终验证")
         if type(plan.get("max_retries_per_slot", 0)) is not int or plan.get("max_retries_per_slot", 0) < 0:
-            raise ATKError("COMPARISON_INVALID", "max_retries_per_slot must be non-negative")
+            raise ATKError("COMPARISON_INVALID", "max_retries_per_slot 必须非负")
         if plan.get("objective", "quality") not in {"quality", "efficiency"}:
-            raise ATKError("COMPARISON_INVALID", "objective must be quality or efficiency")
+            raise ATKError("COMPARISON_INVALID", "objective 必须是 quality 或 efficiency")
         if plan.get("objective") == "efficiency" and plan.get("efficiency_metric") not in {
             "cost",
             "duration_seconds",
             "tool_calls",
         }:
-            raise ATKError("COMPARISON_INVALID", "efficiency objective needs a supported metric")
+            raise ATKError("COMPARISON_INVALID", "效率目标需要受支持指标")
         if not isinstance(plan.get("metric_limits", {}), dict):
-            raise ATKError("COMPARISON_INVALID", "metric_limits must be an object")
+            raise ATKError("COMPARISON_INVALID", "metric_limits 必须是对象")
         for key, value_to_check in {
             **{key: plan[key] for key in ("min_primary_delta", "min_efficiency_delta") if key in plan},
             **plan.get("metric_limits", {}),
         }.items():
             if type(value_to_check) not in {int, float} or not math.isfinite(value_to_check) or value_to_check < 0:
-                raise ATKError("COMPARISON_INVALID", f"{key} must be non-negative")
+                raise ATKError("COMPARISON_INVALID", f"{key} 必须非负")
         if set(plan.get("metric_limits", {})) - {"max_total_cost", "max_mean_duration_seconds", "max_mean_tool_calls"}:
-            raise ATKError("COMPARISON_INVALID", "unsupported metric limit")
+            raise ATKError("COMPARISON_INVALID", "不支持的指标限制")
         preparation = plan["replay_preparation"]
         if not isinstance(preparation, dict) or preparation.get("mode") not in {"stateless", "command"}:
-            raise ATKError("NOT_REPLAYABLE", "replay preparation must be frozen before candidate work")
+            raise ATKError("NOT_REPLAYABLE", "候选工作前必须冻结重放准备")
         if preparation["mode"] == "stateless" and not preparation.get("reason"):
-            raise ATKError("NOT_REPLAYABLE", "stateless replay needs a recorded cache assessment")
+            raise ATKError("NOT_REPLAYABLE", "无状态重放需要记录缓存核查依据")
         if preparation["mode"] == "command" and (
             not isinstance(preparation.get("argv"), list)
             or not preparation["argv"]
@@ -401,7 +399,7 @@ def freeze_round(repo: Path, root: Path, request: dict) -> dict:
             or type(preparation.get("timeout_seconds")) is not int
             or preparation["timeout_seconds"] < 1
         ):
-            raise ATKError("NOT_REPLAYABLE", "replay preparation needs command arguments and a finite timeout")
+            raise ATKError("NOT_REPLAYABLE", "重放准备需要命令参数及有限超时")
         dependencies = plan.get("blocked_by_issue_ids_by_issue", {})
         workaround_ids = plan.get("workaround_issue_ids", [])
         if (
@@ -415,15 +413,15 @@ def freeze_round(repo: Path, root: Path, request: dict) -> dict:
                 for issue_id, blockers in dependencies.items()
             )
         ):
-            raise ATKError("COMPARISON_INVALID", "Issue dependencies or workaround scope are outside the plan")
+            raise ATKError("COMPARISON_INVALID", "Issue 依赖或 workaround 范围超出计划")
         project_hash = digest(read_json(root / "project.json"))
         if plan.get("run_config_hash", project_hash) != project_hash:
-            raise ATKError("COMPARISON_INVALID", "frozen runner configuration differs from the project")
+            raise ATKError("COMPARISON_INVALID", "冻结 runner 配置与项目不一致")
         plan["run_config_hash"] = project_hash
         plan_path = _round_path(root, value["id"]) / "plan.json"
         if plan_path.exists():
             if read_json(plan_path) != plan:
-                raise ATKError("WORKSPACE_CONFLICT", "partial frozen plan differs from the retry")
+                raise ATKError("WORKSPACE_CONFLICT", "部分冻结计划与重试不一致")
         else:
             write_json(plan_path, plan, immutable=True)
         value["status"] = "ready"
@@ -435,7 +433,7 @@ def _round_workspace_state(repo: Path, root: Path, value: dict) -> dict:
     folder = _round_path(root, value["id"])
     for path in (folder / "operations").glob("*.json"):
         if read_json(path).get("stage") not in {"complete", "aborted"}:
-            raise ATKError("GIT_OPERATION_INTERRUPTED", f"recover operation before continuing: {path.stem}")
+            raise ATKError("GIT_OPERATION_INTERRUPTED", f"继续前先恢复操作：{path.stem}")
     if value["baseline_commit"] is None:
         return {}
     verify_repo(repo, expected_head=value["current_commit"], expected_branch=value["branch"])
@@ -449,7 +447,7 @@ def _round_workspace_state(repo: Path, root: Path, value: dict) -> dict:
     actual = changed_paths(repo)
     baseline = set(value["baseline_untracked"])
     if actual - baseline - paths or baseline - actual:
-        raise ATKError("WORKSPACE_CONFLICT", "unaccounted workspace changes block Round transition")
+        raise ATKError("WORKSPACE_CONFLICT", "未解释的工作区修改阻断 Round 状态切换")
     return {name: digest(data) if (data := content(repo, name)) is not None else None for name in sorted(paths)}
 
 
@@ -460,11 +458,11 @@ def transition_round(repo: Path, root: Path, request: dict) -> dict:
         action = request.get("action")
         reason = request.get("reason")
         if action not in {"pause", "resume", "start_finalizing"} or not isinstance(reason, str) or not reason.strip():
-            raise ATKError("WORKSPACE_CONFLICT", "Round transition needs a supported action and reason")
+            raise ATKError("WORKSPACE_CONFLICT", "Round 状态切换需要受支持动作和原因")
         before = value["status"]
         if action == "pause":
             if before not in {"analysis_only", "ready", "optimizing", "finalizing"}:
-                raise ATKError("WORKSPACE_CONFLICT", "Round cannot be paused from its current state")
+                raise ATKError("WORKSPACE_CONFLICT", "当前状态不允许暂停 Round")
             snapshot, error = None, None
             try:
                 snapshot = _round_workspace_state(repo, root, value)
@@ -474,29 +472,29 @@ def transition_round(repo: Path, root: Path, request: dict) -> dict:
             value["status"] = "paused"
         elif action == "resume":
             if before != "paused":
-                raise ATKError("WORKSPACE_CONFLICT", "only a paused Round can resume")
+                raise ATKError("WORKSPACE_CONFLICT", "只有暂停的 Round 可以恢复")
             for path in (root / "rounds").glob("*/round.json"):
                 other = read_json(path)
                 if other["id"] != value["id"] and other["status"] in {"ready", "optimizing", "finalizing"}:
-                    raise ATKError("WORKSPACE_CONFLICT", "pause or close the other active Round before resuming")
+                    raise ATKError("WORKSPACE_CONFLICT", "恢复前先暂停或关闭其他活跃 Round")
             plan_path = _round_path(root, value["id"]) / "plan.json"
             if plan_path.exists():
                 plan = read_json(plan_path)
                 if plan.get("run_config_hash") != digest(read_json(root / "project.json")) or plan[
                     "runner_hash"
                 ] != digest(root / "adapters" / "runner.py"):
-                    raise ATKError("COMPARISON_INVALID", "frozen runtime changed while Round was paused")
+                    raise ATKError("COMPARISON_INVALID", "Round 暂停期间冻结 runtime 已改变")
             pause = value["pause"]
             snapshot = _round_workspace_state(repo, root, value)
             if pause["workspace"] is not None and snapshot != pause["workspace"]:
-                raise ATKError("REVISION_MISMATCH", "pending draft changed while Round was paused")
+                raise ATKError("REVISION_MISMATCH", "Round 暂停期间未决草稿已改变")
             value["status"] = pause["from_status"]
             del value["pause"]
         else:
             if before not in {"ready", "optimizing", "finalizing"} or value["pending_candidate_id"]:
-                raise ATKError("WORKSPACE_CONFLICT", "final validation needs an active Round with no pending candidate")
+                raise ATKError("WORKSPACE_CONFLICT", "最终验证需要活跃 Round，且不能有未决候选")
             if not value["active_candidate_ids"] and not value.get("external_fix_identity"):
-                raise ATKError("WORKSPACE_CONFLICT", "final validation needs an accepted Revision or external fix")
+                raise ATKError("WORKSPACE_CONFLICT", "最终验证需要已采用 Revision 或外部修复")
             _round_workspace_state(repo, root, value)
             if before == "finalizing":
                 return value
@@ -516,74 +514,74 @@ def prepare_candidate(repo: Path, root: Path, request: dict) -> dict:
     with locked(root):
         value = _round(root, request["round_id"])
         if value["status"] not in {"ready", "optimizing"} or value["pending_candidate_id"]:
-            raise ATKError("WORKSPACE_CONFLICT", "round is not ready for another candidate")
+            raise ATKError("WORKSPACE_CONFLICT", "Round 尚未准备好接收另一个候选")
         plan = read_json(_round_path(root, value["id"]) / "plan.json")
         if value.get("external_fix_identity"):
-            raise ATKError("WORKSPACE_CONFLICT", "external fix Round verifies its new B0 without an Agent candidate")
+            raise ATKError("WORKSPACE_CONFLICT", "外部修复 Round 验证新 B0，不创建 Agent 候选")
         exposure_path = root / "source-exposure.json"
         if exposure_path.exists() and any(
             entry["round_id"] == value["id"] for entry in read_json(exposure_path).get("groups", {}).values()
         ):
-            raise ATKError("COMPARISON_INVALID", "holdout was exposed; start a new Round before editing")
+            raise ATKError("COMPARISON_INVALID", "holdout 已暴露；编辑前需新建 Round")
         if len(value["candidate_ids"]) >= plan["budget"].get("candidates", len(set(plan["issue_ids"]))):
-            raise ATKError("BUDGET_EXHAUSTED", "candidate budget is exhausted")
+            raise ATKError("BUDGET_EXHAUSTED", "候选预算已耗尽")
         verify_repo(repo, expected_head=value["current_commit"], expected_branch=value["branch"])
         if changed_paths(repo) != set(value["baseline_untracked"]):
-            raise ATKError("DIRTY_BASELINE", "workspace has unaccounted changes before candidate")
+            raise ATKError("DIRTY_BASELINE", "候选工作前工作区有未解释修改")
         issue_id = request["primary_issue_id"]
         if issue_id not in plan["issue_ids"]:
-            raise ATKError("WORKSPACE_CONFLICT", "issue is outside frozen plan")
+            raise ATKError("WORKSPACE_CONFLICT", "Issue 超出冻结计划")
         related = request.get("related_issue_ids", [])
         if (
             not isinstance(related, list)
             or any(not isinstance(item, str) for item in related)
             or set(related) - set(plan["issue_ids"])
         ):
-            raise ATKError("WORKSPACE_CONFLICT", "related Issues are outside frozen plan")
+            raise ATKError("WORKSPACE_CONFLICT", "关联 Issue 超出冻结计划")
         supersedes = request.get("supersedes")
         if supersedes is not None:
             if supersedes not in value["candidate_ids"]:
-                raise ATKError("WORKSPACE_CONFLICT", "superseded candidate is outside this Round")
+                raise ATKError("WORKSPACE_CONFLICT", "被替代候选不属于本轮")
             earlier = read_json(_round_path(root, value["id"]) / "candidates" / safe_id(supersedes) / "candidate.json")
             if earlier["primary_issue_id"] != issue_id:
-                raise ATKError("WORKSPACE_CONFLICT", "superseded candidate belongs to another Issue")
+                raise ATKError("WORKSPACE_CONFLICT", "被替代候选属于另一个 Issue")
         change_kind = request.get("change_kind", "fix")
         if change_kind not in {"fix", "workaround"}:
-            raise ATKError("COMPARISON_INVALID", "candidate change_kind is invalid")
+            raise ATKError("COMPARISON_INVALID", "候选 change_kind 无效")
         blocked = set(request.get("blocked_by_issue_ids", [])) | set(
             plan.get("blocked_by_issue_ids_by_issue", {}).get(issue_id, [])
         )
         issue = _latest_issue(root, value["id"], issue_id)
         if not issue or issue["disposition"] not in {"local_candidate", "external_handoff"}:
-            raise ATKError("INCOMPLETE_EVIDENCE", "primary Issue needs a recorded candidate or handoff disposition")
+            raise ATKError("INCOMPLETE_EVIDENCE", "主 Issue 需要已记录的候选或交接处理方式")
         target_cases = plan.get("target_case_ids_by_issue", {}).get(issue_id, [])
         if (
             not target_cases
             or not set(target_cases) <= set(issue["case_ids"])
             or not set(target_cases) <= set(plan["case_ids"])
         ):
-            raise ATKError("COMPARISON_INVALID", "candidate target Cases must be frozen and linked to its Issue")
+            raise ATKError("COMPARISON_INVALID", "候选目标 Case 必须已冻结并关联其 Issue")
         if any(_latest_issue(root, value["id"], related_id) is None for related_id in related):
-            raise ATKError("INCOMPLETE_EVIDENCE", "related Issue has no recorded revision")
+            raise ATKError("INCOMPLETE_EVIDENCE", "关联 Issue 没有已记录修订")
         if issue and issue["disposition"] == "external_handoff" and issue["resolution"] != "resolved":
             if change_kind != "workaround":
-                raise ATKError("WORKSPACE_CONFLICT", "out-of-scope Issue cannot be a local fix")
+                raise ATKError("WORKSPACE_CONFLICT", "范围外 Issue 不能作为本地修复")
             blocked.add(issue_id)
         for blocker_id in blocked:
             blocker = _latest_issue(root, value["id"], blocker_id)
             if blocker_id not in plan["issue_ids"] or not blocker or blocker["disposition"] != "external_handoff":
-                raise ATKError("INCOMPLETE_EVIDENCE", f"blocking Issue is not a recorded handoff: {blocker_id}")
+                raise ATKError("INCOMPLETE_EVIDENCE", f"阻塞 Issue 不是已记录交接：{blocker_id}")
         if change_kind == "workaround" and (not blocked or blocked - set(plan.get("workaround_issue_ids", []))):
-            raise ATKError("WORKSPACE_CONFLICT", "workaround needs a frozen authorization for its blocking Issues")
+            raise ATKError("WORKSPACE_CONFLICT", "workaround 需要对阻塞 Issue 的冻结授权")
         paths = request["paths"]
         if not paths or len(paths) != len(set(paths)):
-            raise ATKError("SCOPE_VIOLATION", "candidate must declare distinct paths")
+            raise ATKError("SCOPE_VIOLATION", "候选必须声明不重复路径")
         spellings = {}
         for name in tracked_paths(repo) | changed_paths(repo) | set(paths):
             key = unicodedata.normalize("NFC", name).casefold()
             spellings.setdefault(key, set()).add(name)
         if any(len(spellings[unicodedata.normalize("NFC", name).casefold()]) > 1 for name in paths):
-            raise ATKError("SCOPE_VIOLATION", "candidate path has a case or Unicode alias")
+            raise ATKError("SCOPE_VIOLATION", "候选路径有大小写或 Unicode 别名")
         for path in paths:
             safe_path(repo, path)
             if (
@@ -591,7 +589,7 @@ def prepare_candidate(repo: Path, root: Path, request: dict) -> dict:
                 or not _allowed(path, plan["allowed_paths"])
                 or _allowed(path, plan["protected_paths"])
             ):
-                raise ATKError("SCOPE_VIOLATION", f"candidate path is not authorized: {path}")
+                raise ATKError("SCOPE_VIOLATION", f"候选路径未获授权：{path}")
         candidate_id = new_id("candidate")
         candidate = {
             "schema_version": 2,
@@ -618,7 +616,7 @@ def prepare_candidate(repo: Path, root: Path, request: dict) -> dict:
         ]
         if orphans:
             if len(orphans) != 1:
-                raise ATKError("WORKSPACE_CONFLICT", "multiple unregistered candidate drafts need inspection")
+                raise ATKError("WORKSPACE_CONFLICT", "存在多个未注册候选草稿，需要检查")
             folder = orphans[0]
             previous = read_json(folder / "draft.json")
             if (
@@ -631,7 +629,7 @@ def prepare_candidate(repo: Path, root: Path, request: dict) -> dict:
                 or {key: val for key, val in previous.items() if key not in {"id", "created_at"}}
                 != {key: val for key, val in candidate.items() if key not in {"id", "created_at"}}
             ):
-                raise ATKError("WORKSPACE_CONFLICT", "unregistered candidate draft differs from the retry")
+                raise ATKError("WORKSPACE_CONFLICT", "未注册候选草稿与重试不一致")
             candidate = previous
             candidate_id = candidate["id"]
         else:
@@ -648,16 +646,16 @@ def seal_candidate(repo: Path, root: Path, request: dict) -> dict:
     with locked(root):
         value = _round(root, request["round_id"])
         if value["status"] != "optimizing":
-            raise ATKError("WORKSPACE_CONFLICT", "Round is not optimizing")
+            raise ATKError("WORKSPACE_CONFLICT", "Round 不处于优化阶段")
         candidate_id = value["pending_candidate_id"]
         if candidate_id != request["candidate_id"]:
-            raise ATKError("WORKSPACE_CONFLICT", "candidate is not pending")
+            raise ATKError("WORKSPACE_CONFLICT", "候选不是未决候选")
         folder = _round_path(root, value["id"]) / "candidates" / candidate_id
         draft = read_json(folder / "draft.json")
         verify_repo(repo, expected_head=draft["parent_commit"], expected_branch=value["branch"])
         actual = changed_paths(repo) - set(value["baseline_untracked"])
         if actual != set(draft["declared_paths"]):
-            raise ATKError("SCOPE_VIOLATION", f"actual changed paths differ from declared paths: {sorted(actual)}")
+            raise ATKError("SCOPE_VIOLATION", f"实际变更路径与声明路径不一致：{sorted(actual)}")
         files = {}
         contents = {}
         for name in sorted(actual):
@@ -679,7 +677,7 @@ def seal_candidate(repo: Path, root: Path, request: dict) -> dict:
                     for name, data in contents.items()
                 )
             ):
-                raise ATKError("REVISION_MISMATCH", "partial seal differs from the pending candidate")
+                raise ATKError("REVISION_MISMATCH", "部分封存与未决候选不一致")
         else:
             for name, data in contents.items():
                 atomic_write(folder / "files" / name, data)
@@ -694,7 +692,7 @@ def seal_candidate(repo: Path, root: Path, request: dict) -> dict:
                 or revision.get("files_hash") != digest(files)
                 or revision.get("changed_paths") != sorted(actual)
             ):
-                raise ATKError("REVISION_MISMATCH", "recorded Revision differs from the sealed files")
+                raise ATKError("REVISION_MISMATCH", "记录的 Revision 与封存文件不一致")
         else:
             revision = {
                 "schema_version": 2,
@@ -717,7 +715,7 @@ def seal_candidate(repo: Path, root: Path, request: dict) -> dict:
         candidate_path = folder / "candidate.json"
         if candidate_path.exists():
             if read_json(candidate_path) != sealed:
-                raise ATKError("REVISION_MISMATCH", "recorded candidate differs from its Revision")
+                raise ATKError("REVISION_MISMATCH", "记录的候选与其 Revision 不一致")
         else:
             write_json(candidate_path, sealed, immutable=True)
         return sealed
@@ -735,16 +733,16 @@ def cancel_draft(repo: Path, root: Path, request: dict) -> dict:
                 decision = read_json(decision_path)
                 if decision.get("action") == "cancel_draft" and decision.get("reason") == request.get("reason"):
                     return decision
-            raise ATKError("WORKSPACE_CONFLICT", "candidate is not the pending draft")
+            raise ATKError("WORKSPACE_CONFLICT", "候选不是未决草稿")
         if value["status"] != "optimizing" or (folder / "candidate.json").exists():
-            raise ATKError("WORKSPACE_CONFLICT", "only an unsealed draft can be cancelled")
+            raise ATKError("WORKSPACE_CONFLICT", "只能取消未封存草稿")
         reason = request.get("reason")
         if not isinstance(reason, str) or not reason.strip():
-            raise ATKError("INCOMPLETE_EVIDENCE", "draft cancellation needs a reason")
+            raise ATKError("INCOMPLETE_EVIDENCE", "取消草稿需要原因")
         draft = read_json(folder / "draft.json")
         verify_repo(repo, expected_head=draft["parent_commit"], expected_branch=value["branch"])
         if changed_paths(repo) != set(value["baseline_untracked"]) or staged_paths(repo):
-            raise ATKError("WORKSPACE_CONFLICT", "restore or inspect draft edits before cancellation")
+            raise ATKError("WORKSPACE_CONFLICT", "取消前先恢复或检查草稿修改")
         if decision_path.exists():
             decision = read_json(decision_path)
             if (decision.get("action"), decision.get("reason"), decision.get("candidate_id")) != (
@@ -752,7 +750,7 @@ def cancel_draft(repo: Path, root: Path, request: dict) -> dict:
                 reason,
                 candidate_id,
             ):
-                raise ATKError("WORKSPACE_CONFLICT", "saved draft cancellation differs from the retry")
+                raise ATKError("WORKSPACE_CONFLICT", "已保存草稿取消记录与重试不一致")
         else:
             decision = {
                 "schema_version": 2,
@@ -775,38 +773,38 @@ def cancel_draft(repo: Path, root: Path, request: dict) -> dict:
 def _verify_sealed(repo: Path, folder: Path, candidate: dict) -> dict:
     files = read_json(folder / "files.json")
     if digest(files) != candidate["files_hash"]:
-        raise ATKError("REVISION_MISMATCH", "sealed file manifest changed")
+        raise ATKError("REVISION_MISMATCH", "封存文件 manifest 已改变")
     for name, expected in files.items():
         data = content(repo, name)
         if (data is not None) != expected["exists"] or (data is not None and digest(data) != expected["sha256"]):
-            raise ATKError("REVISION_MISMATCH", f"candidate changed after sealing: {name}")
+            raise ATKError("REVISION_MISMATCH", f"候选在封存后被修改：{name}")
         archived = folder / "files" / name
         if expected["exists"] and (not archived.is_file() or digest(archived) != expected["sha256"]):
-            raise ATKError("REVISION_MISMATCH", f"sealed candidate copy changed: {name}")
+            raise ATKError("REVISION_MISMATCH", f"封存候选副本被修改：{name}")
     return files
 
 
 def _verify_candidate_commit(repo: Path, candidate: dict, files: dict, operation: dict) -> None:
     if git(repo, "rev-list", "--parents", "-n", "1", "HEAD").decode().split()[1:] != [candidate["parent_commit"]]:
-        raise ATKError("COMMIT_FAILED", "candidate commit parent differs from its sealed checkpoint")
+        raise ATKError("COMMIT_FAILED", "候选提交父节点与封存检查点不一致")
     committed_paths = set(
         filter(None, git(repo, "diff", "--name-only", "-z", "--no-renames", "HEAD^", "HEAD").decode().split("\0"))
     )
     if committed_paths != set(files):
-        raise ATKError("COMMIT_FAILED", "candidate commit contains unsealed paths")
+        raise ATKError("COMMIT_FAILED", "候选提交包含未封存路径")
     message = git(repo, "log", "-1", "--format=%B").decode()
     if (
         f"ATK-Candidate: {candidate['id']}" not in message
         or f"ATK-Operation: {operation['id']}" not in message
         or f"ATK-Round: {candidate['round_id']}" not in message
     ):
-        raise ATKError("COMMIT_FAILED", "candidate commit identity was changed")
+        raise ATKError("COMMIT_FAILED", "候选提交身份被修改")
     for name, state in files.items():
         committed = _git_file(repo, "HEAD", name)
         if (committed is not None) != state["exists"] or (
             committed is not None and digest(committed) != state["sha256"]
         ):
-            raise ATKError("REVISION_MISMATCH", f"committed candidate content differs: {name}")
+            raise ATKError("REVISION_MISMATCH", f"已提交候选内容不一致：{name}")
 
 
 def require_override(request: dict, action: str) -> dict:
@@ -818,7 +816,7 @@ def require_override(request: dict, action: str) -> dict:
         or not authorization.get("reason")
         or not authorization.get("risk")
     ):
-        raise ATKError("WORKSPACE_CONFLICT", "override needs explicit user action, reason, and risk")
+        raise ATKError("WORKSPACE_CONFLICT", "例外需要明确的用户动作、原因和风险")
     return authorization
 
 
@@ -830,7 +828,7 @@ def _restore_parent(repo: Path, candidate: dict, files: dict) -> None:
         if current == parent:
             continue
         if (current is not None) != state["exists"] or (current is not None and digest(current) != state["sha256"]):
-            raise ATKError("GIT_OPERATION_INTERRUPTED", f"unknown restoration content requires inspection: {name}")
+            raise ATKError("GIT_OPERATION_INTERRUPTED", f"未知恢复内容需要检查：{name}")
         restore.append((name, parent))
     for name, parent in restore:
         if parent is not None:
@@ -852,34 +850,34 @@ def decide_candidate(repo: Path, root: Path, request: dict) -> dict:
     with locked(root):
         value = _round(root, request["round_id"])
         if value["status"] != "optimizing":
-            raise ATKError("WORKSPACE_CONFLICT", "Round is not optimizing")
+            raise ATKError("WORKSPACE_CONFLICT", "Round 不处于优化阶段")
         candidate_id = request["candidate_id"]
         if value["pending_candidate_id"] != candidate_id:
-            raise ATKError("WORKSPACE_CONFLICT", "candidate is not pending")
+            raise ATKError("WORKSPACE_CONFLICT", "候选不是未决候选")
         folder = _round_path(root, value["id"]) / "candidates" / candidate_id
         candidate = read_json(folder / "candidate.json")
         verify_repo(repo, expected_head=candidate["parent_commit"], expected_branch=value["branch"])
         files = _verify_sealed(repo, folder, candidate)
         if changed_paths(repo) - set(value["baseline_untracked"]) != set(files):
-            raise ATKError("WORKSPACE_CONFLICT", "unknown workspace changes appeared after sealing")
+            raise ATKError("WORKSPACE_CONFLICT", "封存后出现未知工作区修改")
         action = request["action"]
         if action not in {"keep", "reject", "defer"}:
-            raise ATKError("WORKSPACE_CONFLICT", f"unsupported candidate action: {action}")
+            raise ATKError("WORKSPACE_CONFLICT", f"不支持的候选动作：{action}")
         if not isinstance(request.get("reason"), str) or not request["reason"].strip():
-            raise ATKError("INCOMPLETE_EVIDENCE", "candidate Decision needs a reason")
+            raise ATKError("INCOMPLETE_EVIDENCE", "候选 Decision 需要原因")
         validation_id = request.get("validation_id")
         missing_reason = request.get("validation_missing_reason")
         if not validation_id and (
             action == "keep" or not isinstance(missing_reason, str) or not missing_reason.strip()
         ):
-            raise ATKError("INCOMPLETE_EVIDENCE", "missing candidate Validation needs a recorded reason")
+            raise ATKError("INCOMPLETE_EVIDENCE", "缺少候选 Validation 时必须记录原因")
         if validation_id and missing_reason:
-            raise ATKError("COMPARISON_INVALID", "candidate Validation is present; missing reason is contradictory")
+            raise ATKError("COMPARISON_INVALID", "候选 Validation 已存在；缺失原因与事实矛盾")
         if not validation_id and any(
             read_json(path).get("candidate_id") == candidate_id
             for path in (_round_path(root, value["id"]) / "validations").glob("*/validation.json")
         ):
-            raise ATKError("COMPARISON_INVALID", "existing candidate Validation must be referenced")
+            raise ATKError("COMPARISON_INVALID", "必须引用已有候选 Validation")
         validation = (
             read_json(_round_path(root, value["id"]) / "validations" / safe_id(validation_id) / "validation.json")
             if validation_id
@@ -892,20 +890,20 @@ def decide_candidate(repo: Path, root: Path, request: dict) -> dict:
             or validation.get("issue_id") != candidate["primary_issue_id"]
             or validation.get("target_case_ids") != candidate["target_case_ids"]
         ):
-            raise ATKError("COMPARISON_INVALID", "validation does not match candidate and parent")
+            raise ATKError("COMPARISON_INVALID", "验证与候选及父版本不匹配")
         override = request.get("override") is True
         if override and action != "keep":
-            raise ATKError("WORKSPACE_CONFLICT", "trial override applies only to keep")
+            raise ATKError("WORKSPACE_CONFLICT", "试用例外仅适用于 keep")
         if action == "keep" and validation["result"] != "pass" and not override:
-            raise ATKError("COMPARISON_INVALID", "keep requires a passing validation or explicit override")
+            raise ATKError("COMPARISON_INVALID", "keep 需要通过的验证或明确例外")
         authorization = require_override(request, "trial_commit") if override else None
         if action == "keep":
             blockers = [_latest_issue(root, value["id"], issue_id) for issue_id in candidate["blocked_by_issue_ids"]]
             if any(issue is None for issue in blockers):
-                raise ATKError("INCOMPLETE_EVIDENCE", "candidate blocking Issue disappeared")
+                raise ATKError("INCOMPLETE_EVIDENCE", "候选阻塞 Issue 已消失")
             unresolved = [issue for issue in blockers if issue["resolution"] != "resolved"]
             if unresolved and (candidate["change_kind"] != "workaround" or validation["result"] != "pass"):
-                raise ATKError("WORKSPACE_CONFLICT", "unresolved external Issue blocks candidate adoption")
+                raise ATKError("WORKSPACE_CONFLICT", "未解决外部 Issue 阻断候选采用")
         operation = {
             "id": new_id("operation"),
             "action": action,
@@ -927,39 +925,37 @@ def decide_candidate(repo: Path, root: Path, request: dict) -> dict:
         if action == "keep":
             git(repo, "--literal-pathspecs", "add", "-A", "--", *candidate["changed_paths"])
             if staged_paths(repo) != set(files):
-                raise ATKError("COMMIT_FAILED", "index contains unexpected paths; operation is recorded")
+                raise ATKError("COMMIT_FAILED", "暂存区含意外路径；操作已记录")
             for name, expected in files.items():
                 staged = _git_file(repo, "", name)
                 if (staged is not None) != expected["exists"] or (
                     staged is not None and digest(staged) != expected["sha256"]
                 ):
-                    raise ATKError("REVISION_MISMATCH", f"index content differs from sealed candidate: {name}")
+                    raise ATKError("REVISION_MISMATCH", f"暂存内容与封存候选不一致：{name}")
             try:
                 git(
                     repo,
                     "commit",
                     "-m",
-                    request.get("message", f"feat: [agent] ATK {candidate_id}"),
+                    request.get("message", f"feat: [agent] 采用 ATK 候选 {candidate_id}"),
                     "-m",
                     f"ATK-Round: {value['id']}\nATK-Candidate: {candidate_id}\nATK-Operation: {operation['id']}",
                 )
             except ATKError as exc:
-                raise ATKError(
-                    "COMMIT_FAILED", f"commit failed; operation {operation['id']} needs inspection: {exc}"
-                ) from exc
+                raise ATKError("COMMIT_FAILED", f"提交失败；操作 {operation['id']} 需要检查：{exc}") from exc
             operation["stage"] = "committed"
             operation["commit"] = head(repo)
             write_json(op_path, operation)
             _verify_candidate_commit(repo, candidate, files, operation)
             if changed_paths(repo) != set(value["baseline_untracked"]) or staged_paths(repo):
-                raise ATKError("COMMIT_FAILED", "workspace not clean after commit; operation requires inspection")
+                raise ATKError("COMMIT_FAILED", "提交后工作区不干净；操作需要检查")
             value["current_commit"] = operation["commit"]
             value["current_revision_id"] = candidate["revision_id"]
             value["active_candidate_ids"].append(candidate_id)
         else:
             _restore_parent(repo, candidate, files)
             if changed_paths(repo) != set(value["baseline_untracked"]):
-                raise ATKError("GIT_OPERATION_INTERRUPTED", "restoration incomplete; operation requires inspection")
+                raise ATKError("GIT_OPERATION_INTERRUPTED", "恢复未完成；操作需要检查")
             operation["stage"] = "restored"
             write_json(op_path, operation)
         decision = {
@@ -1000,7 +996,7 @@ def _recover_restoration_locked(repo: Path, root: Path, folder: Path, operation:
         or operation.get("files_hash") != candidate["files_hash"]
         or digest(files) != candidate["files_hash"]
     ):
-        raise ATKError("GIT_OPERATION_INTERRUPTED", "restore operation identity differs from sealed candidate")
+        raise ATKError("GIT_OPERATION_INTERRUPTED", "恢复操作身份与封存候选不一致")
     decision_path = candidate_folder / "decision.json"
     decision = read_json(decision_path) if decision_path.exists() else None
     expected = {
@@ -1014,22 +1010,22 @@ def _recover_restoration_locked(repo: Path, root: Path, folder: Path, operation:
         "after_commit": candidate["parent_commit"],
     }
     if decision and any(decision.get(key) != item for key, item in expected.items()):
-        raise ATKError("GIT_OPERATION_INTERRUPTED", "saved Decision disagrees with restoration")
+        raise ATKError("GIT_OPERATION_INTERRUPTED", "已保存 Decision 与恢复结果不一致")
     if value["pending_candidate_id"] != candidate_id:
         if operation.get("stage") == "complete" and decision:
             return {"stage": "complete", "decision": decision}
         if value["pending_candidate_id"] is not None or not decision:
-            raise ATKError("GIT_OPERATION_INTERRUPTED", "restore operation is not the pending candidate")
+            raise ATKError("GIT_OPERATION_INTERRUPTED", "恢复操作不是未决候选")
     if operation.get("stage") not in {"prepared", "restored"}:
-        raise ATKError("GIT_OPERATION_INTERRUPTED", "restore operation stage is inconsistent")
+        raise ATKError("GIT_OPERATION_INTERRUPTED", "恢复操作阶段不一致")
     if value["current_commit"] != candidate["parent_commit"]:
-        raise ATKError("GIT_OPERATION_INTERRUPTED", "Round checkpoint changed during restoration")
+        raise ATKError("GIT_OPERATION_INTERRUPTED", "恢复期间 Round 检查点改变")
     verify_repo(repo, expected_head=candidate["parent_commit"], expected_branch=value["branch"])
     if changed_paths(repo) - set(value["baseline_untracked"]) - set(files):
-        raise ATKError("GIT_OPERATION_INTERRUPTED", "unknown workspace changes appeared during restoration")
+        raise ATKError("GIT_OPERATION_INTERRUPTED", "恢复期间出现未知工作区修改")
     _restore_parent(repo, candidate, files)
     if changed_paths(repo) != set(value["baseline_untracked"]):
-        raise ATKError("GIT_OPERATION_INTERRUPTED", "restoration did not reach the parent checkpoint")
+        raise ATKError("GIT_OPERATION_INTERRUPTED", "恢复未到达父检查点")
     if operation["stage"] != "restored":
         operation["stage"] = "restored"
         write_json(folder / "operations" / f"{operation['id']}.json", operation)
@@ -1059,7 +1055,7 @@ def inspect_or_recover_operation(repo: Path, root: Path, request: dict) -> dict:
         for path in (root / "rounds").glob("*/round.json"):
             other = read_json(path)
             if other["id"] != request["round_id"] and other["status"] in {"ready", "optimizing", "finalizing"}:
-                raise ATKError("WORKSPACE_CONFLICT", "pause or close the other active Round before recovery")
+                raise ATKError("WORKSPACE_CONFLICT", "恢复操作前先暂停或关闭其他活跃 Round")
         folder = _round_path(root, request["round_id"])
         operation = read_json(folder / "operations" / f"{safe_id(request['operation_id'])}.json")
         if operation.get("action") == "temporary_replay":
@@ -1069,7 +1065,7 @@ def inspect_or_recover_operation(repo: Path, root: Path, request: dict) -> dict:
         if operation.get("action") in {"reject", "defer"}:
             return _recover_restoration_locked(repo, root, folder, operation)
         if operation.get("action") != "keep":
-            raise ATKError("GIT_OPERATION_INTERRUPTED", "unknown candidate operation action")
+            raise ATKError("GIT_OPERATION_INTERRUPTED", "未知候选操作动作")
         candidate_id = operation["candidate_id"]
         candidate_folder = folder / "candidates" / candidate_id
         decision_path = candidate_folder / "decision.json"
@@ -1089,7 +1085,7 @@ def inspect_or_recover_operation(repo: Path, root: Path, request: dict) -> dict:
                 or decision.get("validation_id") != operation["validation_id"]
                 or decision.get("before_commit") != candidate["parent_commit"]
             ):
-                raise ATKError("GIT_OPERATION_INTERRUPTED", "completed operation identity is inconsistent")
+                raise ATKError("GIT_OPERATION_INTERRUPTED", "已完成操作身份不一致")
             if operation.get("stage") == "complete" and decision.get("after_commit") == operation.get("commit"):
                 return {"stage": "complete", "decision": decision}
             if (
@@ -1101,51 +1097,51 @@ def inspect_or_recover_operation(repo: Path, root: Path, request: dict) -> dict:
                 or head(repo) != value["current_commit"]
                 or (operation.get("commit") and operation["commit"] != value["current_commit"])
             ):
-                raise ATKError("GIT_OPERATION_INTERRUPTED", "Round changed after candidate Decision was saved")
+                raise ATKError("GIT_OPERATION_INTERRUPTED", "保存候选 Decision 后 Round 已改变")
             _verify_candidate_commit(repo, candidate, files, operation)
             if changed_paths(repo) != set(value["baseline_untracked"]) or staged_paths(repo):
-                raise ATKError("GIT_OPERATION_INTERRUPTED", "workspace differs after candidate commit")
+                raise ATKError("GIT_OPERATION_INTERRUPTED", "候选提交后工作区不一致")
             operation["commit"] = value["current_commit"]
             operation["stage"] = "complete"
             write_json(folder / "operations" / f"{operation['id']}.json", operation)
             return {"stage": "complete", "decision": decision}
         if value["pending_candidate_id"] != candidate_id:
-            raise ATKError("GIT_OPERATION_INTERRUPTED", "operation is not the pending candidate")
+            raise ATKError("GIT_OPERATION_INTERRUPTED", "操作不是未决候选")
         if (
             operation.get("parent_commit") != candidate["parent_commit"]
             or operation.get("files_hash") != candidate["files_hash"]
             or operation.get("round_id") != value["id"]
         ):
-            raise ATKError("GIT_OPERATION_INTERRUPTED", "operation identity differs from sealed candidate")
+            raise ATKError("GIT_OPERATION_INTERRUPTED", "操作身份与封存候选不一致")
         actual_head = head(repo)
         if actual_head == candidate["parent_commit"] and not decision_path.exists():
             if branch(repo) != value["branch"] or operation["stage"] not in {"prepared", "aborted"}:
-                raise ATKError("GIT_OPERATION_INTERRUPTED", "pre-commit operation state is unknown")
+                raise ATKError("GIT_OPERATION_INTERRUPTED", "提交前操作状态未知")
             _verify_sealed(repo, candidate_folder, candidate)
             if (changed_paths(repo) | staged_paths(repo)) - set(value["baseline_untracked"]) != set(files):
-                raise ATKError("GIT_OPERATION_INTERRUPTED", "candidate workspace changed during commit attempt")
+                raise ATKError("GIT_OPERATION_INTERRUPTED", "提交 attempt 期间候选工作区改变")
             staged = staged_paths(repo)
             if staged - set(files):
-                raise ATKError("GIT_OPERATION_INTERRUPTED", "unknown staged paths require inspection")
+                raise ATKError("GIT_OPERATION_INTERRUPTED", "未知暂存路径需要检查")
             for name in staged:
                 state = files[name]
                 indexed = _git_file(repo, "", name)
                 if (indexed is not None) != state["exists"] or (
                     indexed is not None and digest(indexed) != state["sha256"]
                 ):
-                    raise ATKError("GIT_OPERATION_INTERRUPTED", "staged content differs from sealed candidate")
+                    raise ATKError("GIT_OPERATION_INTERRUPTED", "暂存内容与封存候选不一致")
             if staged:
                 git(repo, "--literal-pathspecs", "restore", "--staged", "--", *sorted(staged))
             if staged_paths(repo):
-                raise ATKError("GIT_OPERATION_INTERRUPTED", "candidate index was not restored")
+                raise ATKError("GIT_OPERATION_INTERRUPTED", "候选暂存区未恢复")
             operation["stage"] = "aborted"
             write_json(folder / "operations" / f"{operation['id']}.json", operation)
             return {"stage": "aborted", "candidate_id": candidate_id}
         if branch(repo) != value["branch"]:
-            raise ATKError("GIT_OPERATION_INTERRUPTED", "branch changed during candidate commit")
+            raise ATKError("GIT_OPERATION_INTERRUPTED", "候选提交期间分支改变")
         _verify_candidate_commit(repo, candidate, files, operation)
         if changed_paths(repo) != set(value["baseline_untracked"]) or staged_paths(repo):
-            raise ATKError("GIT_OPERATION_INTERRUPTED", "workspace differs after candidate commit")
+            raise ATKError("GIT_OPERATION_INTERRUPTED", "候选提交后工作区不一致")
         decision = (
             read_json(decision_path)
             if decision_path.exists()
@@ -1171,7 +1167,7 @@ def inspect_or_recover_operation(repo: Path, root: Path, request: dict) -> dict:
             or decision["after_commit"] != actual_head
             or decision["validation_id"] != operation["validation_id"]
         ):
-            raise ATKError("GIT_OPERATION_INTERRUPTED", "saved Decision disagrees with candidate commit")
+            raise ATKError("GIT_OPERATION_INTERRUPTED", "已保存 Decision 与候选提交不一致")
         if not decision_path.exists():
             write_json(decision_path, decision, immutable=True)
         value["pending_candidate_id"] = None
@@ -1188,12 +1184,12 @@ def inspect_or_recover_operation(repo: Path, root: Path, request: dict) -> dict:
 def _recover_temporary_replay_locked(repo: Path, root: Path, folder: Path, operation: dict) -> dict:
     value = _round(root, folder.name)
     if operation.get("round_id", value["id"]) != value["id"]:
-        raise ATKError("GIT_OPERATION_INTERRUPTED", "replay operation belongs to another Round")
+        raise ATKError("GIT_OPERATION_INTERRUPTED", "重放操作属于其他 Round")
     stage = operation.get("stage")
     if stage in {"complete", "aborted"}:
         return {"stage": stage, "round_id": value["id"]}
     if stage not in {"prepared", "switching", "switched"}:
-        raise ATKError("GIT_OPERATION_INTERRUPTED", "replay operation stage is inconsistent")
+        raise ATKError("GIT_OPERATION_INTERRUPTED", "重放操作阶段不一致")
     target = operation.get("target_commit")
     known = {value["baseline_commit"]}
     known.update(
@@ -1216,7 +1212,7 @@ def _recover_temporary_replay_locked(repo: Path, root: Path, folder: Path, opera
             if expected["exists"]
         )
     ):
-        raise ATKError("GIT_OPERATION_INTERRUPTED", "sealed replay source changed")
+        raise ATKError("GIT_OPERATION_INTERRUPTED", "封存重放源已改变")
     if (
         operation.get("candidate_id") != candidate_id
         or operation.get("before_commit") != value["current_commit"]
@@ -1224,20 +1220,20 @@ def _recover_temporary_replay_locked(repo: Path, root: Path, folder: Path, opera
         or not preparation
         or operation.get("replay_preparation_hash") != digest(preparation)
     ):
-        raise ATKError("GIT_OPERATION_INTERRUPTED", "replay operation differs from the current checkpoint")
+        raise ATKError("GIT_OPERATION_INTERRUPTED", "重放操作与当前检查点不一致")
     paths = set(operation.get("paths", []))
     expected_paths = set(
         filter(None, git(repo, "diff", "--name-only", "-z", target, value["current_commit"]).decode().split("\0"))
     )
     if paths != expected_paths | set(files):
-        raise ATKError("GIT_OPERATION_INTERRUPTED", "replay paths differ from the current checkpoint")
+        raise ATKError("GIT_OPERATION_INTERRUPTED", "重放路径与当前检查点不一致")
     verify_repo(repo, expected_head=value["current_commit"], expected_branch=value["branch"])
     if changed_paths(repo) - set(value["baseline_untracked"]) - paths:
-        raise ATKError("GIT_OPERATION_INTERRUPTED", "unknown workspace changes appeared during replay")
+        raise ATKError("GIT_OPERATION_INTERRUPTED", "重放期间出现未知工作区修改")
     for name in paths:
         before = _sealed_replay_content(repo, name, value["current_commit"], candidate_folder, files)
         if content(repo, name) not in {_git_file(repo, target, name), before}:
-            raise ATKError("GIT_OPERATION_INTERRUPTED", f"replay source has unknown content: {name}")
+            raise ATKError("GIT_OPERATION_INTERRUPTED", f"重放源含未知内容：{name}")
     for name in sorted(paths):
         _write_replay_file(
             repo,
@@ -1251,7 +1247,7 @@ def _recover_temporary_replay_locked(repo: Path, root: Path, folder: Path, opera
     else:
         _verify_restored_content(repo, value["current_commit"], paths)
     if changed_paths(repo) != set(value["baseline_untracked"]) | set(files) or staged_paths(repo):
-        raise ATKError("GIT_OPERATION_INTERRUPTED", "replay recovery did not restore the starting checkpoint")
+        raise ATKError("GIT_OPERATION_INTERRUPTED", "重放恢复未还原开始时检查点")
     operation["stage"] = "aborted"
     write_json(folder / "operations" / f"{operation['id']}.json", operation)
     return {"stage": "aborted", "round_id": value["id"]}
@@ -1259,17 +1255,17 @@ def _recover_temporary_replay_locked(repo: Path, root: Path, folder: Path, opera
 
 def _verify_rollback_commit(repo: Path, operation: dict) -> None:
     if git(repo, "rev-list", "--parents", "-n", "1", "HEAD").decode().split()[1:] != [operation["before_commit"]]:
-        raise ATKError("GIT_OPERATION_INTERRUPTED", "rollback commit parent changed")
+        raise ATKError("GIT_OPERATION_INTERRUPTED", "回退提交父节点改变")
     if git(repo, "rev-parse", "HEAD^{tree}") != git(repo, "rev-parse", f"{operation['target_commit']}^{{tree}}"):
-        raise ATKError("GIT_OPERATION_INTERRUPTED", "rollback commit tree differs from target checkpoint")
+        raise ATKError("GIT_OPERATION_INTERRUPTED", "回退提交树与目标检查点不一致")
     paths = set(
         filter(None, git(repo, "diff", "--name-only", "-z", "--no-renames", "HEAD^", "HEAD").decode().split("\0"))
     )
     if paths != set(operation["paths"]):
-        raise ATKError("GIT_OPERATION_INTERRUPTED", "rollback commit contains unexpected paths")
+        raise ATKError("GIT_OPERATION_INTERRUPTED", "回退提交包含意外路径")
     message = git(repo, "log", "-1", "--format=%B").decode()
     if f"ATK-Round: {operation['round_id']}" not in message or f"ATK-Rollback: {operation['id']}" not in message:
-        raise ATKError("GIT_OPERATION_INTERRUPTED", "rollback commit identity was changed")
+        raise ATKError("GIT_OPERATION_INTERRUPTED", "回退提交身份被修改")
 
 
 def _recover_rollback_locked(repo: Path, folder: Path, operation: dict) -> dict:
@@ -1282,22 +1278,22 @@ def _recover_rollback_locked(repo: Path, folder: Path, operation: dict) -> dict:
             or decision.get("operation_id") != operation["id"]
             or decision.get("after_commit") != operation.get("after_commit")
         ):
-            raise ATKError("GIT_OPERATION_INTERRUPTED", "completed rollback identity is inconsistent")
+            raise ATKError("GIT_OPERATION_INTERRUPTED", "已完成回退身份不一致")
         return {"stage": "complete", "decision": decision}
     if value["current_commit"] != operation["before_commit"] or value["pending_candidate_id"]:
-        raise ATKError("GIT_OPERATION_INTERRUPTED", "Round changed during rollback")
+        raise ATKError("GIT_OPERATION_INTERRUPTED", "回退期间 Round 改变")
     if value["active_candidate_ids"][operation["target_index"] :] != operation["withdrawn_candidate_ids"]:
-        raise ATKError("GIT_OPERATION_INTERRUPTED", "accepted chain differs from rollback record")
+        raise ATKError("GIT_OPERATION_INTERRUPTED", "已采用链与回退记录不一致")
     if branch(repo) != value["branch"]:
-        raise ATKError("GIT_OPERATION_INTERRUPTED", "branch changed during rollback")
+        raise ATKError("GIT_OPERATION_INTERRUPTED", "回退期间分支改变")
     paths = operation["paths"]
     if head(repo) == operation["before_commit"] and not decision_path.exists():
         if operation["stage"] not in {"prepared", "aborted"}:
-            raise ATKError("GIT_OPERATION_INTERRUPTED", "rollback commit disappeared after recording")
+            raise ATKError("GIT_OPERATION_INTERRUPTED", "回退提交在记录后消失")
         if staged_paths(repo) - set(paths):
-            raise ATKError("GIT_OPERATION_INTERRUPTED", "unknown staged paths require inspection")
+            raise ATKError("GIT_OPERATION_INTERRUPTED", "未知暂存路径需要检查")
         if (changed_paths(repo) | staged_paths(repo)) - set(value["baseline_untracked"]) - set(paths):
-            raise ATKError("GIT_OPERATION_INTERRUPTED", "unknown workspace changes appeared during rollback")
+            raise ATKError("GIT_OPERATION_INTERRUPTED", "回退期间出现未知工作区修改")
         for name in paths:
             known = {
                 _git_file(repo, operation["before_commit"], name),
@@ -1306,7 +1302,7 @@ def _recover_rollback_locked(repo: Path, folder: Path, operation: dict) -> dict:
             if content(repo, name) not in known or (
                 name in staged_paths(repo) and _git_file(repo, "", name) not in known
             ):
-                raise ATKError("GIT_OPERATION_INTERRUPTED", f"unknown rollback content requires inspection: {name}")
+                raise ATKError("GIT_OPERATION_INTERRUPTED", f"未知回退内容需要检查：{name}")
         if paths:
             git(
                 repo,
@@ -1322,14 +1318,14 @@ def _recover_rollback_locked(repo: Path, folder: Path, operation: dict) -> dict:
                 git(repo, "--literal-pathspecs", "restore", "--staged", "--", *sorted(staged))
         _verify_restored_content(repo, operation["before_commit"], paths)
         if changed_paths(repo) != set(value["baseline_untracked"]) or staged_paths(repo):
-            raise ATKError("GIT_OPERATION_INTERRUPTED", "rollback abort did not restore the starting checkpoint")
+            raise ATKError("GIT_OPERATION_INTERRUPTED", "中止回退未还原开始时检查点")
         operation["stage"] = "aborted"
         write_json(folder / "operations" / f"{operation['id']}.json", operation)
         return {"stage": "aborted", "round_id": value["id"]}
     _verify_rollback_commit(repo, operation)
     _verify_restored_content(repo, operation["target_commit"], paths)
     if changed_paths(repo) != set(value["baseline_untracked"]) or staged_paths(repo):
-        raise ATKError("GIT_OPERATION_INTERRUPTED", "workspace differs after rollback commit")
+        raise ATKError("GIT_OPERATION_INTERRUPTED", "回退提交后工作区不一致")
     decision = (
         read_json(decision_path)
         if decision_path.exists()
@@ -1348,7 +1344,7 @@ def _recover_rollback_locked(repo: Path, folder: Path, operation: dict) -> dict:
         }
     )
     if decision["after_commit"] != head(repo) or decision["operation_id"] != operation["id"]:
-        raise ATKError("GIT_OPERATION_INTERRUPTED", "saved rollback Decision disagrees with commit")
+        raise ATKError("GIT_OPERATION_INTERRUPTED", "已保存回退 Decision 与提交不一致")
     if not decision_path.exists():
         write_json(decision_path, decision, immutable=True)
     value["active_candidate_ids"] = value["active_candidate_ids"][: operation["target_index"]]
@@ -1369,12 +1365,12 @@ def rollback_to(repo: Path, root: Path, request: dict) -> dict:
     with locked(root):
         value = _round(root, request["round_id"])
         if value["status"] not in {"ready", "optimizing", "finalizing"}:
-            raise ATKError("WORKSPACE_CONFLICT", "round cannot be rolled back from its current state")
+            raise ATKError("WORKSPACE_CONFLICT", "当前状态不允许回退 Round")
         if value["pending_candidate_id"]:
-            raise ATKError("WORKSPACE_CONFLICT", "resolve pending candidate before rollback")
+            raise ATKError("WORKSPACE_CONFLICT", "回退前先处理未决候选")
         verify_repo(repo, expected_head=value["current_commit"], expected_branch=value["branch"])
         if changed_paths(repo) != set(value["baseline_untracked"]):
-            raise ATKError("WORKSPACE_CONFLICT", "unaccounted changes block rollback")
+            raise ATKError("WORKSPACE_CONFLICT", "未解释修改阻断回退")
         folder = _round_path(root, value["id"])
         checkpoints = [(value["baseline_commit"], value["baseline_revision_id"], 0)]
         for index, candidate_id in enumerate(value["active_candidate_ids"], 1):
@@ -1389,13 +1385,13 @@ def rollback_to(repo: Path, root: Path, request: dict) -> dict:
         target_commit = request["target_commit"]
         match = next(((revision, index) for commit, revision, index in checkpoints if commit == target_commit), None)
         if match is None or target_commit == value["current_commit"]:
-            raise ATKError("WORKSPACE_CONFLICT", "rollback target is not an earlier active checkpoint")
+            raise ATKError("WORKSPACE_CONFLICT", "回退目标不是更早的活跃检查点")
         changed = set(filter(None, git(repo, "diff", "--name-only", "-z", target_commit, "HEAD").decode().split("\0")))
         plan = read_json(folder / "plan.json")
         if any(
             not _allowed(name, plan["allowed_paths"]) or _allowed(name, plan["protected_paths"]) for name in changed
         ):
-            raise ATKError("SCOPE_VIOLATION", "rollback diff includes paths outside candidate scope")
+            raise ATKError("SCOPE_VIOLATION", "回退差异包含候选范围外路径")
         operation = {
             "id": new_id("operation"),
             "decision_id": new_id("decision"),
@@ -1426,19 +1422,19 @@ def rollback_to(repo: Path, root: Path, request: dict) -> dict:
             _verify_restored_content(repo, target_commit, changed)
             git(repo, "--literal-pathspecs", "add", "-A", "--", *sorted(changed))
         if staged_paths(repo) != changed:
-            raise ATKError("GIT_OPERATION_INTERRUPTED", "rollback index differs from expected paths")
+            raise ATKError("GIT_OPERATION_INTERRUPTED", "回退暂存区与预期路径不一致")
         try:
             git(
                 repo,
                 "commit",
                 *(["--allow-empty"] if not changed else []),
                 "-m",
-                f"revert: [agent] ATK rollback {operation['id']}",
+                f"revert: [agent] 回退 ATK 操作 {operation['id']}",
                 "-m",
                 f"ATK-Round: {value['id']}\nATK-Rollback: {operation['id']}",
             )
         except ATKError as exc:
-            raise ATKError("COMMIT_FAILED", f"rollback operation {operation['id']} needs inspection: {exc}") from exc
+            raise ATKError("COMMIT_FAILED", f"回退操作 {operation['id']} 需要检查：{exc}") from exc
         operation["stage"] = "committed"
         write_json(op_path, operation)
         _verify_rollback_commit(repo, operation)
@@ -1453,28 +1449,28 @@ def temporary_revision(repo: Path, root: Path, round_id: str, target_commit: str
         candidate_id = value["pending_candidate_id"]
         candidate_folder = _round_path(root, round_id) / "candidates" / candidate_id if candidate_id else None
         if candidate_folder and not (candidate_folder / "candidate.json").is_file():
-            raise ATKError("WORKSPACE_CONFLICT", "temporary replay needs a sealed candidate")
+            raise ATKError("WORKSPACE_CONFLICT", "临时重放需要封存候选")
         candidate = read_json(candidate_folder / "candidate.json") if candidate_folder else None
         files = _verify_sealed(repo, candidate_folder, candidate) if candidate else {}
         verify_repo(repo, expected_head=value["current_commit"], expected_branch=value["branch"])
         if changed_paths(repo) != set(value["baseline_untracked"]) | set(files):
-            raise ATKError("WORKSPACE_CONFLICT", "unaccounted changes block temporary replay")
+            raise ATKError("WORKSPACE_CONFLICT", "未解释修改阻断临时重放")
         known = {value["baseline_commit"]}
         for active_id in value["active_candidate_ids"]:
             decision = read_json(_round_path(root, round_id) / "candidates" / active_id / "decision.json")
             known.add(decision["after_commit"])
         if target_commit not in known:
-            raise ATKError("REVISION_MISMATCH", "temporary replay target is not a recorded checkpoint")
+            raise ATKError("REVISION_MISMATCH", "临时重放目标不是已记录检查点")
         paths = set(
             filter(None, git(repo, "diff", "--name-only", "-z", target_commit, "HEAD").decode().split("\0"))
         ) | set(files)
         for name in paths:
             current = _sealed_replay_content(repo, name, value["current_commit"], candidate_folder, files)
             if content(repo, name) != current:
-                raise ATKError("WORKSPACE_CONFLICT", f"replay path differs from sealed source: {name}")
+                raise ATKError("WORKSPACE_CONFLICT", f"重放路径与封存源不一致：{name}")
         preparation = read_json(_round_path(root, round_id) / "plan.json").get("replay_preparation")
         if not preparation:
-            raise ATKError("NOT_REPLAYABLE", "Round has no frozen replay preparation")
+            raise ATKError("NOT_REPLAYABLE", "Round 未冻结重放准备")
         operation = {
             "id": new_id("operation"),
             "action": "temporary_replay",
@@ -1497,7 +1493,7 @@ def temporary_revision(repo: Path, root: Path, round_id: str, target_commit: str
             for name in sorted(paths):
                 _write_replay_file(repo, name, _git_file(repo, target_commit, name), target_commit)
             if any(content(repo, name) != _git_file(repo, target_commit, name) for name in paths):
-                raise ATKError("GIT_OPERATION_INTERRUPTED", "target source differs after replay switch")
+                raise ATKError("GIT_OPERATION_INTERRUPTED", "重放切换后目标源码不一致")
             _prepare_replay(repo, preparation)
             target_changes = {
                 name
@@ -1510,14 +1506,14 @@ def temporary_revision(repo: Path, root: Path, round_id: str, target_commit: str
                 or changed_paths(repo) != target_changes | set(value["baseline_untracked"])
                 or any(content(repo, name) != _git_file(repo, target_commit, name) for name in paths)
             ):
-                raise ATKError("GIT_OPERATION_INTERRUPTED", "replay preparation changed source or Git state")
+                raise ATKError("GIT_OPERATION_INTERRUPTED", "重放准备改变了源码或 Git 状态")
             operation["stage"] = "switched"
             write_json(op_path, operation)
             ready = True
             yield
         finally:
             if head(repo) != value["current_commit"] or staged_paths(repo):
-                raise ATKError("GIT_OPERATION_INTERRUPTED", "HEAD or index changed during temporary replay")
+                raise ATKError("GIT_OPERATION_INTERRUPTED", "临时重放期间 HEAD 或暂存区改变")
             if any(
                 content(repo, name)
                 not in {
@@ -1526,7 +1522,7 @@ def temporary_revision(repo: Path, root: Path, round_id: str, target_commit: str
                 }
                 for name in paths
             ):
-                raise ATKError("GIT_OPERATION_INTERRUPTED", "replay source has unknown content; inspection required")
+                raise ATKError("GIT_OPERATION_INTERRUPTED", "重放源含未知内容，需要检查")
             for name in sorted(paths):
                 _write_replay_file(
                     repo,
@@ -1540,7 +1536,7 @@ def temporary_revision(repo: Path, root: Path, round_id: str, target_commit: str
             else:
                 _verify_restored_content(repo, value["current_commit"], paths)
             if changed_paths(repo) != set(value["baseline_untracked"]) | set(files):
-                raise ATKError("GIT_OPERATION_INTERRUPTED", "temporary replay did not restore starting checkpoint")
+                raise ATKError("GIT_OPERATION_INTERRUPTED", "临时重放未还原开始时检查点")
             operation["stage"] = "complete" if ready else "aborted"
             write_json(op_path, operation)
 
@@ -1558,11 +1554,11 @@ def _prepare_replay(repo: Path, preparation: dict) -> None:
                 with suppress(ProcessLookupError):
                     os.killpg(process.pid, signal.SIGKILL)
                 process.communicate()
-                raise ATKError("NOT_REPLAYABLE", f"replay preparation timed out: {exc}") from exc
+                raise ATKError("NOT_REPLAYABLE", f"重放准备超时：{exc}") from exc
     except OSError as exc:
-        raise ATKError("NOT_REPLAYABLE", f"replay preparation failed: {exc}") from exc
+        raise ATKError("NOT_REPLAYABLE", f"重放准备失败：{exc}") from exc
     if process.returncode:
-        raise ATKError("NOT_REPLAYABLE", f"replay preparation exited with {process.returncode}")
+        raise ATKError("NOT_REPLAYABLE", f"重放准备退出码为 {process.returncode}")
 
 
 @contextmanager
@@ -1571,22 +1567,22 @@ def execution_revision(repo: Path, root: Path, request: dict):
     round_id = request.get("round_id")
     if not round_id:
         if not request.get("revision_commit"):
-            raise ATKError("REVISION_MISMATCH", "unfrozen run requires an explicit revision_commit")
+            raise ATKError("REVISION_MISMATCH", "未冻结运行需要明确的 revision_commit")
         verify_repo(repo, expected_head=request["revision_commit"])
         if git(repo, "diff", "--name-only", "-z"):
-            raise ATKError("DIRTY_BASELINE", "unfrozen local run requires a clean tracked worktree")
+            raise ATKError("DIRTY_BASELINE", "未冻结本地运行需要干净的已跟踪工作区")
         initial_paths = changed_paths(repo)
         yield
         if head(repo) != request["revision_commit"] or staged_paths(repo) or changed_paths(repo) != initial_paths:
-            raise ATKError("WORKSPACE_CONFLICT", "runner changed unfrozen source or Git state")
+            raise ATKError("WORKSPACE_CONFLICT", "runner 改变了未冻结源码或 Git 状态")
         return
     value = _round(root, round_id)
     if value["status"] not in {"analysis_only", "ready", "optimizing", "finalizing"}:
-        raise ATKError("WORKSPACE_CONFLICT", "Round is paused or closed")
+        raise ATKError("WORKSPACE_CONFLICT", "Round 已暂停或关闭")
     revision_id = request["revision_id"]
     if value["baseline_commit"] is None:
         if request["purpose"] != "diagnostic_probe" or revision_id is not None:
-            raise ATKError("REVISION_MISMATCH", "unfrozen analysis only permits a probe without source Revision")
+            raise ATKError("REVISION_MISMATCH", "未冻结仅分析模式只允许无源码 Revision 的探针")
         yield
         return
     if value["pending_candidate_id"]:
@@ -1601,14 +1597,14 @@ def execution_revision(repo: Path, root: Path, request: dict):
                 ]
             target = checkpoints.get(revision_id)
             if not target:
-                raise ATKError("REVISION_MISMATCH", "run request names an unknown Revision")
+                raise ATKError("REVISION_MISMATCH", "运行请求指定了未知 Revision")
             with temporary_revision(repo, root, round_id, target):
                 yield
             return
         verify_repo(repo, expected_head=candidate["parent_commit"], expected_branch=value["branch"])
         _verify_sealed(repo, folder, candidate)
         if changed_paths(repo) - set(value["baseline_untracked"]) != set(candidate["changed_paths"]):
-            raise ATKError("WORKSPACE_CONFLICT", "candidate workspace has extra changes")
+            raise ATKError("WORKSPACE_CONFLICT", "候选工作区有额外修改")
         yield
         _verify_sealed(repo, folder, candidate)
         if (
@@ -1616,7 +1612,7 @@ def execution_revision(repo: Path, root: Path, request: dict):
             or staged_paths(repo)
             or changed_paths(repo) - set(value["baseline_untracked"]) != set(candidate["changed_paths"])
         ):
-            raise ATKError("WORKSPACE_CONFLICT", "runner changed candidate Git state")
+            raise ATKError("WORKSPACE_CONFLICT", "runner 改变了候选 Git 状态")
         return
     checkpoints = {value["baseline_revision_id"]: value["baseline_commit"]}
     for candidate_id in value["active_candidate_ids"]:
@@ -1626,18 +1622,18 @@ def execution_revision(repo: Path, root: Path, request: dict):
         ]
     target = checkpoints.get(revision_id)
     if not target:
-        raise ATKError("REVISION_MISMATCH", "run request names an unknown Revision")
+        raise ATKError("REVISION_MISMATCH", "运行请求指定了未知 Revision")
     if revision_id == value["current_revision_id"]:
         verify_repo(repo, expected_head=value["current_commit"], expected_branch=value["branch"])
         if changed_paths(repo) != set(value["baseline_untracked"]):
-            raise ATKError("WORKSPACE_CONFLICT", "current checkpoint workspace is dirty")
+            raise ATKError("WORKSPACE_CONFLICT", "当前检查点工作区不干净")
         yield
         if (
             head(repo) != value["current_commit"]
             or staged_paths(repo)
             or changed_paths(repo) != set(value["baseline_untracked"])
         ):
-            raise ATKError("WORKSPACE_CONFLICT", "runner changed current checkpoint source")
+            raise ATKError("WORKSPACE_CONFLICT", "runner 改变了当前检查点源码")
     else:
         with temporary_revision(repo, root, round_id, target):
             yield

@@ -58,8 +58,8 @@ class InstallPluginCliTests(unittest.TestCase):
             ]
             result = run_cli("preview", *common)
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("Will install Agent Tune Kit", result.stdout)
-            self.assertIn("No files changed", result.stdout)
+            self.assertIn("将为 Codex 安装 Agent Tune Kit", result.stdout)
+            self.assertIn("未修改文件", result.stdout)
             self.assertFalse((base / "marketplace.json").exists())
             self.assertFalse((base / "plugins" / "agent-tune-kit").exists())
             self.assertFalse((base / "backups").exists())
@@ -89,7 +89,7 @@ class InstallPluginCliTests(unittest.TestCase):
     def test_script_wrapper_delegates_to_atk_cli(self) -> None:
         result = run_script("--help")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("Register Agent Tune Kit", result.stdout)
+        self.assertIn("将 Agent Tune Kit 注册", result.stdout)
 
     def test_install_happy_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -102,7 +102,7 @@ class InstallPluginCliTests(unittest.TestCase):
                 str(base / "plugins"),
             )
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("installed locally for Codex", result.stdout)
+            self.assertIn("已为 Codex 本地安装 Agent Tune Kit", result.stdout)
             self.assertLessEqual(len(result.stdout.splitlines()), 3)
             for detail in ("payload", "smoke", "backup", "rollback", "status:"):
                 self.assertNotIn(detail, result.stdout)
@@ -135,7 +135,7 @@ class InstallPluginCliTests(unittest.TestCase):
                     ]
                 )
             self.assertEqual(result, 1)
-            self.assertNotIn("installed locally", stdout.getvalue())
+            self.assertNotIn("本地安装", stdout.getvalue())
             self.assertIn("check failed", stderr.getvalue())
 
     def test_copy_failure_preserves_existing_installation(self) -> None:
@@ -198,12 +198,12 @@ class InstallPluginCliTests(unittest.TestCase):
             self.assertEqual(mismatch.returncode, 0, mismatch.stderr)
             mismatch_response = json.loads(output.read_text(encoding="utf-8"))
             self.assertEqual(mismatch_response["status"], "ok")
-            self.assertIn("consider atk install", mismatch_response["warnings"][0])
+            self.assertIn("建议运行 atk install", mismatch_response["warnings"][0])
             self.assertTrue((project / ".atk" / "project.json").exists())
             status = run_cli("status", *common)
             self.assertEqual(status.returncode, 0)
-            self.assertIn("CLI version is 1.0.0", status.stdout)
-            self.assertIn("run atk install to update Skills when convenient", status.stdout)
+            self.assertIn("CLI 版本为 1.0.0", status.stdout)
+            self.assertIn("方便时运行 atk install 更新 Skill", status.stdout)
 
             reinstall = run_cli("install", "--copy", *common, "--no-input")
             self.assertEqual(reinstall.returncode, 0, reinstall.stderr)
@@ -235,9 +235,9 @@ class InstallPluginCliTests(unittest.TestCase):
             self.assertEqual(run_cli("install", *common).returncode, 0)
             status = run_cli("status", *common)
             self.assertEqual(status.returncode, 0, status.stderr)
-            self.assertIn("is installed locally.", status.stdout)
-            self.assertIn("Open /plugins", status.stdout)
-            self.assertIn("check whether Agent Tune Kit is enabled", status.stdout)
+            self.assertIn("已本地安装。", status.stdout)
+            self.assertIn("打开 /plugins", status.stdout)
+            self.assertIn("检查 Agent Tune Kit 是否已启用", status.stdout)
             self.assertLessEqual(len(status.stdout.splitlines()), 3)
             self.assertNotIn("repo:", status.stdout)
             self.assertNotIn("status should change from Available to Installed", status.stdout)
@@ -262,7 +262,7 @@ class InstallPluginCliTests(unittest.TestCase):
             for extra in [["--no-input"], ["--yes"], ["--force"]]:
                 result = run_cli(*common, *extra, timeout=2)
                 self.assertNotEqual(result.returncode, 0)
-                self.assertIn("atk: error:", result.stderr)
+                self.assertIn("atk: 错误：", result.stderr)
             success = run_cli(*common, "--yes", "--force")
             self.assertEqual(success.returncode, 0, success.stderr)
             self.assertTrue((base / "plugins" / "agent-tune-kit" / ".codex-plugin" / "plugin.json").exists())
@@ -376,7 +376,7 @@ class InstallPluginCliTests(unittest.TestCase):
             check=False,
         )
         self.assertEqual(preview.returncode, 0, preview.stderr)
-        self.assertIn("No files changed", preview.stdout)
+        self.assertIn("未修改文件", preview.stdout)
         install_cli = subprocess.run(
             [str(atk), "install", *common],
             cwd=run_dir,
@@ -387,7 +387,7 @@ class InstallPluginCliTests(unittest.TestCase):
             check=False,
         )
         self.assertEqual(install_cli.returncode, 0, install_cli.stderr)
-        self.assertIn("installed locally for Codex", install_cli.stdout)
+        self.assertIn("已为 Codex 本地安装 Agent Tune Kit", install_cli.stdout)
         target = run_dir / "plugins" / "agent-tune-kit"
         self.assertFalse(target.is_symlink())
         self.assertTrue((target / ".codex-plugin" / "plugin.json").exists())
@@ -413,7 +413,7 @@ class InstallPluginCliTests(unittest.TestCase):
             check=False,
         )
         self.assertEqual(status.returncode, 0, status.stderr)
-        self.assertIn("is installed locally.", status.stdout)
+        self.assertIn("已本地安装。", status.stdout)
         project = run_dir / "project"
         project.mkdir()
         request = run_dir / "request.json"

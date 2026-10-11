@@ -182,7 +182,7 @@ def test_invalid_revision_does_not_consume_execution_budget(tmp_path: Path) -> N
         "round_id": round_data["id"],
     }
     (repo / "prompt.txt").write_text("unexpected edit")
-    with pytest.raises(ATKError, match="dirty"):
+    with pytest.raises(ATKError, match="不干净|干净"):
         run_evaluation(root, request)
     usage_path = root / "rounds" / round_data["id"] / "budget-usage.json"
     assert not usage_path.exists()
@@ -203,7 +203,7 @@ def test_freeze_records_repeatability_and_short_repeat_basis(tmp_path: Path) -> 
     plan["repeatability"] = "unknown"
     plan["repeatability_basis"] = "Real model behavior has not been calibrated."
     plan["final_repeats"] = 2
-    with pytest.raises(ATKError, match="short stochastic repeat plan"):
+    with pytest.raises(ATKError, match="较短随机重复计划"):
         freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
     plan["repeat_plan_basis"] = "Two paired attempts fit the local evaluation budget; no significance claim."
     assert freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})["status"] == "ready"
@@ -239,7 +239,7 @@ def test_adapter_declared_infrastructure_exit_is_not_an_agent_failure(tmp_path: 
     statuses = {record["case_id"]: record["execution"]["status"] for record in records.values()}
     assert statuses == {"auth": "infra_error", "agent": "agent_error"}
     execution_ids = {record["case_id"]: record["execution"]["id"] for record in records.values()}
-    with pytest.raises(ATKError, match="infrastructure failure"):
+    with pytest.raises(ATKError, match="基础设施失败"):
         run_evaluation(
             root, {**request, "retry_batch_id": batch["id"], "retry_execution_ids": [execution_ids["agent"]]}
         )
@@ -383,7 +383,7 @@ def test_retry_keeps_all_attempts_and_budget_blocks_extra_run(tmp_path: Path) ->
     retried_execution_id = next(
         record["execution"]["id"] for record in retried_records.values() if record["execution"]["retry_of"]
     )
-    with pytest.raises(ATKError, match="infrastructure failure"):
+    with pytest.raises(ATKError, match="基础设施失败"):
         run_evaluation(
             root,
             {**base_request, "retry_batch_id": retry["id"], "retry_execution_ids": [retried_execution_id]},
@@ -425,7 +425,7 @@ def test_retry_keeps_all_attempts_and_budget_blocks_extra_run(tmp_path: Path) ->
     assert result["metrics"]["cost"] == {"left_total": None, "right_total": None}
     assert result["metrics"]["duration_seconds"]["left_total"] is not None
     assert json.loads((root / "rounds" / round_data["id"] / "budget-usage.json").read_text())["executions"] == 9
-    with pytest.raises(ATKError, match="budget"):
+    with pytest.raises(ATKError, match="预算"):
         run_evaluation(root, {**base_request, "revision_id": sealed["revision_id"], "case_ids": ["target"]})
 
 
@@ -451,11 +451,11 @@ def test_probe_permission_and_isolated_budget(tmp_path: Path) -> None:
         "revision_id": round_data["baseline_revision_id"],
         "round_id": round_data["id"],
     }
-    with pytest.raises(ATKError, match="not authorized"):
+    with pytest.raises(ATKError, match="未获授权"):
         run_evaluation(root, request)
     probe = run_evaluation(root, {**request, "probe_authorization_id": "check-1"})
     assert probe["purpose"] == "diagnostic_probe"
-    with pytest.raises(ATKError, match="probes budget"):
+    with pytest.raises(ATKError, match="probes 预算"):
         run_evaluation(root, {**request, "probe_authorization_id": "check-1"})
 
 
@@ -501,7 +501,7 @@ def test_direct_probe_runs_frozen_script_instead_of_agent(tmp_path: Path) -> Non
     with pytest.raises(ATKError, match="max_calls"):
         run_evaluation(root, request)
     script.write_text("print('changed')\n")
-    with pytest.raises(ATKError, match="not authorized"):
+    with pytest.raises(ATKError, match="未获授权"):
         run_evaluation(root, request)
 
 
@@ -520,7 +520,7 @@ def test_external_write_requires_recorded_protection_before_replay(tmp_path: Pat
         "revision_commit": git(repo, "rev-parse", "HEAD"),
     }
     if not protected:
-        with pytest.raises(ATKError, match="external effect lacks recorded protection"):
+        with pytest.raises(ATKError, match="外部副作用缺少保护记录"):
             run_evaluation(root, request)
         assert not (root / "evidence").exists()
     else:
@@ -612,7 +612,7 @@ def test_efficiency_gate_and_missing_metric(tmp_path: Path, trusted: bool) -> No
     if not trusted:
         assert result["result"] == "insufficient"
         assert result["metrics"]["cost"] == {"left_total": None, "right_total": None}
-        assert any("trusted source" in reason for reason in result["limitations"])
+        assert any("可信来源" in reason for reason in result["limitations"])
         return
     assert result["result"] == "pass"
     assert result["metrics"]["cost"] == {"left_total": 2.0, "right_total": 1.0}
@@ -644,7 +644,7 @@ def test_holdout_exposure_cannot_be_reused_in_new_round(tmp_path: Path) -> None:
     }
     run_evaluation(root, request)
     run_evaluation(root, request)  # the other side of the same frozen milestone
-    with pytest.raises(ATKError, match="holdout was exposed"):
+    with pytest.raises(ATKError, match="holdout 已暴露"):
         prepare_candidate(
             repo, root, {"round_id": round_data["id"], "primary_issue_id": "issue", "paths": ["prompt.txt"]}
         )
@@ -652,7 +652,7 @@ def test_holdout_exposure_cannot_be_reused_in_new_round(tmp_path: Path) -> None:
     next_round = create_round(repo, root, {"issue_ids": ["issue"]})
     plan["holdout_milestone_id"] = "milestone-2"
     freeze_round(repo, root, {"round_id": next_round["id"], "plan": plan})
-    with pytest.raises(ATKError, match="exposed"):
+    with pytest.raises(ATKError, match="暴露"):
         run_evaluation(
             root,
             {
@@ -696,7 +696,7 @@ def test_holdout_evidence_used_for_knowledge_cannot_be_reused(tmp_path: Path) ->
         },
     )
     assert knowledge["optimization_source_group_ids"] == ["shared"]
-    with pytest.raises(ATKError, match="used for optimization"):
+    with pytest.raises(ATKError, match="用于 optimization|用于优化"):
         run_evaluation(root, request)
 
 
@@ -728,14 +728,14 @@ def test_imported_knowledge_needs_source_group_before_holdout(tmp_path: Path) ->
         "validation_ids": [],
         "body": "Trace informed this rule.",
     }
-    with pytest.raises(ATKError, match="source group"):
+    with pytest.raises(ATKError, match="来源组"):
         store_knowledge(root, {"knowledge": knowledge})
     knowledge["evidence_refs"] = [{**ref, "source_group_id": "shared"}]
     saved = store_knowledge(root, {"knowledge": knowledge})
     assert saved["optimization_source_group_ids"] == ["shared"]
     plan["holdout_milestone_id"] = "milestone-1"
     freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
-    with pytest.raises(ATKError, match="used for optimization"):
+    with pytest.raises(ATKError, match="用于 optimization|用于优化"):
         run_evaluation(
             root,
             {
@@ -799,7 +799,7 @@ def test_dataset_rejects_unhashable_source_group(tmp_path: Path) -> None:
     _, root, _, _, _ = project(tmp_path, "print('ok')\n", rows)
     source = tmp_path / "bad.jsonl"
     source.write_text(json.dumps({"id": "bad", "input": "case", "source_group_id": ["g"]}) + "\n")
-    with pytest.raises(ATKError, match="invalid source group"):
+    with pytest.raises(ATKError, match="来源组无效"):
         store_dataset(
             root,
             {"source": str(source), "mapping": {"id": "id", "input": "input", "source_group_id": "source_group_id"}},
@@ -826,7 +826,7 @@ def test_knowledge_rejects_missing_links_and_unsupported_validated_state(tmp_pat
     fake = root / "rounds" / round_data["id"] / "candidates" / "candidate-missing" / "candidate.json"
     fake.parent.mkdir(parents=True)
     fake.write_text(json.dumps({"id": "candidate-missing"}))
-    with pytest.raises(ATKError, match="invalid identity"):
+    with pytest.raises(ATKError, match="身份无效"):
         store_knowledge(root, {"knowledge": knowledge})
     knowledge["candidate_ids"] = []
     knowledge["validation_ids"] = ["validation-missing"]
@@ -834,5 +834,5 @@ def test_knowledge_rejects_missing_links_and_unsupported_validated_state(tmp_pat
         store_knowledge(root, {"knowledge": knowledge})
     knowledge["validation_ids"] = []
     knowledge["status"] = "validated_in_scope"
-    with pytest.raises(ATKError, match="supporting evidence"):
+    with pytest.raises(ATKError, match="支持证据"):
         store_knowledge(root, {"knowledge": knowledge})

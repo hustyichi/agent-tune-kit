@@ -52,7 +52,7 @@ _held_locks = threading.local()
 class ATKError(Exception):
     def __init__(self, code: str, message: str):
         if code not in ERROR_CODES:
-            raise ValueError(f"unknown ATK error code: {code}")
+            raise ValueError(f"未知 ATK 错误码：{code}")
         self.code = code
         super().__init__(message)
 
@@ -63,7 +63,7 @@ def new_id(kind: str) -> str:
 
 def safe_id(value: str) -> str:
     if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}", value):
-        raise ATKError("SCOPE_VIOLATION", f"unsafe artifact ID: {value}")
+        raise ATKError("SCOPE_VIOLATION", f"不安全的产物 ID：{value}")
     return value
 
 
@@ -90,7 +90,7 @@ def read_json(path: Path) -> dict:
 def atomic_write(path: Path, data: bytes, *, immutable: bool = False) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if immutable and path.exists():
-        raise ATKError("WORKSPACE_CONFLICT", f"immutable artifact already exists: {path}")
+        raise ATKError("WORKSPACE_CONFLICT", f"不可变产物已存在：{path}")
     with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as handle:
         temporary = Path(handle.name)
         try:
@@ -102,7 +102,7 @@ def atomic_write(path: Path, data: bytes, *, immutable: bool = False) -> None:
             raise
     try:
         if immutable and path.exists():
-            raise ATKError("WORKSPACE_CONFLICT", f"immutable artifact already exists: {path}")
+            raise ATKError("WORKSPACE_CONFLICT", f"不可变产物已存在：{path}")
         temporary.replace(path)
     finally:
         temporary.unlink(missing_ok=True)
@@ -124,7 +124,7 @@ def locked(root: Path):
         try:
             fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as exc:
-            raise ATKError("WORKSPACE_CONFLICT", "another ATK operation is running") from exc
+            raise ATKError("WORKSPACE_CONFLICT", "另一个 ATK 操作正在运行") from exc
         held.add(key)
         _held_locks.roots = held
         try:
@@ -136,7 +136,7 @@ def locked(root: Path):
 
 def store_object(root: Path, family: str, value: dict) -> Path:
     if value.get("schema_version") != SCHEMA_VERSION or not value.get("id") or not value.get("created_at"):
-        raise ATKError("INCOMPLETE_EVIDENCE", f"invalid {family} identity")
+        raise ATKError("INCOMPLETE_EVIDENCE", f"无效的 {family} 身份")
     path = root / family / safe_id(value["id"]) / "manifest.json"
     write_json(path, value, immutable=True)
     return path
@@ -146,22 +146,22 @@ def validate_evidence(root: Path, batch_id: str) -> tuple[dict, dict[str, dict],
     folder = root / "evidence" / safe_id(batch_id)
     manifest = read_json(folder / "manifest.json")
     if manifest.get("id") != batch_id or manifest.get("schema_version") != SCHEMA_VERSION:
-        raise ATKError("INCOMPLETE_EVIDENCE", "evidence manifest identity mismatch")
+        raise ATKError("INCOMPLETE_EVIDENCE", "证据 manifest 身份不匹配")
     records = {}
     for line in (folder / "records.jsonl").read_text(encoding="utf-8").splitlines():
         record = json.loads(line)
         record_id = record.get("id")
         if not record_id or record_id in records:
-            raise ATKError("INCOMPLETE_EVIDENCE", "duplicate or missing record ID")
+            raise ATKError("INCOMPLETE_EVIDENCE", "记录 ID 重复或缺失")
         records[record_id] = record
     evidence = {}
     for entry in manifest.get("evidence_index", []):
         evidence_id = entry.get("evidence_id")
         if not evidence_id or evidence_id in evidence or not entry.get("fingerprint") or not entry.get("locator"):
-            raise ATKError("INCOMPLETE_EVIDENCE", "invalid evidence index")
+            raise ATKError("INCOMPLETE_EVIDENCE", "证据索引无效")
         evidence[evidence_id] = entry
     if manifest.get("records_sha256") != digest(folder / "records.jsonl"):
-        raise ATKError("INCOMPLETE_EVIDENCE", "evidence records changed after sealing")
+        raise ATKError("INCOMPLETE_EVIDENCE", "证据记录在封存后被修改")
     return manifest, records, evidence
 
 
@@ -176,9 +176,9 @@ def store_assessment(root: Path, request: dict) -> Path:
         or not spec.get("dimensions")
         or set(spec["dimensions"]) != set(spec["dimension_rules"])
     ):
-        raise ATKError("JUDGER_INVALID", "evaluation_spec needs a versioned boundary, dimension rules, and denominator")
+        raise ATKError("JUDGER_INVALID", "evaluation_spec 需要有版本的评测边界、维度规则和分母规则")
     if not judger.get("version") or judger.get("readiness") not in {"calibrated", "uncalibrated"}:
-        raise ATKError("JUDGER_INVALID", "judger version and readiness are required")
+        raise ATKError("JUDGER_INVALID", "必须提供 judger 版本和校准状态")
     if judger["readiness"] == "calibrated":
         examples = judger.get("calibration_examples", [])
         verdicts = {
@@ -189,16 +189,16 @@ def store_assessment(root: Path, request: dict) -> Path:
         if not {"pass", "fail"} <= verdicts or any(
             example.get("expected_verdict") != example.get("actual_verdict") for example in examples
         ):
-            raise ATKError("JUDGER_INVALID", "calibrated judger needs matched positive and negative examples")
+            raise ATKError("JUDGER_INVALID", "已校准 judger 需要判定一致的正反示例")
     dimensions = set(spec["dimensions"])
     rows = request["rows"]
     keys = set()
     for row in rows:
         if set(row) != set(ASSESSMENT_COLUMNS) or row["record_id"] not in records or row["dimension"] not in dimensions:
-            raise ATKError("JUDGER_INVALID", "assessment row has unknown fields, record, or dimension")
+            raise ATKError("JUDGER_INVALID", "判定行包含未知字段、记录或维度")
         key = (row["record_id"], row["dimension"])
         if key in keys:
-            raise ATKError("JUDGER_INVALID", f"duplicate assessment key: {key}")
+            raise ATKError("JUDGER_INVALID", f"重复的判定键：{key}")
         keys.add(key)
         if row["validity"] not in {"valid", "invalid", "unknown"} or row["verdict"] not in {
             "pass",
@@ -206,9 +206,9 @@ def store_assessment(root: Path, request: dict) -> Path:
             "unknown",
             "not_applicable",
         }:
-            raise ATKError("JUDGER_INVALID", "invalid verdict or validity")
+            raise ATKError("JUDGER_INVALID", "判定或有效性状态无效")
         if row["validity"] != "valid" and row["verdict"] != "unknown":
-            raise ATKError("JUDGER_INVALID", "invalid evidence cannot have a determinate verdict")
+            raise ATKError("JUDGER_INVALID", "无效证据不能有确定判定")
         refs = row["evidence_refs"]
         if (
             not isinstance(refs, list)
@@ -218,7 +218,7 @@ def store_assessment(root: Path, request: dict) -> Path:
                 for ref in refs
             )
         ):
-            raise ATKError("INCOMPLETE_EVIDENCE", "assessment has an invalid evidence reference")
+            raise ATKError("INCOMPLETE_EVIDENCE", "判定包含无效证据引用")
         record = records[row["record_id"]]
         if not any(
             ref["evidence_id"] == row["record_id"]
@@ -232,9 +232,9 @@ def store_assessment(root: Path, request: dict) -> Path:
             )
             for ref in refs
         ):
-            raise ATKError("INCOMPLETE_EVIDENCE", "assessment must cite evidence for its own record")
+            raise ATKError("INCOMPLETE_EVIDENCE", "判定必须引用自身记录的证据")
     if keys != {(record_id, dimension) for record_id in records for dimension in dimensions}:
-        raise ATKError("INCOMPLETE_EVIDENCE", "assessment does not cover every record and dimension")
+        raise ATKError("INCOMPLETE_EVIDENCE", "判定未覆盖全部记录和维度")
     assessment_id = new_id("assessment")
     folder = root / "assessments" / safe_id(assessment_id)
     folder.mkdir(parents=True, exist_ok=False)
@@ -270,7 +270,7 @@ def read_assessment(root: Path, assessment_id: str) -> tuple[dict, list[dict]]:
     folder = root / "assessments" / safe_id(assessment_id)
     manifest = read_json(folder / "manifest.json")
     if manifest["csv_sha256"] != digest(folder / "assessment.csv"):
-        raise ATKError("JUDGER_INVALID", "assessment CSV fingerprint mismatch")
+        raise ATKError("JUDGER_INVALID", "判定 CSV 指纹不匹配")
     with (folder / "assessment.csv").open(newline="", encoding="utf-8") as handle:
         rows = list(csv.DictReader(handle))
     return manifest, rows
@@ -279,14 +279,25 @@ def read_assessment(root: Path, assessment_id: str) -> tuple[dict, list[dict]]:
 def render_assessment_html(root: Path, assessment_id: str) -> Path:
     """Regenerate an escaped local view from the authoritative Assessment CSV."""
     manifest, rows = read_assessment(root, assessment_id)
-    headings = "".join(f"<th>{html.escape(name)}</th>" for name in ASSESSMENT_COLUMNS)
+    labels = ("记录 ID", "评测维度", "证据有效性", "有效性说明", "判定", "分数", "判定理由", "证据引用", "判定方式")
+    values = {
+        "validity": {"valid": "有效", "invalid": "无效", "unknown": "未知"},
+        "verdict": {"pass": "通过", "fail": "失败", "unknown": "未知", "not_applicable": "不适用"},
+        "judger_kind": {"semantic": "语义判定", "deterministic": "确定性检查"},
+    }
+    headings = "".join(f"<th>{html.escape(label)}</th>" for label in labels)
     body = "".join(
-        "<tr>" + "".join(f"<td>{html.escape(str(row[name]))}</td>" for name in ASSESSMENT_COLUMNS) + "</tr>"
+        "<tr>"
+        + "".join(
+            f"<td>{html.escape(values.get(name, {}).get(row[name], str(row[name])))}</td>"
+            for name in ASSESSMENT_COLUMNS
+        )
+        + "</tr>"
         for row in rows
     )
     title = html.escape(str(manifest["evaluation_spec"]["boundary"]))
     page = (
-        "<!doctype html><html lang='en'><meta charset='utf-8'>"
+        "<!doctype html><html lang='zh-CN'><meta charset='utf-8'>"
         "<meta http-equiv='Content-Security-Policy' content=\"default-src 'none'\">"
         f"<title>{title}</title><h1>{title}</h1><table><thead><tr>{headings}</tr></thead>"
         f"<tbody>{body}</tbody></table></html>"

@@ -19,7 +19,7 @@ def main() -> int:
         raise ValueError("shared workflow or project runner template is missing")
     for name in sorted(PUBLIC):
         source = (skills / name / "SKILL.md").read_text(encoding="utf-8")
-        if not source.startswith(f"---\nname: {name}\n") or "Read `../WORKFLOW.md`" not in source:
+        if not source.startswith(f"---\nname: {name}\n") or "阅读 `../WORKFLOW.md`" not in source:
             raise ValueError(f"invalid Skill identity or shared contract reference: {name}")
     manifest = json.loads((ROOT / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8"))
     if manifest.get("skills") != "./skills/" or manifest.get("name") != "agent-tune-kit":

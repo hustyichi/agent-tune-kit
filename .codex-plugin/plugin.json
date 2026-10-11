@@ -1,7 +1,7 @@
 {
   "name": "agent-tune-kit",
   "version": "1.0.0",
-  "description": "Local Codex plugin for evidence-driven evaluation and checkpointed tuning of existing Agents.",
+  "description": "用于已有 Agent 评测、诊断和调优的本地 Codex 插件，默认以中文生成说明与报告。",
   "author": {
     "name": "hustyichi",
     "email": "hustyichi@163.com",
@@ -20,8 +20,8 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "Agent Tune Kit",
-    "shortDescription": "Run a guided local Agent tuning loop",
-    "longDescription": "Agent Tune Kit imports or runs evidence, diagnoses issues, and validates scoped Agent changes against Git checkpoints.",
+    "shortDescription": "引导本地 Agent 评测、诊断与调优",
+    "longDescription": "Agent Tune Kit 导入或运行证据、诊断问题，并基于 Git 检查点验证范围明确的 Agent 修改。默认使用中文生成说明与报告。",
     "developerName": "hustyichi",
     "category": "Coding",
     "capabilities": [
@@ -31,9 +31,9 @@
     ],
     "websiteURL": "https://github.com/hustyichi/agent-tune-kit",
     "defaultPrompt": [
-      "Connect my existing Agent with atk-init",
-      "Import traces and diagnose failures",
-      "Validate a scoped Agent candidate"
+      "使用 atk-init 接入我的已有 Agent",
+      "导入运行记录并诊断失败原因",
+      "验证一个范围明确的 Agent 候选"
     ],
     "brandColor": "#334155",
     "screenshots": []

@@ -70,15 +70,15 @@ def run_one(attempt: dict, case: dict, config: dict, output: Path, timeout: int)
     started_clock = time.monotonic()
     try:
         if not attachments_unchanged(attachments):
-            raise OSError("Case attachment changed after dataset import")
+            raise OSError("Case 附件在数据集导入后被修改")
         if (
             config.get("script_path")
             and hashlib.sha256(Path(config["script_path"]).read_bytes()).hexdigest() != config["script_sha256"]
         ):
-            raise OSError("probe script changed after authorization")
+            raise OSError("探针脚本在授权后被修改")
         with _process_lock:
             if _stopping.is_set():
-                raise OSError("runner is stopping")
+                raise OSError("runner 正在停止")
             process = subprocess.Popen(
                 command,
                 cwd=config.get("working_directory", config["workspace_path"]),
@@ -111,7 +111,7 @@ def run_one(attempt: dict, case: dict, config: dict, output: Path, timeout: int)
         response, stderr = redact_output(response), redact_output(stderr)
         if not attachments_unchanged(attachments):
             status = "infra_error"
-            stderr += "\nCase attachment changed during execution"
+            stderr += "\nCase 附件在执行期间被修改"
     except OSError as exc:
         status, response, stderr, returncode = "infra_error", "", redact_output(str(exc)), None
     duration = time.monotonic() - started_clock
@@ -167,7 +167,7 @@ def main() -> int:
     request = json.loads(args.request.read_text(encoding="utf-8"))
     concurrency = request.get("concurrency", 1)
     if type(concurrency) is not int or concurrency < 1:
-        raise ValueError("concurrency must be a positive integer")
+        raise ValueError("concurrency 必须是正整数")
     for signum in (signal.SIGTERM, signal.SIGINT):
         signal.signal(signum, lambda *_: _stopping.set())
     config = json.loads(Path(request["run_config_ref"]).read_text(encoding="utf-8"))

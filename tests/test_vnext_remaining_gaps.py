@@ -54,10 +54,10 @@ def test_attachment_identity_and_runner_delivery(tmp_path: Path) -> None:
     attachment.write_text("other")
     replacement = store_dataset(root, {"source": str(source), "mapping": mapping})
     assert load_cases(root, replacement["id"])["case"]["fingerprint"] != first_fingerprint
-    with pytest.raises(ATKError, match="attachment"):
+    with pytest.raises(ATKError, match="附件"):
         run_evaluation(root, request)
     attachment.unlink()
-    with pytest.raises(ATKError, match="attachment"):
+    with pytest.raises(ATKError, match="附件"):
         run_evaluation(root, request)
 
 
@@ -81,13 +81,13 @@ def test_frozen_case_content_blocks_same_round_replacement(tmp_path: Path, chang
         root,
         {"source": str(source), "mapping": {key: key for key in rows[0]}},
     )
-    with pytest.raises(ATKError, match="frozen dataset"):
+    with pytest.raises(ATKError, match="冻结数据集"):
         run_evaluation(root, {**request, "dataset_id": replacement["id"]})
     plan_path = root / "rounds" / rnd["id"] / "plan.json"
     legacy = read_json(plan_path)
     del legacy["case_fingerprints"]
     write_json(plan_path, legacy)
-    with pytest.raises(ATKError, match="frozen dataset"):
+    with pytest.raises(ATKError, match="冻结数据集"):
         run_evaluation(root, request)
 
 
@@ -182,15 +182,15 @@ def test_non_git_analysis_probe_uses_authorization_budget_and_component_identity
         "round_id": rnd["id"],
         "revision_id": None,
     }
-    with pytest.raises(ATKError, match="not authorized"):
+    with pytest.raises(ATKError, match="未获授权"):
         run_evaluation(root, request)
     batch = run_evaluation(root, {**request, "probe_authorization_id": "local"})
     assert batch["revision_id"] is None
     assert batch["actual_components"][0]["actual_sha256"] == digest(script)
     record = next(iter(validate_evidence(root, batch["id"])[1].values()))
     assert record["output"].strip() == "probe ok"
-    with pytest.raises(ATKError, match="probes budget"):
+    with pytest.raises(ATKError, match="probes 预算"):
         run_evaluation(root, {**request, "probe_authorization_id": "local"})
-    with pytest.raises(ATKError, match="runtime setup"):
+    with pytest.raises(ATKError, match="配置 runtime"):
         run_evaluation(root, {**request, "purpose": "evaluation"})
     assert not (repo / ".git").exists()

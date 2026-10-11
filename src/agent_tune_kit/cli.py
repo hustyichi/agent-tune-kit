@@ -42,7 +42,7 @@ from .installer import (
 
 
 def internal_main(argv: list[str]) -> int:
-    parser = argparse.ArgumentParser(description="ATK deterministic internal operation")
+    parser = argparse.ArgumentParser(description="ATK 确定性内部操作")
     parser.add_argument("operation")
     parser.add_argument("--request", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
@@ -80,15 +80,13 @@ def internal_main(argv: list[str]) -> int:
         try:
             plugin_version = validate_manifest_payload(args.plugin_root.expanduser())["version"]
         except (InstallError, OSError, json.JSONDecodeError) as exc:
-            warnings.append(f"could not check installed plugin version: {exc}")
+            warnings.append(f"无法检查已安装插件版本：{exc}")
         else:
             cli_version = package_version()
             if plugin_version != cli_version:
-                warnings.append(
-                    f"installed plugin {plugin_version} differs from CLI {cli_version}; consider atk install"
-                )
+                warnings.append(f"已安装插件 {plugin_version} 与 CLI {cli_version} 版本不一致；建议运行 atk install")
         if args.operation not in operations:
-            parser.error(f"unknown operation: {args.operation}")
+            parser.error(f"未知操作：{args.operation}")
         value = operations[args.operation]()
         response = {
             "status": "ok",

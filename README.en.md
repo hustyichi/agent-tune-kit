@@ -39,6 +39,8 @@ You set the evaluation criteria and allowed scope of changes. ATK preserves inco
 
 ## Install
 
+ATK replies, reports, and descriptions in new artifacts default to Simplified Chinese unless you explicitly request another language. Protocol fields and original evidence retain their original form.
+
 You need **local Codex, Python 3.11+, and [uv](https://docs.astral.sh/uv/getting-started/installation/)**.
 
 **1. Run in your terminal:**

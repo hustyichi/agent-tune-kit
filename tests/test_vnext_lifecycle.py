@@ -74,7 +74,7 @@ def test_analysis_without_git_imports_assesses_diagnoses_and_closes(tmp_path: Pa
     assert store_diagnosis(root, {"round_id": rnd["id"], "issues": [issue]})["issues"][0]["id"] == "tool"
     with pytest.raises(ATKError, match="runtime"):
         run_evaluation(root, {})
-    with pytest.raises(ATKError, match="not ready"):
+    with pytest.raises(ATKError, match="尚未准备好"):
         prepare_candidate(repo, root, {"round_id": rnd["id"]})
     request = {"round_id": rnd["id"], "action": "close_without_adoption", "reason": "analysis complete"}
     decision = finish_round(repo, root, request)
@@ -142,7 +142,7 @@ def test_analysis_can_bind_clean_b0_without_losing_evidence(tmp_path: Path, monk
         "rollback_on_failure": "B0",
     }
     (repo / "prompt.txt").write_text("dirty")
-    with pytest.raises(ATKError, match="changed"):
+    with pytest.raises(ATKError, match="修改|改变|变化"):
         freeze_round(repo, root, {"round_id": rnd["id"], "plan": plan})
     (repo / "prompt.txt").write_text("old")
     import agent_tune_kit.checkpoints as checkpoints
@@ -184,9 +184,9 @@ def test_pause_preserves_candidate_and_resume_checks_content(tmp_path: Path, sea
     paused = transition_round(repo, root, {"round_id": rnd["id"], "action": "pause", "reason": "review"})
     assert paused["status"] == "paused" and paused["pending_candidate_id"] == candidate["id"]
     assert create_round(repo, root, {"analysis_only": True})["baseline_commit"] is None
-    with pytest.raises(ATKError, match="optimizing"):
+    with pytest.raises(ATKError, match="优化阶段"):
         seal_candidate(repo, root, {"round_id": rnd["id"], "candidate_id": candidate["id"]})
-    with pytest.raises(ATKError, match="paused"):
+    with pytest.raises(ATKError, match="已暂停|暂停"):
         run_evaluation(
             root,
             {
@@ -198,7 +198,7 @@ def test_pause_preserves_candidate_and_resume_checks_content(tmp_path: Path, sea
             },
         )
     (repo / "prompt.txt").write_text("unexpected")
-    with pytest.raises(ATKError, match="changed"):
+    with pytest.raises(ATKError, match="修改|改变|变化"):
         transition_round(repo, root, {"round_id": rnd["id"], "action": "resume", "reason": "continue"})
     (repo / "prompt.txt").write_text("candidate")
     resumed = transition_round(repo, root, {"round_id": rnd["id"], "action": "resume", "reason": "continue"})
@@ -215,11 +215,11 @@ def test_resume_requires_recovered_operation_and_unchanged_git(tmp_path: Path) -
     write_json(op, {"id": "op", "stage": "prepared"})
     paused = transition_round(repo, root, {"round_id": rnd["id"], "action": "pause", "reason": "interrupted"})
     assert paused["pause"]["blocker"]["code"] == "GIT_OPERATION_INTERRUPTED"
-    with pytest.raises(ATKError, match="recover operation"):
+    with pytest.raises(ATKError, match="恢复操作"):
         transition_round(repo, root, {"round_id": rnd["id"], "action": "resume", "reason": "continue"})
     write_json(op, {"id": "op", "stage": "aborted"})
     git(repo, "switch", "-qc", "other")
-    with pytest.raises(ATKError, match="branch"):
+    with pytest.raises(ATKError, match="分支"):
         transition_round(repo, root, {"round_id": rnd["id"], "action": "resume", "reason": "continue"})
     git(repo, "switch", "-q", rnd["branch"])
     assert (
@@ -288,7 +288,7 @@ def test_external_fix_can_follow_closed_analysis_round(tmp_path: Path) -> None:
     )
     store_diagnosis(root, {"round_id": analysis["id"], "issues": [_handoff_issue()]})
     finish_round(repo, root, {"round_id": analysis["id"], "action": "close_without_adoption", "reason": "tool owner"})
-    with pytest.raises(ATKError, match="cannot be reused"):
+    with pytest.raises(ATKError, match="不能跨"):
         create_round(repo, root, {"previous_round_id": analysis["id"], "reuse_revision": True})
     followup = create_round(
         repo,
@@ -300,7 +300,7 @@ def test_external_fix_can_follow_closed_analysis_round(tmp_path: Path) -> None:
         },
     )
     plan.update(allowed_paths=[], commit_authorized=False, protection_case_ids=[])
-    with pytest.raises(ATKError, match="retain affected and protection"):
+    with pytest.raises(ATKError, match="保留受影响和保护"):
         freeze_round(repo, root, {"round_id": followup["id"], "plan": plan})
     plan["protection_case_ids"] = ["protect"]
     assert freeze_round(repo, root, {"round_id": followup["id"], "plan": plan})["status"] == "ready"
@@ -315,20 +315,20 @@ def test_paused_round_allows_switch_but_resume_checks_active_round_and_runtime(t
     second = create_round(repo, root, {"issue_ids": ["issue"]})
     freeze_round(repo, root, {"round_id": second["id"], "plan": plan})
     resume = {"round_id": first["id"], "action": "resume", "reason": "return"}
-    with pytest.raises(ATKError, match="other active"):
+    with pytest.raises(ATKError, match="其他活跃"):
         transition_round(repo, root, resume)
-    with pytest.raises(ATKError, match="other active"):
+    with pytest.raises(ATKError, match="其他活跃"):
         inspect_or_recover_operation(repo, root, {"round_id": first["id"], "operation_id": "pending"})
     finish_round(repo, root, {"round_id": second["id"], "action": "close_without_adoption", "reason": "done"})
     config = read_json(root / "project.json")
     write_json(root / "project.json", {**config, "command": ["changed"]})
-    with pytest.raises(ATKError, match="frozen runtime changed"):
+    with pytest.raises(ATKError, match="冻结 runtime 已改变"):
         transition_round(repo, root, resume)
     write_json(root / "project.json", config)
     runner = root / "adapters/runner.py"
     source = runner.read_text()
     runner.write_text(source + "\n# changed\n")
-    with pytest.raises(ATKError, match="frozen runtime changed"):
+    with pytest.raises(ATKError, match="冻结 runtime 已改变"):
         transition_round(repo, root, resume)
     runner.write_text(source)
     assert transition_round(repo, root, resume)["status"] == "ready"

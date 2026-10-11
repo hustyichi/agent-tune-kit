@@ -162,4 +162,4 @@ def test_business_skill_must_be_loaded_at_each_revision(tmp_path: Path, load_mod
         "insufficient" if load_mode in {"wrong_install", "stale_build", "missing_path"} else "pass"
     )
     if validation["result"] == "insufficient":
-        assert any("case-1 repeat 1 lacks verified loading: business-skill" in gap for gap in validation["limitations"])
+        assert any("case-1 第 1 次重复缺少已核验加载证据：business-skill" in gap for gap in validation["limitations"])

@@ -32,17 +32,17 @@ from .core import (
 
 def _version_commands(components: list[dict]) -> dict[str, tuple[list[str], int, str | None]]:
     if not isinstance(components, list):
-        raise ATKError("INCOMPLETE_EVIDENCE", "components must be a list")
+        raise ATKError("INCOMPLETE_EVIDENCE", "components 必须是列表")
     commands = {}
     ids = set()
     for component in components:
         if not isinstance(component, dict) or not {"component_id", "role", "change_role"} <= component.keys():
-            raise ATKError("INCOMPLETE_EVIDENCE", "component identity is incomplete")
+            raise ATKError("INCOMPLETE_EVIDENCE", "组件身份不完整")
         component_id = component["component_id"]
         if not isinstance(component_id, str) or not component_id:
-            raise ATKError("INCOMPLETE_EVIDENCE", "component ID is invalid")
+            raise ATKError("INCOMPLETE_EVIDENCE", "组件 ID 无效")
         if component_id in ids:
-            raise ATKError("INCOMPLETE_EVIDENCE", f"duplicate component ID: {component_id}")
+            raise ATKError("INCOMPLETE_EVIDENCE", f"重复的组件 ID：{component_id}")
         ids.add(component_id)
         command = component.get("version_command")
         if command is None:
@@ -61,7 +61,7 @@ def _version_commands(components: list[dict]) -> dict[str, tuple[list[str], int,
                 and (not isinstance(expected, str) or not re.fullmatch(r"[A-Za-z0-9._+:/@-]{1,128}", expected))
             )
         ):
-            raise ATKError("INCOMPLETE_EVIDENCE", f"invalid version command for component: {component_id}")
+            raise ATKError("INCOMPLETE_EVIDENCE", f"组件版本命令无效：{component_id}")
         commands[component_id] = (command, timeout, expected)
     return commands
 
@@ -99,17 +99,15 @@ def initialize_project(repo: Path, request: dict) -> dict:
     root = repo / ".atk"
     analysis_only = request.get("analysis_only", False)
     if type(analysis_only) is not bool:
-        raise ATKError("INCOMPLETE_EVIDENCE", "analysis_only must be boolean")
+        raise ATKError("INCOMPLETE_EVIDENCE", "analysis_only 必须是布尔值")
     upgrade = False
     if (root / "project.json").exists() and request.get("configure_runtime") is True:
         existing = read_json(root / "project.json")
         upgrade = existing.get("schema_version") == 2 and existing.get("analysis_only") is True
     if root.exists() and not upgrade:
         if (root / "project.json").exists():
-            raise ATKError("WORKSPACE_CONFLICT", "ATK v2 project already exists; inspect before changing configuration")
-        raise ATKError(
-            "WORKSPACE_CONFLICT", "existing .atk data has no v2 project.json; preserve it and choose a clean project"
-        )
+            raise ATKError("WORKSPACE_CONFLICT", "ATK v2 项目已存在；修改配置前先检查")
+        raise ATKError("WORKSPACE_CONFLICT", "已有 .atk 数据缺少 v2 project.json；保留原数据并选择干净项目")
     runtime_requested = any(
         key in request for key in ("python", "command", "components", "external_effects", "configure_runtime")
     )
@@ -127,29 +125,29 @@ def initialize_project(repo: Path, request: dict) -> dict:
         read_json(path).get("status") in {"ready", "optimizing", "finalizing", "paused"}
         for path in (root / "rounds").glob("*/round.json")
     ):
-        raise ATKError("WORKSPACE_CONFLICT", "runtime setup requires inactive analysis Rounds")
+        raise ATKError("WORKSPACE_CONFLICT", "配置 runtime 前，分析 Round 必须处于非活跃状态")
     if not analysis_only:
         verify_repo(repo)
         if any(path == ".atk" or path.startswith(".atk/") for path in tracked_paths(repo)):
-            raise ATKError("DIRTY_BASELINE", "tracked .atk files must be handled before initialization")
+            raise ATKError("DIRTY_BASELINE", "初始化前必须处理已跟踪的 .atk 文件")
     required = {"python", "command", "components", "runtime_notes", "external_effects"}
     if not analysis_only:
         required |= {"allowed_paths", "protected_paths"}
     if required - request.keys() or not isinstance(request["command"], list) or not request["command"]:
-        raise ATKError("INCOMPLETE_EVIDENCE", f"project configuration missing: {sorted(required - request.keys())}")
+        raise ATKError("INCOMPLETE_EVIDENCE", f"项目配置缺失：{sorted(required - request.keys())}")
     infrastructure_codes = request.get("infrastructure_exit_codes", [])
     if (
         not isinstance(infrastructure_codes, list)
         or any(type(code) is not int or not 1 <= code <= 255 for code in infrastructure_codes)
         or len(infrastructure_codes) != len(set(infrastructure_codes))
     ):
-        raise ATKError("INCOMPLETE_EVIDENCE", "infrastructure exit codes must be distinct integers from 1 to 255")
+        raise ATKError("INCOMPLETE_EVIDENCE", "基础设施退出码必须是 1 至 255 的不重复整数")
     external_effects = request["external_effects"]
     if not isinstance(external_effects, list) or any(
         not isinstance(effect, dict) or not isinstance(effect.get("name"), str) or not effect["name"].strip()
         for effect in external_effects
     ):
-        raise ATKError("INCOMPLETE_EVIDENCE", "external effects must be named objects")
+        raise ATKError("INCOMPLETE_EVIDENCE", "外部副作用必须是命名对象")
     metric_sources = request.get("metric_sources", {})
     if (
         not isinstance(metric_sources, dict)
@@ -164,7 +162,7 @@ def initialize_project(repo: Path, request: dict) -> dict:
             for source in metric_sources.values()
         )
     ):
-        raise ATKError("INCOMPLETE_EVIDENCE", "cost and tool-call metrics need a named independent collector")
+        raise ATKError("INCOMPLETE_EVIDENCE", "成本和工具调用指标需要命名的独立采集器")
     _version_commands(request["components"])
     if not analysis_only:
         git_dir = Path(git(repo, "rev-parse", "--git-dir").decode().strip())
@@ -202,7 +200,7 @@ def initialize_project(repo: Path, request: dict) -> dict:
     else:
         runner_source = Path(__file__).resolve().parents[2] / "templates" / "runner.py"
         if not runner_source.exists():
-            raise ATKError("WORKSPACE_CONFLICT", "bundled runner template is missing")
+            raise ATKError("WORKSPACE_CONFLICT", "缺少随包 runner 模板")
         (root / "adapters").mkdir(exist_ok=True)
         shutil.copyfile(runner_source, root / "adapters" / "runner.py")
     write_json(root / "project.json", project, immutable=not upgrade)
@@ -217,41 +215,41 @@ def store_dataset(root: Path, request: dict) -> dict:
     elif source.suffix == ".jsonl":
         rows = [json.loads(line) for line in source.read_text(encoding="utf-8").splitlines() if line.strip()]
     else:
-        raise ATKError("UNSUPPORTED_EXPORT_FORMAT", "dataset must be CSV or JSONL")
+        raise ATKError("UNSUPPORTED_EXPORT_FORMAT", "数据集必须是 CSV 或 JSONL")
     if not rows or any(not isinstance(row, dict) for row in rows):
-        raise ATKError("INCOMPLETE_EVIDENCE", "dataset has no cases")
+        raise ATKError("INCOMPLETE_EVIDENCE", "数据集没有 Case")
     mapping = request["mapping"]
     if not mapping.get("input"):
-        raise ATKError("AMBIGUOUS_MAPPING", "dataset input mapping is required")
+        raise ATKError("AMBIGUOUS_MAPPING", "必须提供数据集 input 映射")
     cases = []
     ids = set()
     for index, row in enumerate(rows, 1):
         case_id = str(row.get(mapping.get("id", "")) or f"case-{index}")
         if case_id in ids:
-            raise ATKError("AMBIGUOUS_MAPPING", f"duplicate Case ID: {case_id}")
+            raise ATKError("AMBIGUOUS_MAPPING", f"重复的 Case ID：{case_id}")
         ids.add(case_id)
         if mapping["input"] not in row:
-            raise ATKError("AMBIGUOUS_MAPPING", f"missing input for {case_id}")
+            raise ATKError("AMBIGUOUS_MAPPING", f"{case_id} 缺少输入")
         source_group = row.get(mapping.get("source_group_id", ""))
         if source_group is not None and not isinstance(source_group, str):
-            raise ATKError("AMBIGUOUS_MAPPING", f"invalid source group for {case_id}")
+            raise ATKError("AMBIGUOUS_MAPPING", f"{case_id} 的来源组无效")
         usage = row.get(mapping.get("usage", "")) or "optimization"
         if usage not in {"optimization", "protection", "holdout"}:
-            raise ATKError("AMBIGUOUS_MAPPING", f"invalid usage for {case_id}")
+            raise ATKError("AMBIGUOUS_MAPPING", f"{case_id} 的用途无效")
         attachments = row.get(mapping.get("attachments", ""), []) if mapping.get("attachments") else []
         if isinstance(attachments, str):
             try:
                 attachments = json.loads(attachments) if attachments.strip() else []
             except ValueError as exc:
-                raise ATKError("AMBIGUOUS_MAPPING", f"invalid attachments for {case_id}") from exc
+                raise ATKError("AMBIGUOUS_MAPPING", f"{case_id} 的附件无效") from exc
         if not isinstance(attachments, list) or any(not isinstance(item, str) or not item for item in attachments):
-            raise ATKError("AMBIGUOUS_MAPPING", f"attachments must be a list of file paths for {case_id}")
+            raise ATKError("AMBIGUOUS_MAPPING", f"{case_id} 的附件必须是文件路径列表")
         attachment_snapshots = []
         for item in attachments:
             path = Path(item).expanduser()
             path = (source.parent / path).resolve() if not path.is_absolute() else path.resolve()
             if not path.is_file():
-                raise ATKError("NOT_REPLAYABLE", f"attachment is missing for {case_id}: {path}")
+                raise ATKError("NOT_REPLAYABLE", f"{case_id} 的附件缺失：{path}")
             attachment_snapshots.append({"path": str(path), "sha256": digest(path)})
         case = {
             "id": case_id,
@@ -275,7 +273,7 @@ def store_dataset(root: Path, request: dict) -> dict:
             and {groups[group], case["usage"]} & {"holdout"}
             and groups[group] != case["usage"]
         ):
-            raise ATKError("COMPARISON_INVALID", "holdout shares a source group with optimization/protection")
+            raise ATKError("COMPARISON_INVALID", "holdout 与 optimization／protection 共用来源组")
         if group:
             groups[group] = case["usage"]
     dataset_id = new_id("dataset")
@@ -303,14 +301,14 @@ def load_cases(root: Path, dataset_id: str, *, verify_attachments: bool = False)
     manifest = json.loads((folder / "manifest.json").read_text(encoding="utf-8"))
     path = folder / "cases.jsonl"
     if digest(path) != manifest["cases_sha256"]:
-        raise ATKError("INCOMPLETE_EVIDENCE", "dataset changed after sealing")
+        raise ATKError("INCOMPLETE_EVIDENCE", "数据集在封存后被修改")
     cases = {case["id"]: case for case in (json.loads(line) for line in path.read_text().splitlines())}
     if verify_attachments:
         for case in cases.values():
             for attachment in case.get("attachments", []):
                 attachment_path = Path(attachment["path"])
                 if not attachment_path.is_file() or digest(attachment_path) != attachment["sha256"]:
-                    raise ATKError("NOT_REPLAYABLE", f"Case attachment changed or disappeared: {case['id']}")
+                    raise ATKError("NOT_REPLAYABLE", f"Case 附件已改变或缺失：{case['id']}")
     return cases
 
 
@@ -318,26 +316,26 @@ def source_groups_for_evidence(root: Path, refs: list[dict]) -> list[str]:
     groups = set()
     for ref in refs:
         if not isinstance(ref, dict) or not ref.get("batch_id") or not ref.get("evidence_id"):
-            raise ATKError("INCOMPLETE_EVIDENCE", "Knowledge evidence reference is malformed")
+            raise ATKError("INCOMPLETE_EVIDENCE", "知识证据引用格式错误")
         manifest, records, index = validate_evidence(root, ref["batch_id"])
         if ref["evidence_id"] not in index:
-            raise ATKError("INCOMPLETE_EVIDENCE", "Knowledge evidence reference is missing")
+            raise ATKError("INCOMPLETE_EVIDENCE", "知识证据引用缺失")
         if manifest.get("source_type") == "source_contract":
             continue
         if manifest.get("source_type") != "local_runner":
             group = ref.get("source_group_id")
             if not isinstance(group, str) or not group.strip():
-                raise ATKError("INCOMPLETE_EVIDENCE", "imported Knowledge evidence needs a source group")
+                raise ATKError("INCOMPLETE_EVIDENCE", "导入的知识证据需要来源组")
             groups.add(group)
             continue
         if ref["evidence_id"] not in records:
-            raise ATKError("INCOMPLETE_EVIDENCE", "Knowledge local evidence must reference an Execution")
+            raise ATKError("INCOMPLETE_EVIDENCE", "知识本地证据必须引用 Execution")
         case_id = records[ref["evidence_id"]].get("execution", {}).get("case_id")
         case = load_cases(root, manifest["dataset_id"]).get(case_id)
         if not case:
-            raise ATKError("INCOMPLETE_EVIDENCE", "Knowledge Execution has no matching Case")
+            raise ATKError("INCOMPLETE_EVIDENCE", "知识 Execution 没有匹配的 Case")
         if ref.get("source_group_id") not in {None, case.get("source_group_id")}:
-            raise ATKError("INCOMPLETE_EVIDENCE", "Knowledge source group differs from its Case")
+            raise ATKError("INCOMPLETE_EVIDENCE", "知识来源组与其 Case 不一致")
         if case.get("source_group_id"):
             groups.add(case["source_group_id"])
     return sorted(groups)
@@ -349,13 +347,13 @@ def _reserve_run(
     round_id = request.get("round_id")
     if not round_id:
         if request["purpose"] == "diagnostic_probe" or any(cases[a["case_id"]]["usage"] == "holdout" for a in attempts):
-            raise ATKError("WORKSPACE_CONFLICT", "probes and holdout runs require a recorded Round")
+            raise ATKError("WORKSPACE_CONFLICT", "探针和 holdout 运行需要已记录的 Round")
         return
     with locked(root):
         folder = root / "rounds" / safe_id(round_id)
         round_data = read_json(folder / "round.json")
         if round_data["status"] not in {"analysis_only", "ready", "optimizing", "finalizing"}:
-            raise ATKError("WORKSPACE_CONFLICT", "Round is already closed")
+            raise ATKError("WORKSPACE_CONFLICT", "Round 已关闭")
         plan = (
             read_json(folder / "plan.json") if (folder / "plan.json").exists() else round_data.get("analysis_plan", {})
         )
@@ -365,15 +363,15 @@ def _reserve_run(
                 plan["case_fingerprints"].get(attempt["case_id"]) != attempt["case_fingerprint"] for attempt in attempts
             )
         ):
-            raise ATKError("COMPARISON_INVALID", "formal run Cases differ from the frozen dataset")
+            raise ATKError("COMPARISON_INVALID", "正式运行的 Case 与冻结数据集不一致")
         if plan.get("run_config_hash") and plan["run_config_hash"] != digest(project):
-            raise ATKError("COMPARISON_INVALID", "project runner configuration changed after Round freeze")
+            raise ATKError("COMPARISON_INVALID", "项目 runner 配置在 Round 冻结后被修改")
         if request["purpose"] == "evaluation" and request.get("concurrency", 1) != plan.get("concurrency", 1):
-            raise ATKError("COMPARISON_INVALID", "execution concurrency differs from the frozen plan")
+            raise ATKError("COMPARISON_INVALID", "执行 concurrency 与冻结计划不一致")
         if request["purpose"] == "evaluation" and request.get(
             "timeout_seconds", plan.get("timeout_seconds", 120)
         ) != plan.get("timeout_seconds", 120):
-            raise ATKError("COMPARISON_INVALID", "execution timeout differs from the frozen plan")
+            raise ATKError("COMPARISON_INVALID", "执行超时与冻结计划不一致")
         budget = plan.get("budget", {})
         purpose = request["purpose"]
         probe_config = None
@@ -423,7 +421,7 @@ def _reserve_run(
                     )
                 )
             ):
-                raise ATKError("WORKSPACE_CONFLICT", "probe command, cases, or isolation are not authorized")
+                raise ATKError("WORKSPACE_CONFLICT", "探针命令、Case 或隔离设置未获授权")
             probe_config = {
                 "command": probe_command,
                 "command_hash": permission["command_hash"],
@@ -436,14 +434,14 @@ def _reserve_run(
         elif round_data["status"] == "analysis_only" or not set(a["case_id"] for a in attempts) <= set(
             plan["case_ids"]
         ):
-            raise ATKError("COMPARISON_INVALID", "formal execution is outside the frozen Round")
+            raise ATKError("COMPARISON_INVALID", "正式执行超出冻结 Round 范围")
         phase = request.get("phase", "incremental")
         if round_data["status"] == "finalizing" and purpose == "evaluation" and phase == "incremental":
-            raise ATKError("WORKSPACE_CONFLICT", "finalizing Round cannot start incremental runs")
+            raise ATKError("WORKSPACE_CONFLICT", "正在收尾的 Round 不能启动增量运行")
         if purpose == "evaluation" and phase not in {"incremental", "final", "external_fix"}:
-            raise ATKError("COMPARISON_INVALID", "evaluation phase is not recognized")
+            raise ATKError("COMPARISON_INVALID", "无法识别评测阶段")
         if purpose == "evaluation" and round_data.get("external_fix_identity") and phase != "external_fix":
-            raise ATKError("COMPARISON_INVALID", "external fix Round needs its dedicated verification phase")
+            raise ATKError("COMPARISON_INVALID", "外部修复 Round 需要专用验证阶段")
         if (
             purpose == "evaluation"
             and phase == "external_fix"
@@ -454,13 +452,13 @@ def _reserve_run(
                 or request["revision_id"] != round_data["baseline_revision_id"]
             )
         ):
-            raise ATKError("COMPARISON_INVALID", "external fix verification must run on the new B0")
+            raise ATKError("COMPARISON_INVALID", "外部修复验证必须在新 B0 上运行")
         if (
             purpose == "evaluation"
             and phase == "final"
             and (round_data["pending_candidate_id"] or not round_data["active_candidate_ids"])
         ):
-            raise ATKError("COMPARISON_INVALID", "final runs require a fixed accepted Revision")
+            raise ATKError("COMPARISON_INVALID", "最终运行需要固定且已采用的 Revision")
         if (
             purpose == "evaluation"
             and phase in {"final", "external_fix"}
@@ -473,7 +471,7 @@ def _reserve_run(
                 or request.get("repeats", 1) != plan["final_repeats"]
                 or request["revision_id"] not in {round_data["baseline_revision_id"], round_data["current_revision_id"]}
             ):
-                raise ATKError("COMPARISON_INVALID", "final run differs from the frozen Case and repeat plan")
+                raise ATKError("COMPARISON_INVALID", "最终运行与冻结 Case 和重复计划不一致")
         holdout = [cases[a["case_id"]] for a in attempts if cases[a["case_id"]]["usage"] == "holdout"]
         if holdout:
             milestone = request.get("holdout_milestone_id")
@@ -483,18 +481,14 @@ def _reserve_run(
                 or not milestone
                 or milestone != plan.get("holdout_milestone_id")
             ):
-                raise ATKError(
-                    "COMPARISON_INVALID", "holdout requires its frozen final milestone and no pending candidate"
-                )
+                raise ATKError("COMPARISON_INVALID", "holdout 需要冻结最终里程碑，且不能有未决候选")
             groups = {case["source_group_id"] for case in holdout}
             if not all(groups):
-                raise ATKError("COMPARISON_INVALID", "holdout source group is unknown")
+                raise ATKError("COMPARISON_INVALID", "holdout 来源组未知")
             for dataset in (root / "datasets").glob("*/manifest.json"):
                 for case in load_cases(root, dataset.parent.name).values():
                     if case["source_group_id"] in groups and case["usage"] != "holdout":
-                        raise ATKError(
-                            "COMPARISON_INVALID", "holdout source group was used for optimization or protection"
-                        )
+                        raise ATKError("COMPARISON_INVALID", "holdout 来源组已用于 optimization 或 protection")
             for knowledge in (root / "knowledge").glob("*/revision-*.json"):
                 entry = read_json(knowledge)
                 used_groups = entry.get("optimization_source_group_ids")
@@ -503,13 +497,13 @@ def _reserve_run(
                         root, entry.get("evidence_refs", []) + entry.get("contrary_refs", [])
                     )
                 if groups.intersection(used_groups):
-                    raise ATKError("COMPARISON_INVALID", "holdout source group was used for optimization knowledge")
+                    raise ATKError("COMPARISON_INVALID", "holdout 来源组已用于优化知识")
             exposure_path = root / "source-exposure.json"
             exposure = read_json(exposure_path) if exposure_path.exists() else {"groups": {}}
             for group in groups:
                 previous = exposure["groups"].get(group)
                 if previous and (previous["round_id"], previous["milestone_id"]) != (round_id, milestone):
-                    raise ATKError("COMPARISON_INVALID", "holdout source group was exposed in another milestone")
+                    raise ATKError("COMPARISON_INVALID", "holdout 来源组已在其他里程碑暴露")
         usage_path = folder / "budget-usage.json"
         usage = read_json(usage_path) if usage_path.exists() else {"executions": 0, "probes": 0, "reservations": []}
         predecessor_id = request.get("retry_batch_id") or request.get("continue_batch_id")
@@ -518,7 +512,7 @@ def _reserve_run(
             or reservation.get("continue_batch_id") == predecessor_id
             for reservation in usage["reservations"]
         ):
-            raise ATKError("COMPARISON_INVALID", "batch was already continued; use its successor")
+            raise ATKError("COMPARISON_INVALID", "批次已有续跑；请使用后继批次")
         if (
             purpose == "evaluation"
             and phase in {"final", "external_fix"}
@@ -528,11 +522,11 @@ def _reserve_run(
                 for reservation in usage["reservations"]
             )
         ):
-            raise ATKError("COMPARISON_INVALID", "final side was already run; reassess its evidence instead")
+            raise ATKError("COMPARISON_INVALID", "最终验证此侧已运行；请重新判定已有证据")
         counter = "probes" if purpose == "diagnostic_probe" else "executions"
         limit = budget.get(counter, 0)
         if type(limit) is not int or limit < 0 or usage[counter] + len(attempts) > limit:
-            raise ATKError("BUDGET_EXHAUSTED", f"{counter} budget cannot cover {len(attempts)} attempts")
+            raise ATKError("BUDGET_EXHAUSTED", f"{counter} 预算不足以覆盖 {len(attempts)} 次 attempt")
         if (
             probe_config
             and sum(
@@ -543,7 +537,7 @@ def _reserve_run(
             + len(attempts)
             > max_calls
         ):
-            raise ATKError("BUDGET_EXHAUSTED", "probe permission max_calls exceeded")
+            raise ATKError("BUDGET_EXHAUSTED", "超出探针许可 max_calls")
         if purpose == "evaluation" and phase not in {"final", "external_fix"}:
             final_needed = (
                 (1 if round_data.get("external_fix_identity") else 2)
@@ -556,14 +550,14 @@ def _reserve_run(
                 if reservation.get("phase") in {"final", "external_fix"}
             )
             if limit - usage["executions"] - len(attempts) < max(0, final_needed - final_spent):
-                raise ATKError("BUDGET_EXHAUSTED", "run would consume the reserved final validation budget")
+                raise ATKError("BUDGET_EXHAUSTED", "本次运行会消耗预留的最终验证预算")
         if purpose == "evaluation" and phase in {"final", "external_fix"} and round_data["status"] != "finalizing":
             round_data.setdefault("transitions", []).append(
                 {
                     "action": "start_finalizing",
                     "from_status": round_data["status"],
                     "to_status": "finalizing",
-                    "reason": "frozen final execution",
+                    "reason": "冻结的最终执行",
                     "at": now(),
                 }
             )
@@ -603,17 +597,17 @@ def run_evaluation(root: Path, request: dict) -> dict:
 def _run_evaluation_locked(root: Path, request: dict) -> dict:
     project = json.loads((root / "project.json").read_text(encoding="utf-8"))
     if project.get("analysis_only") and request.get("purpose") != "diagnostic_probe":
-        raise ATKError("NOT_REPLAYABLE", "analysis-only project needs explicit runtime setup before execution")
+        raise ATKError("NOT_REPLAYABLE", "仅分析项目执行前需明确配置 runtime")
     if project.get("analysis_only") and not all(key in project for key in ("python", "command", "components")):
-        raise ATKError("NOT_REPLAYABLE", "analysis-only probe needs explicit runtime setup")
+        raise ATKError("NOT_REPLAYABLE", "仅分析探针需明确配置 runtime")
     concurrency = request.get("concurrency", 1)
     if type(concurrency) is not int or concurrency < 1:
-        raise ATKError("INCOMPLETE_EVIDENCE", "concurrency must be a positive integer")
+        raise ATKError("INCOMPLETE_EVIDENCE", "concurrency 必须是正整数")
     if type(request.get("batch_timeout_seconds", 3600)) is not int or request.get("batch_timeout_seconds", 3600) < 1:
-        raise ATKError("INCOMPLETE_EVIDENCE", "batch timeout must be a positive integer")
+        raise ATKError("INCOMPLETE_EVIDENCE", "批次超时必须是正整数")
     for effect in project.get("external_effects", []):
         if not isinstance(effect, dict) or not isinstance(effect.get("name"), str):
-            raise ATKError("NOT_REPLAYABLE", "external effect declaration is invalid")
+            raise ATKError("NOT_REPLAYABLE", "外部副作用声明无效")
         protection = effect.get("protection")
         if (
             not isinstance(protection, dict)
@@ -621,7 +615,7 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
             or not isinstance(protection.get("evidence_ref"), str)
             or not protection["evidence_ref"].strip()
         ):
-            raise ATKError("NOT_REPLAYABLE", f"external effect lacks recorded protection: {effect['name']}")
+            raise ATKError("NOT_REPLAYABLE", f"外部副作用缺少保护记录：{effect['name']}")
     repo = Path(project["workspace_path"])
     plan_path = root / "rounds" / safe_id(request["round_id"]) / "plan.json" if request.get("round_id") else None
     formal_plan = (
@@ -629,12 +623,12 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
     )
     formal_timeout = request.get("timeout_seconds", formal_plan.get("timeout_seconds", 120))
     if type(formal_timeout) not in {int, float} or not math.isfinite(formal_timeout) or formal_timeout <= 0:
-        raise ATKError("INCOMPLETE_EVIDENCE", "execution timeout must be positive and finite")
+        raise ATKError("INCOMPLETE_EVIDENCE", "执行超时必须是有限正数")
     version_commands = _version_commands(project["components"])
     retry_batch_id = request.get("retry_batch_id")
     continue_batch_id = request.get("continue_batch_id")
     if retry_batch_id and continue_batch_id:
-        raise ATKError("COMPARISON_INVALID", "retry and continuation are separate operations")
+        raise ATKError("COMPARISON_INVALID", "重试和续跑是独立操作")
     prior_manifest, prior_records = None, []
     predecessor_id = retry_batch_id or continue_batch_id
     if predecessor_id:
@@ -644,7 +638,7 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
             or (retry_batch_id and prior_manifest.get("status") != "sealed")
             or (continue_batch_id and prior_manifest.get("status") not in {"partial", "interrupted"})
         ):
-            raise ATKError("COMPARISON_INVALID", "batch state does not permit the requested retry or continuation")
+            raise ATKError("COMPARISON_INVALID", "批次状态不允许请求的重试或续跑")
         prior_records = (
             list(records.values())
             if retry_batch_id
@@ -655,7 +649,7 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
         for key in ("dataset_id", "revision_id", "round_id", "purpose", "phase"):
             expected_value = request.get(key, "incremental") if key == "phase" else request.get(key)
             if expected_value != prior_manifest.get(key):
-                raise ATKError("REVISION_MISMATCH", f"continuation changes frozen {key}")
+                raise ATKError("REVISION_MISMATCH", f"续跑改变了冻结的 {key}")
     cases = load_cases(root, request["dataset_id"], verify_attachments=True)
     selected = request.get("case_ids", [])
     repeats = request.get("repeats", 1)
@@ -666,17 +660,17 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
         or repeats < 1
         or any(case_id not in cases for case_id in selected)
     ):
-        raise ATKError("INCOMPLETE_EVIDENCE", "run requires known Cases and positive repeat count")
+        raise ATKError("INCOMPLETE_EVIDENCE", "运行需要已知 Case 和正整数重复次数")
     if request["purpose"] not in {"evaluation", "diagnostic_probe"}:
-        raise ATKError("INCOMPLETE_EVIDENCE", "invalid run purpose")
+        raise ATKError("INCOMPLETE_EVIDENCE", "运行用途无效")
     if predecessor_id and request["purpose"] != "evaluation":
-        raise ATKError("COMPARISON_INVALID", "diagnostic probes cannot be continued as formal evidence")
+        raise ATKError("COMPARISON_INVALID", "诊断探针不能续跑为正式证据")
     batch_id = new_id("batch")
     attempts = []
     if continue_batch_id:
         previous_path = root / "evidence" / safe_id(continue_batch_id) / "request.json"
         if not previous_path.is_file() or prior_manifest.get("request_sha256") != digest(previous_path):
-            raise ATKError("INCOMPLETE_EVIDENCE", "predecessor attempt plan changed")
+            raise ATKError("INCOMPLETE_EVIDENCE", "前驱 attempt 计划已改变")
         previous_request = read_json(previous_path)
         pending = set(prior_manifest.get("not_started_record_ids", [])) | set(
             prior_manifest.get("unknown_record_ids", [])
@@ -693,11 +687,11 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
             or not authorization.get("reason")
             or not authorization.get("risk")
         ):
-            raise ATKError("COMPARISON_INVALID", "unknown executions need inspection and explicit rerun authorization")
+            raise ATKError("COMPARISON_INVALID", "未知执行需检查并明确授权重跑")
         if not pending or pending != {item["record_id"] for item in previous_request["attempts"]} - set(
             prior_manifest.get("completed_record_ids", [])
         ):
-            raise ATKError("COMPARISON_INVALID", "batch has no safely identifiable pending slots")
+            raise ATKError("COMPARISON_INVALID", "批次没有可安全识别的待执行槽位")
         for previous in previous_request["attempts"]:
             if previous["record_id"] not in pending:
                 continue
@@ -705,7 +699,7 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
                 previous["case_id"] not in cases
                 or previous["case_fingerprint"] != cases[previous["case_id"]]["fingerprint"]
             ):
-                raise ATKError("REVISION_MISMATCH", "continuation Case changed")
+                raise ATKError("REVISION_MISMATCH", "续跑 Case 已改变")
             attempts.append(
                 {
                     "execution_id": new_id("execution"),
@@ -722,17 +716,17 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
         plan = read_json(root / "rounds" / safe_id(request["round_id"]) / "plan.json")
         max_retries = plan.get("max_retries_per_slot", 0)
         if not targets or len(targets) != len(set(targets)) or type(max_retries) is not int or max_retries < 1:
-            raise ATKError("COMPARISON_INVALID", "retry needs distinct targets and a frozen retry allowance")
+            raise ATKError("COMPARISON_INVALID", "重试需要唯一目标及冻结的重试额度")
         for target_id in targets:
             target = executions.get(target_id)
             if not target or target["execution"]["status"] not in {"timeout", "infra_error"}:
-                raise ATKError("COMPARISON_INVALID", "only an infrastructure failure can be retried")
+                raise ATKError("COMPARISON_INVALID", "仅基础设施失败可重试")
             previous = target["execution"]
             if (
                 previous["case_id"] not in cases
                 or previous["case_fingerprint"] != cases[previous["case_id"]]["fingerprint"]
             ):
-                raise ATKError("REVISION_MISMATCH", "retry Case content differs from the original attempt")
+                raise ATKError("REVISION_MISMATCH", "重试 Case 内容与原 attempt 不一致")
             slot = (previous["case_id"], previous["repeat_index"])
             chain = [
                 r["execution"]
@@ -740,7 +734,7 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
                 if (r["execution"]["case_id"], r["execution"]["repeat_index"]) == slot
             ]
             if chain[-1]["id"] != target_id or len(chain) - 1 >= max_retries:
-                raise ATKError("COMPARISON_INVALID", "retry target is stale or its allowance is exhausted")
+                raise ATKError("COMPARISON_INVALID", "重试目标已过期或额度已耗尽")
             attempts.append(
                 {
                     "execution_id": new_id("execution"),
@@ -765,14 +759,14 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
                     }
                 )
     if predecessor_id and prior_manifest.get("run_config_hash") != digest(project):
-        raise ATKError("COMPARISON_INVALID", "runner configuration changed before continuation")
+        raise ATKError("COMPARISON_INVALID", "runner 配置在续跑前被修改")
     if predecessor_id and prior_manifest.get("timeout_seconds") != formal_timeout:
-        raise ATKError("COMPARISON_INVALID", "execution timeout changed before continuation")
+        raise ATKError("COMPARISON_INVALID", "执行超时在续跑前被修改")
     runner = root / "adapters" / "runner.py"
     if not runner.exists():
-        raise ATKError("NOT_REPLAYABLE", f"project runner is missing: {runner}")
+        raise ATKError("NOT_REPLAYABLE", f"项目 runner 缺失：{runner}")
     if predecessor_id and prior_manifest.get("runner_hash") != digest(runner):
-        raise ATKError("COMPARISON_INVALID", "runner changed before continuation")
+        raise ATKError("COMPARISON_INVALID", "runner 在续跑前被修改")
     with execution_revision(repo, root, request):
         probe_config = _reserve_run(root, request, cases, attempts, batch_id, project)
         folder = root / "evidence" / batch_id
@@ -886,7 +880,7 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
     actual_components = batch.get("actual_components", [])
     if not isinstance(actual_components, list) or any(not isinstance(item, dict) for item in actual_components):
         actual_components = []
-        component_drift.append({"reason": "runner returned an invalid component inventory"})
+        component_drift.append({"reason": "runner 返回了无效组件清单"})
     declared_components = {component["component_id"]: component for component in project["components"]}
     observed_ids = [component.get("component_id") for component in actual_components]
     valid_ids = all(isinstance(component_id, str) and component_id for component_id in observed_ids)
@@ -906,11 +900,11 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
             for key in ("role", "change_role", "source_path")
         )
     ):
-        component_drift.append({"reason": "runner component inventory differs from project configuration"})
+        component_drift.append({"reason": "runner 组件清单与项目配置不一致"})
     for component_id, (version_command, _, expected_version) in version_commands.items():
         observed_component = observed_components.get(component_id)
         if not observed_component:
-            component_drift.append({"component_id": component_id, "reason": "runner omitted component identity"})
+            component_drift.append({"component_id": component_id, "reason": "runner 未提供组件身份"})
             continue
         (before, before_issue), (after, after_issue) = versions_before[component_id], versions_after[component_id]
         if before_issue:
@@ -959,15 +953,15 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
         atomic_write(records_path, b"\n".join(canonical(record) for record in records) + (b"\n" if records else b""))
     expected = {item["record_id"]: item for item in attempts}
     if batch.get("batch_id") != batch_id or batch.get("planned_record_ids") != list(expected):
-        raise ATKError("INCOMPLETE_EVIDENCE", "runner changed planned attempt identities")
+        raise ATKError("INCOMPLETE_EVIDENCE", "runner 改变了计划 attempt 身份")
     observed = set()
     invalid_execution_status_ids = []
     for record in records:
         if not isinstance(record, dict):
-            raise ATKError("INCOMPLETE_EVIDENCE", "runner returned an invalid attempt record")
+            raise ATKError("INCOMPLETE_EVIDENCE", "runner 返回了无效 attempt 记录")
         record_id = record.get("id")
         if not isinstance(record_id, str) or record_id not in expected or record_id in observed:
-            raise ATKError("INCOMPLETE_EVIDENCE", "runner returned unknown or duplicate record ID")
+            raise ATKError("INCOMPLETE_EVIDENCE", "runner 返回了未知或重复 Record ID")
         observed.add(record_id)
         execution = record.get("execution") or {}
         attempt = expected[record_id]
@@ -987,7 +981,7 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
             or record.get("case_id") != attempt["case_id"]
             or any(execution.get(key) != value for key, value in identity.items())
         ):
-            raise ATKError("INCOMPLETE_EVIDENCE", "runner changed an attempt identity")
+            raise ATKError("INCOMPLETE_EVIDENCE", "runner 改变了 attempt 身份")
         if execution.get("status") not in {
             "completed",
             "agent_error",
@@ -1000,30 +994,30 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
     for field in ("completed_record_ids", "not_started_record_ids", "running_record_ids"):
         ids = batch.get(field, [])
         if not isinstance(ids, list) or any(not isinstance(item, str) for item in ids) or len(ids) != len(set(ids)):
-            raise ATKError("INCOMPLETE_EVIDENCE", f"runner returned invalid {field}")
+            raise ATKError("INCOMPLETE_EVIDENCE", f"runner 返回的 {field} 无效")
     declared_completed = set(batch.get("completed_record_ids", []))
     declared_not_started = set(batch.get("not_started_record_ids", []))
     running_record_id = batch.get("running_record_id")
     if declared_completed - set(expected) or (
         running_record_id is not None and (not isinstance(running_record_id, str) or running_record_id not in expected)
     ):
-        raise ATKError("INCOMPLETE_EVIDENCE", "runner returned unknown attempt status")
+        raise ATKError("INCOMPLETE_EVIDENCE", "runner 返回了未知 attempt 状态")
     running = set(batch.get("running_record_ids", []))
     if running_record_id:
         running.add(running_record_id)
     if running - set(expected):
-        raise ATKError("INCOMPLETE_EVIDENCE", "runner returned unknown running attempt")
+        raise ATKError("INCOMPLETE_EVIDENCE", "runner 返回了未知运行中 attempt")
     confirmed = (declared_completed & observed) - running
     not_started = declared_not_started - observed
     if not_started - set(expected):
-        raise ATKError("INCOMPLETE_EVIDENCE", "runner returned unknown not-started attempt")
+        raise ATKError("INCOMPLETE_EVIDENCE", "runner 返回了未知未开始 attempt")
     not_started -= declared_completed | running
     unknown = set(expected) - confirmed - not_started
     status_conflict = bool(
         declared_not_started & (declared_completed | observed) or running & (declared_completed | declared_not_started)
     )
     if predecessor_id and actual_components != prior_manifest.get("actual_components"):
-        raise ATKError("REVISION_MISMATCH", "component identity changed during continuation")
+        raise ATKError("REVISION_MISMATCH", "续跑期间组件身份改变")
     if prior_records:
         records = prior_records + records
         atomic_write(records_path, b"\n".join(canonical(record) for record in records) + b"\n")

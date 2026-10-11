@@ -8,7 +8,9 @@ from pathlib import Path
 import pytest
 
 from agent_tune_kit.core import (
+    ASSESSMENT_COLUMNS,
     ATKError,
+    digest,
     read_assessment,
     render_assessment_html,
     safe_id,
@@ -308,7 +310,7 @@ def test_trace_bundle_joins_separate_observations_and_scores(tmp_path: Path) -> 
         },
     )
     assert assessment.is_file()
-    with pytest.raises(ATKError, match="unknown Trace"):
+    with pytest.raises(ATKError, match="未知 Trace"):
         (source / "scores.json").write_text(json.dumps([{"id": "score-1", "traceId": "missing", "value": 0.7}]))
         import_evidence(root, request)
 
@@ -389,7 +391,7 @@ def test_observation_rows_use_declared_field_aliases_and_reject_conflicts(tmp_pa
     assert record["events"][0]["started_at"] == "2026-09-26T10:00:00+00:00"
     assert "observation:obs-1" in index
     source.write_text(json.dumps([{"id": "wrong", "observation_key": "obs-1", "trace_key": "trace-1"}]))
-    with pytest.raises(ATKError, match="conflicting field mapping"):
+    with pytest.raises(ATKError, match="字段.*映射冲突"):
         import_evidence(root, request)
 
 
@@ -434,7 +436,7 @@ def test_assessment_requires_evidence_for_its_own_record(tmp_path: Path) -> None
         "judger": {"version": "v1", "readiness": "uncalibrated"},
         "rows": rows,
     }
-    with pytest.raises(ATKError, match="own record"):
+    with pytest.raises(ATKError, match="自身记录"):
         store_assessment(root, request)
     for row in rows:
         row["evidence_refs"].append({"batch_id": batch["id"], "evidence_id": row["record_id"]})
@@ -442,7 +444,7 @@ def test_assessment_requires_evidence_for_its_own_record(tmp_path: Path) -> None
 
 
 def test_artifact_id_cannot_escape_workspace() -> None:
-    with pytest.raises(ATKError, match="unsafe artifact ID"):
+    with pytest.raises(ATKError, match="不安全的产物 ID"):
         safe_id("../../outside")
 
 
@@ -471,7 +473,7 @@ def test_source_contract_keeps_source_and_artifact_identities_separate(tmp_path:
     assert next(iter(index.values()))["origin"] == "source_contract"
     assert "secret-value" not in (root / "evidence" / manifest["id"] / "records.jsonl").read_text()
     assert "[REDACTED SECRET LINE]" in record["excerpt"]
-    with pytest.raises(ATKError, match="inside the target project"):
+    with pytest.raises(ATKError, match="目标项目内"):
         record_source_contract(
             repo,
             root,
@@ -525,7 +527,7 @@ def test_assessment_csv_is_authoritative_and_tampering_is_rejected(tmp_path: Pat
             }
         ],
     }
-    with pytest.raises(ATKError, match="invalid evidence reference"):
+    with pytest.raises(ATKError, match="无效证据引用"):
         store_assessment(root, {**assessment_request, "rows": [{**assessment_request["rows"][0], "evidence_refs": []}]})
     bad_judger = {
         "version": "bad-v1",
@@ -535,16 +537,25 @@ def test_assessment_csv_is_authoritative_and_tampering_is_rejected(tmp_path: Pat
             {"source_ref": "negative", "expected_verdict": "fail", "actual_verdict": "pass"},
         ],
     }
-    with pytest.raises(ATKError, match="matched positive and negative"):
+    with pytest.raises(ATKError, match="判定一致的正反示例"):
         store_assessment(root, {**assessment_request, "judger": bad_judger})
     path = store_assessment(root, assessment_request)
     manifest, rows = read_assessment(root, path.parent.name)
     assert manifest["judger_readiness"] == "uncalibrated"
     assert rows[0]["verdict"] == "pass"
     report = render_assessment_html(root, path.parent.name).read_text()
+    assert "lang='zh-CN'" in report
+    assert "<th>判定理由</th>" in report
+    assert "<th>证据引用</th>" in report
+    assert "<td>通过</td>" in report
+    assert "<td>有效</td>" in report
+    assert "<td>语义判定</td>" in report
+    assert "<title>imported result</title>" in report
     assert "&lt;script&gt;alert(1)&lt;/script&gt;" in report
     assert "<script>" not in report
     csv_path = path.parent / "assessment.csv"
+    assert digest(csv_path) == manifest["csv_sha256"]
+    assert csv_path.read_text().splitlines()[0] == ",".join(ASSESSMENT_COLUMNS)
     csv_path.write_text(csv_path.read_text().replace("pass", "fail"))
-    with pytest.raises(ATKError, match="fingerprint mismatch"):
+    with pytest.raises(ATKError, match="指纹不匹配"):
         read_assessment(root, path.parent.name)

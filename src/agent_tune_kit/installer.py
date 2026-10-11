@@ -84,22 +84,22 @@ def read_text(node: PayloadRoot) -> str:
 def load_manifest_from_payload(root: PayloadRoot) -> dict[str, Any]:
     manifest_path = child(root, ".codex-plugin", "plugin.json")
     if not exists(manifest_path):
-        raise InstallError(f"missing plugin manifest: {manifest_path}")
+        raise InstallError(f"插件 manifest 缺失：{manifest_path}")
     manifest = json.loads(read_text(manifest_path))
     if not isinstance(manifest, dict):
-        raise InstallError("plugin manifest must be a JSON object")
+        raise InstallError("插件 manifest 必须是 JSON 对象")
     return manifest
 
 
 def validate_manifest_payload(root: PayloadRoot) -> dict[str, Any]:
     manifest = load_manifest_from_payload(root)
     if manifest.get("name") != PLUGIN_NAME:
-        raise InstallError(f"manifest name must be {PLUGIN_NAME!r}")
+        raise InstallError(f"manifest name 必须为 {PLUGIN_NAME!r}")
     if manifest.get("skills") != "./skills/":
-        raise InstallError("manifest skills must be ./skills/")
+        raise InstallError("manifest skills 必须为 ./skills/")
     interface = manifest.get("interface")
     if not isinstance(interface, dict):
-        raise InstallError("manifest interface must be an object")
+        raise InstallError("manifest interface 必须是对象")
     for key in [
         "displayName",
         "shortDescription",
@@ -110,12 +110,12 @@ def validate_manifest_payload(root: PayloadRoot) -> dict[str, Any]:
         "defaultPrompt",
     ]:
         if key not in interface:
-            raise InstallError(f"manifest interface missing {key}")
+            raise InstallError(f"manifest interface 缺少 {key}")
     if len(interface.get("defaultPrompt", [])) > 3:
-        raise InstallError("manifest defaultPrompt must have at most three entries")
+        raise InstallError("manifest defaultPrompt 最多三项")
     skills_dir = child(root, "skills")
     if not is_dir(skills_dir):
-        raise InstallError(f"manifest skills directory does not exist: {skills_dir}")
+        raise InstallError(f"manifest skills 目录不存在：{skills_dir}")
     return manifest
 
 
@@ -139,7 +139,7 @@ def resolve_payload_source(*, install_mode_hint: str | None = None) -> PayloadSo
     if dev_root is not None:
         manifest = validate_manifest_payload(dev_root)
         if manifest["version"] != version:
-            raise InstallError(f"CLI {version} and bundled plugin {manifest['version']} differ")
+            raise InstallError(f"CLI {version} 与随包插件 {manifest['version']} 版本不一致")
         mode = install_mode_hint or "symlink-dev"
         return PayloadSource(
             kind="dev-root",
@@ -154,7 +154,7 @@ def resolve_payload_source(*, install_mode_hint: str | None = None) -> PayloadSo
         root = root.joinpath(part)
     manifest = validate_manifest_payload(root)
     if manifest["version"] != version:
-        raise InstallError(f"CLI {version} and bundled plugin {manifest['version']} differ")
+        raise InstallError(f"CLI {version} 与随包插件 {manifest['version']} 版本不一致")
     return PayloadSource(
         kind="package-resource",
         package_version=version,
@@ -170,15 +170,15 @@ def load_json(path: Path) -> dict[str, Any]:
     with path.open("r", encoding="utf-8") as handle:
         data = json.load(handle)
     if not isinstance(data, dict):
-        raise InstallError(f"marketplace must be a JSON object: {path}")
+        raise InstallError(f"marketplace 必须是 JSON 对象：{path}")
     data.setdefault("name", "personal")
     interface = data.setdefault("interface", {})
     if not isinstance(interface, dict):
-        raise InstallError("marketplace interface must be an object")
+        raise InstallError("marketplace interface 必须是对象")
     interface.setdefault("displayName", "Personal")
     plugins = data.setdefault("plugins", [])
     if not isinstance(plugins, list):
-        raise InstallError("marketplace plugins must be an array")
+        raise InstallError("marketplace plugins 必须是数组")
     return data
 
 
@@ -303,16 +303,16 @@ def authorize_conflicts(conflicts: list[str], *, yes: bool, force: bool, no_inpu
         return
     summary = "; ".join(conflicts)
     if yes and not force:
-        raise InstallError(f"refusing destructive replacement with --yes alone ({summary}); use --yes --force")
+        raise InstallError(f"仅 --yes 不允许覆盖冲突（{summary}）；请使用 --yes --force")
     noninteractive = no_input or not sys.stdin.isatty()
     if noninteractive:
         if yes and force:
             return
-        raise InstallError(f"conflict requires interactive confirmation or --yes --force: {summary}")
+        raise InstallError(f"冲突需要交互确认或 --yes --force：{summary}")
     if yes and force:
         return
-    if not prompt_confirm(f"Replace existing files/registration ({summary})? This cannot be undone."):
-        raise InstallError("replacement cancelled")
+    if not prompt_confirm(f"替换已有文件／注册（{summary}）？此操作无法撤销。"):
+        raise InstallError("已取消替换")
 
 
 def remove_path(path: Path) -> None:
@@ -363,11 +363,11 @@ def ensure_plugin_store(target: Path, *, use_copy: bool, payload_source: Payload
             write_install_marker(staged, payload_source)
         else:
             if not payload_source.dev_root:
-                raise InstallError("developer install requires a source checkout")
+                raise InstallError("开发安装需要源码 checkout")
             try:
                 staged.symlink_to(payload_source.dev_root, target_is_directory=True)
             except OSError as exc:
-                raise InstallError(f"could not link plugin files ({exc}); rerun with --copy") from exc
+                raise InstallError(f"无法链接插件文件（{exc}）；请用 --copy 重试") from exc
         validate_manifest(staged / ".codex-plugin" / "plugin.json")
         remove_path(target)
         staged.rename(target)
@@ -377,11 +377,11 @@ def run_preview(args: argparse.Namespace) -> int:
     payload_source = resolve_payload_source(install_mode_hint="copy" if args.copy else None)
     target = args.plugin_store.expanduser() / PLUGIN_NAME
     marketplace = load_json(args.marketplace_path.expanduser())
-    print(f"Will install Agent Tune Kit {payload_source.package_version} for Codex.")
-    print(f"Location: {target}")
+    print(f"将为 Codex 安装 Agent Tune Kit {payload_source.package_version}。")
+    print(f"位置：{target}")
     if marketplace_conflict(marketplace) or plugin_store_conflict(target, payload_source):
-        print("Existing files or registration conflict with this installation; replacement requires confirmation.")
-    print("No files changed. Run atk install to install.")
+        print("已有文件或注册与本次安装冲突；替换需要确认。")
+    print("未修改文件。运行 atk install 进行安装。")
     return 0
 
 
@@ -393,37 +393,37 @@ def run_install(args: argparse.Namespace) -> int:
     marketplace = load_json(marketplace_path)
     conflicts: list[str] = []
     if marketplace_conflict(marketplace):
-        conflicts.append(f"Agent Tune Kit is registered at another location in {marketplace_path}")
+        conflicts.append(f"Agent Tune Kit 已在 {marketplace_path} 注册到其他位置")
     if plugin_store_conflict(target, payload_source):
-        conflicts.append(f"{target} contains files not managed by this installer")
+        conflicts.append(f"{target} 包含非本安装器管理的文件")
     authorize_conflicts(conflicts, yes=args.yes, force=args.force, no_input=args.no_input)
 
     ensure_plugin_store(target, use_copy=args.copy, payload_source=payload_source)
     write_json_atomic(marketplace_path, update_marketplace(marketplace))
     manifest = check_installation(marketplace_path, target)
     if manifest.get("version") != payload_source.package_version:
-        raise InstallError("installed plugin version differs from CLI; run atk install again")
-    print(f"Agent Tune Kit {payload_source.package_version} installed locally for Codex.")
-    print("Next: open /plugins in Codex and enable Agent Tune Kit if needed.")
-    print("If $atk-* skills are missing, start a new Codex session.")
+        raise InstallError("已安装插件与 CLI 版本不一致；请重新运行 atk install")
+    print(f"已为 Codex 本地安装 Agent Tune Kit {payload_source.package_version}。")
+    print("下一步：在 Codex 打开 /plugins，按需启用 Agent Tune Kit。")
+    print("若缺少 $atk-* Skill，请开启新的 Codex 会话。")
     return 0
 
 
 def check_installation(marketplace_path: Path, target: Path) -> dict[str, Any]:
     found = find_marketplace_entry(load_json(marketplace_path))
     if not found or any(found[1].get(key) != value for key, value in marketplace_entry().items()):
-        raise InstallError("plugin registration is missing or invalid; run atk install")
+        raise InstallError("插件注册缺失或无效；请运行 atk install")
     return validate_manifest(target / ".codex-plugin" / "plugin.json")
 
 
 def run_status(args: argparse.Namespace) -> int:
     target = args.plugin_store.expanduser() / PLUGIN_NAME
     manifest = check_installation(args.marketplace_path.expanduser(), target)
-    print(f"Agent Tune Kit {manifest.get('version', 'unknown')} is installed locally.")
-    print(f"Location: {target}")
+    print(f"Agent Tune Kit {manifest.get('version', '未知')} 已本地安装。")
+    print(f"位置：{target}")
     if manifest.get("version") != package_version():
-        print(f"CLI version is {package_version()}; run atk install to update Skills when convenient.")
-    print("Open /plugins in Codex to check whether Agent Tune Kit is enabled.")
+        print(f"CLI 版本为 {package_version()}；方便时运行 atk install 更新 Skill。")
+    print("在 Codex 打开 /plugins，检查 Agent Tune Kit 是否已启用。")
     return 0
 
 
@@ -441,33 +441,31 @@ def add_common_flags(parser: argparse.ArgumentParser) -> None:
         "--force",
         action="store_true",
         default=argparse.SUPPRESS,
-        help="allow replacing conflicting files with --yes",
+        help="与 --yes 一起使用，允许替换冲突文件",
     )
-    parser.add_argument(
-        "--yes", action="store_true", default=argparse.SUPPRESS, help="confirm replacement with --force"
-    )
-    parser.add_argument("--no-input", action="store_true", default=argparse.SUPPRESS, help="fail instead of prompting")
-    parser.add_argument("--marketplace-path", type=Path, default=argparse.SUPPRESS, help="local plugin registry file")
-    parser.add_argument("--plugin-store", type=Path, default=argparse.SUPPRESS, help="plugin installation directory")
+    parser.add_argument("--yes", action="store_true", default=argparse.SUPPRESS, help="与 --force 一起使用，确认替换")
+    parser.add_argument("--no-input", action="store_true", default=argparse.SUPPRESS, help="需要交互确认时直接失败")
+    parser.add_argument("--marketplace-path", type=Path, default=argparse.SUPPRESS, help="本地插件注册文件")
+    parser.add_argument("--plugin-store", type=Path, default=argparse.SUPPRESS, help="插件安装目录")
     parser.add_argument(
         "--copy",
         action="store_true",
         default=argparse.SUPPRESS,
-        help="copy plugin files instead of linking a developer checkout",
+        help="复制插件文件，而不是链接开发源码",
     )
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     common = argparse.ArgumentParser(add_help=False)
     add_common_flags(common)
-    parser = argparse.ArgumentParser(description="Register Agent Tune Kit as a local Codex plugin.")
+    parser = argparse.ArgumentParser(description="将 Agent Tune Kit 注册为本地 Codex 插件。")
     add_common_flags(parser)
-    parser.add_argument("--version", action="version", version=version_text(), help="print package version and exit")
+    parser.add_argument("--version", action="version", version=version_text(), help="输出包版本并退出")
     subparsers = parser.add_subparsers(dest="command", required=True)
-    subparsers.add_parser("version", help="print package version and exit")
-    subparsers.add_parser("preview", parents=[common], help="preview installation without changing files")
-    subparsers.add_parser("install", parents=[common], help="install or update Skills for Codex")
-    subparsers.add_parser("status", parents=[common], help="check the local installation")
+    subparsers.add_parser("version", help="输出包版本并退出")
+    subparsers.add_parser("preview", parents=[common], help="预览安装，不修改文件")
+    subparsers.add_parser("install", parents=[common], help="安装或更新 Codex Skill")
+    subparsers.add_parser("status", parents=[common], help="检查本地安装")
     args = parser.parse_args(argv)
     for name, value in {
         "force": False,
@@ -493,9 +491,9 @@ def main(argv: list[str] | None = None) -> int:
             return run_install(args)
         if args.command == "status":
             return run_status(args)
-        raise InstallError(f"unknown command: {args.command}")
+        raise InstallError(f"未知命令：{args.command}")
     except (InstallError, json.JSONDecodeError, OSError) as exc:
-        print(f"atk: error: {exc}", file=sys.stderr)
+        print(f"atk: 错误：{exc}", file=sys.stderr)
         return 1
 
 

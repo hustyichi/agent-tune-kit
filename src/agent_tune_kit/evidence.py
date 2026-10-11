@@ -39,7 +39,7 @@ def redact(value: object, extra_keys: set[str] | None = None) -> object:
 def record_source_contract(repo: Path, root: Path, request: dict) -> dict:
     """Seal a small, redacted source excerpt as diagnostic evidence."""
     if not isinstance(request.get("source_path"), str) or not request["source_path"]:
-        raise ATKError("INCOMPLETE_EVIDENCE", "contract source path is required")
+        raise ATKError("INCOMPLETE_EVIDENCE", "必须提供契约源码路径")
     path = (repo / request["source_path"]).resolve()
     if (
         not path.is_relative_to(repo.resolve())
@@ -47,7 +47,7 @@ def record_source_contract(repo: Path, root: Path, request: dict) -> dict:
         or not path.is_file()
         or path.stat().st_size > 1024 * 1024
     ):
-        raise ATKError("SCOPE_VIOLATION", "contract source must be a small file inside the target project")
+        raise ATKError("SCOPE_VIOLATION", "契约源码必须是目标项目内的小文件")
     start, end = request.get("start_line"), request.get("end_line")
     if (
         type(start) is not int
@@ -58,13 +58,13 @@ def record_source_contract(repo: Path, root: Path, request: dict) -> dict:
         or not request.get("component_id")
         or not request.get("source_revision")
     ):
-        raise ATKError("INCOMPLETE_EVIDENCE", "contract needs component, source revision, and at most 100 lines")
+        raise ATKError("INCOMPLETE_EVIDENCE", "契约需要组件、源码版本及不超过 100 行的摘录")
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
     except UnicodeError as exc:
-        raise ATKError("UNSUPPORTED_EXPORT_FORMAT", "contract source is not UTF-8 text") from exc
+        raise ATKError("UNSUPPORTED_EXPORT_FORMAT", "契约源码不是 UTF-8 文本") from exc
     if end > len(lines):
-        raise ATKError("INCOMPLETE_EVIDENCE", "contract line range exceeds the source")
+        raise ATKError("INCOMPLETE_EVIDENCE", "契约行范围超出源码")
     excerpt = "\n".join(
         "[REDACTED SECRET LINE]" if SECRET_KEY.search(line) else redact(line) for line in lines[start - 1 : end]
     )
@@ -110,10 +110,10 @@ def _source_files(path: Path) -> list[Path]:
     if path.is_file():
         return [path]
     if not path.is_dir():
-        raise ATKError("UNSUPPORTED_EXPORT_FORMAT", f"source does not exist: {path}")
+        raise ATKError("UNSUPPORTED_EXPORT_FORMAT", f"来源不存在：{path}")
     files = sorted(file for file in path.iterdir() if file.is_file() and not file.name.startswith("_"))
     if not files:
-        raise ATKError("UNSUPPORTED_EXPORT_FORMAT", "directory contains no export files")
+        raise ATKError("UNSUPPORTED_EXPORT_FORMAT", "目录中没有导出文件")
     return files
 
 
@@ -122,11 +122,11 @@ def _read_source(path: Path) -> tuple[object, str]:
     compressed = bool(suffixes and suffixes[-1] == ".gz")
     extension = suffixes[-2] if compressed and len(suffixes) > 1 else path.suffix
     if extension not in {".json", ".jsonl", ".csv"}:
-        raise ATKError("UNSUPPORTED_EXPORT_FORMAT", f"unsupported export format: {path.name}")
+        raise ATKError("UNSUPPORTED_EXPORT_FORMAT", f"不支持的导出格式：{path.name}")
     with gzip.open(path, "rb") if compressed else path.open("rb") as handle:
         data = handle.read(MAX_SOURCE_BYTES + 1)
     if len(data) > MAX_SOURCE_BYTES:
-        raise ATKError("UNSUPPORTED_EXPORT_FORMAT", f"export exceeds {MAX_SOURCE_BYTES} bytes: {path.name}")
+        raise ATKError("UNSUPPORTED_EXPORT_FORMAT", f"导出文件超过 {MAX_SOURCE_BYTES} 字节：{path.name}")
     try:
         content = data.decode("utf-8-sig")
         if extension == ".json":
@@ -136,7 +136,7 @@ def _read_source(path: Path) -> tuple[object, str]:
         else:
             result = list(csv.DictReader(content.splitlines()))
     except (UnicodeError, json.JSONDecodeError, csv.Error) as exc:
-        raise ATKError("UNSUPPORTED_EXPORT_FORMAT", f"cannot parse {path.name}: {exc}") from exc
+        raise ATKError("UNSUPPORTED_EXPORT_FORMAT", f"无法解析 {path.name}：{exc}") from exc
     return result, digest(data)
 
 
@@ -146,9 +146,9 @@ def _rows(payload: object) -> list[dict]:
     elif isinstance(payload, dict):
         rows = payload["data"] if isinstance(payload.get("data"), list) else [payload]
     else:
-        raise ATKError("AMBIGUOUS_MAPPING", "export must be an object or array of objects")
+        raise ATKError("AMBIGUOUS_MAPPING", "导出数据必须是对象或对象数组")
     if any(not isinstance(row, dict) for row in rows):
-        raise ATKError("AMBIGUOUS_MAPPING", "export rows must be objects")
+        raise ATKError("AMBIGUOUS_MAPPING", "导出行必须是对象")
     return rows
 
 
@@ -161,13 +161,13 @@ def _alias(row: dict, *names: str):
 
 def _mapped_row(row: dict, fields: dict[str, str]) -> dict:
     if not isinstance(row, dict):
-        raise ATKError("AMBIGUOUS_MAPPING", "mapped export row must be an object")
+        raise ATKError("AMBIGUOUS_MAPPING", "映射的导出行必须是对象")
     mapped = dict(row)
     for canonical_name, source_name in fields.items():
         if source_name not in row:
-            raise ATKError("AMBIGUOUS_MAPPING", f"declared field {source_name} is missing")
+            raise ATKError("AMBIGUOUS_MAPPING", f"声明的字段 {source_name} 缺失")
         if canonical_name in row and row[canonical_name] != row[source_name]:
-            raise ATKError("AMBIGUOUS_MAPPING", f"conflicting field mapping for {canonical_name}")
+            raise ATKError("AMBIGUOUS_MAPPING", f"字段 {canonical_name} 的映射冲突")
         mapped[canonical_name] = row[source_name]
     return mapped
 
@@ -179,7 +179,7 @@ def _normalize_csv_json_columns(rows: list[dict], columns: list[str]) -> list[di
                 try:
                     row[name] = json.loads(row[name])
                 except json.JSONDecodeError as exc:
-                    raise ATKError("AMBIGUOUS_MAPPING", f"declared JSON column {name} is invalid") from exc
+                    raise ATKError("AMBIGUOUS_MAPPING", f"声明的 JSON 列 {name} 无效") from exc
     return rows
 
 
@@ -205,23 +205,23 @@ def _trace_record(
 ) -> tuple[dict, list[dict]]:
     trace_id = _alias(trace, "id", "traceId", "trace_id")
     if not trace_id:
-        raise ATKError("AMBIGUOUS_MAPPING", f"Trace ID missing at {locator}")
+        raise ATKError("AMBIGUOUS_MAPPING", f"{locator} 缺少 Trace ID")
     observations = trace.get("observations", [])
     if observations is None:
         observations = []
     if not isinstance(observations, list):
-        raise ATKError("AMBIGUOUS_MAPPING", "observations must be an array")
+        raise ATKError("AMBIGUOUS_MAPPING", "observations 必须是数组")
     observed_ids = set()
     events = []
     index = []
     for offset, observation in enumerate(observations):
         if not isinstance(observation, dict) or not observation.get("id"):
-            raise ATKError("AMBIGUOUS_MAPPING", "Observation requires a distinct ID")
+            raise ATKError("AMBIGUOUS_MAPPING", "Observation 需要唯一 ID")
         event_id = observation["id"]
         if _alias(observation, "traceId", "trace_id") not in (None, trace_id):
-            raise ATKError("AMBIGUOUS_MAPPING", f"Observation {event_id} belongs to another Trace")
+            raise ATKError("AMBIGUOUS_MAPPING", f"Observation {event_id} 属于另一个 Trace")
         if event_id in observed_ids:
-            raise ATKError("AMBIGUOUS_MAPPING", f"duplicate Observation ID: {event_id}")
+            raise ATKError("AMBIGUOUS_MAPPING", f"重复的 Observation ID：{event_id}")
         observed_ids.add(event_id)
         event = redact(observation, extra_keys)
         raw_start = _alias(event, "startTime", "start_time")
@@ -292,10 +292,10 @@ def _trace_record(
     if scores is None:
         scores = []
     if not isinstance(scores, list):
-        raise ATKError("AMBIGUOUS_MAPPING", "scores must be an array")
+        raise ATKError("AMBIGUOUS_MAPPING", "scores 必须是数组")
     for offset, score in enumerate(scores):
         if not isinstance(score, dict):
-            raise ATKError("AMBIGUOUS_MAPPING", "Score must be an object")
+            raise ATKError("AMBIGUOUS_MAPPING", "Score 必须是对象")
         score_id = score.get("id") or f"{trace_id}:{offset}"
         index.append(
             {
@@ -374,22 +374,22 @@ def import_evidence(root: Path, request: dict) -> dict:
     profile = request.get("adapter_profile")
     mapping_version = request.get("mapping_version")
     if not namespace or not mapping_version:
-        raise ATKError("AMBIGUOUS_MAPPING", "source_namespace and mapping_version are required")
+        raise ATKError("AMBIGUOUS_MAPPING", "必须提供 source_namespace 和 mapping_version")
     if source_kind == "langfuse" and profile not in {"langfuse_trace_bundle", "langfuse_observation_rows"}:
-        raise ATKError("AMBIGUOUS_MAPPING", "explicit Langfuse adapter_profile is required")
+        raise ATKError("AMBIGUOUS_MAPPING", "必须明确提供 Langfuse adapter_profile")
     if source_kind not in {"langfuse", "batch_results"}:
-        raise ATKError("AMBIGUOUS_MAPPING", "unsupported source_kind")
+        raise ATKError("AMBIGUOUS_MAPPING", "不支持的 source_kind")
     mapping = request.get("mapping", {})
     if not isinstance(mapping, dict) or (
         "root_observation_name" in mapping and not isinstance(mapping["root_observation_name"], str)
     ):
-        raise ATKError("AMBIGUOUS_MAPPING", "mapping must contain field names or a root Observation name")
+        raise ATKError("AMBIGUOUS_MAPPING", "mapping 必须包含字段名或根 Observation 名称")
     for role in ("trace", "observation", "score"):
         fields = mapping.get(role, {})
         if not isinstance(fields, dict) or any(
             not isinstance(key, str) or not isinstance(value, str) for key, value in fields.items()
         ):
-            raise ATKError("AMBIGUOUS_MAPPING", f"{role} field mapping must name source columns")
+            raise ATKError("AMBIGUOUS_MAPPING", f"{role} 字段映射必须指定来源列名")
     extra_keys = set(request.get("redact_keys", []))
     files = _source_files(source)
     file_roles = request.get("file_roles", {})
@@ -404,7 +404,7 @@ def import_evidence(root: Path, request: dict) -> dict:
             or "trace" not in file_roles.values()
         )
     ):
-        raise ATKError("AMBIGUOUS_MAPPING", "file_roles must classify every Trace bundle file")
+        raise ATKError("AMBIGUOUS_MAPPING", "file_roles 必须分类每个 Trace bundle 文件")
     source_refs = []
     rows_by_file = []
     for file in files:
@@ -453,22 +453,22 @@ def import_evidence(root: Path, request: dict) -> dict:
                     row = _mapped_row(row, mapping.get(role, {}))
                     trace_id = _alias(row, "traceId", "trace_id")
                     if not trace_id or not row.get("id"):
-                        raise ATKError("AMBIGUOUS_MAPPING", f"{role} requires traceId and id")
+                        raise ATKError("AMBIGUOUS_MAPPING", f"{role} 需要 traceId 和 id")
                     target = observations_by_trace if role == "observation" else scores_by_trace
                     target[str(trace_id)].append((row, f"{file}#/{offset}"))
                     continue
                 trace = row.get("trace", row)
                 if not isinstance(trace, dict):
-                    raise ATKError("AMBIGUOUS_MAPPING", f"not a Trace bundle: {file.name}")
+                    raise ATKError("AMBIGUOUS_MAPPING", f"不是 Trace bundle：{file.name}")
                 mapped_trace = _mapped_row(trace, mapping.get("trace", {}))
                 if "observations" not in mapped_trace and "id" not in mapped_trace:
-                    raise ATKError("AMBIGUOUS_MAPPING", f"not a Trace bundle: {file.name}")
+                    raise ATKError("AMBIGUOUS_MAPPING", f"不是 Trace bundle：{file.name}")
                 locator = f"{file}#/trace" if "trace" in row else f"{file}#/{offset}"
                 traces.append((mapped_trace, trace, locator))
         trace_ids = {_alias(trace, "id", "traceId", "trace_id") for trace, _, _ in traces}
         for trace_id in observations_by_trace.keys() | scores_by_trace.keys():
             if trace_id not in trace_ids:
-                raise ATKError("AMBIGUOUS_MAPPING", f"separate row references unknown Trace: {trace_id}")
+                raise ATKError("AMBIGUOUS_MAPPING", f"分离的行引用了未知 Trace：{trace_id}")
         for trace, original_trace, locator in traces:
             trace_id = str(_alias(trace, "id", "traceId", "trace_id"))
             joined = dict(trace)
@@ -481,13 +481,13 @@ def import_evidence(root: Path, request: dict) -> dict:
                 role = "observation" if key == "observations" else "score"
                 values = [_mapped_row(item, mapping.get(role, {})) for item in trace.get(key) or []]
                 if not isinstance(trace.get(key, []), (list, type(None))):
-                    raise ATKError("AMBIGUOUS_MAPPING", f"{key} must be an array")
+                    raise ATKError("AMBIGUOUS_MAPPING", f"{key} 必须是数组")
                 known = {item.get("id"): item for item in values if isinstance(item, dict)}
                 for item, item_locator in grouped[trace_id]:
                     item_id = item["id"]
                     if item_id in known:
                         if known[item_id] != item:
-                            raise ATKError("AMBIGUOUS_MAPPING", f"conflicting {key} ID: {item_id}")
+                            raise ATKError("AMBIGUOUS_MAPPING", f"{key} ID 冲突：{item_id}")
                         continue
                     values.append(item)
                     known[item_id] = item
@@ -513,7 +513,7 @@ def import_evidence(root: Path, request: dict) -> dict:
                 trace_id = _alias(row, "traceId", "trace_id")
                 event_id = row.get("id")
                 if not trace_id or not event_id:
-                    raise ATKError("AMBIGUOUS_MAPPING", "Observation rows require traceId and id")
+                    raise ATKError("AMBIGUOUS_MAPPING", "Observation 行需要 traceId 和 id")
                 grouped[str(trace_id)].append((row, f"{file}#/{offset}"))
         for trace_id, group in grouped.items():
             trace = {"id": trace_id, "observations": [row for row, _ in group]}
@@ -531,7 +531,7 @@ def import_evidence(root: Path, request: dict) -> dict:
             evidence_index.extend(index)
     else:
         if not mapping.get("input") or not mapping.get("output"):
-            raise ATKError("AMBIGUOUS_MAPPING", "batch_results requires input and output field mapping")
+            raise ATKError("AMBIGUOUS_MAPPING", "batch_results 需要 input 和 output 字段映射")
         for file, rows in rows_by_file:
             for offset, row in enumerate(rows):
                 locator = f"{file}#/{offset}"
@@ -561,10 +561,10 @@ def import_evidence(root: Path, request: dict) -> dict:
                     }
                 )
     if not records:
-        raise ATKError("INCOMPLETE_EVIDENCE", "source has no task records")
+        raise ATKError("INCOMPLETE_EVIDENCE", "来源中没有任务记录")
     ids = [record.get("source_trace_id") for record in records if record.get("source_trace_id")]
     if len(ids) != len(set(ids)):
-        raise ATKError("AMBIGUOUS_MAPPING", "duplicate Trace IDs in one import")
+        raise ATKError("AMBIGUOUS_MAPPING", "同一次导入中的 Trace ID 重复")
     batch_id = new_id("batch")
     folder = root / "evidence" / batch_id
     folder.mkdir(parents=True, exist_ok=False)

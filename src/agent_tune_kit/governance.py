@@ -38,15 +38,15 @@ def _store_diagnosis_locked(root: Path, request: dict) -> dict:
     folder = _round_folder(root, request["round_id"])
     round_data = read_json(folder / "round.json")
     if round_data["status"] == "paused":
-        raise ATKError("WORKSPACE_CONFLICT", "resume the Round before updating diagnosis")
+        raise ATKError("WORKSPACE_CONFLICT", "更新诊断前请先恢复 Round")
     issues = request["issues"]
     if not issues:
-        raise ATKError("INCOMPLETE_EVIDENCE", "diagnosis requires at least one Issue")
+        raise ATKError("INCOMPLETE_EVIDENCE", "诊断至少需要一个 Issue")
     prepared = []
     seen_ids = set()
     for issue in issues:
         if not isinstance(issue, dict):
-            raise ATKError("INCOMPLETE_EVIDENCE", "Issue must be an object")
+            raise ATKError("INCOMPLETE_EVIDENCE", "Issue 必须是对象")
         required = {
             "id",
             "symptom",
@@ -66,13 +66,13 @@ def _store_diagnosis_locked(root: Path, request: dict) -> dict:
             "next_action",
         }
         if required - issue.keys():
-            raise ATKError("INCOMPLETE_EVIDENCE", f"Issue missing fields: {sorted(required - issue.keys())}")
+            raise ATKError("INCOMPLETE_EVIDENCE", f"Issue 缺少字段：{sorted(required - issue.keys())}")
         safe_id(issue["id"])
         if issue["id"] in seen_ids:
-            raise ATKError("INCOMPLETE_EVIDENCE", "duplicate Issue ID in one diagnosis")
+            raise ATKError("INCOMPLETE_EVIDENCE", "同一次诊断中的 Issue ID 重复")
         seen_ids.add(issue["id"])
         if issue["root_cause_status"] not in {"hypothesis", "supported", "intervention_supported", "inconclusive"}:
-            raise ATKError("INCOMPLETE_EVIDENCE", "invalid root-cause status")
+            raise ATKError("INCOMPLETE_EVIDENCE", "根因状态无效")
         if issue["disposition"] not in {
             "local_candidate",
             "external_handoff",
@@ -80,26 +80,26 @@ def _store_diagnosis_locked(root: Path, request: dict) -> dict:
             "needs_evidence",
             "no_action",
         }:
-            raise ATKError("INCOMPLETE_EVIDENCE", "invalid Issue disposition")
+            raise ATKError("INCOMPLETE_EVIDENCE", "Issue 处理方式无效")
         if issue["root_cause_status"] == "supported" and (
             not issue["mechanism_evidence_refs"]
             or not any(check.get("status") == "completed" for check in issue["checks"])
             or not issue.get("competing_explanations_addressed")
         ):
-            raise ATKError("INCOMPLETE_EVIDENCE", "supported mechanism needs direct evidence and executed checks")
+            raise ATKError("INCOMPLETE_EVIDENCE", "已支持的机制需要直接证据和已执行检查")
         if issue["root_cause_status"] == "intervention_supported":
             if not issue["intervention_validation_refs"]:
-                raise ATKError("INCOMPLETE_EVIDENCE", "intervention requires a Validation reference")
+                raise ATKError("INCOMPLETE_EVIDENCE", "干预需要 Validation 引用")
             for validation_id in issue["intervention_validation_refs"]:
                 validation = read_json(folder / "validations" / safe_id(validation_id) / "validation.json")
                 if validation["result"] != "pass":
-                    raise ATKError("COMPARISON_INVALID", "intervention Validation did not pass")
+                    raise ATKError("COMPARISON_INVALID", "干预 Validation 未通过")
         if issue["root_cause_status"] in {"hypothesis", "inconclusive"} and not issue["next_action"]:
-            raise ATKError("INCOMPLETE_EVIDENCE", "unresolved diagnosis needs a next check")
+            raise ATKError("INCOMPLETE_EVIDENCE", "未解决诊断需要下一步检查")
         if issue["disposition"] == "external_handoff":
             handoff = issue.get("handoff", {})
             if not handoff.get("trigger_input") or not handoff.get("expected") or not handoff.get("actual"):
-                raise ATKError("INCOMPLETE_EVIDENCE", "external handoff needs trigger and expected/actual behavior")
+                raise ATKError("INCOMPLETE_EVIDENCE", "外部交接需要触发输入及预期／实际行为")
         if issue["resolution"] == "resolved":
             fix = issue.get("external_fix", {})
             if (
@@ -110,7 +110,7 @@ def _store_diagnosis_locked(root: Path, request: dict) -> dict:
             ):
                 raise ATKError(
                     "INCOMPLETE_EVIDENCE",
-                    "resolution needs a linked new Round, fix identity, direct check, and end-to-end Validation",
+                    "解决问题需要关联新 Round、修复身份、直接检查和端到端 Validation",
                 )
             new_round = read_json(_round_folder(root, fix["new_round_id"]) / "round.json")
             if (
@@ -118,7 +118,7 @@ def _store_diagnosis_locked(root: Path, request: dict) -> dict:
                 or issue["id"] not in new_round["issues"]
                 or new_round.get("external_fix_identity") != fix["component_identity"]
             ):
-                raise ATKError("INCOMPLETE_EVIDENCE", "fix Round does not link Issue and component identity")
+                raise ATKError("INCOMPLETE_EVIDENCE", "修复 Round 未关联 Issue 和组件身份")
             linked_validation = read_json(
                 _round_folder(root, fix["new_round_id"])
                 / "validations"
@@ -133,13 +133,13 @@ def _store_diagnosis_locked(root: Path, request: dict) -> dict:
                 or linked_validation["direct_evidence_refs"] != fix["direct_evidence_refs"]
                 or not set(issue["case_ids"]) <= set(linked_validation["case_ids"])
             ):
-                raise ATKError("COMPARISON_INVALID", "external fix end-to-end Validation did not cover affected Cases")
+                raise ATKError("COMPARISON_INVALID", "外部修复端到端 Validation 未覆盖受影响 Case")
         for ref in issue["evidence_refs"] + issue["mechanism_evidence_refs"]:
             if not isinstance(ref, dict) or not ref.get("batch_id") or not ref.get("evidence_id"):
-                raise ATKError("INCOMPLETE_EVIDENCE", "Issue evidence reference is malformed")
+                raise ATKError("INCOMPLETE_EVIDENCE", "Issue 证据引用格式错误")
             _, _, index = validate_evidence(root, ref["batch_id"])
             if ref["evidence_id"] not in index:
-                raise ATKError("INCOMPLETE_EVIDENCE", "Issue evidence reference is missing")
+                raise ATKError("INCOMPLETE_EVIDENCE", "Issue 证据引用缺失")
         for check in issue["checks"]:
             if not isinstance(check, dict) or check.get("status") not in {
                 "not_run",
@@ -147,22 +147,22 @@ def _store_diagnosis_locked(root: Path, request: dict) -> dict:
                 "failed",
                 "inconclusive",
             }:
-                raise ATKError("INCOMPLETE_EVIDENCE", "invalid diagnostic check status")
+                raise ATKError("INCOMPLETE_EVIDENCE", "诊断检查状态无效")
             if check["status"] == "not_run" and not check.get("reason"):
-                raise ATKError("INCOMPLETE_EVIDENCE", "unrun check needs a reason")
+                raise ATKError("INCOMPLETE_EVIDENCE", "未运行检查需要记录原因")
             if check["status"] == "completed" and (
                 not check.get("expected") or not check.get("actual") or not check.get("evidence_refs")
             ):
-                raise ATKError("INCOMPLETE_EVIDENCE", "completed check needs expected, actual, and evidence refs")
+                raise ATKError("INCOMPLETE_EVIDENCE", "已完成检查需要预期、实际和证据引用")
             if not isinstance(check.get("evidence_refs", []), list):
-                raise ATKError("INCOMPLETE_EVIDENCE", "diagnostic check evidence refs must be a list")
+                raise ATKError("INCOMPLETE_EVIDENCE", "诊断检查证据引用必须是列表")
             for ref in check.get("evidence_refs", []):
                 if (
                     not isinstance(ref, dict)
                     or not ref.get("batch_id")
                     or ref.get("evidence_id") not in validate_evidence(root, ref["batch_id"])[2]
                 ):
-                    raise ATKError("INCOMPLETE_EVIDENCE", "diagnostic check evidence reference is missing")
+                    raise ATKError("INCOMPLETE_EVIDENCE", "诊断检查证据引用缺失")
         issue_folder = folder / "issues" / safe_id(issue["id"])
         revision = 1 + len(list(issue_folder.glob("revision-*.json")))
         value = {
@@ -205,7 +205,7 @@ def _store_knowledge_locked(root: Path, request: dict) -> dict:
         "contradicted",
         "retired",
     }:
-        raise ATKError("INCOMPLETE_EVIDENCE", "Knowledge metadata is incomplete")
+        raise ATKError("INCOMPLETE_EVIDENCE", "知识元数据不完整")
     if (
         not value["applicability"]
         or any(
@@ -223,24 +223,24 @@ def _store_knowledge_locked(root: Path, request: dict) -> dict:
         )
         or any(not isinstance(item, str) for key in ("candidate_ids", "validation_ids") for item in value[key])
     ):
-        raise ATKError("INCOMPLETE_EVIDENCE", "Knowledge applicability and identity fingerprints are required")
+        raise ATKError("INCOMPLETE_EVIDENCE", "必须提供知识适用性和身份指纹")
     if value["status"] == "validated_in_scope" and not (value["evidence_refs"] or value["validation_ids"]):
-        raise ATKError("INCOMPLETE_EVIDENCE", "validated Knowledge needs supporting evidence")
+        raise ATKError("INCOMPLETE_EVIDENCE", "已验证知识需要支持证据")
     if value["status"] == "contradicted" and not value["contrary_refs"]:
-        raise ATKError("INCOMPLETE_EVIDENCE", "contradicted Knowledge needs contrary evidence")
+        raise ATKError("INCOMPLETE_EVIDENCE", "被反驳知识需要反向证据")
     for key, folder_name, filename, label in (
         ("candidate_ids", "candidates", "candidate.json", "Candidate"),
         ("validation_ids", "validations", "validation.json", "Validation"),
     ):
         if len(value[key]) != len(set(value[key])):
-            raise ATKError("INCOMPLETE_EVIDENCE", f"duplicate Knowledge {label} reference")
+            raise ATKError("INCOMPLETE_EVIDENCE", f"重复的知识 {label} 引用")
         for artifact_id in value[key]:
             matches = list((root / "rounds").glob(f"*/{folder_name}/{safe_id(artifact_id)}/{filename}"))
             if len(matches) != 1:
-                raise ATKError("INCOMPLETE_EVIDENCE", f"Knowledge {label} reference is missing")
+                raise ATKError("INCOMPLETE_EVIDENCE", f"知识 {label} 引用缺失")
             linked = read_json(matches[0])
             if linked.get("id") != artifact_id or linked.get("schema_version") != 2:
-                raise ATKError("INCOMPLETE_EVIDENCE", f"Knowledge {label} reference has invalid identity")
+                raise ATKError("INCOMPLETE_EVIDENCE", f"知识 {label} 引用身份无效")
     used_groups = source_groups_for_evidence(root, value["evidence_refs"] + value["contrary_refs"])
     knowledge_id = request.get("knowledge_id") or new_id("knowledge")
     folder = root / "knowledge" / safe_id(knowledge_id)
@@ -267,7 +267,7 @@ def knowledge_applicability(root: Path, request: dict) -> dict:
     folder = root / "knowledge" / safe_id(request["knowledge_id"])
     revisions = sorted(folder.glob("revision-*.json"), key=lambda path: int(path.stem.split("-")[1]))
     if not revisions:
-        raise ATKError("INCOMPLETE_EVIDENCE", "Knowledge entry is missing")
+        raise ATKError("INCOMPLETE_EVIDENCE", "知识条目缺失")
     value = read_json(revisions[-1])
     current = request["current_identity"]
     status = (
@@ -291,7 +291,7 @@ def _assessment_slots(root: Path, assessment_id: str, dimension: str) -> tuple[d
         record = records[row["record_id"]]
         execution = record.get("execution")
         if not execution or batch.get("purpose") != "evaluation":
-            raise ATKError("COMPARISON_INVALID", "comparison requires formal local Executions")
+            raise ATKError("COMPARISON_INVALID", "比较需要正式本地 Execution")
         key = (execution["case_id"], execution["case_fingerprint"], execution["repeat_index"])
         slots[key].append((execution, row, record))
     return manifest, batch, slots
@@ -318,11 +318,11 @@ def _selected_attempt(attempts: list, max_retries: int):
 def _required_dimensions(plan: dict, spec: dict, requested: str | None = None) -> list[str]:
     primary = plan["primary_dimension"]
     if requested is not None and requested != primary:
-        raise ATKError("COMPARISON_INVALID", "comparison dimension differs from the frozen primary dimension")
+        raise ATKError("COMPARISON_INVALID", "比较维度与冻结主维度不一致")
     dimensions = spec["dimensions"]
     required = plan.get("required_dimensions") or dimensions
     if primary not in dimensions or not set(required) <= set(dimensions):
-        raise ATKError("COMPARISON_INVALID", "frozen dimensions differ from the Assessment specification")
+        raise ATKError("COMPARISON_INVALID", "冻结维度与 Assessment 规格不一致")
     return sorted(set(required) | {primary})
 
 
@@ -471,73 +471,73 @@ def _compare_and_gate_locked(root: Path, request: dict) -> dict:
     folder = _round_folder(root, request["round_id"])
     round_data = read_json(folder / "round.json")
     if round_data["status"] not in {"ready", "optimizing", "finalizing"}:
-        raise ATKError("WORKSPACE_CONFLICT", "Round is paused, unfrozen, or closed")
+        raise ATKError("WORKSPACE_CONFLICT", "Round 已暂停、未冻结或已关闭")
     plan = read_json(folder / "plan.json")
     if not plan.get("case_fingerprints"):
-        raise ATKError("COMPARISON_INVALID", "Round has no frozen Case content identities")
+        raise ATKError("COMPARISON_INVALID", "Round 没有冻结的 Case 内容身份")
     if round_data.get("external_fix_identity"):
-        raise ATKError("COMPARISON_INVALID", "external fix Round needs one-sided new B0 validation")
+        raise ATKError("COMPARISON_INVALID", "外部修复 Round 需要仅验证新 B0")
     mode = request["mode"]
     if round_data["status"] == "finalizing" and mode != "final":
-        raise ATKError("WORKSPACE_CONFLICT", "finalizing Round cannot accept incremental validation")
+        raise ATKError("WORKSPACE_CONFLICT", "正在收尾的 Round 不能接受增量验证")
     if mode not in {"incremental", "final"}:
-        raise ATKError("COMPARISON_INVALID", "mode must be incremental or final")
+        raise ATKError("COMPARISON_INVALID", "mode 必须是 incremental 或 final")
     dimension = plan["primary_dimension"]
     left_manifest, left_batch, left_slots = _assessment_slots(root, request["left_assessment_id"], dimension)
     right_manifest, right_batch, right_slots = _assessment_slots(root, request["right_assessment_id"], dimension)
     required_dimensions = _required_dimensions(plan, left_manifest["evaluation_spec"], request.get("dimension"))
     for manifest in (left_manifest, right_manifest):
         if manifest["judger_readiness"] != "calibrated" or digest(manifest["judger"]) != plan["judger_hash"]:
-            raise ATKError("JUDGER_INVALID", "comparison requires the frozen calibrated judger")
+            raise ATKError("JUDGER_INVALID", "比较需要冻结且已校准的 judger")
         if manifest["evaluation_spec_hash"] != plan["evaluation_spec_hash"]:
-            raise ATKError("COMPARISON_INVALID", "evaluation_spec differs from frozen plan")
+            raise ATKError("COMPARISON_INVALID", "evaluation_spec 与冻结计划不一致")
     if left_batch.get("run_config_hash") != right_batch.get("run_config_hash"):
-        raise ATKError("COMPARISON_INVALID", "runner configuration drifted between sides")
+        raise ATKError("COMPARISON_INVALID", "两侧 runner 配置发生变化")
     if plan.get("run_config_hash") and left_batch.get("run_config_hash") != plan["run_config_hash"]:
-        raise ATKError("COMPARISON_INVALID", "runner configuration differs from the frozen Round")
+        raise ATKError("COMPARISON_INVALID", "runner 配置与冻结 Round 不一致")
     for batch in (left_batch, right_batch):
         if (
             batch.get("concurrency", 1) != plan.get("concurrency", 1)
             or batch.get("timeout_seconds") != plan["timeout_seconds"]
         ):
-            raise ATKError("COMPARISON_INVALID", "execution concurrency or timeout differs from the frozen plan")
+            raise ATKError("COMPARISON_INVALID", "执行 concurrency 或超时与冻结计划不一致")
         if (
             batch.get("runner_hash") != plan["runner_hash"]
             or batch.get("fixed_context_hash") != plan["fixed_context_hash"]
         ):
-            raise ATKError("COMPARISON_INVALID", "runner or fixed component identity differs from frozen plan")
+            raise ATKError("COMPARISON_INVALID", "runner 或固定组件身份与冻结计划不一致")
     limitations = request.get("limitations", [])
     if not isinstance(limitations, list):
-        raise ATKError("COMPARISON_INVALID", "limitations must be a list")
+        raise ATKError("COMPARISON_INVALID", "limitations 必须是列表")
     limitations = list(limitations)
     result = "insufficient" if left_batch.get("status") != "sealed" or right_batch.get("status") != "sealed" else None
     if result:
-        limitations.append("one or both execution batches are not sealed")
+        limitations.append("一个或两个执行批次尚未封存")
     if not _fixed_identity_known(left_batch) or not _fixed_identity_known(right_batch):
         result = "insufficient"
-        limitations.append("fixed component identity is unknown")
+        limitations.append("固定组件身份尚未确认")
     if left_batch.get("phase", "incremental") != mode or right_batch.get("phase", "incremental") != mode:
         result = "insufficient"
-        limitations.append("execution phase differs from the requested comparison")
+        limitations.append("执行阶段与请求的比较不一致")
     if set(left_slots) != set(right_slots):
         result = "insufficient"
-        limitations.append("paired Case slots differ between baseline and candidate")
+        limitations.append("基线与候选的配对 Case 槽位不一致")
     if any(
         plan["case_fingerprints"].get(case_id) != fingerprint
         for slots in (left_slots, right_slots)
         for case_id, fingerprint, _ in slots
     ):
         result = "insufficient"
-        limitations.append("execution Case content differs from the frozen dataset")
+        limitations.append("执行 Case 内容与冻结数据集不一致")
     candidate = None
     issue_id = None
     if mode == "incremental":
         candidate = read_json(folder / "candidates" / safe_id(request["candidate_id"]) / "candidate.json")
         issue_id = candidate["primary_issue_id"]
         if request.get("issue_id", issue_id) != issue_id:
-            raise ATKError("COMPARISON_INVALID", "validation Issue differs from the sealed Candidate")
+            raise ATKError("COMPARISON_INVALID", "验证 Issue 与封存 Candidate 不一致")
         if candidate.get("target_case_ids") != sorted(plan.get("target_case_ids_by_issue", {}).get(issue_id, [])):
-            raise ATKError("COMPARISON_INVALID", "Candidate target Cases differ from the frozen plan")
+            raise ATKError("COMPARISON_INVALID", "Candidate 目标 Case 与冻结计划不一致")
     expected_cases = set(
         plan["case_ids"] if mode == "final" else plan["protection_case_ids"] + candidate["target_case_ids"]
     )
@@ -548,14 +548,14 @@ def _compare_and_gate_locked(root: Path, request: dict) -> dict:
             expected_cases.update(prior["fixed_case_ids"])
     if not expected_cases or expected_cases - {slot[0] for slot in left_slots}:
         result = "insufficient"
-        limitations.append("frozen target or protection Cases are missing from the baseline")
+        limitations.append("基线缺少冻结目标或保护 Case")
     expected_repeats = plan["final_repeats"] if mode == "final" else plan.get("incremental_repeats", 1)
     if any(
         {repeat for case, _, repeat in left_slots if case == case_id} != set(range(1, expected_repeats + 1))
         for case_id in expected_cases
     ):
         result = "insufficient"
-        limitations.append("baseline repeat count differs from the frozen plan")
+        limitations.append("基线重复次数与冻结计划不一致")
     secondary_regression = False
     for required_dimension in required_dimensions:
         if required_dimension == dimension:
@@ -578,12 +578,12 @@ def _compare_and_gate_locked(root: Path, request: dict) -> dict:
         )
         if left_verdicts is None or right_verdicts is None:
             result = "insufficient"
-            limitations.append(f"required dimension {required_dimension} has an unknown or invalid verdict")
+            limitations.append(f"必需维度 {required_dimension} 存在未知或无效判定")
         elif any(
             right_verdicts[case_id].count("pass") < left_verdicts[case_id].count("pass") for case_id in expected_cases
         ):
             secondary_regression = True
-            limitations.append(f"required dimension {required_dimension} regressed")
+            limitations.append(f"必需维度 {required_dimension} 发生退化")
     max_retries = plan.get("max_retries_per_slot", 0)
     case_results = {}
     case_distributions = {}
@@ -592,11 +592,11 @@ def _compare_and_gate_locked(root: Path, request: dict) -> dict:
         if key[0] not in expected_cases:
             continue
         sides = []
-        for side_name, side in (("baseline", left_slots), ("candidate", right_slots)):
+        for side_name, side in (("基线", left_slots), ("候选", right_slots)):
             selected = _selected_attempt(side[key], max_retries)
             if selected is None:
                 result = "insufficient"
-                limitations.append(f"{side_name} {key[0]} repeat {key[2]} has no usable execution")
+                limitations.append(f"{side_name} {key[0]} 第 {key[2]} 次重复没有可用执行")
                 sides.append(None)
                 continue
             execution, row, _ = selected
@@ -613,8 +613,8 @@ def _compare_and_gate_locked(root: Path, request: dict) -> dict:
         required_loaded = set(plan.get("required_loaded_component_ids", []))
         if required_loaded:
             for side_name, slots, batch in (
-                ("baseline", left_slots, left_batch),
-                ("candidate", right_slots, right_batch),
+                ("基线", left_slots, left_batch),
+                ("候选", right_slots, right_batch),
             ):
                 selected = _selected_attempt(slots[key], max_retries)
                 for _, _, record in [selected] if selected else []:
@@ -622,12 +622,12 @@ def _compare_and_gate_locked(root: Path, request: dict) -> dict:
                     if missing_loaded:
                         result = "insufficient"
                         limitations.append(
-                            f"{side_name} {key[0]} repeat {key[2]} lacks verified loading: "
+                            f"{side_name} {key[0]} 第 {key[2]} 次重复缺少已核验加载证据："
                             + ", ".join(sorted(missing_loaded))
                         )
         if any(verdict not in {"pass", "fail"} for verdict in sides):
             result = "insufficient"
-            limitations.append(f"{key[0]} repeat {key[2]} has an unknown or invalid verdict")
+            limitations.append(f"{key[0]} 第 {key[2]} 次重复存在未知或无效判定")
     for case_id in expected_cases:
         paired = [row for row in rows if row["case_id"] == case_id]
         repeats = [[row for row in paired if row["repeat_index"] == index] for index in range(1, expected_repeats + 1)]
@@ -640,7 +640,7 @@ def _compare_and_gate_locked(root: Path, request: dict) -> dict:
             len(matches) != 1 or matches[0]["left"] is None or matches[0]["right"] is None for matches in repeats
         ):
             result = "insufficient"
-            limitations.append(f"{case_id} lacks complete paired repeats")
+            limitations.append(f"{case_id} 缺少完整配对重复")
             continue
         case_results[case_id] = {
             "left": sum(row["left"] == "pass" for row in paired) / expected_repeats,
@@ -686,7 +686,7 @@ def _compare_and_gate_locked(root: Path, request: dict) -> dict:
     }
     if any(value is None for name in required_metrics for value in metrics[name].values()):
         result = "insufficient"
-        limitations.append("required cost, duration, or tool-call metrics lack a trusted source or valid values")
+        limitations.append("必需的成本、耗时或工具调用指标缺少可信来源或有效值")
     slot_count = len(expected_cases) * expected_repeats
     exceeds_limit = (
         (
@@ -760,7 +760,7 @@ def _compare_and_gate_locked(root: Path, request: dict) -> dict:
             or validation["left_revision_id"] != candidate["parent_revision_id"]
             or validation["right_revision_id"] != candidate["revision_id"]
         ):
-            raise ATKError("REVISION_MISMATCH", "assessment Revision does not match candidate")
+            raise ATKError("REVISION_MISMATCH", "Assessment Revision 与候选不匹配")
         validation["candidate_id"] = candidate["id"]
     else:
         if (
@@ -768,7 +768,7 @@ def _compare_and_gate_locked(root: Path, request: dict) -> dict:
             or validation["left_revision_id"] != round_data["baseline_revision_id"]
             or validation["right_revision_id"] != round_data.get("current_revision_id")
         ):
-            raise ATKError("REVISION_MISMATCH", "final validation must compare B0 with current Revision")
+            raise ATKError("REVISION_MISMATCH", "最终验证必须比较 B0 与 current Revision")
         validation["final_commit"] = round_data["current_commit"]
     out = folder / "validations" / validation["id"]
     csv_output = io.StringIO(newline="")
@@ -792,23 +792,23 @@ def _validate_external_fix_locked(root: Path, request: dict) -> dict:
     round_data = read_json(folder / "round.json")
     plan = read_json(folder / "plan.json")
     if not plan.get("case_fingerprints"):
-        raise ATKError("COMPARISON_INVALID", "Round has no frozen Case content identities")
+        raise ATKError("COMPARISON_INVALID", "Round 没有冻结的 Case 内容身份")
     if not round_data.get("external_fix_identity") or round_data["status"] not in {"ready", "optimizing", "finalizing"}:
-        raise ATKError("WORKSPACE_CONFLICT", "external fix validation needs an open linked Round")
+        raise ATKError("WORKSPACE_CONFLICT", "外部修复验证需要尚未关闭的关联 Round")
     refs = request.get("direct_evidence_refs", [])
     if not isinstance(refs, list) or not refs or not request.get("direct_assessment_id"):
-        raise ATKError("INCOMPLETE_EVIDENCE", "external fix needs separate direct-check evidence")
+        raise ATKError("INCOMPLETE_EVIDENCE", "外部修复需要独立的直接检查证据")
     direct_manifest, direct_rows = read_assessment(root, request["direct_assessment_id"])
     if direct_manifest["judger_readiness"] != "calibrated":
-        raise ATKError("JUDGER_INVALID", "direct component check needs a calibrated Assessment")
+        raise ATKError("JUDGER_INVALID", "直接组件检查需要已校准 Assessment")
     if "direct_dimension" in request:
-        raise ATKError("COMPARISON_INVALID", "direct-check dimensions are frozen by probe permission")
+        raise ATKError("COMPARISON_INVALID", "直接检查维度由探针许可冻结")
     direct_batches = []
     direct_slots = set()
     direct_permission = None
     for ref in refs:
         if not isinstance(ref, dict) or not ref.get("batch_id") or not ref.get("evidence_id"):
-            raise ATKError("INCOMPLETE_EVIDENCE", "direct-check evidence reference is malformed")
+            raise ATKError("INCOMPLETE_EVIDENCE", "直接检查证据引用格式错误")
         direct_batch, direct_records, index = validate_evidence(root, ref["batch_id"])
         permission = next(
             (
@@ -861,13 +861,11 @@ def _validate_external_fix_locked(root: Path, request: dict) -> dict:
                 for dimension in required_direct_dimensions
             )
         ):
-            raise ATKError(
-                "INCOMPLETE_EVIDENCE", "direct check needs a passing authorized component probe on the new B0"
-            )
+            raise ATKError("INCOMPLETE_EVIDENCE", "直接检查需要在新 B0 上通过获准组件探针")
         direct_permission = permission
         slot = (execution["case_id"], execution["repeat_index"])
         if slot in direct_slots or plan["case_fingerprints"].get(slot[0]) != execution["case_fingerprint"]:
-            raise ATKError("INCOMPLETE_EVIDENCE", "direct check lacks frozen Case coverage")
+            raise ATKError("INCOMPLETE_EVIDENCE", "直接检查缺少冻结 Case 覆盖")
         direct_slots.add(slot)
         direct_batches.append(direct_batch)
     expected_direct_slots = {
@@ -876,14 +874,14 @@ def _validate_external_fix_locked(root: Path, request: dict) -> dict:
         for repeat in range(1, direct_permission.get("required_repeats", 1) + 1)
     }
     if direct_slots != expected_direct_slots:
-        raise ATKError("INCOMPLETE_EVIDENCE", "direct check lacks frozen Case coverage")
+        raise ATKError("INCOMPLETE_EVIDENCE", "直接检查缺少冻结 Case 覆盖")
     dimension = plan["primary_dimension"]
     manifest, batch, slots = _assessment_slots(root, request["assessment_id"], dimension)
     required_dimensions = _required_dimensions(plan, manifest["evaluation_spec"], request.get("dimension"))
     if manifest["judger_readiness"] != "calibrated" or digest(manifest["judger"]) != plan["judger_hash"]:
-        raise ATKError("JUDGER_INVALID", "external fix needs the frozen calibrated judger")
+        raise ATKError("JUDGER_INVALID", "外部修复需要冻结且已校准的 judger")
     if manifest["evaluation_spec_hash"] != plan["evaluation_spec_hash"]:
-        raise ATKError("COMPARISON_INVALID", "evaluation_spec differs from frozen plan")
+        raise ATKError("COMPARISON_INVALID", "evaluation_spec 与冻结计划不一致")
     if (
         batch.get("status") != "sealed"
         or batch.get("phase") != "external_fix"
@@ -896,14 +894,14 @@ def _validate_external_fix_locked(root: Path, request: dict) -> dict:
         or batch.get("fixed_context_hash") != plan["fixed_context_hash"]
         or any(direct.get("run_config_hash") != batch.get("run_config_hash") for direct in direct_batches)
     ):
-        raise ATKError("COMPARISON_INVALID", "external fix run differs from the frozen new B0")
+        raise ATKError("COMPARISON_INVALID", "外部修复运行与冻结的新 B0 不一致")
     expected = {(case_id, repeat) for case_id in plan["case_ids"] for repeat in range(1, plan["final_repeats"] + 1)}
     if (
         {(case_id, repeat) for case_id, _, repeat in slots} != expected
         or len(slots) != len(expected)
         or any(plan["case_fingerprints"].get(case_id) != fingerprint for case_id, fingerprint, _ in slots)
     ):
-        raise ATKError("COMPARISON_INVALID", "external fix run lacks frozen Cases or repeats")
+        raise ATKError("COMPARISON_INVALID", "外部修复运行缺少冻结 Case 或重复次数")
     required_loaded = set(plan.get("required_loaded_component_ids", []))
     result = "pass"
     if not _fixed_identity_known(batch):
@@ -979,7 +977,7 @@ def _finish_round_locked(repo: Path, root: Path, request: dict) -> dict:
         if (decision := read_json(path)).get("action") in final_actions
     ]
     if len(saved) > 1:
-        raise ATKError("WORKSPACE_CONFLICT", "multiple final decisions need inspection")
+        raise ATKError("WORKSPACE_CONFLICT", "存在多个最终决策，需要检查")
     previous = saved[0][1] if saved else None
     if previous and (
         previous.get("id") != saved[0][0].stem
@@ -992,7 +990,7 @@ def _finish_round_locked(repo: Path, root: Path, request: dict) -> dict:
         != (request.get("override_authorization") if request.get("action") == "complete_with_override" else None)
         or previous.get("after_commit") != value["current_commit"]
     ):
-        raise ATKError("WORKSPACE_CONFLICT", "saved final decision differs from the retry")
+        raise ATKError("WORKSPACE_CONFLICT", "已保存最终决策与重试不一致")
     if value["status"] not in {"analysis_only", "ready", "optimizing", "finalizing"}:
         if (
             previous
@@ -1007,15 +1005,15 @@ def _finish_round_locked(repo: Path, root: Path, request: dict) -> dict:
             if value["baseline_commit"] is not None:
                 verify_repo(repo, expected_head=value["current_commit"], expected_branch=value["branch"])
             return previous
-        raise ATKError("WORKSPACE_CONFLICT", "round cannot be closed from its current state")
+        raise ATKError("WORKSPACE_CONFLICT", "当前状态不允许关闭 Round")
     if value["status"] == "analysis_only" and request.get("action") != "close_without_adoption":
-        raise ATKError("WORKSPACE_CONFLICT", "an analysis-only Round can only close without adoption")
+        raise ATKError("WORKSPACE_CONFLICT", "仅分析 Round 只能以无采用关闭")
     if value["baseline_commit"] is not None:
         verify_repo(repo, expected_head=value["current_commit"], expected_branch=value["branch"])
     if value["pending_candidate_id"] or (
         value["baseline_commit"] is not None and changed_paths(repo) != set(value["baseline_untracked"])
     ):
-        raise ATKError("WORKSPACE_CONFLICT", "pending candidate or extra workspace changes")
+        raise ATKError("WORKSPACE_CONFLICT", "存在未决候选或额外工作区修改")
     action = request["action"]
     if action == "complete_external_fix":
         validation = read_json(folder / "validations" / safe_id(request["validation_id"]) / "validation.json")
@@ -1030,11 +1028,11 @@ def _finish_round_locked(repo: Path, root: Path, request: dict) -> dict:
             or validation["final_commit"] != head(repo)
             or validation["plan_hash"] != digest(read_json(folder / "plan.json"))
         ):
-            raise ATKError("COMPARISON_INVALID", "external fix lacks passing direct and end-to-end checks")
+            raise ATKError("COMPARISON_INVALID", "外部修复缺少通过的直接和端到端检查")
         value["status"] = "completed"
     elif action in {"complete", "complete_with_override"}:
         if value.get("external_fix_identity"):
-            raise ATKError("COMPARISON_INVALID", "external fix Round needs its dedicated completion gate")
+            raise ATKError("COMPARISON_INVALID", "外部修复 Round 需要专用完成门禁")
         validation_id = request.get("validation_id")
         validation = (
             read_json(folder / "validations" / safe_id(validation_id) / "validation.json") if validation_id else None
@@ -1047,16 +1045,16 @@ def _finish_round_locked(repo: Path, root: Path, request: dict) -> dict:
             or validation["final_commit"] != head(repo)
             or validation["plan_hash"] != digest(read_json(folder / "plan.json"))
         ):
-            raise ATKError("COMPARISON_INVALID", "final Validation does not match current Round and Revision")
+            raise ATKError("COMPARISON_INVALID", "最终 Validation 与当前 Round 和 Revision 不匹配")
         if action == "complete":
             if not validation or validation["result"] != "pass":
-                raise ATKError("COMPARISON_INVALID", "current commit lacks passing final validation")
+                raise ATKError("COMPARISON_INVALID", "当前提交缺少通过的最终验证")
             value["status"] = "completed"
         else:
             if not value["active_candidate_ids"] or (validation and validation["result"] == "pass"):
-                raise ATKError("COMPARISON_INVALID", "override is only for an unverified adopted Revision")
+                raise ATKError("COMPARISON_INVALID", "例外仅适用于未验证的已采用 Revision")
             if not validation and not request.get("validation_missing_reason"):
-                raise ATKError("INCOMPLETE_EVIDENCE", "missing final Validation needs a recorded reason")
+                raise ATKError("INCOMPLETE_EVIDENCE", "缺少最终 Validation 时必须记录原因")
             require_override(request, "retain_without_final_pass")
             value["status"] = "completed_with_override"
     elif action == "close_without_adoption" and not value["active_candidate_ids"]:
@@ -1064,10 +1062,10 @@ def _finish_round_locked(repo: Path, root: Path, request: dict) -> dict:
             value["current_revision_id"] != value["baseline_revision_id"]
             or git(repo, "rev-parse", "HEAD^{tree}") != git(repo, "rev-parse", f"{value['baseline_commit']}^{{tree}}")
         ):
-            raise ATKError("WORKSPACE_CONFLICT", "empty Round does not match B0 content")
+            raise ATKError("WORKSPACE_CONFLICT", "空 Round 内容与 B0 不匹配")
         value["status"] = "closed_without_adoption"
     else:
-        raise ATKError("WORKSPACE_CONFLICT", "unsupported final action")
+        raise ATKError("WORKSPACE_CONFLICT", "不支持的最终动作")
     value["state_version"] += 1
     decision = {
         "schema_version": 2,
@@ -1089,7 +1087,7 @@ def _finish_round_locked(repo: Path, root: Path, request: dict) -> dict:
         if {key: val for key, val in previous.items() if key not in {"id", "created_at"}} != {
             key: val for key, val in decision.items() if key not in {"id", "created_at"}
         }:
-            raise ATKError("WORKSPACE_CONFLICT", "saved final decision differs from the retry")
+            raise ATKError("WORKSPACE_CONFLICT", "已保存最终决策与重试不一致")
         decision = previous
     else:
         write_json(folder / "decisions" / f"{decision['id']}.json", decision, immutable=True)

@@ -91,7 +91,7 @@ def test_unfrozen_run_requires_commit_and_detects_source_mutation(tmp_path: Path
     with pytest.raises(ATKError, match="revision_commit"), execution_revision(repo, repo / ".atk", {}):
         pass
     with (
-        pytest.raises(ATKError, match="runner changed"),
+        pytest.raises(ATKError, match="runner 改变"),
         execution_revision(repo, repo / ".atk", {"revision_commit": git(repo, "rev-parse", "HEAD")}),
     ):
         source.write_text("mutated")
@@ -315,7 +315,7 @@ def test_local_prompt_candidate_is_compared_and_committed(tmp_path: Path, final_
         )["state_version"]
         == state["state_version"]
     )
-    with pytest.raises(ATKError, match="ready"):
+    with pytest.raises(ATKError, match="准备好"):
         prepare_candidate(repo, root, {"round_id": round_data["id"]})
     transition_round(repo, root, {"round_id": round_data["id"], "action": "pause", "reason": "review final evidence"})
     assert (
@@ -337,7 +337,7 @@ def test_local_prompt_candidate_is_compared_and_committed(tmp_path: Path, final_
             "revision_id": sealed["revision_id"],
         },
     )
-    with pytest.raises(ATKError, match="already run"):
+    with pytest.raises(ATKError, match="已运行"):
         run_evaluation(
             root,
             {

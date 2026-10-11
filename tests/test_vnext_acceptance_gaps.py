@@ -76,7 +76,7 @@ def test_frozen_dimension_gate_cannot_ignore_unknown_or_regression(
         "right_assessment_id": right,
         "left_commit": rnd["baseline_commit"],
     }
-    with pytest.raises(ATKError, match="frozen primary"):
+    with pytest.raises(ATKError, match="冻结主维度"):
         compare_and_gate(root, {**request, "dimension": "evidence_trust"})
     assert compare_and_gate(root, request)["result"] == expected
 
@@ -129,7 +129,7 @@ def test_candidate_issue_and_target_are_bound(tmp_path: Path) -> None:
     candidate = _sealed_candidate(repo, root, rnd["id"])
     changed = run_evaluation(root, {**request, "revision_id": candidate["revision_id"]})
     right = assess(root, changed, {"a": "ok", "b": "ok"})
-    with pytest.raises(ATKError, match="validation Issue differs"):
+    with pytest.raises(ATKError, match="验证 Issue.*不一致"):
         compare_and_gate(
             root,
             {
@@ -156,12 +156,12 @@ def test_timeout_is_frozen_and_draft_can_be_cancelled_safely(tmp_path: Path) -> 
         "round_id": rnd["id"],
         "revision_id": rnd["baseline_revision_id"],
     }
-    with pytest.raises(ATKError, match="timeout differs"):
+    with pytest.raises(ATKError, match="超时.*不一致"):
         run_evaluation(root, {**request, "timeout_seconds": 99})
     assert not (root / "rounds" / rnd["id"] / "budget-usage.json").exists()
     draft = prepare_candidate(repo, root, {"round_id": rnd["id"], "primary_issue_id": "issue", "paths": ["prompt.txt"]})
     (repo / "prompt.txt").write_text("unknown")
-    with pytest.raises(ATKError, match="restore or inspect"):
+    with pytest.raises(ATKError, match="恢复或检查"):
         cancel_draft(repo, root, {"round_id": rnd["id"], "candidate_id": draft["id"], "reason": "no change"})
     (repo / "prompt.txt").write_text("old")
     cancellation = cancel_draft(repo, root, {"round_id": rnd["id"], "candidate_id": draft["id"], "reason": "no change"})
@@ -225,7 +225,7 @@ def test_interrupted_final_batch_resumes_only_pending_slots(tmp_path: Path) -> N
     assert interrupted["status"] == "interrupted"
     assert interrupted["unknown_record_ids"] and interrupted["not_started_record_ids"]
     follow = {**request, "continue_batch_id": interrupted["id"], "batch_timeout_seconds": 5}
-    with pytest.raises(ATKError, match="explicit rerun authorization"):
+    with pytest.raises(ATKError, match="明确授权重跑"):
         run_evaluation(root, follow)
     authorization = {
         "source": "user",

@@ -110,7 +110,7 @@ def test_supported_diagnosis_requires_check_evidence(tmp_path: Path) -> None:
         "competing_explanations_addressed": "direct tool check rules out Agent input error",
         "checks": [{"status": "completed", "expected": "tool error", "actual": "tool error"}],
     }
-    with pytest.raises(ATKError, match="completed check needs"):
+    with pytest.raises(ATKError, match="已完成检查需要"):
         store_diagnosis(root, {"round_id": round_data["id"], "issues": [issue]})
     issue["checks"][0]["evidence_refs"] = [ref]
     stored = store_diagnosis(root, {"round_id": round_data["id"], "issues": [issue]})
@@ -128,9 +128,9 @@ def test_multi_issue_diagnosis_validates_every_issue_before_writing(tmp_path: Pa
     _, root, _, round_data, _ = project(tmp_path, "print('ok')\n", rows, issue_ids=["tool-a", "tool-b"])
     first = {**_handoff_issue(), "id": "tool-a"}
     second = {**_handoff_issue(), "id": "tool-b", "root_cause_status": "supported"}
-    with pytest.raises(ATKError, match="duplicate Issue ID"):
+    with pytest.raises(ATKError, match="Issue ID 重复"):
         store_diagnosis(root, {"round_id": round_data["id"], "issues": [first, first]})
-    with pytest.raises(ATKError, match="supported mechanism"):
+    with pytest.raises(ATKError, match="已支持的机制"):
         store_diagnosis(root, {"round_id": round_data["id"], "issues": [first, second]})
     assert not (root / "rounds" / round_data["id"] / "issues" / "tool-a").exists()
     second["root_cause_status"] = "hypothesis"
@@ -154,7 +154,7 @@ def test_external_issue_blocks_normal_keep_but_allows_authorized_workaround(tmp_
     plan["workaround_issue_ids"] = ["tool"]
     plan["budget"]["candidates"] = 2
     freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
-    with pytest.raises(ATKError, match="out-of-scope"):
+    with pytest.raises(ATKError, match="范围外"):
         prepare_candidate(
             repo, root, {"round_id": round_data["id"], "primary_issue_id": "tool", "paths": ["prompt.txt"]}
         )
@@ -203,7 +203,7 @@ def test_external_issue_blocks_normal_keep_but_allows_authorized_workaround(tmp_
             "reason": "candidate passes, service Issue remains open",
         }
         if change_kind == "fix":
-            with pytest.raises(ATKError, match="unresolved external Issue"):
+            with pytest.raises(ATKError, match="未解决外部 Issue"):
                 decide_candidate(repo, root, {**decision, "action": "keep"})
             decide_candidate(repo, root, {**decision, "action": "reject"})
         else:
@@ -359,7 +359,7 @@ def test_external_fix_new_baseline_needs_direct_and_end_to_end_evidence(tmp_path
     batch = run_evaluation(root, {**base_request, "purpose": "evaluation", "phase": "external_fix"})
     assessment_id = assess(root, batch, {"case": "ok", "protect": "ok"})
     evidence_id = next(iter(validate_evidence(root, batch["id"])[2]))
-    with pytest.raises(ATKError, match="component probe"):
+    with pytest.raises(ATKError, match="组件探针"):
         validate_external_fix(
             root,
             {
@@ -398,7 +398,7 @@ def test_external_fix_new_baseline_needs_direct_and_end_to_end_evidence(tmp_path
         ).parent.name
 
     failed_direct = direct_assessment("fail", "pass")
-    with pytest.raises(ATKError, match="passing authorized"):
+    with pytest.raises(ATKError, match="通过获准"):
         validate_external_fix(
             root,
             {
@@ -409,7 +409,7 @@ def test_external_fix_new_baseline_needs_direct_and_end_to_end_evidence(tmp_path
             },
         )
     unsafe_direct = direct_assessment("pass", "fail")
-    with pytest.raises(ATKError, match="passing authorized"):
+    with pytest.raises(ATKError, match="通过获准"):
         validate_external_fix(
             root,
             {
@@ -419,7 +419,7 @@ def test_external_fix_new_baseline_needs_direct_and_end_to_end_evidence(tmp_path
                 "direct_evidence_refs": direct_refs,
             },
         )
-    with pytest.raises(ATKError, match="frozen by probe permission"):
+    with pytest.raises(ATKError, match="由探针许可冻结"):
         validate_external_fix(
             root,
             {
@@ -431,7 +431,7 @@ def test_external_fix_new_baseline_needs_direct_and_end_to_end_evidence(tmp_path
             },
         )
     direct_assessment_id = direct_assessment("pass", "pass")
-    with pytest.raises(ATKError, match="Case coverage"):
+    with pytest.raises(ATKError, match="Case 覆盖"):
         validate_external_fix(
             root,
             {
@@ -457,7 +457,7 @@ def test_external_fix_new_baseline_needs_direct_and_end_to_end_evidence(tmp_path
         "direct_evidence_refs": direct_refs,
         "end_to_end_validation_id": validation["id"],
     }
-    with pytest.raises(ATKError, match="did not cover"):
+    with pytest.raises(ATKError, match="未覆盖"):
         store_diagnosis(
             root,
             {"round_id": first["id"], "issues": [{**issue, "resolution": "resolved", "external_fix": fix}]},
@@ -517,7 +517,7 @@ def test_replay_preparation_switches_cache_and_restores_after_failure(tmp_path: 
     assert (repo / "prompt.txt").read_text() == (repo / "cache.txt").read_text() == "new"
     (repo / "fail-prep").write_text("")
     with (
-        pytest.raises(ATKError, match="replay preparation exited"),
+        pytest.raises(ATKError, match="重放准备退出码"),
         temporary_revision(repo, root, round_data["id"], round_data["baseline_commit"]),
     ):
         pass
@@ -574,7 +574,7 @@ def test_crashed_temporary_replay_restores_only_known_source(tmp_path: Path) -> 
     assert (repo / "prompt.txt").read_text() == (repo / "cache.txt").read_text() == "old"
     request = {"round_id": round_data["id"], "operation_id": operations[0]["id"]}
     (repo / "prompt.txt").write_text("third-party")
-    with pytest.raises(ATKError, match="unknown content"):
+    with pytest.raises(ATKError, match="未知内容"):
         inspect_or_recover_operation(repo, root, request)
     assert (repo / "prompt.txt").read_text() == "third-party"
     (repo / "prompt.txt").write_text("old")
@@ -588,7 +588,7 @@ def test_replay_preparation_timeout_stops_child_writes(tmp_path: Path) -> None:
     marker = tmp_path / "late-write.txt"
     child = f"import time; from pathlib import Path; time.sleep(2); Path({str(marker)!r}).write_text('late')"
     parent = f"import subprocess, sys, time; subprocess.Popen([sys.executable, '-c', {child!r}]); time.sleep(10)"
-    with pytest.raises(ATKError, match="replay preparation timed out"):
+    with pytest.raises(ATKError, match="重放准备超时"):
         checkpoints._prepare_replay(
             tmp_path,
             {"mode": "command", "argv": [sys.executable, "-c", parent], "timeout_seconds": 1},
@@ -745,7 +745,7 @@ def test_commit_hook_cannot_add_unsealed_path(tmp_path: Path) -> None:
     hook = repo / ".git" / "hooks" / "pre-commit"
     hook.write_text("#!/bin/sh\necho changed > agent.py\ngit add agent.py\n")
     hook.chmod(0o755)
-    with pytest.raises(ATKError, match="unsealed paths"):
+    with pytest.raises(ATKError, match="未封存路径"):
         decide_candidate(
             repo,
             root,
@@ -761,7 +761,7 @@ def test_commit_hook_cannot_add_unsealed_path(tmp_path: Path) -> None:
     assert stored["current_commit"] == round_data["baseline_commit"]
     assert stored["pending_candidate_id"] == draft["id"]
     operation = next((root / "rounds" / round_data["id"] / "operations").glob("*.json"))
-    with pytest.raises(ATKError, match="unsealed paths"):
+    with pytest.raises(ATKError, match="未封存路径"):
         inspect_or_recover_operation(repo, root, {"round_id": round_data["id"], "operation_id": operation.stem})
 
 
@@ -784,7 +784,7 @@ def test_rejected_commit_hook_can_unstage_only_sealed_paths(tmp_path: Path) -> N
         "validation_id": _passing_validation(root, round_data, sealed),
         "reason": "fixture",
     }
-    with pytest.raises(ATKError, match="commit failed"):
+    with pytest.raises(ATKError, match="提交失败"):
         decide_candidate(repo, root, request)
     operation = next((root / "rounds" / round_data["id"] / "operations").glob("*.json"))
     result = inspect_or_recover_operation(repo, root, {"round_id": round_data["id"], "operation_id": operation.stem})
@@ -846,7 +846,7 @@ def test_unvalidated_candidate_can_be_restored_and_recovered(
         "reason": "unsafe to continue",
         "validation_missing_reason": "candidate inspection found a problem",
     }
-    with pytest.raises(ATKError, match="recorded reason"):
+    with pytest.raises(ATKError, match="记录原因"):
         decide_candidate(
             repo, root, {key: value for key, value in request.items() if key != "validation_missing_reason"}
         )
@@ -991,7 +991,7 @@ def test_interrupted_restoration_refuses_unknown_state(
     else:
         git(repo, "add", "prompt.txt")
     operation = next((root / "rounds" / round_data["id"] / "operations").glob("*.json"))
-    with pytest.raises(ATKError, match="unknown restoration content|staged changes must be resolved"):
+    with pytest.raises(ATKError, match="未知恢复内容|必须处理暂存修改"):
         inspect_or_recover_operation(repo, root, {"round_id": round_data["id"], "operation_id": operation.stem})
     assert (repo / "prompt.txt").read_text() == ("third" if tamper == "content" else "new")
     assert read_json(root / "rounds" / round_data["id"] / "round.json")["pending_candidate_id"] == draft["id"]
@@ -1018,7 +1018,7 @@ def test_git_smudge_cannot_hide_restored_content_drift(tmp_path: Path, restore_k
         decide_candidate(repo, root, request)
     current_commit = git(repo, "rev-parse", "HEAD")
     _install_smudge_filter(repo, tmp_path, "new" if restore_kind == "replay" else "old")
-    with pytest.raises(ATKError, match="restored content differs"):
+    with pytest.raises(ATKError, match="恢复内容.*不一致"):
         if restore_kind == "reject":
             decide_candidate(repo, root, request)
         elif restore_kind == "rollback":
@@ -1070,7 +1070,7 @@ def test_final_completion_rejects_wrong_revision(tmp_path: Path) -> None:
             "plan_hash": digest(plan),
         },
     )
-    with pytest.raises(ATKError, match="does not match current Round"):
+    with pytest.raises(ATKError, match="与当前 Round.*不匹配"):
         finish_round(
             repo,
             root,
@@ -1107,15 +1107,15 @@ def test_trial_override_keeps_original_result_and_cannot_claim_normal_completion
         "reason": "trial",
         "override": True,
     }
-    with pytest.raises(ATKError, match="explicit user action"):
+    with pytest.raises(ATKError, match="明确的用户动作"):
         decide_candidate(repo, root, request)
     authorization = {"source": "user", "action": "trial_commit", "reason": "trial", "risk": "no measured benefit"}
     decision = decide_candidate(repo, root, {**request, "override_authorization": authorization})
     assert decision["validation_result"] == "no_effect"
     assert decision["override_authorization"] == authorization
-    with pytest.raises(ATKError, match="passing final validation"):
+    with pytest.raises(ATKError, match="通过的最终验证"):
         finish_round(repo, root, {"round_id": round_data["id"], "action": "complete", "reason": "trial"})
-    with pytest.raises(ATKError, match="explicit user action"):
+    with pytest.raises(ATKError, match="明确的用户动作"):
         finish_round(
             repo,
             root,
@@ -1171,7 +1171,7 @@ def test_interrupted_rollback_refuses_unknown_content_then_restores_start(tmp_pa
     hook = repo / ".git" / "hooks" / "pre-commit"
     hook.write_text("#!/bin/sh\nexit 1\n")
     hook.chmod(0o755)
-    with pytest.raises(ATKError, match="rollback operation"):
+    with pytest.raises(ATKError, match="回退操作"):
         rollback_to(
             repo,
             root,
@@ -1183,7 +1183,7 @@ def test_interrupted_rollback_refuses_unknown_content_then_restores_start(tmp_pa
         if read_json(path)["action"] == "rollback_to"
     )
     (repo / "prompt.txt").write_text("unknown")
-    with pytest.raises(ATKError, match="unknown rollback content"):
+    with pytest.raises(ATKError, match="未知回退内容"):
         inspect_or_recover_operation(repo, root, {"round_id": round_data["id"], "operation_id": operation.stem})
     assert (repo / "prompt.txt").read_text() == "unknown"
     (repo / "prompt.txt").write_text("old")
@@ -1254,7 +1254,7 @@ def test_literal_special_path_and_unknown_file_survive_candidate_gate(tmp_path: 
     freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
     unknown = repo / "unknown.txt"
     unknown.write_text("do not touch")
-    with pytest.raises(ATKError, match="unaccounted"):
+    with pytest.raises(ATKError, match="未解释"):
         prepare_candidate(repo, root, {"round_id": round_data["id"], "primary_issue_id": "issue", "paths": [special]})
     assert unknown.read_text() == "do not touch"
     unknown.unlink()
@@ -1331,7 +1331,7 @@ def test_runner_commit_blocks_evaluation_without_advancing_round(tmp_path: Path)
     rows = [{"id": "case", "input": "task", "usage": "optimization", "source_group_id": "group"}]
     repo, root, dataset, round_data, plan = project(tmp_path, script, rows)
     freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
-    with pytest.raises(ATKError, match="runner changed current checkpoint"):
+    with pytest.raises(ATKError, match="runner 改变了当前检查点"):
         run_evaluation(
             root,
             {
@@ -1374,11 +1374,11 @@ def test_running_evaluation_blocks_candidate_operations(tmp_path: Path) -> None:
             while not started.exists() and not future.done() and time.monotonic() < deadline:
                 time.sleep(0.01)
             assert started.exists()
-            with pytest.raises(ATKError, match="another ATK operation is running"):
+            with pytest.raises(ATKError, match="另一个 ATK 操作正在运行"):
                 prepare_candidate(
                     repo, root, {"round_id": round_data["id"], "primary_issue_id": "issue", "paths": ["prompt.txt"]}
                 )
-            with pytest.raises(ATKError, match="another ATK operation is running"):
+            with pytest.raises(ATKError, match="另一个 ATK 操作正在运行"):
                 store_diagnosis(root, {"round_id": round_data["id"], "issues": []})
         finally:
             release.write_text("go")
@@ -1426,7 +1426,7 @@ def test_freeze_round_resumes_only_matching_plan_after_status_write_failure(
     folder = root / "rounds" / round_data["id"]
     frozen = read_json(folder / "plan.json")
     assert read_json(folder / "round.json")["status"] == "analysis_only"
-    with pytest.raises(ATKError, match="partial frozen plan differs"):
+    with pytest.raises(ATKError, match="部分冻结计划.*不一致"):
         freeze_round(repo, root, {"round_id": round_data["id"], "plan": {**plan, "final_repeats": 2}})
     assert read_json(folder / "plan.json") == frozen
     assert freeze_round(repo, root, request)["status"] == "ready"
@@ -1438,7 +1438,7 @@ def test_freeze_round_rejects_second_active_round(tmp_path: Path) -> None:
     repo, root, _, first, plan = project(tmp_path, "print('ok')\n", rows)
     second = checkpoints.create_round(repo, root, {"issue_ids": ["issue"]})
     freeze_round(repo, root, {"round_id": first["id"], "plan": plan})
-    with pytest.raises(ATKError, match="another active round"):
+    with pytest.raises(ATKError, match="另一个活跃 Round"):
         freeze_round(repo, root, {"round_id": second["id"], "plan": plan})
     assert read_json(root / "rounds" / second["id"] / "round.json")["status"] == "analysis_only"
     assert not (root / "rounds" / second["id"] / "plan.json").exists()
@@ -1459,7 +1459,7 @@ def test_prepare_candidate_reuses_draft_after_round_write_failure(
     folder = root / "rounds" / round_data["id"]
     orphan = next((folder / "candidates").glob("*/draft.json"))
     assert read_json(folder / "round.json")["pending_candidate_id"] is None
-    with pytest.raises(ATKError, match="unregistered candidate draft differs"):
+    with pytest.raises(ATKError, match="未注册候选草稿.*不一致"):
         prepare_candidate(repo, root, {**request, "paths": ["other.txt"]})
     assert prepare_candidate(repo, root, request)["id"] == orphan.parent.name
     assert read_json(folder / "round.json")["candidate_ids"] == [orphan.parent.name]
@@ -1488,9 +1488,9 @@ def test_replacement_candidate_records_validated_lineage_and_patch(tmp_path: Pat
             "reason": "try a different rule",
         },
     )
-    with pytest.raises(ATKError, match="related Issues are outside"):
+    with pytest.raises(ATKError, match="关联 Issue 超出"):
         prepare_candidate(repo, root, {**request, "related_issue_ids": ["unknown"]})
-    with pytest.raises(ATKError, match="superseded candidate is outside"):
+    with pytest.raises(ATKError, match="被替代候选不属于"):
         prepare_candidate(repo, root, {**request, "supersedes": "candidate-unknown"})
     replacement = prepare_candidate(repo, root, {**request, "supersedes": first["id"]})
     assert replacement["supersedes"] == first["id"]
@@ -1520,7 +1520,7 @@ def test_finish_round_reuses_final_decision_after_status_write_failure(
             finish_round(repo, root, request)
     folder = root / "rounds" / round_data["id"]
     saved = next((folder / "decisions").glob("*.json"))
-    with pytest.raises(ATKError, match="saved final decision differs"):
+    with pytest.raises(ATKError, match="已保存最终决策.*不一致"):
         finish_round(repo, root, {**request, "reason": "different"})
     assert finish_round(repo, root, request)["id"] == saved.stem
     assert read_json(folder / "round.json")["status"] == "closed_without_adoption"
@@ -1567,10 +1567,7 @@ def test_interrupted_runner_keeps_running_and_not_started_attempts(tmp_path: Pat
     assert batch["unknown_record_ids"] == [attempts[0]["record_id"]]
     assert batch["not_started_record_ids"] == [attempts[1]["record_id"]]
     assert batch["missing_runner_artifacts"] == ["records.jsonl"]
-    assert (
-        batch["post_run_component_drift"][0]["reason"]
-        == "runner component inventory differs from project configuration"
-    )
+    assert batch["post_run_component_drift"][0]["reason"] == "runner 组件清单与项目配置不一致"
     assert validate_evidence(root, batch["id"])[1] == {}
 
 
@@ -1614,8 +1611,7 @@ def test_invalid_runner_batch_keeps_partial_evidence(tmp_path: Path, kind: str) 
         assert (root / "evidence" / batch["id"] / "batch.json").read_text() == "{bad"
     else:
         assert any(
-            item.get("reason") == "runner component inventory differs from project configuration"
-            for item in batch["post_run_component_drift"]
+            item.get("reason") == "runner 组件清单与项目配置不一致" for item in batch["post_run_component_drift"]
         )
 
 
@@ -1700,7 +1696,7 @@ def test_runner_cannot_change_preallocated_attempt_identity(tmp_path: Path) -> N
     )
     plan["runner_hash"] = digest(runner)
     freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
-    with pytest.raises(ATKError, match="runner changed an attempt identity"):
+    with pytest.raises(ATKError, match="runner 改变了 attempt 身份"):
         run_evaluation(
             root,
             {
@@ -1766,7 +1762,7 @@ def test_runner_untracked_output_blocks_pending_candidate_evidence(tmp_path: Pat
     )
     (repo / "prompt.txt").write_text("new")
     sealed = seal_candidate(repo, root, {"round_id": round_data["id"], "candidate_id": draft["id"]})
-    with pytest.raises(ATKError, match="runner changed candidate Git state"):
+    with pytest.raises(ATKError, match="runner 改变了候选 Git 状态"):
         run_evaluation(
             root,
             {
@@ -1786,7 +1782,7 @@ def test_staged_baseline_scope_and_sealed_content_are_hard_gates(tmp_path: Path)
     repo, root, _, round_data, plan = project(tmp_path, "print('ok')\n", rows)
     (repo / "prompt.txt").write_text("staged")
     git(repo, "add", "prompt.txt")
-    with pytest.raises(ATKError, match="staged changes"):
+    with pytest.raises(ATKError, match="暂存修改"):
         freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
     assert git(repo, "diff", "--cached", "--name-only") == "prompt.txt"
     git(repo, "restore", "--staged", "prompt.txt")
@@ -1797,12 +1793,12 @@ def test_staged_baseline_scope_and_sealed_content_are_hard_gates(tmp_path: Path)
     )
     (repo / "prompt.txt").write_text("new")
     (repo / "agent.py").write_text("print('unauthorized')\n")
-    with pytest.raises(ATKError, match="differ from declared paths"):
+    with pytest.raises(ATKError, match="与声明路径不一致"):
         seal_candidate(repo, root, {"round_id": round_data["id"], "candidate_id": draft["id"]})
     git(repo, "restore", "agent.py")
     sealed = seal_candidate(repo, root, {"round_id": round_data["id"], "candidate_id": draft["id"]})
     (repo / "prompt.txt").write_text("modified-after-seal")
-    with pytest.raises(ATKError, match="changed after sealing"):
+    with pytest.raises(ATKError, match="在封存后被修改"):
         decide_candidate(
             repo,
             root,
@@ -1832,7 +1828,7 @@ def test_staged_baseline_scope_and_sealed_content_are_hard_gates(tmp_path: Path)
     ],
 )
 def test_candidate_path_aliases_are_rejected(tmp_path: Path, alias: str) -> None:
-    with pytest.raises(ATKError, match="unsafe path"):
+    with pytest.raises(ATKError, match="不安全的路径"):
         checkpoints.safe_path(tmp_path, alias)
 
 
@@ -1841,7 +1837,7 @@ def test_candidate_path_cannot_differ_only_by_case(tmp_path: Path) -> None:
     repo, root, _, round_data, plan = project(tmp_path, "print('ok')\n", rows, extra_files={"Example.txt": "base"})
     plan["allowed_paths"].append("example.txt")
     freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
-    with pytest.raises(ATKError, match="case or Unicode alias"):
+    with pytest.raises(ATKError, match="大小写或 Unicode 别名"):
         prepare_candidate(
             repo,
             root,
@@ -1881,7 +1877,7 @@ def test_seal_candidate_resumes_only_matching_artifacts(
     previous_revision = read_json(folder / "revision.json")["id"] if (folder / "revision.json").exists() else None
     if interrupt_at == "revision.json":
         (repo / "prompt.txt").write_text("other")
-        with pytest.raises(ATKError, match="partial seal differs"):
+        with pytest.raises(ATKError, match="部分封存.*不一致"):
             seal_candidate(repo, root, request)
         (repo / "prompt.txt").write_text("new")
     sealed = seal_candidate(repo, root, request)
@@ -1892,9 +1888,9 @@ def test_seal_candidate_resumes_only_matching_artifacts(
     assert (folder / "files" / "prompt.txt").read_text() == "new"
     if interrupt_at == "revision.json":
         (folder / "files" / "prompt.txt").write_text("tampered")
-        with pytest.raises(ATKError, match="partial seal differs"):
+        with pytest.raises(ATKError, match="部分封存.*不一致"):
             seal_candidate(repo, root, request)
-        with pytest.raises(ATKError, match="sealed candidate copy changed"):
+        with pytest.raises(ATKError, match="封存候选副本被修改"):
             decide_candidate(
                 repo,
                 root,
@@ -1926,11 +1922,11 @@ def test_unexpected_index_and_head_drift_block_candidate_keep(tmp_path: Path) ->
     intruder = repo / "intruder.txt"
     intruder.write_text("third-party content")
     git(repo, "add", "intruder.txt")
-    with pytest.raises(ATKError, match="staged changes"):
+    with pytest.raises(ATKError, match="暂存修改"):
         decide_candidate(repo, root, request)
     assert git(repo, "diff", "--cached", "--name-only") == "intruder.txt"
     git(repo, "commit", "-qm", "third-party commit")
-    with pytest.raises(ATKError, match="HEAD differs"):
+    with pytest.raises(ATKError, match="HEAD 与"):
         decide_candidate(repo, root, request)
     assert intruder.read_text() == "third-party content"
     assert not (root / "rounds" / round_data["id"] / "candidates" / draft["id"] / "decision.json").exists()

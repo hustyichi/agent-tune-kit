@@ -411,7 +411,7 @@ def test_rollback_withdraws_accepted_suffix_and_requires_fresh_candidate_evidenc
         "right_assessment_id": right,
         "left_commit": draft["parent_commit"],
     }
-    with pytest.raises(ATKError, match="assessment Revision does not match candidate"):
+    with pytest.raises(ATKError, match="Assessment Revision 与候选不匹配"):
         compare_and_gate(root, {**comparison, "left_assessment_id": second[2]})
     validation = compare_and_gate(root, {**comparison, "left_assessment_id": first[2]})
     assert validation["result"] == "pass"
@@ -510,7 +510,7 @@ def test_incremental_pass_cannot_finish_when_final_replay_fails(tmp_path: Path) 
         },
     )
     assert final["result"] == "no_effect"
-    with pytest.raises(ATKError, match="passing final validation"):
+    with pytest.raises(ATKError, match="通过的最终验证"):
         finish_round(
             repo,
             root,
@@ -636,7 +636,7 @@ def test_unknown_fixed_component_and_config_drift_block_comparison(tmp_path: Pat
     )
     config["command"] = [config["python"], "another-agent.py"]
     write_json(project_path, config)
-    with pytest.raises(ATKError, match="configuration changed"):
+    with pytest.raises(ATKError, match="配置.*修改"):
         run_evaluation(root, {**request, "revision_id": round_data["baseline_revision_id"]})
 
 
@@ -697,7 +697,7 @@ def test_new_judger_reassesses_prior_execution_without_rerunning_agent(tmp_path:
     )
     original_config = read_json(root / "project.json")
     write_json(root / "project.json", {**original_config, "command": [original_config["python"], "another.py"]})
-    with pytest.raises(ATKError, match="cannot be reused"):
+    with pytest.raises(ATKError, match="不能跨"):
         create_round(
             repo,
             root,
@@ -819,7 +819,7 @@ def test_changed_case_input_needs_new_execution_on_both_sides(tmp_path: Path) ->
     )
     (repo / "prompt.txt").write_text("new")
     sealed = seal_candidate(repo, root, {"round_id": first["id"], "candidate_id": draft["id"]})
-    with pytest.raises(ATKError, match="frozen dataset"):
+    with pytest.raises(ATKError, match="冻结数据集"):
         assessed(new_dataset["id"], first["id"], sealed["revision_id"])
     old_right = assessed(old_dataset["id"], first["id"], sealed["revision_id"])
     plan_path = root / "rounds" / first["id"] / "plan.json"
@@ -837,7 +837,7 @@ def test_changed_case_input_needs_new_execution_on_both_sides(tmp_path: Path) ->
     }
     mismatch = compare_and_gate(root, request)
     assert mismatch["result"] == "insufficient"
-    assert "execution Case content differs from the frozen dataset" in mismatch["limitations"]
+    assert "执行 Case 内容与冻结数据集不一致" in mismatch["limitations"]
     decide_candidate(
         repo,
         root,
@@ -1073,7 +1073,7 @@ def test_external_fixed_artifact_drift_invalidates_candidate_gain(tmp_path: Path
     external.write_text("v2")
     candidate = run_evaluation(root, {**request, "revision_id": sealed["revision_id"]})
     assert baseline["fixed_context_hash"] != candidate["fixed_context_hash"]
-    with pytest.raises(ATKError, match="fixed component identity differs"):
+    with pytest.raises(ATKError, match="固定组件身份.*不一致"):
         compare_and_gate(
             root,
             {
@@ -1167,7 +1167,7 @@ def test_fixed_service_version_is_probed_before_and_after_batch(tmp_path: Path) 
     changed = run_evaluation(root, {**request, "revision_id": sealed["revision_id"]})
     assert changed["actual_components"][1]["actual_version"] == "v2"
     assert changed["actual_components"][1]["identity_issue"] == "expected_version_mismatch"
-    with pytest.raises(ATKError, match="fixed component identity differs"):
+    with pytest.raises(ATKError, match="固定组件身份.*不一致"):
         compare_and_gate(
             root,
             {
@@ -1193,7 +1193,7 @@ def test_fixed_service_version_is_probed_before_and_after_batch(tmp_path: Path) 
     assert unknown["actual_components"][1]["identity_issue"] == "before_invalid_output"
     config["components"][1]["version_command"] = "python version.py"
     write_json(config_path, config)
-    with pytest.raises(ATKError, match="invalid version command"):
+    with pytest.raises(ATKError, match="版本命令无效"):
         run_evaluation(root, {**request, "revision_id": sealed["revision_id"]})
 
 
@@ -1330,7 +1330,7 @@ def test_service_failure_remains_valid_failure_while_skill_dimension_is_unknown(
         "left_commit": round_data["baseline_commit"],
     }
     assert compare_and_gate(root, {**common, "dimension": "service_reliability"})["result"] == "insufficient"
-    with pytest.raises(ATKError, match="frozen primary"):
+    with pytest.raises(ATKError, match="冻结主维度"):
         compare_and_gate(root, {**common, "dimension": "skill_behavior"})
 
 

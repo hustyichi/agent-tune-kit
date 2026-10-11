@@ -233,10 +233,10 @@ def smoke_installed_artifact(artifact: Path, work_dir: Path) -> None:
     ]
     run([str(atk), "--help"], cwd=run_dir, timeout=30)
     preview = capture([str(atk), "preview", *common], cwd=run_dir)
-    if "No files changed" not in preview:
+    if "未修改文件" not in preview:
         raise ReleaseCheckError(f"{artifact.name} preview failed")
     install_output = capture([str(atk), "install", *common], cwd=run_dir)
-    if "installed locally for Codex" not in install_output:
+    if "已为 Codex 本地安装 Agent Tune Kit" not in install_output:
         raise ReleaseCheckError(f"{artifact.name} install failed")
     target = run_dir / "plugins" / PLUGIN_NAME
     if target.is_symlink():
@@ -250,7 +250,7 @@ def smoke_installed_artifact(artifact: Path, work_dir: Path) -> None:
         if not required.exists():
             raise ReleaseCheckError(f"installed artifact missing {required}")
     status = capture([str(atk), "status", *common], cwd=run_dir)
-    if "is installed locally." not in status:
+    if "已本地安装。" not in status:
         raise ReleaseCheckError(f"{artifact.name} status smoke failed")
 
 
