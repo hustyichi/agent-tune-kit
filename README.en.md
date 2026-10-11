@@ -71,14 +71,14 @@ Replace the example paths below with your own. **Send one call at a time and wai
 ### 1. Connect your Agent and prepare tasks
 
 ```text
-$atk-init My Agent entry point is scripts/agent.py. Check how it runs and connect it. Only allow changes to prompts/ in this round.
+$atk-init My Agent entry point is scripts/agent.py. Check its runtime environment and input/output handling, then connect it.
 ```
 
 ```text
 $atk-dataset Use the tasks in data/eval.csv. Help confirm inputs, expected results, and judging criteria. Keep already working tasks to check for regressions.
 ```
 
-This establishes how to run your Agent, which files may change, and how results should be judged. If you do not have a dataset file yet, give `$atk-dataset` real task examples to organize.
+`$atk-init` only confirms the entry point, dependencies, and input/output handling, then sets up the adapter; `$atk-dataset` organizes test tasks and judging criteria. If you do not have a dataset file yet, give `$atk-dataset` real task examples to organize.
 
 ### 2. Evaluate current behavior and choose a problem
 
@@ -95,7 +95,7 @@ You receive task-level judgments and a failure analysis. The cause may be a prom
 ### 3. Try a change, validate it, and decide
 
 ```text
-$atk-optimize Prepare one change for the confirmed problem, within the allowed scope.
+$atk-optimize Confirm the allowed scope of changes for this round, then prepare one change for the confirmed problem.
 ```
 
 ```text
