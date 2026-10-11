@@ -1,6 +1,6 @@
 {
   "name": "agent-tune-kit",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "用于已有 Agent 评测、诊断和调优的本地 Codex 插件，默认以中文生成说明与报告。",
   "author": {
     "name": "hustyichi",

@@ -83,7 +83,7 @@ class InstallPluginCliTests(unittest.TestCase):
         for args in [("--version",), ("version",)]:
             result = run_cli(*args)
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(result.stdout.strip(), "agent-tune-kit 1.0.0")
+            self.assertEqual(result.stdout.strip(), "agent-tune-kit 1.1.0")
             self.assertEqual(result.stderr, "")
 
     def test_script_wrapper_delegates_to_atk_cli(self) -> None:
@@ -202,7 +202,7 @@ class InstallPluginCliTests(unittest.TestCase):
             self.assertTrue((project / ".atk" / "project.json").exists())
             status = run_cli("status", *common)
             self.assertEqual(status.returncode, 0)
-            self.assertIn("CLI 版本为 1.0.0", status.stdout)
+            self.assertIn("CLI 版本为 1.1.0", status.stdout)
             self.assertIn("方便时运行 atk install 更新 Skill", status.stdout)
 
             reinstall = run_cli("install", "--copy", *common, "--no-input")
@@ -212,7 +212,7 @@ class InstallPluginCliTests(unittest.TestCase):
             entries = json.loads((base / "marketplace.json").read_text())["plugins"]
             self.assertIn(other, entries)
             self.assertEqual(len(entries), 2)
-            self.assertEqual(json.loads(manifest_path.read_text(encoding="utf-8"))["version"], "1.0.0")
+            self.assertEqual(json.loads(manifest_path.read_text(encoding="utf-8"))["version"], "1.1.0")
             second_project = base / "second-project"
             second_project.mkdir()
             request.write_text(
