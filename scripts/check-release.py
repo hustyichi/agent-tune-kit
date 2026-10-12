@@ -30,6 +30,7 @@ WHEEL_REQUIRED_PATHS = {
     "agent_tune_kit/plugin_payload/agent-tune-kit/.codex-plugin/plugin.json",
     "agent_tune_kit/plugin_payload/agent-tune-kit/skills/WORKFLOW.md",
     "agent_tune_kit/plugin_payload/agent-tune-kit/templates/runner.py",
+    "agent_tune_kit/plugin_payload/agent-tune-kit/templates/logging_json.py",
     *(
         f"agent_tune_kit/plugin_payload/agent-tune-kit/skills/{name}/SKILL.md"
         for name in (
@@ -48,6 +49,7 @@ SDIST_REQUIRED_PATHS = {
     ".codex-plugin/plugin.json",
     "skills/WORKFLOW.md",
     "templates/runner.py",
+    "templates/logging_json.py",
     *(
         f"skills/{name}/SKILL.md"
         for name in (

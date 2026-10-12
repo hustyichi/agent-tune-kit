@@ -19,7 +19,7 @@ from .checkpoints import (
     transition_round,
 )
 from .core import ATKError, render_assessment_html, store_assessment, write_json
-from .evidence import import_evidence, record_source_contract
+from .evidence import import_evidence, read_native_evidence, record_source_contract, view_execution
 from .execution import initialize_project, run_evaluation, store_dataset
 from .governance import (
     compare_and_gate,
@@ -55,6 +55,8 @@ def internal_main(argv: list[str]) -> int:
         "initialize_project": lambda: initialize_project(repo, request),
         "store_dataset": lambda: store_dataset(root, request),
         "import_evidence": lambda: import_evidence(root, request),
+        "view_execution": lambda: view_execution(root, request),
+        "read_native_evidence": lambda: read_native_evidence(root, request),
         "record_source_contract": lambda: record_source_contract(repo, root, request),
         "run_evaluation": lambda: run_evaluation(root, request),
         "store_assessment": lambda: store_assessment(root, request),

@@ -77,7 +77,11 @@ def canonical(value: object) -> bytes:
 
 def digest(value: bytes | Path | object) -> str:
     if isinstance(value, Path):
-        value = value.read_bytes()
+        fingerprint = hashlib.sha256()
+        with value.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(65536), b""):
+                fingerprint.update(chunk)
+        return fingerprint.hexdigest()
     elif not isinstance(value, bytes):
         value = canonical(value)
     return hashlib.sha256(value).hexdigest()
@@ -160,6 +164,14 @@ def validate_evidence(root: Path, batch_id: str) -> tuple[dict, dict[str, dict],
         if not evidence_id or evidence_id in evidence or not entry.get("fingerprint") or not entry.get("locator"):
             raise ATKError("INCOMPLETE_EVIDENCE", "证据索引无效")
         evidence[evidence_id] = entry
+        if entry.get("kind") in {"events", "native_artifact"}:
+            path = Path(entry.get("path", ""))
+            if (
+                not path.resolve().is_relative_to((root / "evidence").resolve())
+                or not path.is_file()
+                or digest(path) != entry["fingerprint"]
+            ):
+                raise ATKError("INCOMPLETE_EVIDENCE", "原生采集证据路径或指纹改变")
     if manifest.get("records_sha256") != digest(folder / "records.jsonl"):
         raise ATKError("INCOMPLETE_EVIDENCE", "证据记录在封存后被修改")
     return manifest, records, evidence

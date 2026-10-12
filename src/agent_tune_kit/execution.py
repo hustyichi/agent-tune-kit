@@ -28,6 +28,7 @@ from .core import (
     validate_evidence,
     write_json,
 )
+from .evidence import redact
 
 
 def _version_commands(components: list[dict]) -> dict[str, tuple[list[str], int, str | None]]:
@@ -149,6 +150,31 @@ def initialize_project(repo: Path, request: dict) -> dict:
     ):
         raise ATKError("INCOMPLETE_EVIDENCE", "外部副作用必须是命名对象")
     metric_sources = request.get("metric_sources", {})
+    observability = request.get("observability", {})
+    if (
+        not isinstance(observability, dict)
+        or (observability and observability.get("format") not in {"atk_json", "loguru_json", "text"})
+        or not isinstance(observability.get("stage_field", "phase"), str)
+        or not observability.get("stage_field", "phase")
+        or any(
+            not isinstance(observability.get(key, []), list)
+            or any(not isinstance(item, str) or not item for item in observability.get(key, []))
+            for key in ("required_messages", "required_stages")
+        )
+        or not isinstance(observability.get("artifacts", []), list)
+        or any(
+            not isinstance(item, dict)
+            or not isinstance(item.get("glob"), str)
+            or not item["glob"]
+            or Path(item["glob"]).is_absolute()
+            or ".." in Path(item["glob"]).parts
+            or not isinstance(item.get("role"), str)
+            or not item["role"]
+            or type(item.get("required", False)) is not bool
+            for item in observability.get("artifacts", [])
+        )
+    ):
+        raise ATKError("INCOMPLETE_EVIDENCE", "日志采集配置无效")
     if (
         not isinstance(metric_sources, dict)
         or set(metric_sources) - {"cost", "tool_calls"}
@@ -189,6 +215,7 @@ def initialize_project(repo: Path, request: dict) -> dict:
         "loading_verification": request.get("loading_verification", {}),
         "external_effects": external_effects,
         "metric_sources": metric_sources,
+        "observability": observability,
     }
     (root / "runtime.md").write_text(request["runtime_notes"], encoding="utf-8")
     template = resources.files("agent_tune_kit").joinpath("plugin_payload/agent-tune-kit/templates/runner.py")
@@ -197,12 +224,16 @@ def initialize_project(repo: Path, request: dict) -> dict:
             runner_source = Path(source)
             (root / "adapters").mkdir(exist_ok=True)
             shutil.copyfile(runner_source, root / "adapters" / "runner.py")
+            shutil.copyfile(runner_source.with_name("logging_json.py"), root / "adapters" / "logging_json.py")
     else:
         runner_source = Path(__file__).resolve().parents[2] / "templates" / "runner.py"
         if not runner_source.exists():
             raise ATKError("WORKSPACE_CONFLICT", "缺少随包 runner 模板")
         (root / "adapters").mkdir(exist_ok=True)
         shutil.copyfile(runner_source, root / "adapters" / "runner.py")
+        shutil.copyfile(runner_source.with_name("logging_json.py"), root / "adapters" / "logging_json.py")
+    if observability:
+        project["observability"] = {**observability, "logging_helper_sha256": digest(root / "adapters/logging_json.py")}
     write_json(root / "project.json", project, immutable=not upgrade)
     return project
 
@@ -328,9 +359,15 @@ def source_groups_for_evidence(root: Path, refs: list[dict]) -> list[str]:
                 raise ATKError("INCOMPLETE_EVIDENCE", "导入的知识证据需要来源组")
             groups.add(group)
             continue
-        if ref["evidence_id"] not in records:
-            raise ATKError("INCOMPLETE_EVIDENCE", "知识本地证据必须引用 Execution")
-        case_id = records[ref["evidence_id"]].get("execution", {}).get("case_id")
+        record = records.get(ref["evidence_id"])
+        if record is None:
+            execution_id = index[ref["evidence_id"]].get("execution_id")
+            record = next(
+                (value for value in records.values() if value.get("execution", {}).get("id") == execution_id), None
+            )
+        if record is None:
+            raise ATKError("INCOMPLETE_EVIDENCE", "知识本地证据必须关联 Execution")
+        case_id = record.get("execution", {}).get("case_id")
         case = load_cases(root, manifest["dataset_id"]).get(case_id)
         if not case:
             raise ATKError("INCOMPLETE_EVIDENCE", "知识 Execution 没有匹配的 Case")
@@ -765,6 +802,10 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
     runner = root / "adapters" / "runner.py"
     if not runner.exists():
         raise ATKError("NOT_REPLAYABLE", f"项目 runner 缺失：{runner}")
+    capture_config = project.get("observability", {})
+    helper = root / "adapters/logging_json.py"
+    if capture_config and (not helper.is_file() or digest(helper) != capture_config.get("logging_helper_sha256")):
+        raise ATKError("COMPARISON_INVALID", "日志采集帮助模块改变或缺失")
     if predecessor_id and prior_manifest.get("runner_hash") != digest(runner):
         raise ATKError("COMPARISON_INVALID", "runner 在续跑前被修改")
     with execution_revision(repo, root, request):
@@ -1032,6 +1073,50 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
         }
         for index, record in enumerate(records)
     ]
+    for record in records:
+        for number, file in enumerate(record.get("capture", {}).get("files", [])):
+            path = Path(file["path"])
+            if not path.resolve().is_relative_to((root / "evidence").resolve()) or digest(path) != file["sha256"]:
+                raise ATKError("INCOMPLETE_EVIDENCE", "采集文件路径或指纹无效")
+            evidence_index.append(
+                {
+                    "evidence_id": f"{record['execution']['id']}:file:{number}",
+                    "execution_id": record["execution"]["id"],
+                    "case_id": record["case_id"],
+                    "kind": "events" if file["role"] == "events" else "native_artifact",
+                    "role": file["role"],
+                    "path": str(path),
+                    "fingerprint": file["sha256"],
+                    "locator": str(path),
+                    "origin": "diagnostic_probe" if request["purpose"] == "diagnostic_probe" else "original_execution",
+                    "source_component": "target_runner",
+                }
+            )
+    for attempt in attempts:
+        if attempt["record_id"] not in unknown:
+            continue
+        directory = folder / "attempts" / safe_id(attempt["execution_id"])
+        files = [(directory / "events.jsonl", "events")]
+        for rule in project.get("observability", {}).get("artifacts", []):
+            files.extend((path, rule["role"]) for path in sorted(directory.glob(rule["glob"])))
+        for number, (path, role) in enumerate(files):
+            if not path.is_file() or not path.resolve().is_relative_to(directory.resolve()):
+                continue
+            evidence_index.append(
+                {
+                    "evidence_id": f"{attempt['execution_id']}:unconfirmed:{number}",
+                    "execution_id": attempt["execution_id"],
+                    "case_id": attempt["case_id"],
+                    "execution_status": "unknown",
+                    "kind": "events" if role == "events" else "native_artifact",
+                    "role": role,
+                    "path": str(path),
+                    "fingerprint": digest(path),
+                    "locator": str(path),
+                    "origin": request["purpose"],
+                    "source_component": "target_runner",
+                }
+            )
     fixed_components = [component for component in actual_components if component.get("change_role") == "fixed"]
     manifest = {
         "schema_version": 2,
@@ -1076,6 +1161,7 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
         else "partial",
         "runner_exit_code": result.returncode,
         "runner_start_error": runner_start_error,
+        "runner_error": redact(result.stderr[:65536].decode("utf-8", errors="replace")) if result.returncode else None,
         "missing_runner_artifacts": missing_artifacts,
         "invalid_runner_artifacts": invalid_artifacts,
         "incomplete_records_sha256": digest(raw_records) if malformed_records else None,

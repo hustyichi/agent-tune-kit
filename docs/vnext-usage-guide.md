@@ -89,4 +89,40 @@ uv run --frozen atk internal initialize_project --plugin-root /absolute/path/to/
 
 ## 7. 使用结果的边界
 
+### Python 日志和原生证据
+
+在 `initialize_project` 的请求中按已核验来源声明采集配置，例如：
+
+```json
+{
+  "observability": {
+    "format": "loguru_json",
+    "required_messages": ["pipeline.finished"],
+    "required_stages": ["split", "approach", "match"],
+    "stage_field": "phase",
+    "artifacts": [{"glob": "pipeline/audit/*.jsonl.gz", "role": "model_audit", "required": false}]
+  }
+}
+```
+
+这是项目映射示例，阶段名和来源必须符合实际项目。格式支持 `loguru_json`、`atk_json` 和 `text`。
+项目先执行原有日志初始化；标准 logging 可导入 `.atk/adapters/logging_json.py` 的 `install_logging`，
+给已声明的 logger 添加 JSON 出口，日志级别由项目明确设置。Loguru 沿用原生 JSON stderr 出口。
+采集不修改原有输出通道，stdout 仍是 Agent 结果。不要同时给同一 logger 的祖先和子项安装重复出口。
+
+每次执行的 `events.jsonl` 持续保存日志与 runner 生命周期；Record 的 `capture` 分别给出覆盖状态、
+观察到的阶段、缺失项和采集故障。单行日志超过 64 KiB 会丢弃该行并显式标记，stdout 超过 8 MiB
+会标记输出裁剪且不保留不完整结果；这些限制不会被声明为完整采集。
+所声明的原生附件仅在 attempt 内登记并校验，外部轮转日志应由项目适配先保存受控快照。
+正文与秘密仍遵循原有受控审计规则；日志采集不能补回未埋点过程，线程/子进程关联需单独验证。
+
+只读内部操作 `view_execution` 使用 `batch_id`，可选 `execution_id`、`case_id`、`stage`、`message`、
+`offset` 和 `limit`（1 至 1000），返回事件、原生附件引用与本次覆盖状态。
+`read_native_evidence` 使用 `batch_id/evidence_id` 和相同分页参数，读取 JSON/JSONL（含 gzip）原始记录，
+返回脱敏视图；非文本原格式附件仅返回引用。每次读取核验被引用文件指纹。
+它们不运行 Agent、调用模型或新建批次，旧执行缺少采集时返回能力未知。
+
+日志正常仍可能答案错误。诊断从评分差异开始，直接引用原生证据；重新评分产生新 Assessment，
+不复制原始执行。临时操作请求/响应在状态核对后清理，评分器与校准资产按版本复用，摘要仅保留必要差异和引用。
+
 离线单测与合成 E2E 证明协议能运行，不能证明真实业务收益。当前项目的真实多 Case 效果、有效候选采用提交、独立审核的责任层诊断以及真实外部组件修复闭环仍待验收；发布决策需参照[实现记录](vnext-implementation-report.md)中的 W8 状态。七个 Skill 的操作细节见[共享流程](../skills/WORKFLOW.md)及各 Skill 文档。

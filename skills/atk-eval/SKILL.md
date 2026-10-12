@@ -6,6 +6,8 @@ description: 按明确且经过校准的评测标准运行、导入或重新判�
 # 评测证据
 
 阅读 `../WORKFLOW.md`，遵循其中默认中文的产物规则。明确选择 `run`、`import` 或 `reassess`。
+配置采集时检查各 Record 的 `capture.status/missing/issues`，并通过 `view_execution` 核对声明阶段。
+执行完成与日志完整分别判断；缺失证据只影响需要它的维度。原生审计通过现有批次引用读取，不重复导入。
 运行前先配置 runtime。`concurrency` 使用 Round 计划冻结的正整数，默认 1。
 默认 runner 限制活跃 attempt 数，并随完成写入结果。中断后检查 `running_record_ids`、`completed_record_ids` 和
 `not_started_record_ids`；仍兼容旧单运行适配器。Case 附件缺失或改变会阻断重放，需导入新 Dataset；已冻结时另建 Round。

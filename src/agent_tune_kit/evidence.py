@@ -10,7 +10,7 @@ from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
-from .core import ATKError, canonical, digest, new_id, now, write_json
+from .core import ATKError, canonical, digest, new_id, now, validate_evidence, write_json
 
 MAX_SOURCE_BYTES = 100 * 1024 * 1024
 SECRET_KEY = re.compile(
@@ -20,6 +20,124 @@ SECRET_KEY = re.compile(
 )
 BEARER = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/-]+")
 INLINE_SECRET = re.compile(r"(?i)\b(api[_-]?key|token|password|secret)\s*[:=]\s*[^\s,;]+")
+
+
+def _page(request: dict) -> tuple[int, int]:
+    offset, limit = request.get("offset", 0), request.get("limit", 100)
+    if type(offset) is not int or offset < 0 or type(limit) is not int or not 1 <= limit <= 1000:
+        raise ATKError("INCOMPLETE_EVIDENCE", "分页必须是非负 offset 和 1 至 1000 的 limit")
+    return offset, limit
+
+
+def view_execution(root: Path, request: dict) -> dict:
+    """Read sealed events at stable locations; never materialize another batch."""
+    offset, limit = _page(request)
+    batch, records, index = validate_evidence(root, request["batch_id"])
+    selected = [
+        record
+        for record in records.values()
+        if (not request.get("execution_id") or record.get("execution", {}).get("id") == request["execution_id"])
+        and (not request.get("case_id") or record.get("case_id") == request["case_id"])
+    ]
+    known_ids = {record.get("execution", {}).get("id") for record in selected}
+    for ref in index.values():
+        if (
+            ref.get("execution_status") == "unknown"
+            and ref["execution_id"] not in known_ids
+            and (not request.get("execution_id") or ref["execution_id"] == request["execution_id"])
+            and (not request.get("case_id") or ref.get("case_id") == request["case_id"])
+        ):
+            selected.append(
+                {
+                    "case_id": ref["case_id"],
+                    "execution": {"id": ref["execution_id"], "status": "unknown"},
+                    "capture": {"status": "partial", "capability": "execution", "issues": ["unconfirmed_attempt"]},
+                }
+            )
+            known_ids.add(ref["execution_id"])
+    if not selected:
+        raise ATKError("INCOMPLETE_EVIDENCE", "没有对应执行记录")
+    ids = {record.get("execution", {}).get("id") for record in selected}
+    events = []
+    files = [
+        ref
+        for ref in index.values()
+        if ref.get("execution_id") in ids and ref.get("kind") in {"events", "native_artifact"}
+    ]
+    count = 0
+    for ref in files:
+        if ref["kind"] != "events":
+            continue
+        with Path(ref["path"]).open(encoding="utf-8") as handle:
+            for line in handle:
+                try:
+                    row = json.loads(line)
+                except ValueError:
+                    if ref.get("execution_status") == "unknown":
+                        break
+                    raise ATKError("INCOMPLETE_EVIDENCE", "封存事件格式无效") from None
+                stage_field = next(
+                    (
+                        r.get("capture", {}).get("stage_field", "phase")
+                        for r in selected
+                        if r.get("execution", {}).get("id") == ref["execution_id"]
+                    ),
+                    "phase",
+                )
+                if request.get("stage") and row.get("extra", {}).get(stage_field) != request["stage"]:
+                    continue
+                if request.get("message") and row.get("message") != request["message"]:
+                    continue
+                if offset <= count < offset + limit:
+                    events.append({**row, "evidence_id": ref["evidence_id"]})
+                count += 1
+    return {
+        "batch_id": batch["id"],
+        "executions": [
+            {
+                "execution": row.get("execution"),
+                "case_id": row.get("case_id"),
+                "capture": row.get("capture", {"status": "unknown", "capability": "legacy"}),
+            }
+            for row in selected
+        ],
+        "events": events,
+        "files": files,
+        "offset": offset,
+        "total": count,
+        "next_offset": offset + limit if offset + limit < count else None,
+    }
+
+
+def read_native_evidence(root: Path, request: dict) -> dict:
+    offset, limit = _page(request)
+    _, _, index = validate_evidence(root, request["batch_id"])
+    ref = index.get(request["evidence_id"])
+    if not ref or ref.get("kind") not in {"events", "native_artifact"}:
+        raise ATKError("INCOMPLETE_EVIDENCE", "不是可读取的原生证据")
+    path = Path(ref["path"])
+    if ".jsonl" in path.suffixes:
+        opener = gzip.open if path.suffix == ".gz" else open
+        rows, total = [], 0
+        with opener(path, "rt", encoding="utf-8") as handle:
+            while line := handle.readline(1024 * 1024 + 1):
+                if len(line) > 1024 * 1024:
+                    raise ATKError("INCOMPLETE_EVIDENCE", "原生记录超过读取限制")
+                if offset <= total < offset + limit:
+                    if len(line.encode()) > MAX_SOURCE_BYTES:
+                        raise ATKError("INCOMPLETE_EVIDENCE", "原生记录超过读取限制")
+                    rows.append(redact(json.loads(line)))
+                total += 1
+        return {
+            "evidence_ref": ref,
+            "rows": rows,
+            "total": total,
+            "next_offset": offset + limit if offset + limit < total else None,
+        }
+    if path.suffix == ".json":
+        value, _ = _read_source(path)
+        return {"evidence_ref": ref, "value": redact(value)}
+    return {"evidence_ref": ref, "readable": False, "reason": "原格式附件，请使用对应文件读取工具"}
 
 
 def redact(value: object, extra_keys: set[str] | None = None) -> object:

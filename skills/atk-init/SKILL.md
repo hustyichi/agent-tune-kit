@@ -6,6 +6,10 @@ description: 检查并接入已有本地 Agent，保留其原有加载行为。
 # 接入已有 Agent
 
 阅读 `../WORKFLOW.md`，遵循其中默认中文的产物规则。
+Python 项目需核对原有日志初始化、logger/sink、级别、传播、线程/异步上下文及原生审计位置。
+按已核验方式声明 `observability`（见使用指南）；标准 logging 可复用随包 `logging_json.py`，Loguru 可沿用 JSON 出口。
+用受控正常/异常/并发检查确认覆盖范围，记录于项目说明；文件存在或 root Handler 安装成功不证明全部日志可见。
+不生成逐轮采集脚本，不默认更换日志库或扩大正文范围。
 仅导入分析时，调用 `initialize_project`，设置 `analysis_only=true`，可选 `redact_keys`；无需 Git 或 runner。
 无 Git 的获准探针需提供 `python`、`command`、`components`、`external_effects` 和 `runtime_notes`，
 再在 Round 的 `analysis_plan` 中冻结许可与预算。后续用 `configure_runtime=true` 和完整 runtime 配置升级项目，

@@ -7,6 +7,7 @@ invocation inside run_one while keeping the request/response contract unchanged.
 from __future__ import annotations
 
 import argparse
+import codecs
 import hashlib
 import json
 import os
@@ -23,6 +24,192 @@ from pathlib import Path
 _processes = set()
 _process_lock = threading.Lock()
 _stopping = threading.Event()
+
+
+def file_sha256(path: Path) -> str:
+    fingerprint = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(65536), b""):
+            fingerprint.update(chunk)
+    return fingerprint.hexdigest()
+
+
+def redact_fields(value):
+    if isinstance(value, dict):
+        return {
+            key: "[REDACTED]"
+            if re.search(r"(?i)^(authorization|cookie|password|secret|api[_-]?key|token|private[_-]?key)$", key)
+            else redact_fields(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [redact_fields(item) for item in value]
+    return redact_output(value) if isinstance(value, str) else value
+
+
+class EventCapture:
+    """One writer per attempt; native records keep their observed fields."""
+
+    def __init__(self, directory: Path, attempt: dict, config: dict):
+        self.path = directory / "events.jsonl"
+        self.attempt = attempt
+        self.config = config.get("observability", {})
+        self.sequence = 0
+        self.messages = set()
+        self.stages = set()
+        self.issues = []
+        self.lock = threading.Lock()
+        self.handle = self.path.open("w", encoding="utf-8")
+        os.chmod(self.path, 0o600)
+
+    def emit(self, message: str, source: str = "runner", extra: dict | None = None, **fields) -> None:
+        with self.lock:
+            self.sequence += 1
+            extra = extra or {}
+            event = {
+                "schema_version": 1,
+                "id": f"{self.attempt['execution_id']}:{self.sequence}",
+                "execution_id": self.attempt["execution_id"],
+                "case_id": self.attempt["case_id"],
+                "sequence": self.sequence,
+                "received_at": datetime.now(UTC).isoformat(),
+                "source": source,
+                "message": message,
+                "extra": extra,
+                **fields,
+            }
+            event = redact_fields(event)
+            self.handle.write(json.dumps(event, ensure_ascii=False) + "\n")
+            self.handle.flush()
+            os.fsync(self.handle.fileno())
+            if source != "runner":
+                if event["message"] in self.config.get("required_messages", []):
+                    self.messages.add(event["message"])
+                stage = event["extra"].get(self.config.get("stage_field", "phase"))
+                if isinstance(stage, str) and stage in self.config.get("required_stages", []):
+                    self.stages.add(stage)
+
+    def line(self, value: str) -> None:
+        value = value.rstrip("\r\n")
+        try:
+            raw = json.loads(value.removeprefix("ATK_LOG "))
+        except ValueError:
+            if value.startswith("ATK_LOG "):
+                self.issues.append("malformed_event")
+            self.emit(value, "stderr")
+            return
+        fmt = self.config.get("format")
+        key = "record" if fmt == "loguru_json" else "atk_log" if fmt == "atk_json" else None
+        if key and isinstance(raw, dict) and key in raw:
+            record = raw[key]
+            if (
+                not isinstance(record, dict)
+                or not isinstance(record.get("message"), str)
+                or not isinstance(record.get("extra", {}), dict)
+                or (
+                    fmt == "loguru_json"
+                    and (not isinstance(record.get("level", {}), dict) or not isinstance(record.get("time", {}), dict))
+                )
+            ):
+                self.issues.append("malformed_event")
+                self.emit("capture.malformed_event")
+                return
+        if fmt == "loguru_json" and isinstance(raw, dict) and isinstance(raw.get("record"), dict):
+            record = raw["record"]
+            self.emit(
+                record["message"],
+                "loguru",
+                record.get("extra", {}),
+                level=record.get("level", {}).get("name"),
+                source_time=record.get("time", {}).get("repr"),
+                logger=record.get("name"),
+                location=record.get("function"),
+                file=record.get("file"),
+                line=record.get("line"),
+                thread=record.get("thread"),
+                process=record.get("process"),
+            )
+        elif fmt == "atk_json" and isinstance(raw, dict) and isinstance(raw.get("atk_log"), dict):
+            record = raw["atk_log"]
+            self.emit(
+                record["message"],
+                "python",
+                record.get("extra", {}),
+                level=record.get("level"),
+                source_time=record.get("time"),
+                logger=record.get("logger"),
+                file=record.get("file"),
+                line=record.get("line"),
+                thread=record.get("thread"),
+                process=record.get("process"),
+            )
+        else:
+            self.emit(json.dumps(redact_fields(raw), ensure_ascii=False), "stderr")
+
+    def consume(self, stream) -> None:
+        pending = bytearray()
+        oversized = False
+        try:
+            while chunk := os.read(stream.fileno(), 4096):
+                for piece in chunk.splitlines(keepends=True):
+                    if not oversized:
+                        pending.extend(piece)
+                        if len(pending) > 65536:
+                            pending.clear()
+                            oversized = True
+                            self.issues.append("line_too_large")
+                    if piece.endswith(b"\n"):
+                        if not oversized:
+                            self.line(pending.decode("utf-8", errors="strict"))
+                        else:
+                            self.emit("capture.line_too_large")
+                        pending.clear()
+                        oversized = False
+            if pending:
+                self.line(pending.decode("utf-8", errors="strict"))
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            self.issues.append(type(error).__name__)
+            # Keep draining so a capture error cannot deadlock the Agent's stderr pipe.
+            with suppress(OSError):
+                while os.read(stream.fileno(), 4096):
+                    pass
+
+    def finish(self, status: str) -> dict:
+        self.emit("attempt.finished", extra={"status": status})
+        self.handle.close()
+        files = [{"path": str(self.path), "sha256": file_sha256(self.path), "role": "events"}]
+        missing = sorted(set(self.config.get("required_messages", [])) - self.messages)
+        missing += sorted(set(self.config.get("required_stages", [])) - self.stages)
+        for item in self.config.get("artifacts", []):
+            paths = sorted(self.path.parent.glob(item["glob"]))
+            accepted = []
+            for path in paths:
+                if not path.is_file() or not path.resolve().is_relative_to(self.path.parent.resolve()):
+                    self.issues.append("artifact_outside_attempt")
+                    continue
+                accepted.append(path)
+                files.append(
+                    {
+                        "path": str(path.resolve()),
+                        "sha256": file_sha256(path),
+                        "role": item["role"],
+                    }
+                )
+            if item.get("required") and not accepted:
+                missing.append(item["role"])
+        complete = not missing and not self.issues and status != "timeout"
+        return {
+            "schema_version": 1,
+            "status": "complete" if complete else "partial",
+            "capability": "workflow" if self.config.get("required_stages") and complete else "execution",
+            "stage_field": self.config.get("stage_field", "phase"),
+            "event_count": self.sequence,
+            "observed_messages": sorted(self.messages),
+            "observed_stages": sorted(self.stages),
+            "missing": missing,
+            "issues": self.issues,
+            "files": files,
+        }
 
 
 def stop_processes() -> None:
@@ -48,12 +235,17 @@ def redact_output(value: str) -> str:
 
 
 def attachments_unchanged(attachments: list[dict]) -> bool:
-    return all(hashlib.sha256(Path(item["path"]).read_bytes()).hexdigest() == item["sha256"] for item in attachments)
+    return all(file_sha256(Path(item["path"])) == item["sha256"] for item in attachments)
 
 
 def run_one(attempt: dict, case: dict, config: dict, output: Path, timeout: int) -> dict:
     task_dir = output / "attempts" / attempt["execution_id"]
     task_dir.mkdir(parents=True, exist_ok=False)
+    capture = (
+        EventCapture(task_dir, {**attempt, "case_id": case["id"]}, config) if config.get("observability") else None
+    )
+    if capture:
+        capture.emit("attempt.started")
     input_file = task_dir / "input.json"
     input_file.write_text(json.dumps(case["input"], ensure_ascii=False), encoding="utf-8")
     attachments = case.get("attachments", [])
@@ -71,10 +263,7 @@ def run_one(attempt: dict, case: dict, config: dict, output: Path, timeout: int)
     try:
         if not attachments_unchanged(attachments):
             raise OSError("Case 附件在数据集导入后被修改")
-        if (
-            config.get("script_path")
-            and hashlib.sha256(Path(config["script_path"]).read_bytes()).hexdigest() != config["script_sha256"]
-        ):
+        if config.get("script_path") and file_sha256(Path(config["script_path"])) != config["script_sha256"]:
             raise OSError("探针脚本在授权后被修改")
         with _process_lock:
             if _stopping.is_set():
@@ -84,13 +273,60 @@ def run_one(attempt: dict, case: dict, config: dict, output: Path, timeout: int)
                 cwd=config.get("working_directory", config["workspace_path"]),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                text=True,
+                text=capture is None,
+                env={
+                    **os.environ,
+                    "ATK_EXECUTION_ID": attempt["execution_id"],
+                    "ATK_CASE_ID": case["id"],
+                    "ATK_RUNNER_PATH": str(Path(__file__).resolve()),
+                },
                 start_new_session=True,
             )
             _processes.add(process)
         try:
             try:
-                response, stderr = process.communicate(timeout=timeout)
+                if capture:
+                    responses = []
+                    output_size = [0]
+
+                    def read_output():
+                        decoder = codecs.getincrementaldecoder("utf-8")(errors="strict")
+                        try:
+                            while chunk := os.read(process.stdout.fileno(), 4096):
+                                output_size[0] += len(chunk)
+                                if output_size[0] <= 8 * 1024 * 1024:
+                                    responses.append(decoder.decode(chunk))
+                            responses.append(decoder.decode(b"", final=True))
+                        except UnicodeDecodeError:
+                            capture.issues.append("output_decode_error")
+                            responses.clear()
+                            while os.read(process.stdout.fileno(), 4096):
+                                pass
+
+                    stdout_thread = threading.Thread(target=read_output)
+                    stderr_thread = threading.Thread(target=capture.consume, args=(process.stderr,))
+                    stdout_thread.start()
+                    stderr_thread.start()
+                    try:
+                        process.wait(timeout=timeout)
+                    finally:
+                        if process.poll() is None:
+                            with suppress(ProcessLookupError):
+                                os.killpg(process.pid, signal.SIGKILL)
+                        stdout_thread.join(timeout)
+                        stderr_thread.join(timeout if not stdout_thread.is_alive() else 0)
+                        if stdout_thread.is_alive() or stderr_thread.is_alive():
+                            capture.issues.append("descendant_stream_open")
+                            with suppress(ProcessLookupError):
+                                os.killpg(process.pid, signal.SIGKILL)
+                            stdout_thread.join()
+                            stderr_thread.join()
+                    response, stderr = "".join(responses), ""
+                    if output_size[0] > 8 * 1024 * 1024:
+                        capture.issues.append("output_too_large")
+                        response = ""
+                else:
+                    response, stderr = process.communicate(timeout=timeout)
                 status = (
                     "completed"
                     if process.returncode == 0
@@ -100,9 +336,13 @@ def run_one(attempt: dict, case: dict, config: dict, output: Path, timeout: int)
                 )
                 returncode = process.returncode
             except subprocess.TimeoutExpired:
-                with suppress(ProcessLookupError):
-                    os.killpg(process.pid, signal.SIGKILL)
-                response, stderr = process.communicate()
+                if process.poll() is None:
+                    with suppress(ProcessLookupError):
+                        os.killpg(process.pid, signal.SIGKILL)
+                if capture:
+                    response, stderr = "".join(responses), ""
+                else:
+                    response, stderr = process.communicate()
                 status, returncode = "timeout", None
         finally:
             process.wait()
@@ -115,7 +355,10 @@ def run_one(attempt: dict, case: dict, config: dict, output: Path, timeout: int)
     except OSError as exc:
         status, response, stderr, returncode = "infra_error", "", redact_output(str(exc)), None
     duration = time.monotonic() - started_clock
-    (task_dir / "stderr.log").write_text(stderr, encoding="utf-8")
+    if capture and stderr:
+        capture.line(stderr)
+    if not capture:
+        (task_dir / "stderr.log").write_text(stderr, encoding="utf-8")
     loading_path = task_dir / "loading.json"
     loading = json.loads(loading_path.read_text(encoding="utf-8")) if loading_path.exists() else []
     metrics_path = task_dir / "metrics.json"
@@ -130,7 +373,7 @@ def run_one(attempt: dict, case: dict, config: dict, output: Path, timeout: int)
             if key in agent_metrics:
                 metrics[key] = agent_metrics[key]
                 metric_sources[key] = "agent_sidecar"
-    return {
+    record = {
         "id": attempt["record_id"],
         "case_id": case["id"],
         "input_present": True,
@@ -157,6 +400,9 @@ def run_one(attempt: dict, case: dict, config: dict, output: Path, timeout: int)
             "returncode": returncode,
         },
     }
+    if capture:
+        record["capture"] = capture.finish(status)
+    return record
 
 
 def main() -> int:
@@ -213,7 +459,7 @@ def main() -> int:
         if component.get("source_path"):
             path = Path(config["workspace_path"]) / component["source_path"]
             if path.is_file():
-                observed["actual_sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+                observed["actual_sha256"] = file_sha256(path)
                 observed["identity_status"] = "available"
         batch["actual_components"].append(observed)
     save_batch()
