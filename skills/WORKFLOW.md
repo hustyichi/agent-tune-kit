@@ -35,7 +35,11 @@ CLI 在 `warnings` 中提示版本差异，但仍执行操作。若缺少 `atk`�
 评分器、规格和校准材料按版本维护并引用，不按每次运行复制。摘要只保留统计、必要差异与证据引用，
 不要再次嵌入完整输入、答案、模型输出和审计正文；ID 和事件映射通过确定性查询获得。
 
-Python 执行可在接入时声明 `observability`，每次 attempt 的主轨迹为 `events.jsonl`。
+Python 执行在接入时声明 `observability`。新接入优先使用 `format=native`，
+通过随包 `logging_capture.py` 在项目初始化后增加 logging Handler 或 Loguru sink，
+将原生日志保存于 attempt 的 `logs/`，保留原出口；runner 保存 stderr 兜底，执行状态在 Record 中。
+不把原生日志再转换为 ATK 日志副本；标准 logging 已转接 Loguru 时只在后者采集。
+旧配置与 `events.jsonl` 继续读取，不改写封存来源。原生日志视图给出文件、指纹和物理行号。
 优先使用 `view_execution` 分页查看，再用 `read_native_evidence` 读取同一批次索引中的原生审计。
 缺少观测点时记录能力不足；原生日志级别正常不表示业务答案正确。不得为了诊断引用而将已登记的审计再导入一批。
 先检查原始执行，只有明确未决问题及实验目的时才生成探针和重放样本；Knowledge 只用于独立可复用结论。

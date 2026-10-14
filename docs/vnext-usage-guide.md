@@ -96,7 +96,8 @@ uv run --frozen atk internal initialize_project --plugin-root /absolute/path/to/
 ```json
 {
   "observability": {
-    "format": "loguru_json",
+    "format": "native",
+    "logs": [{"glob": "logs/service.jsonl", "format": "loguru_json", "required": true}],
     "required_messages": ["pipeline.finished"],
     "required_stages": ["split", "approach", "match"],
     "stage_field": "phase",
@@ -105,21 +106,59 @@ uv run --frozen atk internal initialize_project --plugin-root /absolute/path/to/
 }
 ```
 
-这是项目映射示例，阶段名和来源必须符合实际项目。格式支持 `loguru_json`、`atk_json` 和 `text`。
-项目先执行原有日志初始化；标准 logging 可导入 `.atk/adapters/logging_json.py` 的 `install_logging`，
-给已声明的 logger 添加 JSON 出口，日志级别由项目明确设置。Loguru 沿用原生 JSON stderr 出口。
-采集不修改原有输出通道，stdout 仍是 Agent 结果。不要同时给同一 logger 的祖先和子项安装重复出口。
+这是项目映射示例，阶段名和来源必须符合实际项目。新接入使用 `format=native`，`logs` 声明
+attempt 内的原生日志路径与格式（`loguru_json` 或 `text`）。日志原格式保存，仅作落盘前脱敏；
+不生成 ATK 字段结构的日志副本。执行状态仍在 Record 中，原服务出口继续使用原配置。
 
-每次执行的 `events.jsonl` 持续保存日志与 runner 生命周期；Record 的 `capture` 分别给出覆盖状态、
-观察到的阶段、缺失项和采集故障。单行日志超过 64 KiB 会丢弃该行并显式标记，stdout 超过 8 MiB
-会标记输出裁剪且不保留不完整结果；这些限制不会被声明为完整采集。
-所声明的原生附件仅在 attempt 内登记并校验，外部轮转日志应由项目适配先保存受控快照。
-正文与秘密仍遵循原有受控审计规则；日志采集不能补回未埋点过程，线程/子进程关联需单独验证。
+目标 Python 环境无需安装 ATK。初始化会复制标准库实现的 `.atk/adapters/logging_capture.py`。
+在原项目日志初始化之后、业务执行之前接入，退出上下文时刷新并移除本次附加出口：
+
+```python
+from logging_capture import capture_loguru
+
+configure_project_logging()
+with capture_loguru(output_dir / "logs/service.jsonl", level="DEBUG"):
+    run_agent()
+```
+
+Loguru 原生 `serialize=True` 为默认值；可以传入项目原有 `format`、`filter` 等选项。
+附加 sink 默认同步写入，`backtrace/diagnose` 关闭，文件错误显式传播；不清空原 sink。
+使用 `serialize=False` 时，将该来源声明为 `text`。
+
+```python
+import logging
+from logging_capture import capture_logging
+
+formatter = project_file_handler.formatter
+with capture_logging(output_dir / "logs/service.log", ["application"], formatter):
+    run_agent()
+```
+
+标准 logging 复用项目 Formatter，Logger 级别和传播由项目负责；文本需展示归因所需的业务字段。
+`propagate=False` 的独立 Logger 要明确接入，不给祖先和子项重复安装 Handler。
+若标准 logging 已转接 Loguru，在 Loguru 端采集一次；两套独立日志使用不同路径并分别声明。
+先等待业务线程/异步工作完成，再退出采集上下文。独立进程按执行目录隔离；共享服务请求和内部多进程
+需要额外关联与采集验证，不由通用辅助模块自动处理。
+
+runner 持续保存 `logs/stderr.log`，作为初始化错误和普通 stderr 输出的兜底。
+stdout 仍是 Agent 结果。stderr 单行超过 64 KiB 会丢弃并标记，stdout 超过 8 MiB 会标记且不保留不完整结果。
+原生日志不会因解析失败被改写或丢弃；格式错误行仍可读取，但采集状态为部分。
+原生日志覆盖检查和查询每行上限 1 MiB，超过限制的原文件保留，查询明确报错。
+必需日志缺失/为空、采集错误、超时或未确认执行不能声明完整。
+文件权限为 `0600`，原生审计和附件继续限制在 attempt 内并核验指纹。
+正文与秘密沿用项目规则，日志辅助模块额外脱敏命名秘密字段和常见文本凭证。
+采集完整仅针对声明范围；不能补回未埋点过程或强制终止前尚未写出的内容。
+
+旧 `loguru_json/atk_json/text` stderr 采集配置与 `events.jsonl` 仍可运行和读取；
+切换现有项目必须核对适配器与 helper 指纹，保持已封存批次和冻结对照条件不变。
 
 只读内部操作 `view_execution` 使用 `batch_id`，可选 `execution_id`、`case_id`、`stage`、`message`、
-`offset` 和 `limit`（1 至 1000），返回事件、原生附件引用与本次覆盖状态。
+`offset` 和 `limit`（1 至 1000），返回日志视图、原生附件引用与本次覆盖状态。
+原生日志视图携带 `raw`、`source_line`、`source_locator`（文件路径加 `#L行号`）及所属执行。
+`stage/message` 按原生结构字段精确匹配；文本日志不能推断阶段。视图不另行落盘。
 `read_native_evidence` 使用 `batch_id/evidence_id` 和相同分页参数，读取 JSON/JSONL（含 gzip）原始记录，
-返回脱敏视图；非文本原格式附件仅返回引用。每次读取核验被引用文件指纹。
+返回脱敏视图；声明的文本日志及 stderr 返回物理行与行号，非文本原格式附件仅返回引用。
+每次读取核验被引用文件指纹。
 它们不运行 Agent、调用模型或新建批次，旧执行缺少采集时返回能力未知。
 
 日志正常仍可能答案错误。诊断从评分差异开始，直接引用原生证据；重新评分产生新 Assessment，

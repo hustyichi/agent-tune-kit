@@ -11,6 +11,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .core import ATKError, canonical, digest, new_id, now, validate_evidence, write_json
+from .logging_capture import log_records
 
 MAX_SOURCE_BYTES = 100 * 1024 * 1024
 SECRET_KEY = re.compile(
@@ -66,6 +67,41 @@ def view_execution(root: Path, request: dict) -> dict:
     ]
     count = 0
     for ref in files:
+        if ref.get("role") == "service_log":
+            stage_field = next(
+                (
+                    r.get("capture", {}).get("stage_field", "phase")
+                    for r in selected
+                    if r.get("execution", {}).get("id") == ref["execution_id"]
+                ),
+                "phase",
+            )
+            try:
+                for number, raw, record in log_records(ref["path"], ref["format"]):
+                    row = record or {"message": raw if isinstance(raw, str) else json.dumps(raw, ensure_ascii=False)}
+                    if request.get("stage") and row.get("extra", {}).get(stage_field) != request["stage"]:
+                        continue
+                    if request.get("message") and row["message"] != request["message"]:
+                        continue
+                    if offset <= count < offset + limit:
+                        events.append(
+                            redact(
+                                {
+                                    **row,
+                                    "raw": raw,
+                                    "execution_id": ref["execution_id"],
+                                    "case_id": ref["case_id"],
+                                    "evidence_id": ref["evidence_id"],
+                                    "source_line": number,
+                                    "source_locator": f"{ref['path']}#L{number}",
+                                }
+                            )
+                        )
+                    count += 1
+            except (OSError, ValueError, UnicodeError) as error:
+                if ref.get("execution_status") != "unknown":
+                    raise ATKError("INCOMPLETE_EVIDENCE", f"原生日志无法读取：{error}") from error
+            continue
         if ref["kind"] != "events":
             continue
         with Path(ref["path"]).open(encoding="utf-8") as handle:
@@ -116,6 +152,24 @@ def read_native_evidence(root: Path, request: dict) -> dict:
     if not ref or ref.get("kind") not in {"events", "native_artifact"}:
         raise ATKError("INCOMPLETE_EVIDENCE", "不是可读取的原生证据")
     path = Path(ref["path"])
+    if ref.get("role") in {"service_log", "stderr"}:
+        rows, numbers, total = [], [], 0
+        try:
+            for number, raw, _ in log_records(path, ref.get("format", "text")):
+                if offset <= total < offset + limit:
+                    rows.append(redact(raw))
+                    numbers.append(number)
+                total += 1
+        except (OSError, ValueError, UnicodeError) as error:
+            if ref.get("execution_status") != "unknown":
+                raise ATKError("INCOMPLETE_EVIDENCE", f"原生日志无法读取：{error}") from error
+        return {
+            "evidence_ref": ref,
+            "rows": rows,
+            "source_lines": numbers,
+            "total": total,
+            "next_offset": offset + limit if offset + limit < total else None,
+        }
     if ".jsonl" in path.suffixes:
         opener = gzip.open if path.suffix == ".gz" else open
         rows, total = [], 0

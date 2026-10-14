@@ -27,6 +27,7 @@ PACKAGE_IMPORT = "agent_tune_kit"
 PLUGIN_NAME = "agent-tune-kit"
 
 WHEEL_REQUIRED_PATHS = {
+    "agent_tune_kit/logging_capture.py",
     "agent_tune_kit/plugin_payload/agent-tune-kit/.codex-plugin/plugin.json",
     "agent_tune_kit/plugin_payload/agent-tune-kit/skills/WORKFLOW.md",
     "agent_tune_kit/plugin_payload/agent-tune-kit/templates/runner.py",
@@ -46,6 +47,7 @@ WHEEL_REQUIRED_PATHS = {
 }
 
 SDIST_REQUIRED_PATHS = {
+    "src/agent_tune_kit/logging_capture.py",
     ".codex-plugin/plugin.json",
     "skills/WORKFLOW.md",
     "templates/runner.py",

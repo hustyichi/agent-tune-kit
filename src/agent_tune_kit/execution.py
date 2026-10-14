@@ -153,7 +153,19 @@ def initialize_project(repo: Path, request: dict) -> dict:
     observability = request.get("observability", {})
     if (
         not isinstance(observability, dict)
-        or (observability and observability.get("format") not in {"atk_json", "loguru_json", "text"})
+        or (observability and observability.get("format") not in {"native", "atk_json", "loguru_json", "text"})
+        or not isinstance(observability.get("logs", []), list)
+        or (observability.get("format") == "native" and not observability.get("logs"))
+        or any(
+            not isinstance(item, dict)
+            or not isinstance(item.get("glob"), str)
+            or not item["glob"]
+            or Path(item["glob"]).is_absolute()
+            or ".." in Path(item["glob"]).parts
+            or item.get("format") not in {"text", "loguru_json"}
+            or type(item.get("required", False)) is not bool
+            for item in observability.get("logs", [])
+        )
         or not isinstance(observability.get("stage_field", "phase"), str)
         or not observability.get("stage_field", "phase")
         or any(
@@ -233,7 +245,9 @@ def initialize_project(repo: Path, request: dict) -> dict:
         shutil.copyfile(runner_source, root / "adapters" / "runner.py")
         shutil.copyfile(runner_source.with_name("logging_json.py"), root / "adapters" / "logging_json.py")
     if observability:
-        project["observability"] = {**observability, "logging_helper_sha256": digest(root / "adapters/logging_json.py")}
+        shutil.copyfile(Path(__file__).with_name("logging_capture.py"), root / "adapters/logging_capture.py")
+        helper = "logging_capture.py" if observability.get("format") == "native" else "logging_json.py"
+        project["observability"] = {**observability, "logging_helper_sha256": digest(root / "adapters" / helper)}
     write_json(root / "project.json", project, immutable=not upgrade)
     return project
 
@@ -803,7 +817,9 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
     if not runner.exists():
         raise ATKError("NOT_REPLAYABLE", f"项目 runner 缺失：{runner}")
     capture_config = project.get("observability", {})
-    helper = root / "adapters/logging_json.py"
+    helper = (
+        root / "adapters" / ("logging_capture.py" if capture_config.get("format") == "native" else "logging_json.py")
+    )
     if capture_config and (not helper.is_file() or digest(helper) != capture_config.get("logging_helper_sha256")):
         raise ATKError("COMPARISON_INVALID", "日志采集帮助模块改变或缺失")
     if predecessor_id and prior_manifest.get("runner_hash") != digest(runner):
@@ -1085,6 +1101,7 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
                     "case_id": record["case_id"],
                     "kind": "events" if file["role"] == "events" else "native_artifact",
                     "role": file["role"],
+                    **({"format": file["format"]} if "format" in file else {}),
                     "path": str(path),
                     "fingerprint": file["sha256"],
                     "locator": str(path),
@@ -1096,10 +1113,17 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
         if attempt["record_id"] not in unknown:
             continue
         directory = folder / "attempts" / safe_id(attempt["execution_id"])
-        files = [(directory / "events.jsonl", "events")]
+        native = project.get("observability", {}).get("format") == "native"
+        files = (
+            [(directory / "logs/stderr.log", "stderr", "text")]
+            if native
+            else [(directory / "events.jsonl", "events", None)]
+        )
+        for rule in project.get("observability", {}).get("logs", []):
+            files.extend((path, "service_log", rule["format"]) for path in sorted(directory.glob(rule["glob"])))
         for rule in project.get("observability", {}).get("artifacts", []):
-            files.extend((path, rule["role"]) for path in sorted(directory.glob(rule["glob"])))
-        for number, (path, role) in enumerate(files):
+            files.extend((path, rule["role"], None) for path in sorted(directory.glob(rule["glob"])))
+        for number, (path, role, format) in enumerate(files):
             if not path.is_file() or not path.resolve().is_relative_to(directory.resolve()):
                 continue
             evidence_index.append(
@@ -1110,6 +1134,7 @@ def _run_evaluation_locked(root: Path, request: dict) -> dict:
                     "execution_status": "unknown",
                     "kind": "events" if role == "events" else "native_artifact",
                     "role": role,
+                    **({"format": format} if format else {}),
                     "path": str(path),
                     "fingerprint": digest(path),
                     "locator": str(path),

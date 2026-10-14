@@ -361,3 +361,180 @@ def test_malformed_native_schema_does_not_silently_stop_log_collection(tmp_path:
     assert "malformed_event" in record["capture"]["issues"]
     view = evidence.view_execution(repo / ".atk", {"batch_id": batch["id"]})
     assert any(event["message"] == "done" for event in view["events"])
+
+
+def test_native_outlets_are_isolated_and_queryable_without_event_copies(tmp_path: Path) -> None:
+    script = (
+        "import os,sys,json,logging\nfrom pathlib import Path\n"
+        "sys.path.insert(0,os.path.dirname(os.environ['ATK_RUNNER_PATH']))\n"
+        "from logging_capture import capture_logging\n"
+        "case=json.loads(Path(sys.argv[1]).read_text())\n"
+        "log=logging.getLogger('application');log.setLevel(logging.INFO)\n"
+        "with capture_logging(Path(sys.argv[2])/'logs/service.log', ['application'], "
+        "logging.Formatter('%(levelname)s %(message)s')):\n"
+        " log.info('case='+case)\n"
+        "print('fallback api_key=DO_NOT_STORE',file=sys.stderr)\nprint('answer')\n"
+    )
+    repo, request = setup_project(
+        tmp_path,
+        script,
+        {
+            "format": "native",
+            "logs": [{"glob": "logs/service.log", "format": "text", "required": True}],
+        },
+    )
+    batch = run_evaluation(repo / ".atk", request)
+    _, records, _ = validate_evidence(repo / ".atk", batch["id"])
+    for record in records.values():
+        assert record["capture"]["status"] == "complete"
+        view = evidence.view_execution(
+            repo / ".atk", {"batch_id": batch["id"], "execution_id": record["execution"]["id"]}
+        )
+        assert view["total"] == 1
+        event = view["events"][0]
+        assert event["message"] == "INFO case=" + record["case_id"]
+        assert event["source_line"] == 1
+        ref = next(x for x in view["files"] if x["role"] == "service_log")
+        assert event["source_locator"] == ref["path"] + "#L1"
+        detail = evidence.read_native_evidence(
+            repo / ".atk", {"batch_id": batch["id"], "evidence_id": ref["evidence_id"]}
+        )
+        assert detail["rows"] == [event["message"]]
+        directory = Path(record["source_locator"])
+        assert not (directory / "events.jsonl").exists()
+        assert (directory / "logs/stderr.log").read_text() == "fallback api_key=[REDACTED]\n"
+
+
+def test_native_loguru_view_retains_raw_record_and_file_line(tmp_path: Path) -> None:
+    payload = {
+        "text": "native rendered text",
+        "record": {
+            "message": "done",
+            "extra": {"phase": "work", "run_id": "run-a"},
+            "level": {"name": "INFO"},
+            "time": {"repr": "source-time"},
+            "file": {"name": "source.py"},
+            "line": 42,
+            "custom_native_field": [1, 2],
+        },
+    }
+    repo, request = setup_project(
+        tmp_path,
+        "import sys\nfrom pathlib import Path\n"
+        "p=Path(sys.argv[2])/'logs';p.mkdir(exist_ok=True)\n"
+        f"(p/'service.jsonl').write_text({json.dumps(payload)!r}+'\\n')\nprint('answer')\n",
+        {
+            "format": "native",
+            "required_messages": ["done"],
+            "required_stages": ["work"],
+            "logs": [{"glob": "logs/service.jsonl", "format": "loguru_json", "required": True}],
+        },
+    )
+    batch = run_evaluation(repo / ".atk", {**request, "case_ids": ["a"]})
+    view = evidence.view_execution(repo / ".atk", {"batch_id": batch["id"], "stage": "work"})
+    assert view["executions"][0]["capture"]["status"] == "complete"
+    assert view["events"][0]["raw"] == payload
+    assert view["events"][0]["line"] == 42
+    assert view["events"][0]["source_line"] == 1
+
+
+@pytest.mark.parametrize("interrupted", [False, True])
+def test_native_logs_survive_timeout_and_batch_interruption(tmp_path: Path, interrupted: bool) -> None:
+    script = (
+        "import os,sys,logging,time\nfrom pathlib import Path\n"
+        "sys.path.insert(0,os.path.dirname(os.environ['ATK_RUNNER_PATH']))\n"
+        "from logging_capture import capture_logging\n"
+        "log=logging.getLogger('application');log.setLevel(logging.INFO)\n"
+        "with capture_logging(Path(sys.argv[2])/'logs/service.log', ['application'], "
+        "logging.Formatter('%(message)s')):\n"
+        " log.info('before termination')\n time.sleep(10)\n"
+    )
+    repo, request = setup_project(
+        tmp_path,
+        script,
+        {
+            "format": "native",
+            "logs": [{"glob": "logs/service.log", "format": "text", "required": True}],
+        },
+    )
+    batch = run_evaluation(
+        repo / ".atk",
+        {
+            **request,
+            "case_ids": ["a"],
+            "timeout_seconds": 3 if interrupted else 1,
+            "batch_timeout_seconds": 1 if interrupted else 5,
+        },
+    )
+    view = evidence.view_execution(repo / ".atk", {"batch_id": batch["id"]})
+    assert [row["message"] for row in view["events"]] == ["before termination"]
+    execution = view["executions"][0]
+    assert execution["capture"]["status"] == "partial"
+    assert execution["execution"]["status"] == ("unknown" if interrupted else "timeout")
+
+
+@pytest.mark.parametrize(
+    "logs", [[], [{"glob": "../service.log", "format": "text"}], [{"glob": "logs/service.log", "format": "unknown"}]]
+)
+def test_native_log_configuration_rejects_missing_or_unsafe_sources(tmp_path, logs):
+    with pytest.raises(ATKError, match="采集"):
+        setup_project(tmp_path, "print('answer')", {"format": "native", "logs": logs})
+
+
+def test_missing_native_outlet_is_a_capture_gap(tmp_path):
+    repo, request = setup_project(
+        tmp_path,
+        "print('answer')",
+        {
+            "format": "native",
+            "logs": [{"glob": "logs/service.log", "format": "text", "required": True}],
+        },
+    )
+    batch = run_evaluation(repo / ".atk", {**request, "case_ids": ["a"]})
+    view = evidence.view_execution(repo / ".atk", {"batch_id": batch["id"]})
+    assert view["executions"][0]["capture"]["status"] == "partial"
+    assert "missing_log:logs/service.log" in view["executions"][0]["capture"]["issues"]
+
+
+def test_malformed_native_line_keeps_original_and_later_records(tmp_path):
+    payload = {"record": {"message": "done", "extra": {}}}
+    repo, request = setup_project(
+        tmp_path,
+        "import sys\nfrom pathlib import Path\n"
+        f"(Path(sys.argv[2])/'logs/service.jsonl').write_text('bad native line\\n'+{json.dumps(payload)!r}+'\\n')\n"
+        "print('answer')\n",
+        {"format": "native", "logs": [{"glob": "logs/service.jsonl", "format": "loguru_json", "required": True}]},
+    )
+    batch = run_evaluation(repo / ".atk", {**request, "case_ids": ["a"]})
+    view = evidence.view_execution(repo / ".atk", {"batch_id": batch["id"]})
+    assert view["executions"][0]["capture"]["status"] == "partial"
+    assert [r["message"] for r in view["events"]] == ["bad native line", "done"]
+    ref = next(r for r in view["files"] if r["role"] == "service_log")
+    assert Path(ref["path"]).read_text().startswith("bad native line\n")
+
+
+def test_caught_outlet_failure_cannot_claim_complete_capture(tmp_path):
+    script = (
+        "import os,sys,logging\nfrom pathlib import Path\n"
+        "sys.path.insert(0,os.path.dirname(os.environ['ATK_RUNNER_PATH']))\n"
+        "from logging_capture import capture_logging\n"
+        "log=logging.getLogger('application');log.setLevel(logging.INFO)\n"
+        "with capture_logging(Path(sys.argv[2])/'logs/service.log', ['application'], logging.Formatter('%(field)s')):\n"
+        " log.info('ok',extra={'field':'first'})\n"
+        " try: log.info('bad')\n except ValueError: pass\n"
+        "print('answer')\n"
+    )
+    repo, request = setup_project(
+        tmp_path,
+        script,
+        {
+            "format": "native",
+            "logs": [{"glob": "logs/service.log", "format": "text", "required": True}],
+        },
+    )
+    batch = run_evaluation(repo / ".atk", {**request, "case_ids": ["a"]})
+    view = evidence.view_execution(repo / ".atk", {"batch_id": batch["id"]})
+    execution = view["executions"][0]
+    assert execution["execution"]["status"] == "completed"
+    assert execution["capture"]["status"] == "partial"
+    assert "native_outlet_error" in execution["capture"]["issues"]

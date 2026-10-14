@@ -193,6 +193,7 @@ The following detailed documents are in Chinese:
 - [Usage guide](https://github.com/hustyichi/agent-tune-kit/blob/1.0.0/docs/vnext-usage-guide.md): data, attachments, budgets, imports, and pause/resume workflows.
 - [Architecture and design](https://github.com/hustyichi/agent-tune-kit/blob/1.0.0/docs/agent-tune-kit-vnext-refactor-plan.md): data model, version management, and validation mechanisms.
 - [Implementation and acceptance record](https://github.com/hustyichi/agent-tune-kit/blob/1.0.0/docs/vnext-implementation-report.md): implemented capabilities and remaining acceptance work.
+- [Python log capture](docs/python-execution-evidence-validation.md): local source supports additive logging/Loguru outlets, native per-attempt logs, and file/line references; existing service sinks remain active. Verified offline; this change is not a published release.
 
 <details>
 <summary>Contributing</summary>

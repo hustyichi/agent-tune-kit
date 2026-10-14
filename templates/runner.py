@@ -51,9 +51,12 @@ class EventCapture:
     """One writer per attempt; native records keep their observed fields."""
 
     def __init__(self, directory: Path, attempt: dict, config: dict):
-        self.path = directory / "events.jsonl"
         self.attempt = attempt
         self.config = config.get("observability", {})
+        self.directory = directory
+        self.native = self.config.get("format") == "native"
+        self.path = directory / "logs/stderr.log" if self.native else directory / "events.jsonl"
+        self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.sequence = 0
         self.messages = set()
         self.stages = set()
@@ -63,6 +66,8 @@ class EventCapture:
         os.chmod(self.path, 0o600)
 
     def emit(self, message: str, source: str = "runner", extra: dict | None = None, **fields) -> None:
+        if self.native:
+            return
         with self.lock:
             self.sequence += 1
             extra = extra or {}
@@ -90,6 +95,22 @@ class EventCapture:
                     self.stages.add(stage)
 
     def line(self, value: str) -> None:
+        if self.native:
+            from logging_capture import redact_record, redact_text
+
+            if value.startswith("ATK_CAPTURE_ERROR ") and "native_outlet_error" not in self.issues:
+                self.issues.append("native_outlet_error")
+            try:
+                raw = json.loads(value)
+            except ValueError:
+                rendered = redact_text(value)
+            else:
+                clean = redact_record(raw)
+                rendered = value if clean == raw else json.dumps(clean, ensure_ascii=False)
+            self.handle.write(rendered.rstrip("\r\n") + "\n")
+            self.handle.flush()
+            os.fsync(self.handle.fileno())
+            return
         value = value.rstrip("\r\n")
         try:
             raw = json.loads(value.removeprefix("ATK_LOG "))
@@ -177,14 +198,66 @@ class EventCapture:
     def finish(self, status: str) -> dict:
         self.emit("attempt.finished", extra={"status": status})
         self.handle.close()
-        files = [{"path": str(self.path), "sha256": file_sha256(self.path), "role": "events"}]
+        files = [
+            {
+                "path": str(self.path),
+                "sha256": file_sha256(self.path),
+                "role": "stderr" if self.native else "events",
+                **({"format": "text"} if self.native else {}),
+            }
+        ]
+        if self.native:
+            from logging_capture import log_records
+
+            seen = {self.path.resolve()}
+            for rule in self.config.get("logs", []):
+                accepted = []
+                for path in sorted(self.directory.glob(rule["glob"])):
+                    if not path.is_file() or not path.resolve().is_relative_to(self.directory.resolve()):
+                        self.issues.append("log_outside_attempt")
+                        continue
+                    if path.resolve() in seen:
+                        self.issues.append("duplicate_log_source")
+                        continue
+                    seen.add(path.resolve())
+                    accepted.append(path)
+                    files.append(
+                        {
+                            "path": str(path.resolve()),
+                            "sha256": file_sha256(path),
+                            "role": "service_log",
+                            "format": rule["format"],
+                        }
+                    )
+                    if rule.get("required") and not path.stat().st_size:
+                        self.issues.append("empty_required_log")
+                    try:
+                        for _, _, record in log_records(path, rule["format"]):
+                            self.sequence += 1
+                            if (
+                                record is None
+                                and rule["format"] != "text"
+                                and "malformed_native_log" not in self.issues
+                            ):
+                                self.issues.append("malformed_native_log")
+                            if record:
+                                message = record["message"]
+                                stage = record.get("extra", {}).get(self.config.get("stage_field", "phase"))
+                                if message in self.config.get("required_messages", []):
+                                    self.messages.add(message)
+                                if isinstance(stage, str) and stage in self.config.get("required_stages", []):
+                                    self.stages.add(stage)
+                    except (OSError, ValueError, UnicodeError) as error:
+                        self.issues.append(str(error))
+                if rule.get("required") and not accepted:
+                    self.issues.append("missing_log:" + rule["glob"])
         missing = sorted(set(self.config.get("required_messages", [])) - self.messages)
         missing += sorted(set(self.config.get("required_stages", [])) - self.stages)
         for item in self.config.get("artifacts", []):
-            paths = sorted(self.path.parent.glob(item["glob"]))
+            paths = sorted(self.directory.glob(item["glob"]))
             accepted = []
             for path in paths:
-                if not path.is_file() or not path.resolve().is_relative_to(self.path.parent.resolve()):
+                if not path.is_file() or not path.resolve().is_relative_to(self.directory.resolve()):
                     self.issues.append("artifact_outside_attempt")
                     continue
                 accepted.append(path)
@@ -203,6 +276,7 @@ class EventCapture:
             "status": "complete" if complete else "partial",
             "capability": "workflow" if self.config.get("required_stages") and complete else "execution",
             "stage_field": self.config.get("stage_field", "phase"),
+            "format": self.config.get("format"),
             "event_count": self.sequence,
             "observed_messages": sorted(self.messages),
             "observed_stages": sorted(self.stages),
