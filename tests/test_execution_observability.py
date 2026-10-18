@@ -67,6 +67,25 @@ def event_script(message: str = "done", extra: dict | None = None) -> str:
     )
 
 
+@pytest.mark.parametrize(
+    "capture,helpers",
+    [
+        ({}, set()),
+        ({"format": "native", "logs": [{"glob": "logs/service.log", "format": "text"}]}, {"logging_capture.py"}),
+        ({"format": "atk_json"}, {"logging_json.py"}),
+        ({"format": "loguru_json"}, {"logging_json.py"}),
+        ({"format": "text"}, {"logging_json.py"}),
+    ],
+)
+def test_initialization_copies_only_selected_logging_helper(tmp_path: Path, capture: dict, helpers: set[str]) -> None:
+    repo, _ = setup_project(tmp_path, "print('answer')", capture)
+    adapters = repo / ".atk/adapters"
+    assert {path.name for path in adapters.iterdir()} == {"runner.py"} | helpers
+    config = json.loads((repo / ".atk/project.json").read_text())
+    if helpers:
+        assert config["observability"]["logging_helper_sha256"] == digest(adapters / next(iter(helpers)))
+
+
 def test_parallel_attempt_events_and_native_evidence_are_directly_queryable(tmp_path: Path) -> None:
     repo, request = setup_project(
         tmp_path,

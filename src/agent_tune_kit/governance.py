@@ -13,7 +13,6 @@ from .core import (
     ATKError,
     atomic_write,
     digest,
-    locked,
     new_id,
     now,
     read_assessment,
@@ -30,11 +29,6 @@ def _round_folder(root: Path, round_id: str) -> Path:
 
 
 def store_diagnosis(root: Path, request: dict) -> dict:
-    with locked(root):
-        return _store_diagnosis_locked(root, request)
-
-
-def _store_diagnosis_locked(root: Path, request: dict) -> dict:
     folder = _round_folder(root, request["round_id"])
     round_data = read_json(folder / "round.json")
     if round_data["status"] == "paused":
@@ -181,11 +175,6 @@ def _store_diagnosis_locked(root: Path, request: dict) -> dict:
 
 
 def store_knowledge(root: Path, request: dict) -> dict:
-    with locked(root):
-        return _store_knowledge_locked(root, request)
-
-
-def _store_knowledge_locked(root: Path, request: dict) -> dict:
     value = request["knowledge"]
     required = {
         "status",
@@ -463,11 +452,6 @@ def _loaded_component_ids(root: Path, batch: dict, record: dict) -> set[str]:
 
 
 def compare_and_gate(root: Path, request: dict) -> dict:
-    with locked(root):
-        return _compare_and_gate_locked(root, request)
-
-
-def _compare_and_gate_locked(root: Path, request: dict) -> dict:
     folder = _round_folder(root, request["round_id"])
     round_data = read_json(folder / "round.json")
     if round_data["status"] not in {"ready", "optimizing", "finalizing"}:
@@ -783,11 +767,6 @@ def _compare_and_gate_locked(root: Path, request: dict) -> dict:
 
 
 def validate_external_fix(root: Path, request: dict) -> dict:
-    with locked(root):
-        return _validate_external_fix_locked(root, request)
-
-
-def _validate_external_fix_locked(root: Path, request: dict) -> dict:
     folder = _round_folder(root, request["round_id"])
     round_data = read_json(folder / "round.json")
     plan = read_json(folder / "plan.json")
@@ -963,11 +942,6 @@ def _validate_external_fix_locked(root: Path, request: dict) -> dict:
 
 
 def finish_round(repo: Path, root: Path, request: dict) -> dict:
-    with locked(root):
-        return _finish_round_locked(repo, root, request)
-
-
-def _finish_round_locked(repo: Path, root: Path, request: dict) -> dict:
     folder = _round_folder(root, request["round_id"])
     value = read_json(folder / "round.json")
     final_actions = {"complete", "complete_with_override", "complete_external_fix", "close_without_adoption"}

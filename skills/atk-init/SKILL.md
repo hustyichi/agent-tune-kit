@@ -31,6 +31,7 @@ Case 含附件时，配置 Agent 命令读取默认 runner 的 `{attachments_fil
 调用 `initialize_project` 时提供 `python`、argv 数组 `command`、`components`、`allowed_paths`、`protected_paths`、
 `external_effects` 和详细 `runtime_notes`。只有核实无外部写入后才能将 `external_effects` 设为 `[]`。
 操作生成 `.atk/project.json`、`.atk/runtime.md` 和 `.atk/adapters/runner.py`，并把 `.atk/` 加入本地 Git exclude。
+日志辅助模块按模式生成：native 仅 `logging_capture.py`，旧 stderr 格式仅 `logging_json.py`，未配置观测时不生成。
 检查生成的适配器，仅作保持请求／响应契约所需的项目调用适配。不要新建 Agent、运行完整数据集、提交已有修改或替换旧 `.atk` 数据。
 若已有旧数据，停止并说明冲突。
 
@@ -49,3 +50,27 @@ Case 含附件时，配置 Agent 命令读取默认 runner 的 `{attachments_fil
 固定远程组件的实际版本重要时，配置只读 argv 数组 `version_command`，已知时提供 `expected_version`，可选
 `version_timeout_seconds`。命令只输出不含秘密的版本标识。ATK 在批次前后执行它；记录命令如何触达实际服务，
 不能仅凭本地源码元数据推断服务版本。
+
+## 接入产物与收尾
+
+初始化请求、响应放系统临时目录，核对返回状态后清理；首次调用前不预建 `.atk/initialization/`。
+按项目需要编写适配器，维护测试遵循目标项目既有规范；不默认新增 README、输入结构报告、
+`verification.json`、独立门禁回执或逐轮采集脚本。数据整理交给 atk-dataset。
+
+迭代测试在自动清理的临时目录进行，不累积 `run-N`、pytest 夹具、网络 guard 或合成索引。
+Python 自检可在子进程设置 `PYTHONDONTWRITEBYTECODE=1`，避免新增字节码缓存混入接入产物，不改写用户环境配置。
+适配和配置稳定后，在 `.atk/self-check/` 直接运行最后一轮已获准且隔离已核验的合成/测试检查；
+不搬运含绝对路径的输出，不覆盖未知的旧现场，不绕过正式重放的外部副作用门禁。
+核对执行结果、必需日志/阶段、实际加载组件、保留文件的引用和指纹，不能只看退出码。
+
+- 全部必需检查通过：先把命令、范围、结果及实际版本/指纹写入 `runtime.md`，再清理本次自检目录和临时请求。
+  摘要明确“原始现场已清理”；检查清理结果，移除失效引用，清理失败时说明残留，不称已清理。
+- 失败或中断：在 `self-check/` 保留一套有用现场和简短 `checks.log`，记录命令、退出码/中断状态、未通过项和位置。
+  保留 runner 原始 Record、加载证据及其引用的日志、结果和审计；不另存重复正文或无关夹具。
+- 未执行：在说明中写原因，不创建空自检目录；unknown 或部分通过不能按成功清理。
+
+仅清理本次生成且未被正式对象引用的临时材料；已有项目数据、封存证据及恢复信息保持原有保护。
+故障修复后重新核验相关必需检查，再按成功规则清理本次现场。
+`runtime.md` 是人的唯一接入说明入口：开头写状态、运行入口、验证摘要、限制和下一步；失败时链接实际现场。
+配置以 `project.json` 为准，不复制完整配置或输出；保留外部保护依据对应章节，不链接已清理文件。
+稳定后又改动 adapter、runner/helper 或配置时须重新验证，不沿用旧通过结论。

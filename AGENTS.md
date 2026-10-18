@@ -37,7 +37,7 @@ atk install / preview / status / version → installer → 本地插件目录与
 | --- | --- |
 | `src/agent_tune_kit/cli.py` | `atk` 入口；分派安装命令或 `internal` 操作，统一响应和版本提示，不放业务门禁逻辑 |
 | `src/agent_tune_kit/installer.py` | 解析源码／包内 payload，验证 manifest，安装或更新插件、注册 marketplace、处理冲突及安装状态 |
-| `src/agent_tune_kit/core.py` | 公共错误码、ID、指纹、原子写入、项目操作锁；证据完整性、Assessment 校验与 HTML 渲染 |
+| `src/agent_tune_kit/core.py` | 公共错误码、ID、指纹、原子写入；证据完整性、Assessment 校验与 HTML 渲染 |
 | `src/agent_tune_kit/evidence.py` | 导入批量结果和 Langfuse 导出，字段映射、来源身份、脱敏、证据索引及源码／契约摘录 |
 | `src/agent_tune_kit/execution.py` | 初始化项目、保存 Dataset、校验附件；预留预算、调度 runner、封存批次、重试／续跑及组件身份核验 |
 | `src/agent_tune_kit/checkpoints.py` | Git／路径保护、Round 冻结与状态切换、候选准备／封存／决策、检查点重放、回退和中断恢复 |
@@ -109,6 +109,7 @@ Skill 顺序不等于内部操作各执行一次：诊断写入 Issue 前需要�
 
 ## 必须保持的约束
 
+- 同一项目的管理操作按顺序调用，不创建或依赖 `.operation.lock`；批次内 attempt 并发与 runner 内部同步保持独立。Init 自检通过后清理本次现场，失败或中断保留一套诊断材料，`runtime.md` 保存摘要；正式证据与恢复信息继续保留。适用范围为 ATK 本地源码，来源为用户确认的精简方案，生效日期 2026-10-18。
 - 冻结计划覆盖 Dataset／Case 身份、Issue 与修改范围、保护路径、judger／spec／runner／固定上下文指纹、重复次数、并发、超时、有限预算、提交授权、回退规则及重放准备。预留最终验证预算；封存后不继续修改候选，也不叠加第二个 pending candidate。
 - 评测不能通过改 `.atk/`、runner、Dataset 或评分规则让候选过关。标准变化需重新校准并创建新 Assessment／相应新 Round；Case、用途、来源组、附件或固定上下文变化不能沿用旧可比性结论。
 - 只允许同一 Revision 内的 attempts 按冻结并发执行，不并行切换不同 Revision。重放已知检查点在原目录进行，运行后恢复开始时内容；不要绕过记录直接 reset 或改写状态。

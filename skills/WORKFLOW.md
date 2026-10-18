@@ -32,6 +32,8 @@ CLI 在 `warnings` 中提示版本差异，但仍执行操作。若缺少 `atk`�
 临时请求文件放在目标仓库外或已忽略的 `.atk/` 目录中。
 
 临时请求与响应在操作状态和正式对象核对后清理；恢复必需的信息保留于既有 Operation 或批次。
+Init 自检全部必需检查通过后清理本次现场，仅在 `runtime.md` 留摘要；失败或中断保留一套诊断现场。
+这不适用于正式 Dataset、EvidenceBatch、Assessment、Round 或恢复信息；具体接入收尾遵循 atk-init。
 评分器、规格和校准材料按版本维护并引用，不按每次运行复制。摘要只保留统计、必要差异与证据引用，
 不要再次嵌入完整输入、答案、模型输出和审计正文；ID 和事件映射通过确定性查询获得。
 
@@ -69,6 +71,7 @@ Issue 与 Case ID、已校准的 judger／spec／runner／固定上下文指纹�
 冻结 `primary_dimension`（默认 `task_success`），可选 `required_dimensions`；省略后者则要求规格中的全部维度。
 必需维度存在未知或无效判定时不能通过；主指标改善不能抵消必需维度退化。
 同一 Revision 的 attempts 可并发，不同 Revision 不得并行运行。
+同一项目的管理操作顺序调用；ATK 不创建或依赖 `.operation.lock`，不提供跨操作的进程互斥。
 记录 `repeatability_basis`；未经校准的模型 Agent 记为 `unknown`，不能视为确定性。
 随机或未知计划默认在最终验证的每侧重复三次；两次计划必须记录 `repeat_plan_basis`，且仍不宣称统计显著性。
 `freeze_round` 拒绝脏基线。不得把修改 `.atk/`、runner、数据集、评分器或验证标准作为候选的一部分。

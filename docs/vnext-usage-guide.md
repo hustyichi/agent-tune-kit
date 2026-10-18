@@ -1,6 +1,6 @@
 # Agent Tune Kit vNext 使用指南
 
-最后核对：2026-09-28。适用于 PyPI 的 1.0.0 版本及本仓库 checkout。产品约束以[正式改造方案](agent-tune-kit-vnext-refactor-plan.md)为准，已实现范围及真实验收状态以[实现记录](vnext-implementation-report.md)为准。
+最近核对：2026-10-18（本地源码 Init 产物、自检收尾及去除操作锁依赖；原主体核对日期 2026-09-28）。本次改动尚未发布，发行版能力以实际安装来源为准。产品约束以[正式改造方案](agent-tune-kit-vnext-refactor-plan.md)及后续用户确认的[Init 精简方案](2026-10-18-atk-init-artifact-slimming.md)为准，已实现范围及真实验收状态以[实现记录](vnext-implementation-report.md)为准。
 
 ## 1. 选择入口
 
@@ -25,6 +25,30 @@ ATK 面向**已有** Agent。用户通过七个 Codex Skill 表达目标；当�
 从 PyPI 安装请运行 `uv tool install agent-tune-kit@latest`、`atk install` 和 `atk status`，再在 Codex `/plugins` 启用。以后重复运行 `uv tool install agent-tune-kit@latest`，未安装则安装，已有新版本则升级；建议随后运行 `atk install` 更新 Skill，也可以稍后再做。源码 checkout 可在仓库目录运行 `uv run --frozen atk install`。Skill 调用 CLI 时传入自身插件根目录；版本不同只提示，不阻止执行。
 
 旧 `.atk/results/vN/` 不自动迁移或删除。目标工程若已有旧 `.atk`，初始化会停止；先保留旧目录并人工决定迁移方案，或改用干净的目标工程，不要覆盖旧数据。
+
+### Init 产物与自检收尾
+
+可执行接入保留 `project.json`、`runtime.md` 和 `adapters/runner.py`，以及项目确实需要的适配代码和维护测试。
+`observability.format=native` 仅复制 `logging_capture.py`；旧 `atk_json/loguru_json/text` 模式仅复制
+`logging_json.py`；未配置观测时不复制日志辅助模块。纯分析接入仍只需要 `project.json`。
+
+`initialize_project` 只建立接入文件，不执行自检或自动整理旧数据。自检和收尾由 `atk-init` Skill 在当前会话完成：
+
+- 初始化请求与回执放系统临时目录，核对后清理；迭代测试也使用临时目录，不在 `.atk` 累积 `run-N` 或 pytest 夹具。
+- 配置稳定后，在 `.atk/self-check/` 直接执行已获准且隔离已核验的最后一轮检查，保持输出中的实际路径有效。
+- 全部必需检查通过，先核对结果、加载、日志和指纹，在 `runtime.md` 记下命令、范围、结果及版本/指纹，
+  再清理本次自检现场。摘要写明原始现场已清理，不链接已删除的文件；原始内容事后复查需重新执行自检。
+- 失败或中断时保留一套有用的 `self-check/` 现场和简短 `checks.log`，说明失败项及定位入口。
+  未执行时写明原因，不强制创建空目录；unknown 或部分通过不算全部通过。
+
+`runtime.md` 是人的接入入口，配置以 `project.json` 为准，不默认新增 README、`verification.json`、输入结构报告或独立门禁回执。
+说明保留运行方法、隔离依据、已验证范围、限制及下一步；adapter 或配置变化后重新验证。
+清理仅限本次生成且未被正式对象引用的临时材料，不影响正式 Dataset、EvidenceBatch、Assessment、Round 或恢复信息。
+安全隔离无法核验时记录未执行，不通过自检绕过正式重放门禁。
+
+同一项目的管理操作按顺序调用；本地源码不创建、读取或依赖 `.operation.lock`，残留旧锁文件不会阻断执行，
+也不会被自动删除。不提供不同管理操作之间的跨进程互斥保证；原子写入、内容指纹和 Git 基线校验继续有效，
+同一批次内的 attempt 并发及 runner 内部同步保持原有行为。
 
 ## 3. 准备 Case 与附件
 
@@ -110,7 +134,7 @@ uv run --frozen atk internal initialize_project --plugin-root /absolute/path/to/
 attempt 内的原生日志路径与格式（`loguru_json` 或 `text`）。日志原格式保存，仅作落盘前脱敏；
 不生成 ATK 字段结构的日志副本。执行状态仍在 Record 中，原服务出口继续使用原配置。
 
-目标 Python 环境无需安装 ATK。初始化会复制标准库实现的 `.atk/adapters/logging_capture.py`。
+目标 Python 环境无需安装 ATK。native 初始化会复制标准库实现的 `.atk/adapters/logging_capture.py`。
 在原项目日志初始化之后、业务执行之前接入，退出上下文时刷新并移除本次附加出口：
 
 ```python

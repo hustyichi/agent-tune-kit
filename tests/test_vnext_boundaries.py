@@ -4,7 +4,6 @@ import shlex
 import subprocess
 import sys
 import time
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -1348,17 +1347,15 @@ def test_runner_commit_blocks_evaluation_without_advancing_round(tmp_path: Path)
     assert git(repo, "rev-parse", "HEAD") != round_data["baseline_commit"]
 
 
-def test_running_evaluation_blocks_candidate_operations(tmp_path: Path) -> None:
-    started = tmp_path / "agent-started"
-    release = tmp_path / "agent-release"
-    script = (
-        "import time\nfrom pathlib import Path\n"
-        f"Path({str(started)!r}).write_text('started')\n"
-        f"while not Path({str(release)!r}).exists(): time.sleep(0.01)\n"
-        "print('ok')\n"
-    )
+@pytest.mark.parametrize("legacy_lock", [False, True])
+def test_sequential_operations_do_not_depend_on_operation_lock(tmp_path: Path, legacy_lock: bool) -> None:
     rows = [{"id": "case", "input": "task", "usage": "optimization", "source_group_id": "group"}]
-    repo, root, dataset, round_data, plan = project(tmp_path, script, rows)
+    repo, root, dataset, round_data, plan = project(tmp_path, "print('ok')\n", rows)
+    lock = root / ".operation.lock"
+    if legacy_lock:
+        lock.write_text("legacy lock")
+    else:
+        assert not lock.exists()
     freeze_round(repo, root, {"round_id": round_data["id"], "plan": plan})
     request = {
         "dataset_id": dataset["id"],
@@ -1367,28 +1364,17 @@ def test_running_evaluation_blocks_candidate_operations(tmp_path: Path) -> None:
         "revision_id": round_data["baseline_revision_id"],
         "round_id": round_data["id"],
     }
-    with ThreadPoolExecutor(max_workers=1) as pool:
-        future = pool.submit(run_evaluation, root, request)
-        try:
-            deadline = time.monotonic() + 5
-            while not started.exists() and not future.done() and time.monotonic() < deadline:
-                time.sleep(0.01)
-            assert started.exists()
-            with pytest.raises(ATKError, match="另一个 ATK 操作正在运行"):
-                prepare_candidate(
-                    repo, root, {"round_id": round_data["id"], "primary_issue_id": "issue", "paths": ["prompt.txt"]}
-                )
-            with pytest.raises(ATKError, match="另一个 ATK 操作正在运行"):
-                store_diagnosis(root, {"round_id": round_data["id"], "issues": []})
-        finally:
-            release.write_text("go")
-        assert future.result(timeout=10)["status"] == "sealed"
+    assert run_evaluation(root, request)["status"] == "sealed"
     assert (
         prepare_candidate(
             repo, root, {"round_id": round_data["id"], "primary_issue_id": "issue", "paths": ["prompt.txt"]}
         )["content_status"]
         == "draft"
     )
+    if legacy_lock:
+        assert lock.read_text() == "legacy lock"
+    else:
+        assert not lock.exists()
 
 
 @pytest.mark.parametrize("failure", ["fsync", "replace"])

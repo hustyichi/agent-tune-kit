@@ -82,6 +82,8 @@ $atk-dataset 使用 data/eval.csv 中的任务，帮我确认输入、预期结�
 
 `$atk-init` 只负责确认运行入口、依赖环境和输入输出方式，完成适配器接入；`$atk-dataset` 整理测试任务和判断依据。数据还没整理成文件时，也可以先提供真实任务示例，让 `$atk-dataset` 帮你整理。
 
+本地源码的 Init 按需生成日志辅助模块，`runtime.md` 是接入说明入口。自检全部通过后清理本次现场；失败或中断时只保留一套 `self-check/` 诊断材料。同一项目的管理操作按顺序调用，不创建或依赖 `.operation.lock`；正式评测证据继续保留。已有项目文件不自动清理，详见[产物与自检说明](docs/vnext-usage-guide.md#init-产物与自检收尾)。
+
 ### 2. 看清当前表现，找出优先解决的问题
 
 ```text
@@ -189,7 +191,7 @@ ATK 会保留任务、实际输出、判定明细、修改和决策记录。需�
 ## 进一步了解
 
 - [完整使用指南](docs/vnext-usage-guide.md)：数据与附件、预算、导入、暂停恢复等进阶用法。
-- [Init 产物精简方案（待确认）](docs/2026-10-18-atk-init-artifact-slimming.md)：按需生成日志辅助模块，自检成功清理、失败保留现场，并去除操作锁依赖；尚未实施。
+- [Init 产物精简方案](docs/2026-10-18-atk-init-artifact-slimming.md)：按需生成日志辅助模块，自检成功清理、失败保留现场，并去除操作锁依赖；实施与检查结果在文末记录。
 - [架构与设计](docs/agent-tune-kit-vnext-refactor-plan.md)：数据模型、版本管理和验证机制。
 - [Python 执行日志与证据采集改造方案](docs/python-execution-evidence-plan.md)：按测试执行保存日志、关联原生审计，并从执行流程减少重复中间资产。
 - [Python 日志改造验收记录](docs/python-execution-evidence-validation.md)：2026-10-14 源码支持附加 logging/Loguru 出口，直接保存原格式日志并提供文件行号引用；已核验原出口保留及手术项目离线三阶段接入。历史五 Case 对比保持原口径。

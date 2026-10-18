@@ -20,7 +20,6 @@ from .core import (
     atomic_write,
     canonical,
     digest,
-    locked,
     new_id,
     now,
     read_json,
@@ -236,16 +235,19 @@ def initialize_project(repo: Path, request: dict) -> dict:
             runner_source = Path(source)
             (root / "adapters").mkdir(exist_ok=True)
             shutil.copyfile(runner_source, root / "adapters" / "runner.py")
-            shutil.copyfile(runner_source.with_name("logging_json.py"), root / "adapters" / "logging_json.py")
+            if observability and observability["format"] != "native":
+                shutil.copyfile(runner_source.with_name("logging_json.py"), root / "adapters" / "logging_json.py")
     else:
         runner_source = Path(__file__).resolve().parents[2] / "templates" / "runner.py"
         if not runner_source.exists():
             raise ATKError("WORKSPACE_CONFLICT", "缺少随包 runner 模板")
         (root / "adapters").mkdir(exist_ok=True)
         shutil.copyfile(runner_source, root / "adapters" / "runner.py")
-        shutil.copyfile(runner_source.with_name("logging_json.py"), root / "adapters" / "logging_json.py")
+        if observability and observability["format"] != "native":
+            shutil.copyfile(runner_source.with_name("logging_json.py"), root / "adapters" / "logging_json.py")
     if observability:
-        shutil.copyfile(Path(__file__).with_name("logging_capture.py"), root / "adapters/logging_capture.py")
+        if observability["format"] == "native":
+            shutil.copyfile(Path(__file__).with_name("logging_capture.py"), root / "adapters/logging_capture.py")
         helper = "logging_capture.py" if observability.get("format") == "native" else "logging_json.py"
         project["observability"] = {**observability, "logging_helper_sha256": digest(root / "adapters" / helper)}
     write_json(root / "project.json", project, immutable=not upgrade)
@@ -400,252 +402,235 @@ def _reserve_run(
         if request["purpose"] == "diagnostic_probe" or any(cases[a["case_id"]]["usage"] == "holdout" for a in attempts):
             raise ATKError("WORKSPACE_CONFLICT", "探针和 holdout 运行需要已记录的 Round")
         return
-    with locked(root):
-        folder = root / "rounds" / safe_id(round_id)
-        round_data = read_json(folder / "round.json")
-        if round_data["status"] not in {"analysis_only", "ready", "optimizing", "finalizing"}:
-            raise ATKError("WORKSPACE_CONFLICT", "Round 已关闭")
-        plan = (
-            read_json(folder / "plan.json") if (folder / "plan.json").exists() else round_data.get("analysis_plan", {})
+    folder = root / "rounds" / safe_id(round_id)
+    round_data = read_json(folder / "round.json")
+    if round_data["status"] not in {"analysis_only", "ready", "optimizing", "finalizing"}:
+        raise ATKError("WORKSPACE_CONFLICT", "Round 已关闭")
+    plan = read_json(folder / "plan.json") if (folder / "plan.json").exists() else round_data.get("analysis_plan", {})
+    if request["purpose"] == "evaluation" and (
+        not plan.get("case_fingerprints")
+        or any(plan["case_fingerprints"].get(attempt["case_id"]) != attempt["case_fingerprint"] for attempt in attempts)
+    ):
+        raise ATKError("COMPARISON_INVALID", "正式运行的 Case 与冻结数据集不一致")
+    if plan.get("run_config_hash") and plan["run_config_hash"] != digest(project):
+        raise ATKError("COMPARISON_INVALID", "项目 runner 配置在 Round 冻结后被修改")
+    if request["purpose"] == "evaluation" and request.get("concurrency", 1) != plan.get("concurrency", 1):
+        raise ATKError("COMPARISON_INVALID", "执行 concurrency 与冻结计划不一致")
+    if request["purpose"] == "evaluation" and request.get(
+        "timeout_seconds", plan.get("timeout_seconds", 120)
+    ) != plan.get("timeout_seconds", 120):
+        raise ATKError("COMPARISON_INVALID", "执行超时与冻结计划不一致")
+    budget = plan.get("budget", {})
+    purpose = request["purpose"]
+    probe_config = None
+    if purpose == "diagnostic_probe":
+        permission_id = request.get("probe_authorization_id")
+        permissions = plan.get("probe_permissions", [])
+        permission = (
+            next((p for p in permissions if isinstance(p, dict) and p.get("id") == permission_id), None)
+            if isinstance(permissions, list)
+            else None
         )
-        if request["purpose"] == "evaluation" and (
-            not plan.get("case_fingerprints")
-            or any(
-                plan["case_fingerprints"].get(attempt["case_id"]) != attempt["case_fingerprint"] for attempt in attempts
-            )
-        ):
-            raise ATKError("COMPARISON_INVALID", "正式运行的 Case 与冻结数据集不一致")
-        if plan.get("run_config_hash") and plan["run_config_hash"] != digest(project):
-            raise ATKError("COMPARISON_INVALID", "项目 runner 配置在 Round 冻结后被修改")
-        if request["purpose"] == "evaluation" and request.get("concurrency", 1) != plan.get("concurrency", 1):
-            raise ATKError("COMPARISON_INVALID", "执行 concurrency 与冻结计划不一致")
-        if request["purpose"] == "evaluation" and request.get(
-            "timeout_seconds", plan.get("timeout_seconds", 120)
-        ) != plan.get("timeout_seconds", 120):
-            raise ATKError("COMPARISON_INVALID", "执行超时与冻结计划不一致")
-        budget = plan.get("budget", {})
-        purpose = request["purpose"]
-        probe_config = None
-        if purpose == "diagnostic_probe":
-            permission_id = request.get("probe_authorization_id")
-            permissions = plan.get("probe_permissions", [])
-            permission = (
-                next((p for p in permissions if isinstance(p, dict) and p.get("id") == permission_id), None)
-                if isinstance(permissions, list)
-                else None
-            )
-            probe_command = permission.get("command", project["command"]) if permission else None
-            workdir_ref = permission.get("working_directory", ".") if permission else None
-            workdir = (
-                (Path(project["workspace_path"]) / workdir_ref).resolve() if isinstance(workdir_ref, str) else None
-            )
-            timeout = permission.get("timeout_seconds", 120) if permission else None
-            max_calls = permission.get("max_calls", budget.get("probes", 0)) if permission else None
-            script_ref = permission.get("script_path") if permission else None
-            script_path = (root / "probes" / script_ref).resolve() if isinstance(script_ref, str) else None
-            script_hash = permission.get("script_sha256") if permission else None
-            if (
-                not permission
-                or not isinstance(probe_command, list)
-                or not probe_command
-                or any(not isinstance(part, str) for part in probe_command)
-                or permission.get("command_hash") != digest(probe_command)
-                or (permission.get("kind") == "direct_component" and probe_command == project["command"])
-                or permission.get("runner_hash") != digest(root / "adapters" / "runner.py")
-                or not set(a["case_id"] for a in attempts) <= set(permission.get("case_ids", []))
-                or not permission.get("isolation_ref")
-                or not workdir
-                or not workdir.is_dir()
-                or not workdir.is_relative_to(Path(project["workspace_path"]).resolve())
-                or type(timeout) is not int
-                or timeout < 1
-                or type(max_calls) is not int
-                or max_calls < 1
-                or (
-                    script_ref is not None
-                    and (
-                        not script_path
-                        or not script_path.is_relative_to((root / "probes").resolve())
-                        or not script_path.is_file()
-                        or digest(script_path) != script_hash
-                        or not any((workdir / part).resolve() == script_path for part in probe_command)
-                    )
+        probe_command = permission.get("command", project["command"]) if permission else None
+        workdir_ref = permission.get("working_directory", ".") if permission else None
+        workdir = (Path(project["workspace_path"]) / workdir_ref).resolve() if isinstance(workdir_ref, str) else None
+        timeout = permission.get("timeout_seconds", 120) if permission else None
+        max_calls = permission.get("max_calls", budget.get("probes", 0)) if permission else None
+        script_ref = permission.get("script_path") if permission else None
+        script_path = (root / "probes" / script_ref).resolve() if isinstance(script_ref, str) else None
+        script_hash = permission.get("script_sha256") if permission else None
+        if (
+            not permission
+            or not isinstance(probe_command, list)
+            or not probe_command
+            or any(not isinstance(part, str) for part in probe_command)
+            or permission.get("command_hash") != digest(probe_command)
+            or (permission.get("kind") == "direct_component" and probe_command == project["command"])
+            or permission.get("runner_hash") != digest(root / "adapters" / "runner.py")
+            or not set(a["case_id"] for a in attempts) <= set(permission.get("case_ids", []))
+            or not permission.get("isolation_ref")
+            or not workdir
+            or not workdir.is_dir()
+            or not workdir.is_relative_to(Path(project["workspace_path"]).resolve())
+            or type(timeout) is not int
+            or timeout < 1
+            or type(max_calls) is not int
+            or max_calls < 1
+            or (
+                script_ref is not None
+                and (
+                    not script_path
+                    or not script_path.is_relative_to((root / "probes").resolve())
+                    or not script_path.is_file()
+                    or digest(script_path) != script_hash
+                    or not any((workdir / part).resolve() == script_path for part in probe_command)
                 )
-            ):
-                raise ATKError("WORKSPACE_CONFLICT", "探针命令、Case 或隔离设置未获授权")
-            probe_config = {
-                "command": probe_command,
-                "command_hash": permission["command_hash"],
-                "working_directory": str(workdir),
-                "timeout_seconds": timeout,
-                "isolation_ref": permission["isolation_ref"],
-                "script_path": str(script_path) if script_path else None,
-                "script_sha256": script_hash,
-            }
-        elif round_data["status"] == "analysis_only" or not set(a["case_id"] for a in attempts) <= set(
-            plan["case_ids"]
-        ):
-            raise ATKError("COMPARISON_INVALID", "正式执行超出冻结 Round 范围")
-        phase = request.get("phase", "incremental")
-        if round_data["status"] == "finalizing" and purpose == "evaluation" and phase == "incremental":
-            raise ATKError("WORKSPACE_CONFLICT", "正在收尾的 Round 不能启动增量运行")
-        if purpose == "evaluation" and phase not in {"incremental", "final", "external_fix"}:
-            raise ATKError("COMPARISON_INVALID", "无法识别评测阶段")
-        if purpose == "evaluation" and round_data.get("external_fix_identity") and phase != "external_fix":
-            raise ATKError("COMPARISON_INVALID", "外部修复 Round 需要专用验证阶段")
-        if (
-            purpose == "evaluation"
-            and phase == "external_fix"
-            and (
-                not round_data.get("external_fix_identity")
-                or round_data["pending_candidate_id"]
-                or round_data["active_candidate_ids"]
-                or request["revision_id"] != round_data["baseline_revision_id"]
             )
         ):
-            raise ATKError("COMPARISON_INVALID", "外部修复验证必须在新 B0 上运行")
+            raise ATKError("WORKSPACE_CONFLICT", "探针命令、Case 或隔离设置未获授权")
+        probe_config = {
+            "command": probe_command,
+            "command_hash": permission["command_hash"],
+            "working_directory": str(workdir),
+            "timeout_seconds": timeout,
+            "isolation_ref": permission["isolation_ref"],
+            "script_path": str(script_path) if script_path else None,
+            "script_sha256": script_hash,
+        }
+    elif round_data["status"] == "analysis_only" or not set(a["case_id"] for a in attempts) <= set(plan["case_ids"]):
+        raise ATKError("COMPARISON_INVALID", "正式执行超出冻结 Round 范围")
+    phase = request.get("phase", "incremental")
+    if round_data["status"] == "finalizing" and purpose == "evaluation" and phase == "incremental":
+        raise ATKError("WORKSPACE_CONFLICT", "正在收尾的 Round 不能启动增量运行")
+    if purpose == "evaluation" and phase not in {"incremental", "final", "external_fix"}:
+        raise ATKError("COMPARISON_INVALID", "无法识别评测阶段")
+    if purpose == "evaluation" and round_data.get("external_fix_identity") and phase != "external_fix":
+        raise ATKError("COMPARISON_INVALID", "外部修复 Round 需要专用验证阶段")
+    if (
+        purpose == "evaluation"
+        and phase == "external_fix"
+        and (
+            not round_data.get("external_fix_identity")
+            or round_data["pending_candidate_id"]
+            or round_data["active_candidate_ids"]
+            or request["revision_id"] != round_data["baseline_revision_id"]
+        )
+    ):
+        raise ATKError("COMPARISON_INVALID", "外部修复验证必须在新 B0 上运行")
+    if (
+        purpose == "evaluation"
+        and phase == "final"
+        and (round_data["pending_candidate_id"] or not round_data["active_candidate_ids"])
+    ):
+        raise ATKError("COMPARISON_INVALID", "最终运行需要固定且已采用的 Revision")
+    if (
+        purpose == "evaluation"
+        and phase in {"final", "external_fix"}
+        and not (request.get("retry_batch_id") or request.get("continue_batch_id"))
+    ):
+        selected = request.get("case_ids", [])
         if (
-            purpose == "evaluation"
-            and phase == "final"
-            and (round_data["pending_candidate_id"] or not round_data["active_candidate_ids"])
+            len(selected) != len(set(selected))
+            or set(selected) != set(plan["case_ids"])
+            or request.get("repeats", 1) != plan["final_repeats"]
+            or request["revision_id"] not in {round_data["baseline_revision_id"], round_data["current_revision_id"]}
         ):
-            raise ATKError("COMPARISON_INVALID", "最终运行需要固定且已采用的 Revision")
+            raise ATKError("COMPARISON_INVALID", "最终运行与冻结 Case 和重复计划不一致")
+    holdout = [cases[a["case_id"]] for a in attempts if cases[a["case_id"]]["usage"] == "holdout"]
+    if holdout:
+        milestone = request.get("holdout_milestone_id")
         if (
-            purpose == "evaluation"
-            and phase in {"final", "external_fix"}
-            and not (request.get("retry_batch_id") or request.get("continue_batch_id"))
+            purpose != "evaluation"
+            or round_data["pending_candidate_id"]
+            or not milestone
+            or milestone != plan.get("holdout_milestone_id")
         ):
-            selected = request.get("case_ids", [])
-            if (
-                len(selected) != len(set(selected))
-                or set(selected) != set(plan["case_ids"])
-                or request.get("repeats", 1) != plan["final_repeats"]
-                or request["revision_id"] not in {round_data["baseline_revision_id"], round_data["current_revision_id"]}
-            ):
-                raise ATKError("COMPARISON_INVALID", "最终运行与冻结 Case 和重复计划不一致")
-        holdout = [cases[a["case_id"]] for a in attempts if cases[a["case_id"]]["usage"] == "holdout"]
-        if holdout:
-            milestone = request.get("holdout_milestone_id")
-            if (
-                purpose != "evaluation"
-                or round_data["pending_candidate_id"]
-                or not milestone
-                or milestone != plan.get("holdout_milestone_id")
-            ):
-                raise ATKError("COMPARISON_INVALID", "holdout 需要冻结最终里程碑，且不能有未决候选")
-            groups = {case["source_group_id"] for case in holdout}
-            if not all(groups):
-                raise ATKError("COMPARISON_INVALID", "holdout 来源组未知")
-            for dataset in (root / "datasets").glob("*/manifest.json"):
-                for case in load_cases(root, dataset.parent.name).values():
-                    if case["source_group_id"] in groups and case["usage"] != "holdout":
-                        raise ATKError("COMPARISON_INVALID", "holdout 来源组已用于 optimization 或 protection")
-            for knowledge in (root / "knowledge").glob("*/revision-*.json"):
-                entry = read_json(knowledge)
-                used_groups = entry.get("optimization_source_group_ids")
-                if used_groups is None:
-                    used_groups = source_groups_for_evidence(
-                        root, entry.get("evidence_refs", []) + entry.get("contrary_refs", [])
-                    )
-                if groups.intersection(used_groups):
-                    raise ATKError("COMPARISON_INVALID", "holdout 来源组已用于优化知识")
-            exposure_path = root / "source-exposure.json"
-            exposure = read_json(exposure_path) if exposure_path.exists() else {"groups": {}}
-            for group in groups:
-                previous = exposure["groups"].get(group)
-                if previous and (previous["round_id"], previous["milestone_id"]) != (round_id, milestone):
-                    raise ATKError("COMPARISON_INVALID", "holdout 来源组已在其他里程碑暴露")
-        usage_path = folder / "budget-usage.json"
-        usage = read_json(usage_path) if usage_path.exists() else {"executions": 0, "probes": 0, "reservations": []}
-        predecessor_id = request.get("retry_batch_id") or request.get("continue_batch_id")
-        if predecessor_id and any(
-            reservation.get("retry_batch_id") == predecessor_id
-            or reservation.get("continue_batch_id") == predecessor_id
+            raise ATKError("COMPARISON_INVALID", "holdout 需要冻结最终里程碑，且不能有未决候选")
+        groups = {case["source_group_id"] for case in holdout}
+        if not all(groups):
+            raise ATKError("COMPARISON_INVALID", "holdout 来源组未知")
+        for dataset in (root / "datasets").glob("*/manifest.json"):
+            for case in load_cases(root, dataset.parent.name).values():
+                if case["source_group_id"] in groups and case["usage"] != "holdout":
+                    raise ATKError("COMPARISON_INVALID", "holdout 来源组已用于 optimization 或 protection")
+        for knowledge in (root / "knowledge").glob("*/revision-*.json"):
+            entry = read_json(knowledge)
+            used_groups = entry.get("optimization_source_group_ids")
+            if used_groups is None:
+                used_groups = source_groups_for_evidence(
+                    root, entry.get("evidence_refs", []) + entry.get("contrary_refs", [])
+                )
+            if groups.intersection(used_groups):
+                raise ATKError("COMPARISON_INVALID", "holdout 来源组已用于优化知识")
+        exposure_path = root / "source-exposure.json"
+        exposure = read_json(exposure_path) if exposure_path.exists() else {"groups": {}}
+        for group in groups:
+            previous = exposure["groups"].get(group)
+            if previous and (previous["round_id"], previous["milestone_id"]) != (round_id, milestone):
+                raise ATKError("COMPARISON_INVALID", "holdout 来源组已在其他里程碑暴露")
+    usage_path = folder / "budget-usage.json"
+    usage = read_json(usage_path) if usage_path.exists() else {"executions": 0, "probes": 0, "reservations": []}
+    predecessor_id = request.get("retry_batch_id") or request.get("continue_batch_id")
+    if predecessor_id and any(
+        reservation.get("retry_batch_id") == predecessor_id or reservation.get("continue_batch_id") == predecessor_id
+        for reservation in usage["reservations"]
+    ):
+        raise ATKError("COMPARISON_INVALID", "批次已有续跑；请使用后继批次")
+    if (
+        purpose == "evaluation"
+        and phase in {"final", "external_fix"}
+        and not predecessor_id
+        and any(
+            reservation.get("phase") == phase and reservation.get("revision_id") == request["revision_id"]
             for reservation in usage["reservations"]
-        ):
-            raise ATKError("COMPARISON_INVALID", "批次已有续跑；请使用后继批次")
-        if (
-            purpose == "evaluation"
-            and phase in {"final", "external_fix"}
-            and not predecessor_id
-            and any(
-                reservation.get("phase") == phase and reservation.get("revision_id") == request["revision_id"]
-                for reservation in usage["reservations"]
-            )
-        ):
-            raise ATKError("COMPARISON_INVALID", "最终验证此侧已运行；请重新判定已有证据")
-        counter = "probes" if purpose == "diagnostic_probe" else "executions"
-        limit = budget.get(counter, 0)
-        if type(limit) is not int or limit < 0 or usage[counter] + len(attempts) > limit:
-            raise ATKError("BUDGET_EXHAUSTED", f"{counter} 预算不足以覆盖 {len(attempts)} 次 attempt")
-        if (
-            probe_config
-            and sum(
-                reservation["attempts"]
-                for reservation in usage["reservations"]
-                if reservation.get("probe_authorization_id") == permission_id
-            )
-            + len(attempts)
-            > max_calls
-        ):
-            raise ATKError("BUDGET_EXHAUSTED", "超出探针许可 max_calls")
-        if purpose == "evaluation" and phase not in {"final", "external_fix"}:
-            final_needed = (
-                (1 if round_data.get("external_fix_identity") else 2)
-                * len(set(plan["case_ids"]))
-                * plan["final_repeats"]
-            )
-            final_spent = sum(
-                reservation["attempts"]
-                for reservation in usage["reservations"]
-                if reservation.get("phase") in {"final", "external_fix"}
-            )
-            if limit - usage["executions"] - len(attempts) < max(0, final_needed - final_spent):
-                raise ATKError("BUDGET_EXHAUSTED", "本次运行会消耗预留的最终验证预算")
-        if purpose == "evaluation" and phase in {"final", "external_fix"} and round_data["status"] != "finalizing":
-            round_data.setdefault("transitions", []).append(
-                {
-                    "action": "start_finalizing",
-                    "from_status": round_data["status"],
-                    "to_status": "finalizing",
-                    "reason": "冻结的最终执行",
-                    "at": now(),
-                }
-            )
-            round_data["status"] = "finalizing"
-            round_data["state_version"] += 1
-            write_json(folder / "round.json", round_data)
-        usage[counter] += len(attempts)
-        usage["reservations"].append(
+        )
+    ):
+        raise ATKError("COMPARISON_INVALID", "最终验证此侧已运行；请重新判定已有证据")
+    counter = "probes" if purpose == "diagnostic_probe" else "executions"
+    limit = budget.get(counter, 0)
+    if type(limit) is not int or limit < 0 or usage[counter] + len(attempts) > limit:
+        raise ATKError("BUDGET_EXHAUSTED", f"{counter} 预算不足以覆盖 {len(attempts)} 次 attempt")
+    if (
+        probe_config
+        and sum(
+            reservation["attempts"]
+            for reservation in usage["reservations"]
+            if reservation.get("probe_authorization_id") == permission_id
+        )
+        + len(attempts)
+        > max_calls
+    ):
+        raise ATKError("BUDGET_EXHAUSTED", "超出探针许可 max_calls")
+    if purpose == "evaluation" and phase not in {"final", "external_fix"}:
+        final_needed = (
+            (1 if round_data.get("external_fix_identity") else 2) * len(set(plan["case_ids"])) * plan["final_repeats"]
+        )
+        final_spent = sum(
+            reservation["attempts"]
+            for reservation in usage["reservations"]
+            if reservation.get("phase") in {"final", "external_fix"}
+        )
+        if limit - usage["executions"] - len(attempts) < max(0, final_needed - final_spent):
+            raise ATKError("BUDGET_EXHAUSTED", "本次运行会消耗预留的最终验证预算")
+    if purpose == "evaluation" and phase in {"final", "external_fix"} and round_data["status"] != "finalizing":
+        round_data.setdefault("transitions", []).append(
             {
-                "batch_id": batch_id,
-                "purpose": purpose,
-                "phase": phase if purpose == "evaluation" else None,
-                "revision_id": request["revision_id"],
-                "retry_batch_id": request.get("retry_batch_id"),
-                "continue_batch_id": request.get("continue_batch_id"),
-                "probe_authorization_id": permission_id if purpose == "diagnostic_probe" else None,
-                "attempts": len(attempts),
+                "action": "start_finalizing",
+                "from_status": round_data["status"],
+                "to_status": "finalizing",
+                "reason": "冻结的最终执行",
                 "at": now(),
             }
         )
-        write_json(usage_path, usage)
-        if holdout:
-            for group in groups:
-                entry = exposure["groups"].setdefault(
-                    group, {"round_id": round_id, "milestone_id": milestone, "batch_ids": []}
-                )
-                entry["batch_ids"].append(batch_id)
-            write_json(exposure_path, exposure)
-        return probe_config
+        round_data["status"] = "finalizing"
+        round_data["state_version"] += 1
+        write_json(folder / "round.json", round_data)
+    usage[counter] += len(attempts)
+    usage["reservations"].append(
+        {
+            "batch_id": batch_id,
+            "purpose": purpose,
+            "phase": phase if purpose == "evaluation" else None,
+            "revision_id": request["revision_id"],
+            "retry_batch_id": request.get("retry_batch_id"),
+            "continue_batch_id": request.get("continue_batch_id"),
+            "probe_authorization_id": permission_id if purpose == "diagnostic_probe" else None,
+            "attempts": len(attempts),
+            "at": now(),
+        }
+    )
+    write_json(usage_path, usage)
+    if holdout:
+        for group in groups:
+            entry = exposure["groups"].setdefault(
+                group, {"round_id": round_id, "milestone_id": milestone, "batch_ids": []}
+            )
+            entry["batch_ids"].append(batch_id)
+        write_json(exposure_path, exposure)
+    return probe_config
 
 
 def run_evaluation(root: Path, request: dict) -> dict:
-    with locked(root):
-        return _run_evaluation_locked(root, request)
-
-
-def _run_evaluation_locked(root: Path, request: dict) -> dict:
     project = json.loads((root / "project.json").read_text(encoding="utf-8"))
     if project.get("analysis_only") and request.get("purpose") != "diagnostic_probe":
         raise ATKError("NOT_REPLAYABLE", "仅分析项目执行前需明确配置 runtime")

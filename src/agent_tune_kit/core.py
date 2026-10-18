@@ -3,16 +3,13 @@
 from __future__ import annotations
 
 import csv
-import fcntl
 import hashlib
 import html
 import json
 import os
 import re
 import tempfile
-import threading
 import uuid
-from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -46,7 +43,6 @@ ERROR_CODES = {
     "DIRTY_BASELINE",
     "UNSUPPORTED_GIT_STATE",
 }
-_held_locks = threading.local()
 
 
 class ATKError(Exception):
@@ -114,28 +110,6 @@ def atomic_write(path: Path, data: bytes, *, immutable: bool = False) -> None:
 
 def write_json(path: Path, value: dict, *, immutable: bool = False) -> None:
     atomic_write(path, canonical(value) + b"\n", immutable=immutable)
-
-
-@contextmanager
-def locked(root: Path):
-    root.mkdir(parents=True, exist_ok=True)
-    key = str(root.resolve())
-    held = getattr(_held_locks, "roots", set())
-    if key in held:
-        yield
-        return
-    with (root / ".operation.lock").open("a+b") as handle:
-        try:
-            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError as exc:
-            raise ATKError("WORKSPACE_CONFLICT", "另一个 ATK 操作正在运行") from exc
-        held.add(key)
-        _held_locks.roots = held
-        try:
-            yield
-        finally:
-            held.remove(key)
-            fcntl.flock(handle, fcntl.LOCK_UN)
 
 
 def store_object(root: Path, family: str, value: dict) -> Path:

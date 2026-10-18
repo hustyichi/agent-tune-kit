@@ -419,18 +419,19 @@ class InstallPluginCliTests(unittest.TestCase):
         request = run_dir / "request.json"
         output = run_dir / "response.json"
         request.write_text(json.dumps({"project_path": str(project), "analysis_only": True}), encoding="utf-8")
+        command = [
+            str(atk),
+            "internal",
+            "initialize_project",
+            "--plugin-root",
+            str(target),
+            "--request",
+            str(request),
+            "--output",
+            str(output),
+        ]
         internal = subprocess.run(
-            [
-                str(atk),
-                "internal",
-                "initialize_project",
-                "--plugin-root",
-                str(target),
-                "--request",
-                str(request),
-                "--output",
-                str(output),
-            ],
+            command,
             cwd=run_dir,
             text=True,
             stdout=subprocess.PIPE,
@@ -440,6 +441,34 @@ class InstallPluginCliTests(unittest.TestCase):
         )
         self.assertEqual(internal.returncode, 0, internal.stderr)
         self.assertEqual(json.loads(output.read_text(encoding="utf-8"))["status"], "ok")
+        self.assertEqual({p.name for p in (project / ".atk").iterdir()}, {"project.json"})
+        for capture, helpers in (
+            ({}, set()),
+            ({"format": "native", "logs": [{"glob": "logs/service.log", "format": "text"}]}, {"logging_capture.py"}),
+            ({"format": "atk_json"}, {"logging_json.py"}),
+        ):
+            runtime = run_dir / f"runtime-{capture.get('format', 'none')}"
+            subprocess.run(["git", "init", "-q", str(runtime)], check=True, capture_output=True)
+            request.write_text(
+                json.dumps(
+                    {
+                        "project_path": str(runtime),
+                        "python": str(python),
+                        "command": [str(python), "-c", "print('ok')"],
+                        "components": [],
+                        "allowed_paths": [],
+                        "protected_paths": [],
+                        "external_effects": [],
+                        "runtime_notes": "offline package smoke",
+                        "observability": capture,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            result = subprocess.run(command, cwd=run_dir, text=True, capture_output=True, timeout=20, check=False)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual({p.name for p in (runtime / ".atk/adapters").iterdir()}, {"runner.py"} | helpers)
+            self.assertEqual({p.name for p in (runtime / ".atk").iterdir()}, {"project.json", "runtime.md", "adapters"})
 
 
 if __name__ == "__main__":
