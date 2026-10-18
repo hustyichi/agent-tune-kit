@@ -189,6 +189,7 @@ ATK 会保留任务、实际输出、判定明细、修改和决策记录。需�
 ## 进一步了解
 
 - [完整使用指南](docs/vnext-usage-guide.md)：数据与附件、预算、导入、暂停恢复等进阶用法。
+- [Init 产物精简方案（待确认）](docs/2026-10-18-atk-init-artifact-slimming.md)：按需生成日志辅助模块，自检成功清理、失败保留现场，并去除操作锁依赖；尚未实施。
 - [架构与设计](docs/agent-tune-kit-vnext-refactor-plan.md)：数据模型、版本管理和验证机制。
 - [Python 执行日志与证据采集改造方案](docs/python-execution-evidence-plan.md)：按测试执行保存日志、关联原生审计，并从执行流程减少重复中间资产。
 - [Python 日志改造验收记录](docs/python-execution-evidence-validation.md)：2026-10-14 源码支持附加 logging/Loguru 出口，直接保存原格式日志并提供文件行号引用；已核验原出口保留及手术项目离线三阶段接入。历史五 Case 对比保持原口径。
