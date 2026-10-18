@@ -1,6 +1,6 @@
 # Agent Tune Kit vNext 使用指南
 
-最近核对：2026-10-18（本地源码 Init 产物、自检收尾及去除操作锁依赖；原主体核对日期 2026-09-28）。本次改动尚未发布，发行版能力以实际安装来源为准。产品约束以[正式改造方案](agent-tune-kit-vnext-refactor-plan.md)及后续用户确认的[Init 精简方案](2026-10-18-atk-init-artifact-slimming.md)为准，已实现范围及真实验收状态以[实现记录](vnext-implementation-report.md)为准。
+最近核对：2026-10-18（本地源码 Init/Dataset 产物、自检收尾及去除操作锁依赖；原主体核对日期 2026-09-28）。本次改动尚未发布，发行版能力以实际安装来源为准。产品约束以[正式改造方案](agent-tune-kit-vnext-refactor-plan.md)及后续用户确认的[Init 精简方案](2026-10-18-atk-init-artifact-slimming.md)为准，Dataset 产物规则见第 3 节，已实现范围及真实验收状态以[实现记录](vnext-implementation-report.md)为准。
 
 ## 1. 选择入口
 
@@ -51,6 +51,11 @@ ATK 面向**已有** Agent。用户通过七个 Codex Skill 表达目标；当�
 同一批次内的 attempt 并发及 runner 内部同步保持原有行为。
 
 ## 3. 准备 Case 与附件
+
+Dataset 阶段的常驻文件、来源追溯和临时材料收尾以
+[atk-dataset 生成规则](../skills/atk-dataset/SKILL.md#常驻产物)为准：默认限于 Cases、manifest、评分规格、必要目录切片及短 README；
+复杂转换按需保留一份 `prepare.py`，临时导入源和请求/响应核验后清理，不重复保存原始行或历史输出正文。
+该规则不迁移或清理既有 `.atk` 数据，也不删除原始数据、附件或必要重放资产。
 
 `atk-dataset` 通过显式字段映射生成不可变 Dataset。下面的 JSONL 是最小示意；附件路径相对数据文件所在目录解析，也可使用绝对路径：
 
