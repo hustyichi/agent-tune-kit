@@ -196,18 +196,45 @@ The following detailed documents are in Chinese:
 - [Python log capture](docs/python-execution-evidence-validation.md): local source supports additive logging/Loguru outlets, native per-attempt logs, and file/line references; existing service sinks remain active. Verified offline; this change is not a published release.
 
 <details>
-<summary>Contributing</summary>
+<summary>Local source installation and development</summary>
 
-Install from this repository and run development checks:
+### Install the local development version
+
+With Python 3.11+ and [uv](https://docs.astral.sh/uv/getting-started/installation/) installed, enter your local Agent Tune Kit repository root and run:
 
 ```sh
-uv run --frozen atk install
+uv tool install --force --reinstall --editable .
+atk install
+atk --version
+atk status
+```
+
+The first command installs the CLI from the current directory and provides the shell's `atk` command. It reinstalls local source even if you previously installed from PyPI or the version number is unchanged. `atk install` links the Codex plugin to this repository. No manual packaging, publication, version bump, or test dependencies are needed; build dependencies may still require network access.
+
+If your shell cannot find `atk`, run `uv tool update-shell`, open a new terminal, and continue with `atk install`. Then refresh the Codex plugin list, ensure the plugin is enabled, and open a new session. `atk status` checks local installation only; it does not confirm that Codex has enabled the plugin.
+
+### Update after making changes
+
+- Python code edits: subsequent `atk` calls use local code without reinstallation.
+- Skill edits: the linked plugin reads repository files directly; refresh the Codex plugin list and open a new session.
+- Package metadata changes, installation source changes, or a moved source directory: rerun the installation commands above from the repository root.
+
+Keep the source directory available for the editable installation and plugin link. `atk --version` displays the declared source version, not a count of edits. Continue using the local installation command for updates; `agent-tune-kit@latest` selects the PyPI release.
+
+### Development dependencies and checks (optional)
+
+Skip this section if you only need to install and use the local version. To modify ATK and run checks, execute from the repository root:
+
+```sh
+uv sync --frozen
 uv run --frozen pytest -q
 uv run --frozen ruff check .
 python3 scripts/validate_skill_pack.py
 uv build --no-sources
 ```
 
-For Skill development and internal interfaces, read the [shared Skill workflow](https://github.com/hustyichi/agent-tune-kit/blob/1.0.0/skills/WORKFLOW.md).
+`uv sync --frozen` installs local ATK and the locked development dependencies (pytest, Ruff, and Loguru) into the project's `.venv/`, separate from the CLI environment managed by `uv tool install`. Install the target Agent's dependencies separately in its own project.
+
+For Skill development and internal interfaces, read the [shared Skill workflow](skills/WORKFLOW.md).
 
 </details>

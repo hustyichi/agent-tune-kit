@@ -195,17 +195,44 @@ ATK 会保留任务、实际输出、判定明细、修改和决策记录。需�
 - [实现与验收记录](docs/vnext-implementation-report.md)：已实现能力及尚待验收的范围。
 
 <details>
-<summary>参与开发</summary>
+<summary>本地源码安装与开发</summary>
 
-在本仓库从源码安装并检查：
+### 安装本地开发版本
+
+准备 Python 3.11+ 和 [uv](https://docs.astral.sh/uv/getting-started/installation/)，进入本地 Agent Tune Kit 仓库根目录，执行：
 
 ```sh
-uv run --frozen atk install
+uv tool install --force --reinstall --editable .
+atk install
+atk --version
+atk status
+```
+
+第一条命令从当前目录安装 CLI，并提供终端可用的 `atk`；即使此前安装过 PyPI 版本或版本号未变，也会重新安装本地源码。`atk install` 将 Codex 插件链接到本仓库。无需手动打包、发布或提升版本号，也无需先安装测试依赖；构建依赖仍可能联网下载。
+
+如果终端找不到 `atk`，运行 `uv tool update-shell` 后打开新终端，再继续执行 `atk install`。安装后在 Codex 中刷新插件列表、确认启用插件并打开新会话；`atk status` 只检查本地安装状态，不代表 Codex 已启用插件。
+
+### 修改后如何更新
+
+- 修改 Python 代码：后续 `atk` 调用直接使用本地代码，无需重新安装。
+- 修改 Skills：插件链接直接读取本仓库文件，在 Codex 中刷新插件列表并打开新会话。
+- 修改包元数据、切换安装来源或移动源码目录：在仓库根目录重新执行上面的安装命令。
+
+保留源码目录，避免破坏可编辑安装和插件链接。`atk --version` 显示源码声明的版本号，不代表修改次数。后续更新继续使用本地安装命令；`agent-tune-kit@latest` 获取的是 PyPI 发布版本。
+
+### 开发依赖与检查（按需）
+
+仅安装和使用本地版本无需执行本节。需要修改 ATK 并运行检查时，在仓库根目录执行：
+
+```sh
+uv sync --frozen
 uv run --frozen pytest -q
 uv run --frozen ruff check .
 python3 scripts/validate_skill_pack.py
 uv build --no-sources
 ```
+
+`uv sync --frozen` 将本地 ATK 和锁定的开发依赖（pytest、Ruff、Loguru）安装到项目 `.venv/`，与 `uv tool install` 的 CLI 环境分开管理。目标 Agent 的依赖仍需在其自己的工程中安装。
 
 开发 Skill 或内部接口时，请阅读[共享 Skill 流程](skills/WORKFLOW.md)。
 
