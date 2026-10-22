@@ -1426,7 +1426,7 @@ def rollback_to(repo: Path, root: Path, request: dict) -> dict:
 
 
 @contextmanager
-def temporary_revision(repo: Path, root: Path, round_id: str, target_commit: str):
+def temporary_revision(repo: Path, root: Path, round_id: str, target_commit: str, *, check_only: bool = False):
     """Replay a known checkpoint in the same directory without moving HEAD or index."""
     value = _round(root, round_id)
     candidate_id = value["pending_candidate_id"]
@@ -1454,6 +1454,9 @@ def temporary_revision(repo: Path, root: Path, round_id: str, target_commit: str
     preparation = read_json(_round_path(root, round_id) / "plan.json").get("replay_preparation")
     if not preparation:
         raise ATKError("NOT_REPLAYABLE", "Round 未冻结重放准备")
+    if check_only:
+        yield
+        return
     operation = {
         "id": new_id("operation"),
         "action": "temporary_replay",
@@ -1545,7 +1548,7 @@ def _prepare_replay(repo: Path, preparation: dict) -> None:
 
 
 @contextmanager
-def execution_revision(repo: Path, root: Path, request: dict):
+def execution_revision(repo: Path, root: Path, request: dict, *, check_only: bool = False):
     """Bind an evaluation to actual source content, switching only known commits."""
     round_id = request.get("round_id")
     if not round_id:
@@ -1581,7 +1584,7 @@ def execution_revision(repo: Path, root: Path, request: dict):
             target = checkpoints.get(revision_id)
             if not target:
                 raise ATKError("REVISION_MISMATCH", "运行请求指定了未知 Revision")
-            with temporary_revision(repo, root, round_id, target):
+            with temporary_revision(repo, root, round_id, target, check_only=check_only):
                 yield
             return
         verify_repo(repo, expected_head=candidate["parent_commit"], expected_branch=value["branch"])
@@ -1618,5 +1621,5 @@ def execution_revision(repo: Path, root: Path, request: dict):
         ):
             raise ATKError("WORKSPACE_CONFLICT", "runner 改变了当前检查点源码")
     else:
-        with temporary_revision(repo, root, round_id, target):
+        with temporary_revision(repo, root, round_id, target, check_only=check_only):
             yield

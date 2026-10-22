@@ -10,7 +10,7 @@ import re
 import shutil
 import signal
 import subprocess
-from contextlib import suppress
+from contextlib import contextmanager, suppress
 from importlib import resources
 from pathlib import Path
 
@@ -22,9 +22,11 @@ from .core import (
     digest,
     new_id,
     now,
+    read_assessment,
     read_json,
     safe_id,
     validate_evidence,
+    validate_judger,
     write_json,
 )
 from .evidence import redact
@@ -395,31 +397,43 @@ def source_groups_for_evidence(root: Path, refs: list[dict]) -> list[str]:
 
 
 def _reserve_run(
-    root: Path, request: dict, cases: dict, attempts: list[dict], batch_id: str, project: dict
+    root: Path,
+    request: dict,
+    cases: dict,
+    attempts: list[dict],
+    batch_id: str,
+    project: dict,
+    *,
+    blockers: list | None = None,
 ) -> dict | None:
+    def reject(code, message):
+        if blockers is None:
+            raise ATKError(code, message)
+        blockers.append({"check": "round", "code": code, "message": message})
+
     round_id = request.get("round_id")
     if not round_id:
         if request["purpose"] == "diagnostic_probe" or any(cases[a["case_id"]]["usage"] == "holdout" for a in attempts):
-            raise ATKError("WORKSPACE_CONFLICT", "探针和 holdout 运行需要已记录的 Round")
+            reject("WORKSPACE_CONFLICT", "探针和 holdout 运行需要已记录的 Round")
         return
     folder = root / "rounds" / safe_id(round_id)
     round_data = read_json(folder / "round.json")
     if round_data["status"] not in {"analysis_only", "ready", "optimizing", "finalizing"}:
-        raise ATKError("WORKSPACE_CONFLICT", "Round 已关闭")
+        reject("WORKSPACE_CONFLICT", "Round 已关闭")
     plan = read_json(folder / "plan.json") if (folder / "plan.json").exists() else round_data.get("analysis_plan", {})
     if request["purpose"] == "evaluation" and (
         not plan.get("case_fingerprints")
         or any(plan["case_fingerprints"].get(attempt["case_id"]) != attempt["case_fingerprint"] for attempt in attempts)
     ):
-        raise ATKError("COMPARISON_INVALID", "正式运行的 Case 与冻结数据集不一致")
+        reject("COMPARISON_INVALID", "正式运行的 Case 与冻结数据集不一致")
     if plan.get("run_config_hash") and plan["run_config_hash"] != digest(project):
-        raise ATKError("COMPARISON_INVALID", "项目 runner 配置在 Round 冻结后被修改")
+        reject("COMPARISON_INVALID", "项目 runner 配置在 Round 冻结后被修改")
     if request["purpose"] == "evaluation" and request.get("concurrency", 1) != plan.get("concurrency", 1):
-        raise ATKError("COMPARISON_INVALID", "执行 concurrency 与冻结计划不一致")
+        reject("COMPARISON_INVALID", "执行 concurrency 与冻结计划不一致")
     if request["purpose"] == "evaluation" and request.get(
         "timeout_seconds", plan.get("timeout_seconds", 120)
     ) != plan.get("timeout_seconds", 120):
-        raise ATKError("COMPARISON_INVALID", "执行超时与冻结计划不一致")
+        reject("COMPARISON_INVALID", "执行超时与冻结计划不一致")
     budget = plan.get("budget", {})
     purpose = request["purpose"]
     probe_config = None
@@ -467,7 +481,8 @@ def _reserve_run(
                 )
             )
         ):
-            raise ATKError("WORKSPACE_CONFLICT", "探针命令、Case 或隔离设置未获授权")
+            reject("WORKSPACE_CONFLICT", "探针命令、Case 或隔离设置未获授权")
+            return
         probe_config = {
             "command": probe_command,
             "command_hash": permission["command_hash"],
@@ -477,15 +492,17 @@ def _reserve_run(
             "script_path": str(script_path) if script_path else None,
             "script_sha256": script_hash,
         }
-    elif round_data["status"] == "analysis_only" or not set(a["case_id"] for a in attempts) <= set(plan["case_ids"]):
-        raise ATKError("COMPARISON_INVALID", "正式执行超出冻结 Round 范围")
+    elif round_data["status"] == "analysis_only" or not set(a["case_id"] for a in attempts) <= set(
+        plan.get("case_ids", [])
+    ):
+        reject("COMPARISON_INVALID", "正式执行超出冻结 Round 范围")
     phase = request.get("phase", "incremental")
     if round_data["status"] == "finalizing" and purpose == "evaluation" and phase == "incremental":
-        raise ATKError("WORKSPACE_CONFLICT", "正在收尾的 Round 不能启动增量运行")
+        reject("WORKSPACE_CONFLICT", "正在收尾的 Round 不能启动增量运行")
     if purpose == "evaluation" and phase not in {"incremental", "final", "external_fix"}:
-        raise ATKError("COMPARISON_INVALID", "无法识别评测阶段")
+        reject("COMPARISON_INVALID", "无法识别评测阶段")
     if purpose == "evaluation" and round_data.get("external_fix_identity") and phase != "external_fix":
-        raise ATKError("COMPARISON_INVALID", "外部修复 Round 需要专用验证阶段")
+        reject("COMPARISON_INVALID", "外部修复 Round 需要专用验证阶段")
     if (
         purpose == "evaluation"
         and phase == "external_fix"
@@ -496,13 +513,13 @@ def _reserve_run(
             or request["revision_id"] != round_data["baseline_revision_id"]
         )
     ):
-        raise ATKError("COMPARISON_INVALID", "外部修复验证必须在新 B0 上运行")
+        reject("COMPARISON_INVALID", "外部修复验证必须在新 B0 上运行")
     if (
         purpose == "evaluation"
         and phase == "final"
         and (round_data["pending_candidate_id"] or not round_data["active_candidate_ids"])
     ):
-        raise ATKError("COMPARISON_INVALID", "最终运行需要固定且已采用的 Revision")
+        reject("COMPARISON_INVALID", "最终运行需要固定且已采用的 Revision")
     if (
         purpose == "evaluation"
         and phase in {"final", "external_fix"}
@@ -511,11 +528,11 @@ def _reserve_run(
         selected = request.get("case_ids", [])
         if (
             len(selected) != len(set(selected))
-            or set(selected) != set(plan["case_ids"])
-            or request.get("repeats", 1) != plan["final_repeats"]
+            or set(selected) != set(plan.get("case_ids", []))
+            or request.get("repeats", 1) != plan.get("final_repeats", 1)
             or request["revision_id"] not in {round_data["baseline_revision_id"], round_data["current_revision_id"]}
         ):
-            raise ATKError("COMPARISON_INVALID", "最终运行与冻结 Case 和重复计划不一致")
+            reject("COMPARISON_INVALID", "最终运行与冻结 Case 和重复计划不一致")
     holdout = [cases[a["case_id"]] for a in attempts if cases[a["case_id"]]["usage"] == "holdout"]
     if holdout:
         milestone = request.get("holdout_milestone_id")
@@ -525,14 +542,14 @@ def _reserve_run(
             or not milestone
             or milestone != plan.get("holdout_milestone_id")
         ):
-            raise ATKError("COMPARISON_INVALID", "holdout 需要冻结最终里程碑，且不能有未决候选")
+            reject("COMPARISON_INVALID", "holdout 需要冻结最终里程碑，且不能有未决候选")
         groups = {case["source_group_id"] for case in holdout}
         if not all(groups):
-            raise ATKError("COMPARISON_INVALID", "holdout 来源组未知")
+            reject("COMPARISON_INVALID", "holdout 来源组未知")
         for dataset in (root / "datasets").glob("*/manifest.json"):
             for case in load_cases(root, dataset.parent.name).values():
                 if case["source_group_id"] in groups and case["usage"] != "holdout":
-                    raise ATKError("COMPARISON_INVALID", "holdout 来源组已用于 optimization 或 protection")
+                    reject("COMPARISON_INVALID", "holdout 来源组已用于 optimization 或 protection")
         for knowledge in (root / "knowledge").glob("*/revision-*.json"):
             entry = read_json(knowledge)
             used_groups = entry.get("optimization_source_group_ids")
@@ -541,13 +558,13 @@ def _reserve_run(
                     root, entry.get("evidence_refs", []) + entry.get("contrary_refs", [])
                 )
             if groups.intersection(used_groups):
-                raise ATKError("COMPARISON_INVALID", "holdout 来源组已用于优化知识")
+                reject("COMPARISON_INVALID", "holdout 来源组已用于优化知识")
         exposure_path = root / "source-exposure.json"
         exposure = read_json(exposure_path) if exposure_path.exists() else {"groups": {}}
         for group in groups:
             previous = exposure["groups"].get(group)
             if previous and (previous["round_id"], previous["milestone_id"]) != (round_id, milestone):
-                raise ATKError("COMPARISON_INVALID", "holdout 来源组已在其他里程碑暴露")
+                reject("COMPARISON_INVALID", "holdout 来源组已在其他里程碑暴露")
     usage_path = folder / "budget-usage.json"
     usage = read_json(usage_path) if usage_path.exists() else {"executions": 0, "probes": 0, "reservations": []}
     predecessor_id = request.get("retry_batch_id") or request.get("continue_batch_id")
@@ -555,7 +572,7 @@ def _reserve_run(
         reservation.get("retry_batch_id") == predecessor_id or reservation.get("continue_batch_id") == predecessor_id
         for reservation in usage["reservations"]
     ):
-        raise ATKError("COMPARISON_INVALID", "批次已有续跑；请使用后继批次")
+        reject("COMPARISON_INVALID", "批次已有续跑；请使用后继批次")
     if (
         purpose == "evaluation"
         and phase in {"final", "external_fix"}
@@ -565,11 +582,11 @@ def _reserve_run(
             for reservation in usage["reservations"]
         )
     ):
-        raise ATKError("COMPARISON_INVALID", "最终验证此侧已运行；请重新判定已有证据")
+        reject("COMPARISON_INVALID", "最终验证此侧已运行；请重新判定已有证据")
     counter = "probes" if purpose == "diagnostic_probe" else "executions"
     limit = budget.get(counter, 0)
     if type(limit) is not int or limit < 0 or usage[counter] + len(attempts) > limit:
-        raise ATKError("BUDGET_EXHAUSTED", f"{counter} 预算不足以覆盖 {len(attempts)} 次 attempt")
+        reject("BUDGET_EXHAUSTED", f"{counter} 预算不足以覆盖 {len(attempts)} 次 attempt")
     if (
         probe_config
         and sum(
@@ -580,10 +597,12 @@ def _reserve_run(
         + len(attempts)
         > max_calls
     ):
-        raise ATKError("BUDGET_EXHAUSTED", "超出探针许可 max_calls")
+        reject("BUDGET_EXHAUSTED", "超出探针许可 max_calls")
     if purpose == "evaluation" and phase not in {"final", "external_fix"}:
         final_needed = (
-            (1 if round_data.get("external_fix_identity") else 2) * len(set(plan["case_ids"])) * plan["final_repeats"]
+            (1 if round_data.get("external_fix_identity") else 2)
+            * len(set(plan.get("case_ids", [])))
+            * plan.get("final_repeats", 1)
         )
         final_spent = sum(
             reservation["attempts"]
@@ -591,7 +610,9 @@ def _reserve_run(
             if reservation.get("phase") in {"final", "external_fix"}
         )
         if limit - usage["executions"] - len(attempts) < max(0, final_needed - final_spent):
-            raise ATKError("BUDGET_EXHAUSTED", "本次运行会消耗预留的最终验证预算")
+            reject("BUDGET_EXHAUSTED", "本次运行会消耗预留的最终验证预算")
+    if blockers is not None:
+        return probe_config
     if purpose == "evaluation" and phase in {"final", "external_fix"} and round_data["status"] != "finalizing":
         round_data.setdefault("transitions", []).append(
             {
@@ -630,37 +651,7 @@ def _reserve_run(
     return probe_config
 
 
-def run_evaluation(root: Path, request: dict) -> dict:
-    project = json.loads((root / "project.json").read_text(encoding="utf-8"))
-    if project.get("analysis_only") and request.get("purpose") != "diagnostic_probe":
-        raise ATKError("NOT_REPLAYABLE", "仅分析项目执行前需明确配置 runtime")
-    if project.get("analysis_only") and not all(key in project for key in ("python", "command", "components")):
-        raise ATKError("NOT_REPLAYABLE", "仅分析探针需明确配置 runtime")
-    concurrency = request.get("concurrency", 1)
-    if type(concurrency) is not int or concurrency < 1:
-        raise ATKError("INCOMPLETE_EVIDENCE", "concurrency 必须是正整数")
-    if type(request.get("batch_timeout_seconds", 3600)) is not int or request.get("batch_timeout_seconds", 3600) < 1:
-        raise ATKError("INCOMPLETE_EVIDENCE", "批次超时必须是正整数")
-    for effect in project.get("external_effects", []):
-        if not isinstance(effect, dict) or not isinstance(effect.get("name"), str):
-            raise ATKError("NOT_REPLAYABLE", "外部副作用声明无效")
-        protection = effect.get("protection")
-        if (
-            not isinstance(protection, dict)
-            or protection.get("kind") not in {"test_environment", "stub", "approved_safeguard"}
-            or not isinstance(protection.get("evidence_ref"), str)
-            or not protection["evidence_ref"].strip()
-        ):
-            raise ATKError("NOT_REPLAYABLE", f"外部副作用缺少保护记录：{effect['name']}")
-    repo = Path(project["workspace_path"])
-    plan_path = root / "rounds" / safe_id(request["round_id"]) / "plan.json" if request.get("round_id") else None
-    formal_plan = (
-        read_json(plan_path) if plan_path and plan_path.exists() and request["purpose"] == "evaluation" else {}
-    )
-    formal_timeout = request.get("timeout_seconds", formal_plan.get("timeout_seconds", 120))
-    if type(formal_timeout) not in {int, float} or not math.isfinite(formal_timeout) or formal_timeout <= 0:
-        raise ATKError("INCOMPLETE_EVIDENCE", "执行超时必须是有限正数")
-    version_commands = _version_commands(project["components"])
+def _plan_attempts(root: Path, request: dict, project: dict, cases: dict, formal_timeout: float) -> tuple:
     retry_batch_id = request.get("retry_batch_id")
     continue_batch_id = request.get("continue_batch_id")
     if retry_batch_id and continue_batch_id:
@@ -686,7 +677,6 @@ def run_evaluation(root: Path, request: dict) -> dict:
             expected_value = request.get(key, "incremental") if key == "phase" else request.get(key)
             if expected_value != prior_manifest.get(key):
                 raise ATKError("REVISION_MISMATCH", f"续跑改变了冻结的 {key}")
-    cases = load_cases(root, request["dataset_id"], verify_attachments=True)
     selected = request.get("case_ids", [])
     repeats = request.get("repeats", 1)
     if not predecessor_id and (
@@ -701,7 +691,6 @@ def run_evaluation(root: Path, request: dict) -> dict:
         raise ATKError("INCOMPLETE_EVIDENCE", "运行用途无效")
     if predecessor_id and request["purpose"] != "evaluation":
         raise ATKError("COMPARISON_INVALID", "诊断探针不能续跑为正式证据")
-    batch_id = new_id("batch")
     attempts = []
     if continue_batch_id:
         previous_path = root / "evidence" / safe_id(continue_batch_id) / "request.json"
@@ -798,17 +787,356 @@ def run_evaluation(root: Path, request: dict) -> dict:
         raise ATKError("COMPARISON_INVALID", "runner 配置在续跑前被修改")
     if predecessor_id and prior_manifest.get("timeout_seconds") != formal_timeout:
         raise ATKError("COMPARISON_INVALID", "执行超时在续跑前被修改")
-    runner = root / "adapters" / "runner.py"
-    if not runner.exists():
-        raise ATKError("NOT_REPLAYABLE", f"项目 runner 缺失：{runner}")
-    capture_config = project.get("observability", {})
-    helper = (
-        root / "adapters" / ("logging_capture.py" if capture_config.get("format") == "native" else "logging_json.py")
+    return attempts, prior_manifest, prior_records
+
+
+def _preflight_evaluation(root: Path, request: dict) -> tuple[dict, tuple]:
+    blockers, checks = [], []
+
+    @contextmanager
+    def check(name):
+        before = len(blockers)
+        try:
+            yield
+        except (ATKError, OSError, ValueError, KeyError, TypeError) as error:
+            blockers.append(
+                {
+                    "check": name,
+                    "code": error.code if isinstance(error, ATKError) else "INCOMPLETE_EVIDENCE",
+                    "message": str(error),
+                }
+            )
+            checks.append({"check": name, "status": "blocked"})
+        else:
+            checks.append({"check": name, "status": "blocked" if len(blockers) > before else "checked"})
+
+    project, cases, attempts, prior_manifest, prior_records, formal_plan = {}, {}, [], None, [], {}
+    with check("project"):
+        project = read_json(root / "project.json")
+    with check("runtime"):
+        if project.get("analysis_only") and request.get("purpose") != "diagnostic_probe":
+            raise ATKError("NOT_REPLAYABLE", "仅分析项目执行前需明确配置 runtime")
+        if not all(key in project for key in ("python", "command", "components", "workspace_path")):
+            raise ATKError("NOT_REPLAYABLE", "执行前需明确配置 runtime")
+        if not shutil.which(project["python"]):
+            raise ATKError("NOT_REPLAYABLE", "目标 Python 不存在或不可执行")
+    with check("concurrency"):
+        if type(request.get("concurrency", 1)) is not int or request.get("concurrency", 1) < 1:
+            raise ATKError("INCOMPLETE_EVIDENCE", "concurrency 必须是正整数")
+    with check("batch_timeout"):
+        if (
+            type(request.get("batch_timeout_seconds", 3600)) is not int
+            or request.get("batch_timeout_seconds", 3600) < 1
+        ):
+            raise ATKError("INCOMPLETE_EVIDENCE", "批次超时必须是正整数")
+    with check("external_effects"):
+        effects = project.get("external_effects", [])
+        if not isinstance(effects, list):
+            raise ATKError("NOT_REPLAYABLE", "外部副作用声明无效")
+        for number, effect in enumerate(effects):
+            with check(f"external_effects[{number}]"):
+                if not isinstance(effect, dict) or not isinstance(effect.get("name"), str):
+                    raise ATKError("NOT_REPLAYABLE", "外部副作用声明无效")
+                protection = effect.get("protection")
+                if (
+                    not isinstance(protection, dict)
+                    or protection.get("kind") not in {"test_environment", "stub", "approved_safeguard"}
+                    or not isinstance(protection.get("evidence_ref"), str)
+                    or not protection["evidence_ref"].strip()
+                ):
+                    raise ATKError("NOT_REPLAYABLE", f"外部副作用缺少保护记录：{effect['name']}")
+    with check("plan"):
+        if request.get("round_id"):
+            path = root / "rounds" / safe_id(request["round_id"]) / "plan.json"
+            if path.exists() and request.get("purpose") == "evaluation":
+                formal_plan = read_json(path)
+    formal_timeout = request.get("timeout_seconds", formal_plan.get("timeout_seconds", 120))
+    with check("timeout"):
+        if type(formal_timeout) not in {int, float} or not math.isfinite(formal_timeout) or formal_timeout <= 0:
+            raise ATKError("INCOMPLETE_EVIDENCE", "执行超时必须是有限正数")
+    with check("components"):
+        components = project.get("components", [])
+        if not isinstance(components, list):
+            raise ATKError("INCOMPLETE_EVIDENCE", "components 必须是列表")
+        for number, component in enumerate(components):
+            with check(f"components[{number}]"):
+                _version_commands([component])
+        _version_commands(components)
+    with check("dataset"):
+        cases = load_cases(root, request["dataset_id"])
+    for case in cases.values():
+        for number, attachment in enumerate(case.get("attachments", [])):
+            with check(f"attachments:{case['id']}:{number}"):
+                path = Path(attachment["path"])
+                if not path.is_file() or digest(path) != attachment["sha256"]:
+                    raise ATKError("NOT_REPLAYABLE", f"Case 附件已改变或缺失：{case['id']}：{path}")
+    with check("attempt_plan"):
+        attempts, prior_manifest, prior_records = _plan_attempts(root, request, project, cases, formal_timeout)
+    runner = root / "adapters/runner.py"
+    with check("runner"):
+        if not runner.is_file():
+            raise ATKError("NOT_REPLAYABLE", f"项目 runner 缺失：{runner}")
+        if prior_manifest and prior_manifest.get("runner_hash") != digest(runner):
+            raise ATKError("COMPARISON_INVALID", "runner 在续跑前被修改")
+    with check("capture"):
+        capture = project.get("observability", {})
+        helper = root / "adapters" / ("logging_capture.py" if capture.get("format") == "native" else "logging_json.py")
+        if capture and (not helper.is_file() or digest(helper) != capture.get("logging_helper_sha256")):
+            raise ATKError("COMPARISON_INVALID", "日志采集帮助模块改变或缺失")
+    with check("revision"), execution_revision(Path(project["workspace_path"]), root, request, check_only=True):
+        pass
+    if attempts:
+        with check("round"):
+            _reserve_run(root, request, cases, attempts, "preflight", project, blockers=blockers)
+    else:
+        checks.append({"check": "round", "status": "not_checked", "reason": "attempt_plan 不可用"})
+    calibration = "not_recorded"
+    calibration_issues = []
+    if "evaluation_spec" in request or "judger" in request:
+        try:
+            validate_judger(request.get("evaluation_spec", {}), request.get("judger", {}))
+            calibration = request["judger"]["readiness"]
+        except (ATKError, TypeError, KeyError) as error:
+            calibration = "invalid"
+            calibration_issues.append(str(error))
+    slots = attempts
+    if not slots and isinstance(request.get("case_ids"), list):
+        repeats = request.get("repeats", 1)
+        slots = [
+            {"case_id": case_id, "repeat_index": repeat}
+            for case_id in request["case_ids"]
+            if isinstance(case_id, str)
+            for repeat in range(1, (repeats if type(repeats) is int and repeats > 0 else 1) + 1)
+        ]
+    report_id = new_id("preflight")
+    report_path = root / "preflights" / f"{report_id}.json"
+    report = {
+        "id": report_id,
+        "created_at": now(),
+        "report_path": str(report_path.resolve()),
+        "request_hash": digest(request),
+        "dataset_id": request.get("dataset_id"),
+        "stages": {
+            "preparation": "blocked" if blockers else "ready",
+            "calibration": calibration,
+            "execution": "not_started",
+            "scoring": "not_started",
+        },
+        "blockers": blockers,
+        "calibration_issues": calibration_issues,
+        "checks": checks,
+        "batch_complete": False,
+        "started_count": 0,
+        "planned_count": len(slots),
+        "case_statuses": [
+            {
+                "case_id": a["case_id"],
+                "repeat_index": a["repeat_index"],
+                "status": "blocked" if blockers else "not_started",
+            }
+            for a in slots
+        ],
+        "warnings": [] if project.get("observability") else ["未声明轨迹采集；执行后不能宣称完整批测"],
+    }
+    write_json(report_path, report, immutable=True)
+    return report, (project, cases, attempts, prior_manifest, prior_records, formal_timeout)
+
+
+def preflight_evaluation(root: Path, request: dict) -> dict:
+    """List independent blockers without running commands, switching revisions or spending budget."""
+    return _preflight_evaluation(root, request)[0]
+
+
+def inspect_evaluation(root: Path, request: dict) -> dict:
+    """Derive progress from verified evidence; sealing or scoring alone never means execution completed."""
+    batch_id = request["batch_id"]
+    manifest, records, index = validate_evidence(root, batch_id)
+    if manifest.get("source_type") != "local_runner":
+        raise ATKError("COMPARISON_INVALID", "导入证据不代表本地批测执行")
+    folder = root / "evidence" / safe_id(batch_id)
+    request_path = folder / "request.json"
+    if not request_path.is_file() or digest(request_path) != manifest.get("request_sha256"):
+        raise ATKError("INCOMPLETE_EVIDENCE", "批次执行计划指纹改变")
+    plan = read_json(request_path)
+    config_path = folder / "run-config.json"
+    if not config_path.is_file():
+        raise ATKError("INCOMPLETE_EVIDENCE", "批次运行配置缺失")
+    config = read_json(config_path)
+    if digest(config) != manifest.get("run_config_hash"):
+        raise ATKError("INCOMPLETE_EVIDENCE", "批次运行配置指纹改变")
+    capture_config = config.get("observability", {})
+    trace_roles = {
+        rule["role"]
+        for rule in capture_config.get("artifacts", [])
+        if rule.get("required") and rule["role"] in {"trace", "trajectory", "events"}
+    }
+    confirmed = set(manifest.get("completed_record_ids", []))
+    case_statuses = []
+    for record in records.values():
+        execution = record["execution"]
+        capture = record.get("capture", {})
+        execution_status = execution.get("status", "unknown")
+        if execution_status not in {"completed", "agent_error", "infra_error", "timeout", "cancelled", "unknown"}:
+            execution_status = "unknown"
+        refs = [entry for entry in index.values() if entry.get("execution_id") == execution["id"] and entry.get("path")]
+        trajectory_verified = capture.get("capability") == "workflow" or any(
+            entry.get("role") in trace_roles and Path(entry["path"]).stat().st_size for entry in refs
+        )
+        missing = capture.get("missing", []) + sorted(
+            {"stdout.log", "output.txt"} - {Path(file["path"]).name for file in record.get("files", [])}
+        )
+        evidence_complete = (
+            capture.get("status") == "complete"
+            and not missing
+            and bool(capture.get("files"))
+            and not capture.get("issues")
+            and bool(record.get("files"))
+            and trajectory_verified
+        )
+        case_statuses.append(
+            {
+                "case_id": record["case_id"],
+                "repeat_index": execution["repeat_index"],
+                "record_id": record["id"],
+                "execution_id": execution["id"],
+                "retry_of": execution.get("retry_of"),
+                "execution_status": execution_status if record["id"] in confirmed else "unknown",
+                "agent_started": execution.get(
+                    "agent_started", True if execution_status in {"completed", "agent_error", "timeout"} else None
+                ),
+                "evidence_status": "verified" if evidence_complete else "incomplete",
+                "trajectory_status": "verified" if trajectory_verified else "missing_or_undeclared",
+                "missing": missing,
+                "issues": capture.get("issues", []),
+                "output_ref": {"batch_id": batch_id, "evidence_id": record["id"]},
+                "attempt_dir": record.get("source_locator"),
+                "files": [
+                    {"path": entry["path"], "role": entry["role"], "evidence_id": entry["evidence_id"]}
+                    for entry in refs
+                ],
+            }
+        )
+    for attempt in plan["attempts"]:
+        if attempt["record_id"] in records:
+            continue
+        not_started = attempt["record_id"] in manifest.get("not_started_record_ids", [])
+        case_statuses.append(
+            {
+                "case_id": attempt["case_id"],
+                "repeat_index": attempt["repeat_index"],
+                "record_id": attempt["record_id"],
+                "execution_id": attempt["execution_id"],
+                "execution_status": "not_started" if not_started else "unknown",
+                "agent_started": False if not_started else None,
+                "evidence_status": "missing",
+                "trajectory_status": "missing_or_undeclared",
+                "attempt_dir": str(folder / "attempts" / attempt["execution_id"]),
+                "files": [
+                    {"path": entry["path"], "role": entry["role"], "evidence_id": entry["evidence_id"]}
+                    for entry in index.values()
+                    if entry.get("execution_id") == attempt["execution_id"] and entry.get("path")
+                ],
+            }
+        )
+    latest = {(item["case_id"], item["repeat_index"]): item for item in case_statuses}
+    for item in case_statuses:
+        item["superseded"] = latest[(item["case_id"], item["repeat_index"])] is not item
+    executed = len(case_statuses) == manifest["planned_count"] and all(
+        item["execution_status"] in {"completed", "agent_error"} for item in latest.values()
     )
-    if capture_config and (not helper.is_file() or digest(helper) != capture_config.get("logging_helper_sha256")):
-        raise ATKError("COMPARISON_INVALID", "日志采集帮助模块改变或缺失")
-    if predecessor_id and prior_manifest.get("runner_hash") != digest(runner):
-        raise ATKError("COMPARISON_INVALID", "runner 在续跑前被修改")
+    verified = bool(latest) and all(item["evidence_status"] == "verified" for item in latest.values())
+    identity_issues = [
+        component for component in manifest.get("actual_components", []) if component.get("identity_issue")
+    ]
+    complete = executed and verified and manifest["status"] == "sealed" and not identity_issues
+    calibration, scoring = "not_recorded", "not_started"
+    if manifest.get("preflight_ref"):
+        path = Path(manifest["preflight_ref"])
+        if not path.is_file() or digest(path) != manifest.get("preflight_sha256"):
+            raise ATKError("INCOMPLETE_EVIDENCE", "预检报告缺失或指纹改变")
+        calibration = read_json(path)["stages"]["calibration"]
+    if request.get("assessment_id"):
+        assessment, rows = read_assessment(root, request["assessment_id"])
+        if assessment["batch_id"] != batch_id:
+            raise ATKError("COMPARISON_INVALID", "Assessment 不属于本次批次")
+        expected = {(rid, dim) for rid in records for dim in assessment["evaluation_spec"]["dimensions"]}
+        actual = {(row["record_id"], row["dimension"]) for row in rows}
+        if actual != expected or len(rows) != len(expected):
+            raise ATKError("INCOMPLETE_EVIDENCE", "评分未覆盖全部记录和维度")
+        validate_judger(assessment["evaluation_spec"], assessment["judger"])
+        calibration = assessment["judger"]["readiness"]
+        scoring = "completed"
+    return {
+        "batch_id": batch_id,
+        "manifest_ref": str(folder / "manifest.json"),
+        "summary_ref": str(folder / "execution-summary.json"),
+        "assessment_id": request.get("assessment_id"),
+        "stages": {
+            "preparation": "ready",
+            "calibration": calibration,
+            "execution": "completed" if executed else "incomplete",
+            "scoring": scoring,
+        },
+        "evidence_status": "verified" if verified else "incomplete",
+        "batch_complete": complete,
+        "identity_issues": identity_issues,
+        "evaluation_complete": complete and scoring == "completed" and calibration == "calibrated",
+        "planned_count": manifest["planned_count"],
+        "started_count": sum(item["agent_started"] is True for item in case_statuses),
+        "confirmed_count": len(confirmed),
+        "slot_count": len(latest),
+        "case_statuses": case_statuses,
+    }
+
+
+def run_evaluation(root: Path, request: dict) -> dict:
+    preflight, prepared = _preflight_evaluation(root, request)
+    if preflight["blockers"]:
+        raise ATKError(
+            preflight["blockers"][0]["code"],
+            "；".join(item["message"] for item in preflight["blockers"]),
+            artifact_refs=[preflight],
+        )
+    batch_id = new_id("batch")
+    try:
+        return _execute_evaluation(root, request, preflight, prepared, batch_id)
+    except (ATKError, OSError, ValueError, KeyError) as error:
+        folder = root / "evidence" / batch_id
+        receipt = {
+            "preflight_ref": preflight["report_path"],
+            "batch_id": batch_id,
+            "batch_complete": False,
+            "execution_status": "unknown" if folder.exists() else "not_started",
+            "evidence_dir": str(folder) if folder.exists() else None,
+            "case_statuses": [
+                {
+                    "case_id": attempt["case_id"],
+                    "repeat_index": attempt["repeat_index"],
+                    "execution_status": "unknown" if folder.exists() else "not_started",
+                    "attempt_dir": str(folder / "attempts" / attempt["execution_id"]) if folder.exists() else None,
+                }
+                for attempt in prepared[2]
+            ],
+            "error": str(error),
+        }
+        receipt_path = root / "preflights" / f"{preflight['id']}-execution-error.json"
+        write_json(receipt_path, receipt, immutable=True)
+        raise ATKError(
+            error.code if isinstance(error, ATKError) else "INCOMPLETE_EVIDENCE",
+            str(error),
+            artifact_refs=[{**receipt, "report_path": str(receipt_path)}],
+        ) from error
+
+
+def _execute_evaluation(root: Path, request: dict, preflight: dict, prepared: tuple, batch_id: str) -> dict:
+    project, cases, attempts, prior_manifest, prior_records, formal_timeout = prepared
+    repo = Path(project["workspace_path"])
+    concurrency = request.get("concurrency", 1)
+    version_commands = _version_commands(project["components"])
+    retry_batch_id = request.get("retry_batch_id")
+    continue_batch_id = request.get("continue_batch_id")
+    predecessor_id = retry_batch_id or continue_batch_id
+    runner = root / "adapters" / "runner.py"
     with execution_revision(repo, root, request):
         probe_config = _reserve_run(root, request, cases, attempts, batch_id, project)
         folder = root / "evidence" / batch_id
@@ -870,6 +1198,8 @@ def run_evaluation(root: Path, request: dict) -> dict:
         except OSError as exc:
             runner_start_error = str(exc)
             result = subprocess.CompletedProcess(command, 127, b"", b"")
+        for name, data in (("runner.stdout.log", result.stdout), ("runner.stderr.log", result.stderr)):
+            atomic_write(folder / name, redact(data.decode("utf-8", errors="replace")).encode(), immutable=True)
         versions_after = _probe_versions(repo, version_commands)
         if batch_path.exists():
             try:
@@ -1077,20 +1407,61 @@ def run_evaluation(root: Path, request: dict) -> dict:
     for record in records:
         for number, file in enumerate(record.get("capture", {}).get("files", [])):
             path = Path(file["path"])
-            if not path.resolve().is_relative_to((root / "evidence").resolve()) or digest(path) != file["sha256"]:
+            directory = (
+                root
+                / "evidence"
+                / safe_id(record["execution"]["batch_id"])
+                / "attempts"
+                / safe_id(record["execution"]["id"])
+            )
+            if (
+                not path.resolve().is_relative_to(directory.resolve())
+                or not path.is_file()
+                or digest(path) != file["sha256"]
+            ):
                 raise ATKError("INCOMPLETE_EVIDENCE", "采集文件路径或指纹无效")
             evidence_index.append(
                 {
                     "evidence_id": f"{record['execution']['id']}:file:{number}",
                     "execution_id": record["execution"]["id"],
                     "case_id": record["case_id"],
-                    "kind": "events" if file["role"] == "events" else "native_artifact",
+                    "kind": "events"
+                    if file["role"] == "events"
+                    and record.get("capture", {}).get("format") != "native"
+                    and path.name == "events.jsonl"
+                    else "native_artifact",
                     "role": file["role"],
                     **({"format": file["format"]} if "format" in file else {}),
                     "path": str(path),
                     "fingerprint": file["sha256"],
                     "locator": str(path),
                     "origin": "diagnostic_probe" if request["purpose"] == "diagnostic_probe" else "original_execution",
+                    "source_component": "target_runner",
+                }
+            )
+    for record in records:
+        directory = (
+            root
+            / "evidence"
+            / safe_id(record["execution"]["batch_id"])
+            / "attempts"
+            / safe_id(record["execution"]["id"])
+        ).resolve()
+        for number, file in enumerate(record.get("files", [])):
+            path = Path(file["path"])
+            if not path.resolve().is_relative_to(directory) or not path.is_file() or digest(path) != file["sha256"]:
+                raise ATKError("INCOMPLETE_EVIDENCE", "执行产物路径或指纹无效")
+            evidence_index.append(
+                {
+                    "evidence_id": f"{record['execution']['id']}:output:{number}",
+                    "execution_id": record["execution"]["id"],
+                    "case_id": record["case_id"],
+                    "kind": "execution_file",
+                    "role": file["role"],
+                    "path": str(path),
+                    "fingerprint": file["sha256"],
+                    "locator": str(path),
+                    "origin": "original_execution" if request["purpose"] == "evaluation" else "diagnostic_probe",
                     "source_component": "target_runner",
                 }
             )
@@ -1108,6 +1479,10 @@ def run_evaluation(root: Path, request: dict) -> dict:
             files.extend((path, "service_log", rule["format"]) for path in sorted(directory.glob(rule["glob"])))
         for rule in project.get("observability", {}).get("artifacts", []):
             files.extend((path, rule["role"], None) for path in sorted(directory.glob(rule["glob"])))
+        known = {path.resolve() for path, _, _ in files}
+        files.extend(
+            (path, "partial_output", None) for path in sorted(directory.rglob("*")) if path.resolve() not in known
+        )
         for number, (path, role, format) in enumerate(files):
             if not path.is_file() or not path.resolve().is_relative_to(directory.resolve()):
                 continue
@@ -1117,7 +1492,9 @@ def run_evaluation(root: Path, request: dict) -> dict:
                     "execution_id": attempt["execution_id"],
                     "case_id": attempt["case_id"],
                     "execution_status": "unknown",
-                    "kind": "events" if role == "events" else "native_artifact",
+                    "kind": "events"
+                    if role == "events" and not native and path.name == "events.jsonl"
+                    else "native_artifact",
                     "role": role,
                     **({"format": format} if format else {}),
                     "path": str(path),
@@ -1127,10 +1504,26 @@ def run_evaluation(root: Path, request: dict) -> dict:
                     "source_component": "target_runner",
                 }
             )
+    for name in ("runner.stdout.log", "runner.stderr.log"):
+        path = folder / name
+        evidence_index.append(
+            {
+                "evidence_id": f"{batch_id}:{name}",
+                "kind": "execution_file",
+                "role": "runner_log",
+                "path": str(path),
+                "fingerprint": digest(path),
+                "locator": str(path),
+                "origin": request["purpose"],
+                "source_component": "target_runner",
+            }
+        )
     fixed_components = [component for component in actual_components if component.get("change_role") == "fixed"]
     manifest = {
         "schema_version": 2,
         "id": batch_id,
+        "preflight_ref": preflight["report_path"],
+        "preflight_sha256": digest(Path(preflight["report_path"])),
         "created_at": now(),
         "purpose": request["purpose"],
         "phase": request.get("phase", "incremental") if request["purpose"] == "evaluation" else None,
@@ -1191,4 +1584,6 @@ def run_evaluation(root: Path, request: dict) -> dict:
         "unknown_record_ids": sorted(unknown),
     }
     write_json(folder / "manifest.json", manifest, immutable=True)
-    return manifest
+    summary = inspect_evaluation(root, {"batch_id": batch_id})
+    write_json(folder / "execution-summary.json", summary, immutable=True)
+    return {**manifest, "evaluation_status": summary}

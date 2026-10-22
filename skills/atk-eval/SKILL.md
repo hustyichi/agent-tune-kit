@@ -1,20 +1,56 @@
 ---
 name: atk-eval
-description: 按明确且经过校准的评测标准运行、导入或重新判定 Agent 证据。
+description: 分开完成准备、校准、执行和评分，按 Case 核验运行证据后报告批测状态。
 ---
 
 # 评测证据
 
 阅读 `../WORKFLOW.md`，遵循其中默认中文的产物规则。明确选择 `run`、`import` 或 `reassess`。
-配置采集时检查各 Record 的 `capture.status/missing/issues`，并通过 `view_execution` 核对声明阶段。
-执行完成与日志完整分别判断；缺失证据只影响需要它的维度。原生审计通过现有批次引用读取，不重复导入。
-运行前先配置 runtime。`concurrency` 使用 Round 计划冻结的正整数，默认 1。
-默认 runner 限制活跃 attempt 数，并随完成写入结果。中断后检查 `running_record_ids`、`completed_record_ids` 和
-`not_started_record_ids`；仍兼容旧单运行适配器。Case 附件缺失或改变会阻断重放，需导入新 Dataset；已冻结时另建 Round。
-每次 attempt 有独立输出目录，会话和外部写入隔离仍由目标 Agent 提供。
 
-运行调用 `run_evaluation`，指定 Dataset ID、Case ID、Revision ID、Round ID（已冻结时）、重复次数、冻结的
-`timeout_seconds`、用途及 `phase=incremental/final`。最终验证必须覆盖冻结两侧，各运行一次；候选工作前预留所有 attempts。
+## 四个阶段分别报告
+
+`run` 依次记录准备、校准、执行、评分四个阶段。校准、数据准入、自检、导入和评分都不能替代目标 Agent 批量执行。
+用户只调用本 Skill 且没有指定分支时，已有 runtime 和 Dataset 默认走 `run`；不要自行降为仅校准后收尾。
+
+1. **准备**：确定 Dataset、Case、Revision、重复次数、并发与超时，调用 `preflight_evaluation`。
+   一次展示返回的全部 `blockers` 和 `not_checked` 项，给出报告路径及实际启动数（预检为 0）。
+   它只检查本地条件，不调用 Agent、服务版本命令、不切换 Revision、不预留预算。
+   外部副作用保护需有真实依据；不得自动添加虚假的 stub 或保护记录来消除阻塞。
+   Case 附件变化需新 Dataset，已冻结时另建 Round；运行配置与冻结条件不符也先修复。
+2. **校准**：按后文定义有版本的 `evaluation_spec`、`judger` 和确认的正反示例。
+   可把二者随预检请求提交，得到独立的 `calibration` 状态；未提供标为 `not_recorded`。
+   准入或 checker 单测只能支持对应规则的校准，不能计入 Agent 执行数量。
+   未校准不禁止单独取证，但不能宣称已完成正式评分或进入比较门禁。预检的 `calibration_issues` 单独报告。
+3. **执行**：调用 `run_evaluation`，它会重新预检，避免沿用过期的 ready 结论。
+   指定 Dataset ID、Case ID、Revision ID、Round ID（已冻结时）、重复次数、冻结的
+   `timeout_seconds`、用途及 `phase=incremental/final`。轮外运行提供明确 `revision_commit`。
+   `concurrency` 用冻结的正整数，默认 1。每次 attempt 有独立目录，外部会话隔离由目标 Agent 提供。
+   最终验证覆盖冻结两侧，各运行一次；候选工作前预留全部 attempts。
+4. **评分**：先核对执行证据，再调用 `store_assessment`。对未执行槽位不得补造输出或判定为业务失败。
+   `inspect_evaluation` 带 `batch_id` 和明确的 `assessment_id` 核验评分覆盖；不按最新目录猜测 Assessment。
+
+## 执行证据与完成条件
+
+每次预检保存在 `.atk/preflights/<id>.json`；受阻不创建伪 Execution 或 EvidenceBatch。
+错误响应的 `artifact_refs` 仍返回报告。执行后失败的报告还给出实际批次目录，必须保留已落盘现场。
+正式执行证据位于 `.atk/evidence/<batch-id>/`：`request.json` 是 Case 与 attempt 的计划，`batch.json` 是运行中状态，
+`records.jsonl` 保存结果，`execution-summary.json` 是封存时的阶段和逐 Case 摘要。
+`attempts/<execution-id>/` 保留 `input.json`、`attachments.json`、脱敏的 `stdout.log`、`output.txt`、
+原生日志或 `events.jsonl`，以及目标 Agent 写入的实际产物；runner 日志位于批次根目录。
+配置 `observability.logs/artifacts` 收集原生文件，要求 adapter 把工作区产物与轨迹存入本次 attempt 的 `{output_dir}`。
+外部路径不会自动归档；至少声明真实 `required_stages`，或把原生轨迹声明为必需的 `trace/trajectory/events` artifact。
+生命周期事件和 stderr 兜底只说明 attempt 运行，不能声称有完整 Agent 轨迹。
+超大行、解码失败、缺少必需日志和超时都会留缺口；不得隐瞒或补造内容。
+
+每次报告前用 `inspect_evaluation` 重新核对记录、计划、配置和文件指纹；不要仅信任旧摘要。
+结合 `case_statuses`、`capture.status/missing/issues` 与 `view_execution` 检查每个 Case 的状态和引用。
+只有返回 `batch_complete=true` 才可说“批测执行与证据核验完成”；`evaluation_complete=true` 才可说正式评测完成。
+`sealed` 仅表示批次已封存，CLI `status=ok` 只表示内部操作返回成功，二者都不等于批测完成。
+Agent 正常结束但业务失败仍是已执行，是否通过由 Assessment 决定；基础设施失败、超时、未知或未开始槽位不得报完整。
+评分可以针对已有部分证据进行，但不能让不完整批次变成完整。证据缺失仅影响依赖它的判定维度。
+收尾明确四阶段状态、计划/启动/确认数量、阻塞项、逐 Case 摘要及证据目录，禁止把校准结果叫作批测结果。
+正式证据、预检与失败报告均保留，不按 init/dataset 临时文件规则清理。
+
 关联外部修复 Round 仅在新 B0 上运行 `phase=external_fix`，包含原受影响及保护 Case。
 直接组件检查是另一个获准的 `diagnostic_probe`，需通过的 Assessment，不能混为端到端运行。
 
@@ -48,3 +84,5 @@ CSV 嵌套字段在 `json_columns` 声明；来源字段名变更在 `mapping.tr
 向 `store_assessment` 提交每条记录、每个维度的完整判定行，每项引用 `{batch_id,evidence_id}`。
 CSV 是评分明细唯一权威来源。新标准创建新 Assessment，并使旧比较失效；不要原地修改旧 Assessment。
 需要时用 `render_assessment_html` 从封存 CSV 重建已转义的本地视图，不能把 HTML 当作独立评分来源。
+
+授权重试保留所有历史 attempts；完成条件按每个 Case／重复槽位的最后一次授权执行核对，旧失败在逐 Case 摘要中标为 `superseded`，不改写为成功。

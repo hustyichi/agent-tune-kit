@@ -144,6 +144,11 @@ $atk-decide Save the analysis and close this round without adopting changes.
 
 To test improvements later, add Agent runtime configuration and a Git baseline while keeping existing evidence. See the [usage guide](https://github.com/hustyichi/agent-tune-kit/blob/1.0.0/docs/vnext-usage-guide.md) for import formats and mappings.
 
+`atk-eval` reports preparation, calibration, execution, and scoring separately. Preflight lists local blockers together;
+per-case status, actual outputs, logs, and traces remain in the target project's `.atk/`. Batch completion requires
+verified execution evidence for every planned slot; calibration or a `sealed` batch alone is insufficient.
+See the [usage guide](docs/vnext-usage-guide.md).
+
 ## Review results and continue
 
 Results are saved under `.atk/` **in your Agent project**. Ask Codex to help review them:

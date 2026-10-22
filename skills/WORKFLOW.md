@@ -93,5 +93,11 @@ workaround 不表示外部 Issue 已解决。
 已有 Validation 时必须引用。正常 `keep` 要求匹配且通过的 Validation；记录试用例外不能抹去原验证结果。
 拒绝或延期通过记录的操作恢复封存候选的父内容，并保留证据。
 
+`atk-eval run` 将准备、校准、执行、评分分开报告。`preflight_evaluation` 汇总本地阻塞项并保存报告，
+不调用 Agent、切换版本或扣预算。`run_evaluation` 执行前重新预检；错误响应也应读取 `artifact_refs`。
+完成前调用 `inspect_evaluation` 验证逐 Case 状态和实际文件，只有 `batch_complete=true` 才报告批测执行与证据核验完成，
+`evaluation_complete=true` 才报告正式评测完成。`sealed`、准入／校准通过、CLI 返回成功均不能替代这些条件。
+`.atk/preflights/` 与批次实际产物、日志、轨迹属于保留证据，不按临时请求清理。
+
 每个 Skill 收尾均给出对象 ID、已完成动作、结果、产物路径、阻塞原因（如有）和下一步要求。
 不要把本地样本门禁通过描述为线上或总体收益。区分 `original_execution` 与诊断探针。

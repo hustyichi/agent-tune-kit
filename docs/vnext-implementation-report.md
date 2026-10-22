@@ -216,3 +216,22 @@ T35–T39 语义复核：另用不含责任层标签的六份临时合成材料�
 1. 准备独立审核的责任层配对材料及真实本地组件故障案例，完成 T35–T39、T42；继续核对操作中断矩阵、安装布局、服务制品版本、副作用隔离和可信指标来源。
 2. 在认证恢复且真实执行范围获授权后，新开 Magic Round 完成有效多 Case／保护集、真实候选 keep／commit、最终重复验收，并补齐真实非 Skill 和多问题多候选场景。认证未恢复期间不重复已知失败的付费调用。
 3. 在干净用户环境继续验证 1.0.0 发布包与七入口，核对 W8 和最终 DoD 后再决定是否声明真实业务验收完成。无需新增公开 Skill、独立模型 Backend、后台调度或 worktree 管理；它们不属于本期缺失需求。
+
+
+## 2026-10-22：批测阶段与完成证据
+
+修正了预检首错退出、封存状态易被解释为批测完成的问题。新增 `preflight_evaluation` 汇总本地阻塞项并留存报告，
+复用运行的 attempt／重试／续跑规划与 Round 门禁，预检不消耗预算、不切换版本、不执行准备或服务命令。
+`inspect_evaluation` 从实际证据重算阶段、逐 Case 状态与完成标志；原有 sealed/partial/interrupted 协议保留。
+默认 runner 保留逐 Case 脱敏 stdout、输出、日志和生成文件，部分运行保留已落盘文件并索引；
+执行后的身份或封存异常返回现场路径，避免丢失真实执行的定位信息。
+
+新增离线回归覆盖批量阻塞、预算不变、预检不会重放、CLI 错误产物引用、校准不等于执行、评分独立完成、
+无轨迹不能报告完成、真实产物篡改、中断与逐 Case 超时、业务错误和执行后身份失败。
+这些测试使用本地合成 Agent，不代表 magic-workspace 的远端 MCS 批测或真实业务验收已完成。
+
+本次验证：新增 `tests/test_evaluation_progress.py` 的 16 项回归。最终全量运行 237 项通过，唯一失败为打包烟测
+获取 PyPI hatchling 索引时的 TLS 连接错误；使用 `UV_OFFLINE=1 uv run --frozen pytest
+tests/test_install_plugin.py::InstallPluginCliTests::test_distribution_archives_and_installed_cli_use_package_resource_payload -q`
+离线重跑通过，覆盖 wheel／sdist 与隔离安装。全部 238 项均取得通过结果；Ruff、格式检查、Skill 包校验及
+`git diff --check` 通过。未更新已安装插件缓存或目标工程已有 runner，未执行真实 MCS 批测或发布。

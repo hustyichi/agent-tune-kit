@@ -63,7 +63,7 @@ def view_execution(root: Path, request: dict) -> dict:
     files = [
         ref
         for ref in index.values()
-        if ref.get("execution_id") in ids and ref.get("kind") in {"events", "native_artifact"}
+        if ref.get("execution_id") in ids and ref.get("kind") in {"events", "native_artifact", "execution_file"}
     ]
     count = 0
     for ref in files:
@@ -149,7 +149,7 @@ def read_native_evidence(root: Path, request: dict) -> dict:
     offset, limit = _page(request)
     _, _, index = validate_evidence(root, request["batch_id"])
     ref = index.get(request["evidence_id"])
-    if not ref or ref.get("kind") not in {"events", "native_artifact"}:
+    if not ref or ref.get("kind") not in {"events", "native_artifact", "execution_file"}:
         raise ATKError("INCOMPLETE_EVIDENCE", "不是可读取的原生证据")
     path = Path(ref["path"])
     if ref.get("role") in {"service_log", "stderr"}:

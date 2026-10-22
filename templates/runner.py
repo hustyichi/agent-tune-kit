@@ -270,6 +270,12 @@ class EventCapture:
                 )
             if item.get("required") and not accepted:
                 missing.append(item["role"])
+            if (
+                item.get("required")
+                and item["role"] in {"trace", "trajectory", "events"}
+                and any(not path.stat().st_size for path in accepted)
+            ):
+                self.issues.append("empty_required_trajectory:" + item["role"])
         complete = not missing and not self.issues and status != "timeout"
         return {
             "schema_version": 1,
@@ -315,9 +321,7 @@ def attachments_unchanged(attachments: list[dict]) -> bool:
 def run_one(attempt: dict, case: dict, config: dict, output: Path, timeout: int) -> dict:
     task_dir = output / "attempts" / attempt["execution_id"]
     task_dir.mkdir(parents=True, exist_ok=False)
-    capture = (
-        EventCapture(task_dir, {**attempt, "case_id": case["id"]}, config) if config.get("observability") else None
-    )
+    capture = EventCapture(task_dir, {**attempt, "case_id": case["id"]}, config)
     if capture:
         capture.emit("attempt.started")
     input_file = task_dir / "input.json"
@@ -334,6 +338,7 @@ def run_one(attempt: dict, case: dict, config: dict, output: Path, timeout: int)
     command = [part.format_map(variables) for part in config["command"]]
     started = datetime.now(UTC).isoformat()
     started_clock = time.monotonic()
+    agent_started = False
     try:
         if not attachments_unchanged(attachments):
             raise OSError("Case 附件在数据集导入后被修改")
@@ -356,6 +361,7 @@ def run_one(attempt: dict, case: dict, config: dict, output: Path, timeout: int)
                 },
                 start_new_session=True,
             )
+            agent_started = True
             _processes.add(process)
         try:
             try:
@@ -365,17 +371,56 @@ def run_one(attempt: dict, case: dict, config: dict, output: Path, timeout: int)
 
                     def read_output():
                         decoder = codecs.getincrementaldecoder("utf-8")(errors="strict")
-                        try:
-                            while chunk := os.read(process.stdout.fileno(), 4096):
-                                output_size[0] += len(chunk)
+                        pending = bytearray()
+                        oversized = False
+                        with (task_dir / "stdout.log").open("w", encoding="utf-8") as stream:
+
+                            def save_line(data):
+                                value = data.decode("utf-8", errors="strict")
+                                try:
+                                    raw = json.loads(value)
+                                except ValueError:
+                                    clean = redact_output(value)
+                                else:
+                                    rendered = redact_fields(raw)
+                                    clean = (
+                                        value if rendered == raw else json.dumps(rendered, ensure_ascii=False) + "\n"
+                                    )
+                                stream.write(clean)
+                                stream.flush()
+                                os.fsync(stream.fileno())
+
+                            try:
+                                while chunk := os.read(process.stdout.fileno(), 4096):
+                                    output_size[0] += len(chunk)
+                                    if output_size[0] <= 8 * 1024 * 1024:
+                                        responses.append(decoder.decode(chunk))
+                                    for piece in chunk.splitlines(keepends=True):
+                                        if not oversized:
+                                            pending.extend(piece)
+                                            if len(pending) > 65536:
+                                                pending.clear()
+                                                oversized = True
+                                                capture.issues.append("stdout_line_too_large")
+                                        if piece.endswith(b"\n"):
+                                            if not oversized:
+                                                save_line(pending)
+                                            pending.clear()
+                                            oversized = False
+                                if pending:
+                                    save_line(pending)
                                 if output_size[0] <= 8 * 1024 * 1024:
-                                    responses.append(decoder.decode(chunk))
-                            responses.append(decoder.decode(b"", final=True))
-                        except UnicodeDecodeError:
-                            capture.issues.append("output_decode_error")
-                            responses.clear()
-                            while os.read(process.stdout.fileno(), 4096):
-                                pass
+                                    responses.append(decoder.decode(b"", final=True))
+                            except (UnicodeDecodeError, OSError) as error:
+                                capture.issues.append(
+                                    "output_decode_error"
+                                    if isinstance(error, UnicodeDecodeError)
+                                    else "output_write_error"
+                                )
+                                responses.clear()
+                                with suppress(OSError):
+                                    while os.read(process.stdout.fileno(), 4096):
+                                        pass
 
                     stdout_thread = threading.Thread(target=read_output)
                     stderr_thread = threading.Thread(target=capture.consume, args=(process.stderr,))
@@ -468,6 +513,7 @@ def run_one(attempt: dict, case: dict, config: dict, output: Path, timeout: int)
             "retry_of": attempt["retry_of"],
             "purpose": config["purpose"],
             "revision_id": config["revision_id"],
+            "agent_started": agent_started,
             "started_at": started,
             "ended_at": datetime.now(UTC).isoformat(),
             "status": status,
@@ -476,6 +522,21 @@ def run_one(attempt: dict, case: dict, config: dict, output: Path, timeout: int)
     }
     if capture:
         record["capture"] = capture.finish(status)
+    (task_dir / "output.txt").write_text(response, encoding="utf-8")
+    captured = {Path(file["path"]).resolve() for file in record.get("capture", {}).get("files", [])}
+    record["files"] = []
+    for path in sorted(task_dir.rglob("*")):
+        if path.is_symlink() or not path.resolve().is_relative_to(task_dir.resolve()):
+            record["capture"]["issues"].append("output_outside_attempt:" + str(path.relative_to(task_dir)))
+            record["capture"]["status"] = "partial"
+        elif path.is_file() and path.resolve() not in captured:
+            record["files"].append(
+                {
+                    "path": str(path.resolve()),
+                    "sha256": file_sha256(path),
+                    "role": "output" if path.name == "output.txt" else "attempt_file",
+                }
+            )
     return record
 
 

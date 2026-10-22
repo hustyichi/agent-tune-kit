@@ -46,9 +46,10 @@ ERROR_CODES = {
 
 
 class ATKError(Exception):
-    def __init__(self, code: str, message: str):
+    def __init__(self, code: str, message: str, *, artifact_refs: list | None = None):
         if code not in ERROR_CODES:
             raise ValueError(f"未知 ATK 错误码：{code}")
+        self.artifact_refs = artifact_refs or []
         self.code = code
         super().__init__(message)
 
@@ -138,7 +139,7 @@ def validate_evidence(root: Path, batch_id: str) -> tuple[dict, dict[str, dict],
         if not evidence_id or evidence_id in evidence or not entry.get("fingerprint") or not entry.get("locator"):
             raise ATKError("INCOMPLETE_EVIDENCE", "证据索引无效")
         evidence[evidence_id] = entry
-        if entry.get("kind") in {"events", "native_artifact"}:
+        if entry.get("kind") in {"events", "native_artifact", "execution_file"}:
             path = Path(entry.get("path", ""))
             if (
                 not path.resolve().is_relative_to((root / "evidence").resolve())
@@ -151,11 +152,7 @@ def validate_evidence(root: Path, batch_id: str) -> tuple[dict, dict[str, dict],
     return manifest, records, evidence
 
 
-def store_assessment(root: Path, request: dict) -> Path:
-    batch_id = request["batch_id"]
-    _, records, evidence = validate_evidence(root, batch_id)
-    spec = request["evaluation_spec"]
-    judger = request["judger"]
+def validate_judger(spec: dict, judger: dict) -> None:
     required_spec = {"version", "boundary", "dimensions", "dimension_rules", "denominator_rule"}
     if (
         required_spec - spec.keys()
@@ -176,6 +173,14 @@ def store_assessment(root: Path, request: dict) -> Path:
             example.get("expected_verdict") != example.get("actual_verdict") for example in examples
         ):
             raise ATKError("JUDGER_INVALID", "已校准 judger 需要判定一致的正反示例")
+
+
+def store_assessment(root: Path, request: dict) -> Path:
+    batch_id = request["batch_id"]
+    _, records, evidence = validate_evidence(root, batch_id)
+    spec = request["evaluation_spec"]
+    judger = request["judger"]
+    validate_judger(spec, judger)
     dimensions = set(spec["dimensions"])
     rows = request["rows"]
     keys = set()

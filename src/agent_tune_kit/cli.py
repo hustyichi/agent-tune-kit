@@ -20,7 +20,7 @@ from .checkpoints import (
 )
 from .core import ATKError, render_assessment_html, store_assessment, write_json
 from .evidence import import_evidence, read_native_evidence, record_source_contract, view_execution
-from .execution import initialize_project, run_evaluation, store_dataset
+from .execution import initialize_project, inspect_evaluation, preflight_evaluation, run_evaluation, store_dataset
 from .governance import (
     compare_and_gate,
     finish_round,
@@ -58,6 +58,8 @@ def internal_main(argv: list[str]) -> int:
         "view_execution": lambda: view_execution(root, request),
         "read_native_evidence": lambda: read_native_evidence(root, request),
         "record_source_contract": lambda: record_source_contract(repo, root, request),
+        "inspect_evaluation": lambda: inspect_evaluation(root, request),
+        "preflight_evaluation": lambda: preflight_evaluation(root, request),
         "run_evaluation": lambda: run_evaluation(root, request),
         "store_assessment": lambda: store_assessment(root, request),
         "render_assessment_html": lambda: render_assessment_html(root, request["assessment_id"]),
@@ -100,7 +102,7 @@ def internal_main(argv: list[str]) -> int:
     except ATKError as exc:
         response = {
             "status": "error",
-            "artifact_refs": [],
+            "artifact_refs": exc.artifact_refs,
             "warnings": warnings,
             "error_code": exc.code,
             "next_required_action": str(exc),

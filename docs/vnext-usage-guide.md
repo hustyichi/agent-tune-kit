@@ -72,6 +72,35 @@ Dataset 阶段的常驻文件、来源追溯和临时材料收尾以
 
 `atk-eval` 必须明确选择 `run`、`import` 或 `reassess`。`run` 在目标环境执行 Agent，形成 EvidenceBatch 和 Execution；`import` 只接入已有批量结果或 Langfuse Trace／Observation／Score；`reassess` 对原证据创建新 Assessment，不重新运行 Agent。导入时保存来源、字段映射、过滤范围及脱敏规则；外部分数只作证据，不直接变成 ATK 的通过率。
 
+本地 `run` 分为准备、校准、执行、评分，使用以下确定性操作：
+
+| 操作／结果 | 含义 |
+| --- | --- |
+| `preflight_evaluation` | 与运行使用相同请求，汇总可检查的阻塞项，保存 `.atk/preflights/<id>.json`。只读运行条件，不执行目标或版本命令、不切换 Git、不预留预算；依赖不可用的检查列为 `not_checked`。 |
+| `run_evaluation` | 重新预检后调度真实 Agent。受阻返回全部阻塞及报告引用，不创建执行证据；执行后遇到封存错误仍保留实际批次和失败报告。 |
+| `inspect_evaluation` | 提供 `batch_id`，重新核验实际文件指纹，返回四阶段状态、计划／已启动／确认数量、逐 Case 的执行／证据／轨迹状态及文件路径。评分后另提供明确 `assessment_id` 核验同批次覆盖。 |
+| `batch_complete` | 全部计划槽位均有已结束的 Agent 执行、批次封存完整、文件核验通过并满足声明的轨迹采集条件。业务错误可视为已执行；超时、基础设施失败、未知或未开始不能视为完整。 |
+| `evaluation_complete` | `batch_complete` 为真，并已完成有校准依据的全记录、全维度 Assessment；不表示业务全部通过。 |
+
+可在预检／执行请求中提供 `evaluation_spec` 与 `judger` 记录独立校准状态；不提供则为 `not_recorded`，无效校准列于
+`calibration_issues`。取证不依赖已校准评分器，但正式比较仍遵循冻结门禁。只做数据准入或规则校准时，执行状态为
+`not_started`，不得用校准例数量报告 Agent 运行数量。预检不是外部服务健康保证，运行中仍可能产生新的失败。
+
+逐 Case 路径从 `case_statuses` 获取；批次目录为 `.atk/evidence/<batch-id>/`，包含：
+
+- `request.json`（Case／重复槽位与 Execution ID）、`batch.json`（运行中完成／运行／未开始 ID）、`records.jsonl`（真实结果）；
+- `execution-summary.json`（封存时的派生摘要，评分后或再次报告前用 `inspect_evaluation` 重查）；
+- `attempts/<execution-id>/` 下的输入、附件、`stdout.log`、`output.txt`、日志／事件，以及真实生成文件；
+- 批次根目录的 `runner.stdout.log` 与 `runner.stderr.log`。
+
+默认 runner 即使没有业务观测配置，也保留 stderr 与生命周期事件；这不证明有完整 Agent 轨迹。用
+`observability.required_stages` 声明并观察必经阶段，或在 `artifacts` 中声明必需且非空的
+`role=trace/trajectory/events` 文件。adapter 必须把工作区产物、服务日志和轨迹落到当前 attempt 的 `{output_dir}`；
+ATK 不自动复制外部工作区。所有实际 attempt 文件纳入指纹索引，未配置的普通产物也保留；中断的未确认 attempt
+仍索引已落盘文件。原生日志采集沿用已有脱敏；stdout 日志按行脱敏，超过 64 KiB 的行、输出解码错误或超时会明确
+标为采集缺口，不能报告完整。自定义／旧 runner 缺少文件清单时保持证据不完整；升级模板需重新核验冻结配置。
+这些本地文件可能含原始业务输入和产物，保持在已忽略的 `.atk/`。正式证据与预检／失败报告均不得作为临时自检材料清理。
+
 Assessment 按冻结的 `evaluation_spec` 为每条记录的每个维度写出有效性、判定和证据引用。没有可信任务效果判据时，把该维度记为 `unknown`；输出存在不等于成功。新判定规则需要正反校准例和新 Assessment。判据变化后，旧对照不再直接可比。
 
 `atk-diagnose` 应区分 Agent／业务 Skill、工具、运行时、数据或评分器责任，并记录竞争解释和缺失证据。诊断探针须有冻结的命令、Case、隔离依据和独立预算；它不是原始执行，也不参与正式效果统计。若问题属于范围外组件，只在本地保存 `external_handoff` 与复验条件，不把 Agent 规避写成组件已修复。
@@ -194,3 +223,5 @@ stdout 仍是 Agent 结果。stderr 单行超过 64 KiB 会丢弃并标记，std
 不复制原始执行。临时操作请求/响应在状态核对后清理，评分器与校准资产按版本复用，摘要仅保留必要差异和引用。
 
 离线单测与合成 E2E 证明协议能运行，不能证明真实业务收益。当前项目的真实多 Case 效果、有效候选采用提交、独立审核的责任层诊断以及真实外部组件修复闭环仍待验收；发布决策需参照[实现记录](vnext-implementation-report.md)中的 W8 状态。七个 Skill 的操作细节见[共享流程](../skills/WORKFLOW.md)及各 Skill 文档。
+
+授权重试保留所有历史 attempts；完成条件按每个 Case／重复槽位的最后一次授权执行核对，旧失败在逐 Case 摘要中标为 `superseded`，不改写为成功。

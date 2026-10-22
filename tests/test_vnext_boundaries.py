@@ -373,7 +373,7 @@ def test_external_fix_new_baseline_needs_direct_and_end_to_end_evidence(tmp_path
         {**base_request, "purpose": "diagnostic_probe", "probe_authorization_id": "direct-tool"},
     )
     direct_refs = [
-        {"batch_id": probe["id"], "evidence_id": record_id} for record_id in validate_evidence(root, probe["id"])[2]
+        {"batch_id": probe["id"], "evidence_id": record_id} for record_id in validate_evidence(root, probe["id"])[1]
     ]
 
     def direct_assessment(task_verdict: str, safety_verdict: str) -> str:
@@ -389,7 +389,7 @@ def test_external_fix_new_baseline_needs_direct_and_end_to_end_evidence(tmp_path
                 "evidence_refs": [{"batch_id": probe["id"], "evidence_id": record_id}],
                 "judger_kind": "deterministic",
             }
-            for record_id in validate_evidence(root, probe["id"])[2]
+            for record_id in validate_evidence(root, probe["id"])[1]
             for dimension, verdict in (("task_success", task_verdict), ("contract_safety", safety_verdict))
         ]
         return store_assessment(
