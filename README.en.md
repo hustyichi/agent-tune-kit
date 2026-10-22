@@ -10,7 +10,7 @@ It focuses on two jobs: first turn evaluation data into a reusable, human-review
 
 ## Architecture
 
-![Agent Tune Kit architecture](docs/assets/arch-en.png)
+![Agent Tune Kit architecture: dataset preparation and the atk-init → atk-eval → atk-diagnose → atk-report → atk-optimize loop, with optional failure browsing. Unknown outcomes never count as passes.](docs/assets/arch-en.png)
 
 ## Who It Is For
 

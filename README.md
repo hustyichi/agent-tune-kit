@@ -10,7 +10,7 @@ Agent Tune Kit 是一个**本地 Codex 插件**，用于把你自己的本地 Ag
 
 ## 架构图
 
-![Agent Tune Kit 架构图](docs/assets/arch.png)
+![Agent Tune Kit 架构图：数据集准备，以及 atk-init → atk-eval → atk-diagnose → atk-report → atk-optimize 调优闭环；失败浏览为可选步骤，未判定不算通过。](docs/assets/arch.png)
 
 ## 适合谁
 
