@@ -36,7 +36,7 @@ In the current package layout, this is also reachable from this Skill file as `.
 - `.atk/runner/eval_runner.py`
 - `.atk/datasets/dataset.csv` containing the ATK canonical runnable dataset used by the generated runner, including a required `atk_id` column.
 - No version directory is required before this Skill runs; no version directory is required for generation.
-- Runtime results are produced later by running `atk-run`, which executes the generated script:
+- Runtime results are produced later by running `atk-eval`, which executes the generated script:
   - `.atk/results/vN/eval_results.csv`
   - optional `.atk/results/vN/app.log`
   - optional row logs under `.atk/results/vN/logs/`, referenced by `log_path`
@@ -68,7 +68,7 @@ In the current package layout, this is also reachable from this Skill file as `.
    - dataset load and one-row input-shaping check.
    - if a smoke execution is needed, run a bounded command such as `.atk/runner/eval_runner.py --limit 1`, record the exact result version that existed before and after the command, then clean up only the result directory created or reused solely for that smoke check.
    - after smoke cleanup, confirm `.atk/results/` has returned to the pre-smoke version state. Do not remove any pre-existing version that contained user data before the smoke command.
-7. Tell the user the next command is `atk-run`.
+7. Tell the user the next command is `atk-eval`.
 
 ## Required runner behavior
 
@@ -78,7 +78,7 @@ In the current package layout, this is also reachable from this Skill file as `.
 - Append the stable row-log evidence column `log_path`. When same-process Python logging capture is configured and active, it must contain a relative POSIX path such as `logs/row_000001.log`; otherwise it should be blank.
 - If Agent output has multiple fields, serialize the complete structured result as JSON in `agent_output`; do not add auxiliary `agent_output_*` columns.
 - If the input dataset already contains `agent_output` or `log_path`, ask the user to confirm a rename strategy before writing the script.
-- Write the input dataset into `.atk/datasets/` during `atk-init`, specifically `.atk/datasets/dataset.csv`, as the ATK canonical runnable dataset with `atk_id`. Reuse it when canonical content is identical and ask before overwriting different canonical content. The generated runner must read this fixed `.atk/datasets/` dataset so later source dataset moves do not break `atk-run`.
+- Write the input dataset into `.atk/datasets/` during `atk-init`, specifically `.atk/datasets/dataset.csv`, as the ATK canonical runnable dataset with `atk_id`. Reuse it when canonical content is identical and ask before overwriting different canonical content. The generated runner must read this fixed `.atk/datasets/` dataset so later source dataset moves do not break `atk-eval`.
 - Automatically allocate the output version with `allocate_next_results_version()`.
 - Use `RESULTS_DIR = Path(".atk/results")`.
 - Do not require a user-supplied version argument or result path.
@@ -143,6 +143,6 @@ After writing the runner, summarize:
 - concurrency flag (`--concurrency`) and whether output row order is serial order or completion order when concurrency is greater than 1;
 - whether `app.log` will be captured, including whether it is sourced from Python `logging`, stdout/stderr fallback, or an existing Agent log file, and whether row-specific Python logging files under `logs/` will be captured;
 - whether a smoke run was executed, which temporary result version it produced, and whether that version was cleaned up;
-- next command to run: `atk-run`;
+- next command to run: `atk-eval`;
 - expected next output path `.atk/results/v1/eval_results.csv` when no prior result version exists, otherwise the path selected by the normal runner allocation rule;
 - do not say a smoke test has already occupied `v1` when the smoke-created version was cleaned up before handoff.

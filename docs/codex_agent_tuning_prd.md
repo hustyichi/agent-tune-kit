@@ -76,13 +76,13 @@
   - 在保留原有列和相对顺序的基础上补齐规范 `ground_truth` 列；若该列已存在或会语义替换 expected-like 字段，必须展示候选修改摘要并要求用户显式确认
   - 候选修改摘要应包含受影响行数和代表性示例；大数据集不需要逐行列出全部变更
 - **边界**：
-  - 这是 dataset-only / pre-results Skill；不创建 `.atk/results/vN`，不运行 Agent / `atk-run` / eval runner，不写 `failure_cases.csv`
+  - 这是 dataset-only / pre-results Skill；不创建 `.atk/results/vN`，不运行 Agent / `atk-eval` / eval runner，不写 `failure_cases.csv`
   - 第一版不改变 `$atk-find-failures` 行为，也不强制所有 ATK 数据集都必须拥有 `ground_truth`
   - 不自动挖掘大规模生产日志，不在常规路径创建候选数据集文件，不发明缺失领域事实
   - 当数据集包含多个互不兼容任务、所需领域事实缺失、已有 expected-like 语义冲突或风格选择不明确时，必须先向用户确认
 - **输出**：
   - 更新后的 `.atk/datasets/dataset.csv`，保留原有列并包含规范 `ground_truth`
-  - 下一步建议：若现有 `eval_results.csv` 早于本次数据集补齐，提示重新运行 `$atk-run`；若当前评测结果已反映补齐后的数据集，可继续 `$atk-find-failures`
+  - 下一步建议：若现有 `eval_results.csv` 早于本次数据集补齐，提示重新运行 `$atk-eval`；若当前评测结果已反映补齐后的数据集，可继续 `$atk-find-failures`
 
 ### 2.1.2 ATK new Agent：仅有数据集时初始化 Agent 项目（可选前置 Skill）
 - **适用场景**：
@@ -135,9 +135,9 @@
 - **依赖处理**：
   - 尽量避免引入额外依赖；针对本地已有项目调优时，优先复用项目自身的依赖与虚拟环境
 
-### 2.3 批量执行模块（用户通过 `atk-run` 执行生成的测试脚本）
+### 2.3 批量执行模块（用户通过 `atk-eval` 执行生成的测试脚本）
 - **功能**：
-  - 用户触发 `atk-run`，由该 Skill 执行 `.atk/runner/eval_runner.py`
+  - 用户触发 `atk-eval`，由该 Skill 执行 `.atk/runner/eval_runner.py`
   - 简单机制实现批量测试执行和结果收集
   - 支持通过 `--only-failures` 仅运行最近一份 `failure_cases.csv` 中出现的 `atk_id` 对应样本；该模式必须回到 `.atk/datasets/dataset.csv` 按 `atk_id` 筛选原始样本执行，不得直接把 `failure_cases.csv` 当作输入数据集运行
   - 仅在「上一轮已有结果」时才新建版本目录；否则直接复用当前最新版本目录重跑
@@ -225,13 +225,13 @@
   - 从当前版本目录下的 `failure_cases.csv` 生成便于人工审阅的静态 HTML 浏览器 `failure_cases.html`
   - 通过插件内固定 Python 标准库脚本生成 HTML，避免模型临场生成可视化、LLM 摘要、项目内模板漂移或额外依赖
   - 该 Skill 是独立的可选审阅步骤，不并入 `atk-report`，也不改变报告生成、异常筛选或调优语义
-  - 可在当前版本存在 `failure_cases.csv` 后随时执行；推荐在 `atk-report` 之后、`atk-tune` 之前用于审阅具体异常
+  - 可在当前版本存在 `failure_cases.csv` 后随时执行；推荐在 `atk-report` 之后、`atk-optimize` 之前用于审阅具体异常
 - **输入**：
   - 必需：当前版本目录下的 `failure_cases.csv`
   - 可选：同版本 `report.md`，仅提取有界摘要、归因或 3-5 条调优重点作为上下文
   - 可选（用于跨版本分析，只读、永不修改、缺失不阻塞）：
     - 历史版本 `v1..v(N-1)/failure_cases.csv` —— 推导每个 case 的跨版本失败/通过状态
-    - 历史版本 `v1..v(N-1)/eval_results.csv` —— 仅流式读取 `atk_id` 列（每文件上限 64 MiB），用于区分四态状态（`passed` / `failed` / `not_tested` / `unknown`），并检测 `atk-run --only-failures` 子集执行
+    - 历史版本 `v1..v(N-1)/eval_results.csv` —— 仅流式读取 `atk_id` 列（每文件上限 64 MiB），用于区分四态状态（`passed` / `failed` / `not_tested` / `unknown`），并检测 `atk-eval --only-failures` 子集执行
     - 上一版本 `v(N-1)/tuning_plan.md` —— 仅解析 `## 目标异常清单` 段落（文件上限 256 KiB），用于计算上轮调优目标命中率
 - **输出文件**：
   - 当前版本目录下的 `failure_cases.html`
@@ -364,7 +364,7 @@
 ## 5. 使用示例（手工执行）
 1. 完成数据准备：本地待调优的 Agent 服务 + 评估数据集（默认 CSV）；如只有业务描述可先执行 `$atk-build-dataset`，如已有数据集但预期语义薄弱可先执行 `$atk-build-ground-truth` 补齐 `ground_truth`
 2. 执行**批量测试脚本生成 Skill**，生成 `.atk/runner/eval_runner.py`；遇到 Agent 接入或字段不确定时按需与用户确认
-3. 执行 `atk-run`，由其运行 `.atk/runner/eval_runner.py`，脚本自动创建 `.atk/results/v1/` 并写入 `eval_results.csv`（及可选 `app.log`）
+3. 执行 `atk-eval`，由其运行 `.atk/runner/eval_runner.py`，脚本自动创建 `.atk/results/v1/` 并写入 `eval_results.csv`（及可选 `app.log`）
 4. 执行异常筛选（按需选择规则路径或大模型路径）：
    - **规则路径**：先执行 `atk-init-failure-rule` 交互确认规则并生成 `.atk/runner/failure_rule.py`，再执行 `atk-find-failures-by-rule` 运行该脚本并输出 `failure_cases.csv`
    - **大模型路径**：执行 `atk-find-failures`，直接读取当前版本 `eval_results.csv` 并输出 `failure_cases.csv`
@@ -372,7 +372,7 @@
    - 当前版本为 `v1` 时为单版本报告，说明无上一版本可对比
 6. 可选执行**异常样本可视化 Skill (`atk-visualize-failures`)**：基于当前 `failure_cases.csv` 生成 `.atk/results/v1/failure_cases.html`，同版本 `report.md` 作为可选、非阻塞上下文
 7. 执行**Agent 调优 Skill**：基于 `report.md` 完成调优，并在 `v1/` 下写入 `tuning_plan.md`；建议用户随后做一次 git commit
-8. 进入下一轮：再次执行 `atk-run`，自动创建 `.atk/results/v2/`
+8. 进入下一轮：再次执行 `atk-eval`，自动创建 `.atk/results/v2/`
 9. 重新执行异常筛选与报告生成 Skill，`v2/report.md` 自动读取 `v1/tuning_plan.md`，逐条核验上一轮目标异常在 `v2` 是否仍然出现，并给出"上一轮调优是否符合预期"的结论
 
 ---

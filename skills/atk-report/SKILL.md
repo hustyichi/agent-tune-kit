@@ -122,4 +122,4 @@ After writing the report, summarize:
 - output path `.atk/results/vN/report.md`;
 - whether failure attribution used row-specific logs from `log_path` or fell back to `app.log`;
 - whether `.atk/context.md` was updated with durable feedback or decisions;
-- whether the next step is `atk-tune`.
+- whether the next step is `atk-optimize`.

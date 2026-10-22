@@ -99,7 +99,7 @@ In the current package layout, these are also reachable from this Skill file as 
    - compile generated Python files when possible;
    - run the CLI far enough to prove imports and argument parsing work;
    - if credentials are missing, treat a clear missing-configuration error as an acceptable MVP smoke result.
-10. Tell the user the next command is `atk-init`, not `atk-run`.
+10. Tell the user the next command is `atk-init`, not `atk-eval`.
 
 ## Risk-triggered confirmation policy
 

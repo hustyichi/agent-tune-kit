@@ -97,7 +97,7 @@ preserve?" If not, leave it out.
   failures; should not write the local context.
 - `atk-report`: reads the whole document when present; may append durable `User Feedback` or `Tuning Decisions` only
   when the report conclusion reflects user-confirmed or human-reviewed guidance rather than routine run facts.
-- `atk-tune`: reads `Tuning Objective`, `Agent Behavior Standard`, `Ground Truth Standard`, and `Tuning Decisions`
+- `atk-optimize`: reads `Tuning Objective`, `Agent Behavior Standard`, `Ground Truth Standard`, and `Tuning Decisions`
   before editing the Agent; should not modify `Ground Truth Standard`.
 
 The file is optional. Missing `.atk/context.md` must never block a Skill.

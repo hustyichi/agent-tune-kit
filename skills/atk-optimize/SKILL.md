@@ -1,9 +1,9 @@
 ---
-name: atk-tune
-description: Tune the Agent from the current report and write a fixed-heading tuning_plan.md for the next iteration's validation.
+name: atk-optimize
+description: Optimize the Agent from the current report and write a fixed-heading tuning_plan.md for the next iteration's validation.
 ---
 
-# Agent Tuning — Tune Agent
+# Agent Tuning — Optimize Agent
 
 ## Purpose
 
@@ -99,4 +99,4 @@ After tuning, summarize:
 - files changed;
 - validation run and result;
 - output path `.atk/results/vN/tuning_plan.md`;
-- suggested next step: run `atk-run` for the next version and optionally create a git commit.
+- suggested next step: run `atk-eval` for the next version and optionally create a git commit.

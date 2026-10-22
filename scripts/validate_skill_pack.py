@@ -23,7 +23,7 @@ REQUIRED_FILES = [
     "skills/atk-tune-ground-truth/scripts/tune_ground_truth.py",
     "skills/atk-new-agent/SKILL.md",
     "skills/atk-init/SKILL.md",
-    "skills/atk-run/SKILL.md",
+    "skills/atk-eval/SKILL.md",
     "skills/atk-init-failure-rule/SKILL.md",
     "skills/atk-find-failures-by-rule/SKILL.md",
     "skills/atk-find-failures/SKILL.md",
@@ -39,7 +39,7 @@ REQUIRED_FILES = [
     "skills/atk-visualize-dataset/assets/styles.css",
     "skills/atk-visualize-dataset/assets/app.js",
     "skills/atk-visualize-dataset/assets/vendor/echarts.min.js",
-    "skills/atk-tune/SKILL.md",
+    "skills/atk-optimize/SKILL.md",
     "templates/.atk/runner/eval_runner.py.md",
     "templates/.atk/runner/failure_rule.py.md",
     "templates/agent/agent.py",
@@ -309,7 +309,7 @@ PER_FILE_PHRASES = {
         "required domain facts are absent",
         "Do not create `.atk/results/vN`",
         "Do not run the Agent",
-        "Do not run `$atk-run`",
+        "Do not run `$atk-eval`",
         "Do not write `failure_cases.csv`",
         "Do not change `atk-find-failures` behavior in v1",
         "eval_results.csv` predates dataset enrichment",
@@ -329,7 +329,7 @@ PER_FILE_PHRASES = {
         "The writeback is automatic",
         "Do not create `.atk/results/vN`",
         "Do not run the Agent",
-        "Do not run `$atk-run`",
+        "Do not run `$atk-eval`",
         "Do not write `failure_cases.csv`",
     ],
     "skills/atk-tune-ground-truth/scripts/tune_ground_truth.py": [
@@ -359,8 +359,8 @@ PER_FILE_PHRASES = {
         "Agent invocation, dataset path/format, log source, Python logger names, invalid `atk_id`, or `agent_output` / `log_path` column conflict",
         "Write the input dataset into `.atk/datasets/`",
     ],
-    "skills/atk-run/SKILL.md": [
-        "atk-run",
+    "skills/atk-eval/SKILL.md": [
+        "atk-eval",
         ".atk/runner/eval_runner.py",
         "<python-runtime> .atk/runner/eval_runner.py",
         "uv run python",
@@ -545,7 +545,7 @@ PER_FILE_PHRASES = {
         "Refusing to overwrite existing",
         "run atk-build-dataset or atk-init first",
     ],
-    "skills/atk-tune/SKILL.md": [
+    "skills/atk-optimize/SKILL.md": [
         'require_current_file(current_dir, "report.md")',
         "## 目标异常清单",
         "## 调优手段",
@@ -903,7 +903,7 @@ def main() -> int:
     for phrase in PRD_REFERENCES:
         require(contains_any(all_text, [phrase]), f"missing PRD traceability phrase: {phrase}", errors)
 
-    tuning_text = existing_texts.get("skills/atk-tune/SKILL.md", "")
+    tuning_text = existing_texts.get("skills/atk-optimize/SKILL.md", "")
     for heading in ["## 目标异常清单", "## 调优手段", "## 关联改动"]:
         require(heading in tuning_text, f"tuning Skill missing exact heading {heading}", errors)
 

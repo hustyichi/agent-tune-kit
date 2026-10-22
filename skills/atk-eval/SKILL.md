@@ -1,9 +1,9 @@
 ---
-name: atk-run
+name: atk-eval
 description: Run the generated Agent tuning test runner and summarize the current version results.
 ---
 
-# Agent Tuning — Run Tests
+# Agent Tuning — Evaluate Agent
 
 ## Purpose
 

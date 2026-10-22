@@ -7,7 +7,7 @@ description: Generate a dependency-free current-version HTML browser for Agent T
 
 ## Purpose
 
-Generate `.atk/results/vN/failure_cases.html` from the current version's `failure_cases.csv` so reviewers can inspect concrete failures in a modern, searchable single-file browser before tuning. This Skill is an independent optional review stage; it must not be folded into `atk-report` and does not change `atk-report`, `atk-tune`, or failure-finding semantics. Generation is handled by the fixed plugin-owned stdlib script `scripts/generate_failure_browser.py`, not by model-time HTML synthesis, LLM summaries, or a project-local template.
+Generate `.atk/results/vN/failure_cases.html` from the current version's `failure_cases.csv` so reviewers can inspect concrete failures in a modern, searchable single-file browser before tuning. This Skill is an independent optional review stage; it must not be folded into `atk-report` and does not change `atk-report`, `atk-optimize`, or failure-finding semantics. Generation is handled by the fixed plugin-owned stdlib script `scripts/generate_failure_browser.py`, not by model-time HTML synthesis, LLM summaries, or a project-local template.
 
 The page shell (HTML/CSS/JS) is shipped as plugin-owned assets under `skills/atk-visualize-failures/assets/` (`page.html`, `styles.css`, `app.js`). These assets are inlined into the single output HTML at generation time, are never copied into the user project, and are never written outside the current `.atk/results/vN/` directory. The final artifact remains a single self-contained file with zero CDN, zero runtime dependencies, no sidecar files, no per-project asset copies, and no frontend package installation. The migrated UI follows the `dataset-visualize` / `atk-visualize-dataset` structure: application shell, data list, field feature analysis, inspector overlay, abnormal-count card, JSON/code rendering, and review export.
 
@@ -94,4 +94,4 @@ After writing the visualization, summarize:
 - the `history=...` line from stdout — for example `history=included (N versions)`, `history=skipped (--no-history)`, or `history=skipped (no prior vN)` — so the user knows whether historical compatibility metadata was read;
 - whether the HTML includes the dataset-style shell, `stat-card-abnormal`, search/filter, pagination, field feature analysis, inspector overlay, schema-adaptive role switching, JSON/code rendering, review export, and safe relative log links;
 - the `browser_open=...` line from stdout so the user knows whether the page was auto-opened (the Skill should pass `--open` by default; if the open attempt is skipped, tell the user to open the printed file path manually);
-- whether the next useful review step is `atk-tune` after inspecting the failures.
+- whether the next useful review step is `atk-optimize` after inspecting the failures.

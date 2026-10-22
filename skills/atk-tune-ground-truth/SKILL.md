@@ -9,7 +9,7 @@ description: Tune `.atk/datasets/dataset.csv` ground_truth values from dataset r
 
 Tune the canonical `ground_truth` values in `.atk/datasets/dataset.csv` from reviewer feedback exported by
 `atk-visualize-dataset`. This is a dataset-only / pre-results Skill: it updates `.atk/datasets/dataset.csv`, but it does
-not create `.atk/results/vN`, does not run the Agent or eval runner, does not run `$atk-run`, and does not write
+not create `.atk/results/vN`, does not run the Agent or eval runner, does not run `$atk-eval`, and does not write
 `failure_cases.csv`.
 
 Use this after a reviewer opens `.atk/datasets/dataset.html`, records feedback about incorrect, weak, incomplete, or
@@ -91,7 +91,7 @@ python3 <skill-dir>/scripts/tune_ground_truth.py --updates-path <updates.csv>
     row counts, field names, result versions, or generated statistics there.
 12. Handoff based on result freshness:
     - recommend `$atk-visualize-dataset` if the user wants to re-review the tuned dataset;
-    - recommend `$atk-run` when no current evaluation exists or when existing `eval_results.csv` predates this
+    - recommend `$atk-eval` when no current evaluation exists or when existing `eval_results.csv` predates this
       ground_truth tuning;
     - recommend `$atk-find-failures` when current `eval_results.csv` already reflects the tuned dataset and the user
       wants failure discovery.
@@ -137,7 +137,7 @@ After updating the dataset, summarize:
 - assumptions or unresolved feedback that were left unchanged;
 - next step:
   - run `$atk-visualize-dataset` to re-review the tuned dataset;
-  - run `$atk-run` when no current evaluation exists or existing results predate tuning;
+  - run `$atk-eval` when no current evaluation exists or existing results predate tuning;
   - run `$atk-find-failures` when current results already reflect the tuned dataset.
 
 ## V1 boundaries
@@ -145,7 +145,7 @@ After updating the dataset, summarize:
 - Do not create `.atk/results/vN`.
 - Do not run the Agent.
 - Do not run the eval runner.
-- Do not run `$atk-run`.
+- Do not run `$atk-eval`.
 - Do not write `failure_cases.csv`.
 - Do not create alternate canonical dataset filenames.
 - Do not add fingerprint validation.

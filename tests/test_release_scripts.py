@@ -89,7 +89,7 @@ class ReleaseScriptTests(unittest.TestCase):
         for phrase in [
             "Do not create `.atk/results/vN`",
             "Do not run the Agent",
-            "Do not run `$atk-run`",
+            "Do not run `$atk-eval`",
             "Do not write `failure_cases.csv`",
             "Do not change `atk-find-failures` behavior in v1",
         ]:
