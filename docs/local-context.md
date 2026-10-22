@@ -88,11 +88,8 @@ preserve?" If not, leave it out.
 
 ## Skill Read/Write Contract
 
-- `atk-build-dataset`: may read the local context as optional business and behavior guidance; should not write it.
-- `atk-build-ground-truth`: reads `Ground Truth Standard` when present; may create or update only that section when the
-  user confirms dataset-wide `ground_truth` semantics.
-- `atk-tune-ground-truth`: reads `Ground Truth Standard`; updates it when review feedback changes the confirmed
-  standard, and records the decision in `Tuning Decisions`.
+- `atk-dataset`: reads existing objectives and standards; updates `Ground Truth Standard` and `Tuning Decisions` only
+  when user-confirmed feedback changes reusable criteria. Do not record routine dataset preparation or metadata.
 - `atk-diagnose`: reads `Tuning Objective`, `Agent Behavior Standard`, and `Ground Truth Standard` before judging
   failures; should not write the local context.
 - `atk-report`: reads the whole document when present; may append durable `User Feedback` or `Tuning Decisions` only

@@ -50,7 +50,11 @@ In the current package layout, this is also reachable from this Skill file as `.
    - inspect logging behavior, Python `logging` logger names, stdout/stderr use, and log file paths;
    - check whether the dataset already has a column named `atk_id`, `agent_output`, or `log_path`.
 2. Apply the uncertainty confirmation pattern from `docs/shared-versioning-and-confirmation.md`.
-3. If safe, create `.atk/datasets/` and write the canonical runnable dataset to `.atk/datasets/dataset.csv` before writing the runner:
+3. Reuse a suitable dataset already prepared by `atk-dataset`: preserve IDs, row order, expected-field names and values.
+   Do not repeat ground-truth generation or ask again about fields/criteria already established in the request or context.
+   Only unresolved runtime/input mapping questions need clarification. With unchanged inputs, answer-only corrections do not
+   require regenerating a compatible runner. Keep answer/criteria columns out of Agent inputs.
+   If safe, create `.atk/datasets/` and write the canonical runnable dataset to `.atk/datasets/dataset.csv` before writing the runner:
    - for CSV datasets, preserve all user-provided columns and their order;
    - if the source dataset lacks `atk_id`, append an `atk_id` column and fill it with the source data row number, starting at `1`;
    - if the source dataset already has `atk_id`, reuse it only when values are non-empty, unique positive integers;

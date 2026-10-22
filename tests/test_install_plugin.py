@@ -414,15 +414,9 @@ class InstallPluginCliTests(unittest.TestCase):
             with zipfile.ZipFile(wheel) as archive:
                 names = set(archive.namelist())
                 self.assertIn(hidden_manifest, names)
-                self.assertIn("agent_tune_kit/plugin_payload/agent-tune-kit/skills/atk-build-dataset/SKILL.md", names)
+                self.assertIn("agent_tune_kit/plugin_payload/agent-tune-kit/skills/atk-dataset/SKILL.md", names)
                 self.assertIn(
-                    "agent_tune_kit/plugin_payload/agent-tune-kit/skills/atk-build-ground-truth/SKILL.md", names
-                )
-                self.assertIn(
-                    "agent_tune_kit/plugin_payload/agent-tune-kit/skills/atk-tune-ground-truth/SKILL.md", names
-                )
-                self.assertIn(
-                    "agent_tune_kit/plugin_payload/agent-tune-kit/skills/atk-tune-ground-truth/scripts/tune_ground_truth.py",
+                    "agent_tune_kit/plugin_payload/agent-tune-kit/skills/atk-dataset/scripts/update_dataset.py",
                     names,
                 )
                 self.assertIn(
@@ -436,10 +430,8 @@ class InstallPluginCliTests(unittest.TestCase):
                 names = set(archive.getnames())
                 prefix = sdist.name.removesuffix(".tar.gz")
                 self.assertIn(f"{prefix}/.codex-plugin/plugin.json", names)
-                self.assertIn(f"{prefix}/skills/atk-build-dataset/SKILL.md", names)
-                self.assertIn(f"{prefix}/skills/atk-build-ground-truth/SKILL.md", names)
-                self.assertIn(f"{prefix}/skills/atk-tune-ground-truth/SKILL.md", names)
-                self.assertIn(f"{prefix}/skills/atk-tune-ground-truth/scripts/tune_ground_truth.py", names)
+                self.assertIn(f"{prefix}/skills/atk-dataset/SKILL.md", names)
+                self.assertIn(f"{prefix}/skills/atk-dataset/scripts/update_dataset.py", names)
                 self.assertIn(f"{prefix}/templates/.atk/runner/eval_runner.py.md", names)
                 self.assertIn(f"{prefix}/templates/.atk/runner/failure_rule.py.md", names)
 
@@ -508,14 +500,19 @@ class InstallPluginCliTests(unittest.TestCase):
         self.assertFalse(target.is_symlink())
         self.assertTrue((target / ".codex-plugin" / "plugin.json").exists())
         self.assertTrue((target / ".codex-plugin" / "agent-tune-kit-install.json").exists())
-        self.assertTrue((target / "skills" / "atk-build-dataset" / "SKILL.md").exists())
+        self.assertTrue((target / "skills" / "atk-dataset" / "SKILL.md").exists())
         self.assertTrue((target / "skills" / "atk-diagnose" / "SKILL.md").exists())
         self.assertTrue((target / "skills" / "atk-report" / "SKILL.md").exists())
-        for old_skill in ("atk-find-failures", "atk-find-failures-by-rule", "atk-init-failure-rule"):
+        for old_skill in (
+            "atk-find-failures",
+            "atk-find-failures-by-rule",
+            "atk-init-failure-rule",
+            "atk-build-dataset",
+            "atk-build-ground-truth",
+            "atk-tune-ground-truth",
+        ):
             self.assertFalse((target / "skills" / old_skill).exists())
-        self.assertTrue((target / "skills" / "atk-build-ground-truth" / "SKILL.md").exists())
-        self.assertTrue((target / "skills" / "atk-tune-ground-truth" / "SKILL.md").exists())
-        self.assertTrue((target / "skills" / "atk-tune-ground-truth" / "scripts" / "tune_ground_truth.py").exists())
+        self.assertTrue((target / "skills" / "atk-dataset" / "scripts" / "update_dataset.py").exists())
         self.assertTrue((target / "templates" / ".atk" / "runner" / "eval_runner.py.md").exists())
         self.assertTrue((target / "templates" / ".atk" / "runner" / "failure_rule.py.md").exists())
         status = subprocess.run(

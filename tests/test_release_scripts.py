@@ -75,9 +75,9 @@ class ReleaseScriptTests(unittest.TestCase):
         self.assertTrue(readme_paths.isdisjoint(validate_skill_pack.PER_FILE_PHRASES))
         self.assertNotIn("explicit subcommands only", validate_skill_pack.PLUGIN_DOC_PHRASES)
 
-    def test_skill_pack_validation_registers_ground_truth_as_dataset_only_pre_results_skill(self) -> None:
+    def test_skill_pack_validation_registers_dataset_as_dataset_only_pre_results_skill(self) -> None:
         validate_skill_pack = load_script("validate_skill_pack.py")
-        path = "skills/atk-build-ground-truth/SKILL.md"
+        path = "skills/atk-dataset/SKILL.md"
 
         self.assertIn(path, validate_skill_pack.REQUIRED_FILES)
         self.assertIn(path, validate_skill_pack.SKILL_FILES)
@@ -91,7 +91,6 @@ class ReleaseScriptTests(unittest.TestCase):
             "Do not run the Agent",
             "Do not run `$atk-eval`",
             "Do not write `failure_cases.csv`",
-            "Do not change `atk-diagnose` behavior in v1",
         ]:
             self.assertIn(phrase, required_phrases)
 

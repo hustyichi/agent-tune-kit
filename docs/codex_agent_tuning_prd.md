@@ -30,59 +30,23 @@
 - **功能**：
   - 用户需要准备需要调优的 Agent 服务以及可以用于评估的数据集
   - 系统需要在项目内维护统一父目录 `.atk/`
-  - 用户可先通过 `$atk-build-dataset` 从业务描述、样例或验收规则构建初始 `.atk/datasets/dataset.csv`
-  - 当已有数据集缺少清晰预期结果语义时，用户可通过 `$atk-build-ground-truth` 为现有 `.atk/datasets/dataset.csv` 补齐规范 `ground_truth` 列，以提升后续异常判断稳定性
+  - 用户可先通过 `$atk-dataset` 从业务描述、样例或验收规则构建初始 `.atk/datasets/dataset.csv`
+  - 当已有数据集缺少清晰预期结果语义时，用户可通过 `$atk-dataset` 为现有 `.atk/datasets/dataset.csv` 在原有预期字段中补充有依据的答案或验收条件
   - 用户提供或构建的数据集需要在生成测试脚本时由 `$atk-init` 校验/规范化写入 `.atk/datasets/`，并保证存在 `atk_id`
   - 所有共享脚本需要存储在 `.atk/runner/`
   - 所有版本化结果需要存储在 `.atk/results/{version}/`
   - 用户不需要手工指定当前调优版本，版本由各模块自动创建或识别
 
-### 2.1.0 ATK build Dataset：从业务上下文构建评估数据集（可选前置 Skill）
-- **适用场景**：
-  - 用户还没有评估 CSV，只有业务描述、样例、流程规则或验收标准
-  - 用户希望先构建一份小而高价值、可被 `$atk-init` 直接接入的数据集
-- **入口**：
-  - Codex Skill：`$atk-build-dataset`
-  - 产品名：`ATK build Dataset`
-- **功能**：
-  - 接受自然语言业务描述、样例输入/期望输出、流程规则、验收标准、局部表格或小型现有文件
-  - 在信息不足时先问 1 到 3 个关键问题，优先确认 Agent 输入字段、期望输出或验收标准、关键业务场景或风险
-  - 直接写入 `.atk/datasets/dataset.csv`，并保证包含非空、唯一、正整数 `atk_id`
-  - 字段根据业务动态生成，至少包含一个清晰输入列和一个期望输出或验收标准列；可按需加入 `scenario`、`priority`、`notes` 等辅助列，但不把它们作为全局固定 Schema
-  - 默认生成 10 到 30 条高价值样本，重点覆盖主流程、边界输入、缺失或含糊信息、拒答/不确定或不支持请求、输出格式约束，以及用户描述的高优先级业务风险
-  - 当 `.atk/datasets/dataset.csv` 已存在时，必须先询问是否覆盖
-- **边界**：
-  - 第一版不做大规模默认合成扩写
-  - 不创建 `candidate_dataset.csv` 或其它候选数据集文件
-  - 不自动合并或追加已有 `dataset.csv`
-  - 不要求解析生产日志
-  - 当输入字段、期望输出语义、多种互不兼容的 Agent 任务或缺失领域事实会影响生成质量时，必须先向用户确认
-  - `$atk-build-dataset` 可创建初始 canonical dataset；`$atk-init` 仍负责接入 Agent 时的数据集校验/规范化和 runner 生成
-- **输出**：
-  - `.atk/datasets/dataset.csv`
-  - 下一步建议需根据 Agent 是否已存在分流：已有 Agent 时提示通过 `$atk-init` 接入新数据集并开始批量评测；没有 Agent 时提示先通过 `$atk-new-agent` 基于数据集创建 Agent；无法确认时同时说明两种可能路径
-
-### 2.1.1 ATK build Ground Truth：为现有数据集补齐统一预期语义（可选前置 Skill）
-- **适用场景**：
-  - 用户已经有 `.atk/datasets/dataset.csv`，但缺少清晰的预期结果、答案或验收标准列
-  - 用户希望在不改变异常筛选 Skill 行为的前提下，提高后续 `$atk-diagnose` 对“Agent 输出 vs 预期结果”的判断稳定性
-- **入口**：
-  - Codex Skill：`$atk-build-ground-truth`
-  - 产品名：`ATK build Ground Truth`
-- **功能**：
-  - 读取现有 `.atk/datasets/dataset.csv`，要求存在非空、唯一、正整数 `atk_id`
-  - 检查 `expected`、`expected_output`、`label`、`answer`、`target`、`acceptance_criteria`、`notes` 以及其它业务列，识别可作为 ground truth 来源的字段
-  - 在生成前要求用户选择一种全局一致的 `ground_truth` 风格：精确答案，或自然语言验收标准；不得在同一数据集中静默混用两种风格
-  - 在保留原有列和相对顺序的基础上补齐规范 `ground_truth` 列；若该列已存在或会语义替换 expected-like 字段，必须展示候选修改摘要并要求用户显式确认
-  - 候选修改摘要应包含受影响行数和代表性示例；大数据集不需要逐行列出全部变更
-- **边界**：
-  - 这是 dataset-only / pre-results Skill；不创建 `.atk/results/vN`，不运行 Agent / `atk-eval` / eval runner，不写 `failure_cases.csv`
-  - 第一版不改变 `$atk-diagnose` 行为，也不强制所有 ATK 数据集都必须拥有 `ground_truth`
-  - 不自动挖掘大规模生产日志，不在常规路径创建候选数据集文件，不发明缺失领域事实
-  - 当数据集包含多个互不兼容任务、所需领域事实缺失、已有 expected-like 语义冲突或风格选择不明确时，必须先向用户确认
-- **输出**：
-  - 更新后的 `.atk/datasets/dataset.csv`，保留原有列并包含规范 `ground_truth`
-  - 下一步建议：若现有 `eval_results.csv` 早于本次数据集补齐，提示重新运行 `$atk-eval`；若当前评测结果已反映补齐后的数据集，可继续 `$atk-diagnose`
+### 2.1.0 ATK Dataset：统一准备与修订评估数据（按需）
+- 入口 `$atk-dataset`：按已有资料完成导入/构建样本、补充可信判断依据或根据反馈局部修订，不要求用户选择模式。
+- 默认只保留 `.atk/datasets/dataset.csv`。已有可用数据直接复用，不自动迁移、扩写或覆盖。
+- 保留已有有效 `atk_id`、行顺序、原始输入、字段名及未涉及的值。只为缺少 ID 的新数据补充非空、唯一、正整数 ID。
+- 直接使用 expected、label、acceptance_criteria、ground_truth 等现有字段，不强制统一为 ground_truth，也不要求全局答案风格。
+- 缺少事实时留空或保留原值并说明缺口；输入可执行的样本可进入评测，无法支持的判定交由 atk-diagnose 保持 unknown。
+- 直接对话反馈无需先打开 HTML 和导出文件。原 dataset_review.csv 格式继续支持；核对来源及样本后修订，明确请求不重复确认。
+- 按需使用脚本 update_dataset.py 原子写回指定答案字段；未改变的 CSV 不重写。历史结果和判定不随数据修订改写。
+- 可选调用 atk-visualize-dataset 浏览，不作为数据准备完成条件。无 Agent 执行、结果版本、准备报告或 manifest。
+- 未接入或输入映射改变时继续 atk-init；已接入且映射兼容时继续 atk-eval。标准修订不等于 Agent 效果改善。
 
 ### 2.1.2 ATK new Agent：仅有数据集时初始化 Agent 项目（可选前置 Skill）
 - **适用场景**：
@@ -102,7 +66,7 @@
 - **边界**：
   - `$atk-new-agent` 是 pre-init scaffold Skill，不参与 `.atk/results/vN` 版本管理
   - `$atk-new-agent` 可以检查源数据集并记录字段推断，但不得写入 `.atk/datasets/dataset.csv`
-  - 如尚无评估数据集，可先使用 `$atk-build-dataset` 写入 `.atk/datasets/dataset.csv`
+  - 如尚无评估数据集，可先使用 `$atk-dataset` 写入 `.atk/datasets/dataset.csv`
   - `$atk-init` 仍然负责接入 Agent 时的 `atk_id` 校验/规范化和 `.atk/runner/eval_runner.py` 生成
   - 第一版不生成 RAG、Web UI、多供应商抽象、复杂单元测试或完整一键调优编排
 - **输出**：
@@ -247,9 +211,9 @@
 - **功能**：
   - 从 `.atk/datasets/dataset.csv` 生成便于人工浏览与质检的静态 HTML 浏览器 `.atk/datasets/dataset.html`
   - 通过插件内固定 Python 标准库脚本生成 HTML，避免模型临场生成可视化、LLM 摘要、项目内模板漂移或额外依赖
-  - 该 Skill 是独立的可选审阅步骤，不并入 `atk-build-dataset` 或 `atk-init`，也不改变数据集构建、校验或评估语义
+  - 该 Skill 是独立的可选审阅步骤，不并入 `atk-dataset` 或 `atk-init`，也不改变数据集构建、校验或评估语义
   - 重点支持快速确认每行 ground_truth 是否符合预期，并发现 ground_truth 错误、缺失或不合理的样本
-  - 可在 `.atk/datasets/dataset.csv` 存在后随时执行；推荐在 `atk-build-dataset` 之后、`atk-init` 之前用于浏览与质检
+  - 可在 `.atk/datasets/dataset.csv` 存在后随时执行；推荐在 `atk-dataset` 之后、`atk-init` 之前用于浏览与质检
 - **输入**：
   - 必需：`.atk/datasets/dataset.csv`（非版本化，位于 `.atk/datasets/`，不走 `.atk/results/vN`）
   - 自动识别 `atk_id` 列、输入列与 `expected|ground_truth|answer|label|target` 类期望列；无法识别时降级展示原始列并允许前端临时重映射
@@ -264,7 +228,7 @@
   - `数据列表` 支持全字段搜索、动态分类 facet 过滤、字段显示控制、排序、分页、质量标签过滤、详情抽屉，并突出「输入 vs ground_truth」对照
   - `字段特征分析` 提供字段角色映射、总行/总列/ground_truth/问题样本 KPI、分类分布摘要和逐字段统计；首版以核心视觉还原和静态阅读体验优先，不迁移浏览器上传、Gemini/AI Studio、数据集编辑或源码级 React 要求
   - **数据集质检 lint**：逐行计算并提供过滤标签，包括空 ground_truth、空输入、重复/缺失/非正整数 `atk_id`、冲突样本（相同输入不同 ground_truth）、完全重复样本（输入+ground_truth 相同）、ground_truth 过短/过长（长度离群）
-  - **客户端审阅**：每行详情提供一个面向 `ground_truth` 修正的自由文本反馈框，按 `atk_id` 和行号存入 `localStorage`；「导出审阅结果」经 Blob 下载 `dataset_review.csv`（仅含 `atk_id`、`row_number`、`review_feedback`，且只导出有反馈的行），完全离线、无后端；原始数据内容通过 `atk_id` / `row_number` 回连 `.atk/datasets/dataset.csv`，不在审阅导出中重复；审阅结果可通过 `$atk-tune-ground-truth` 作为用户对 `ground_truth` 判定的修正意见回写到 `.atk/datasets/dataset.csv`
+  - **客户端审阅**：每行详情提供一个面向预期结果修正的自由文本反馈框，按 `atk_id` 和行号存入 `localStorage`；「导出审阅结果」经 Blob 下载 `dataset_review.csv`（仅含 `atk_id`、`row_number`、`review_feedback`，且只导出有反馈的行），完全离线、无后端；原始数据内容通过 `atk_id` / `row_number` 回连 `.atk/datasets/dataset.csv`，不在审阅导出中重复；审阅结果可通过 `$atk-dataset` 作为用户对现有预期结果的修正意见回写到 `.atk/datasets/dataset.csv`
   - 数据集为空、表头无法解析或目标文件已存在且未确认覆盖时给出明确提示并安全退出，不破坏已有文件
 
 ### 2.6 Agent 调优模块（Codex Skill）
@@ -307,7 +271,7 @@
 ## 4. 版本管理要求
 - **统一父目录**：
   - 所有调优相关产物统一放在 `.atk/` 下
-  - `.atk/datasets/` 存放 ATK 可运行数据集；可由 `$atk-build-dataset` 初始创建，可由 `$atk-build-ground-truth` 对现有 `dataset.csv` 补齐 `ground_truth`，并由 `$atk-init` 校验/规范化后供 runner 使用
+  - `.atk/datasets/` 存放 ATK 可运行数据集；由 `$atk-dataset` 按需创建或修订，复用原有字段与 ID；`$atk-init` 负责输入映射与 runner 接入
   - `.atk/runner/` 存放跨版本共享脚本
   - `.atk/results/` 存放按版本隔离的结果
 - **版本命名**：
@@ -353,7 +317,7 @@
 ---
 
 ## 5. 使用示例（手工执行）
-1. 完成数据准备：本地待调优的 Agent 服务 + 评估数据集（默认 CSV）；如只有业务描述可先执行 `$atk-build-dataset`，如已有数据集但预期语义薄弱可先执行 `$atk-build-ground-truth` 补齐 `ground_truth`
+1. 需要准备或修订评估数据时执行 `$atk-dataset`；已有合适数据可直接接入或评测，浏览与反馈导出均为可选。
 2. 执行**批量测试脚本生成 Skill**，生成 `.atk/runner/eval_runner.py`；遇到 Agent 接入或字段不确定时按需与用户确认
 3. 执行 `atk-eval`，由其运行 `.atk/runner/eval_runner.py`，脚本自动创建 `.atk/results/v1/` 并写入 `eval_results.csv`（及可选 `app.log`）
 4. 执行 `atk-diagnose`，按需组合规则与语义判断，生成 `failure_cases.csv` 和 `judgments.csv`，给出初步定位。
@@ -370,7 +334,7 @@
 ```text
 /.atk/
 ├── datasets/
-│   ├── dataset.csv             # ATK 可运行数据集（含 atk_id），可由 atk-build-dataset 创建并由 atk-init 校验/规范化
+│   ├── dataset.csv             # ATK 可运行数据集（含 atk_id），可由 atk-dataset 创建并由 atk-init 校验/规范化
 │   └── dataset.html            # 数据集可视化与质检页（可选，由 atk-visualize-dataset 生成）
 ├── runner/
 │   ├── eval_runner.py          # 跨版本共享测试脚本

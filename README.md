@@ -10,7 +10,7 @@ Agent Tune Kit 是一个**本地 Codex 插件**，用于把你自己的本地 Ag
 
 ## 架构图
 
-![Agent Tune Kit 架构图：数据集准备，以及 atk-init → atk-eval → atk-diagnose → atk-report → atk-optimize 调优闭环；失败浏览为可选步骤，未判定不算通过。](docs/assets/arch.png)
+![Agent Tune Kit 工作流程：按需使用 atk-dataset 准备数据、atk-init 接入 Agent；核心闭环为 atk-eval → atk-diagnose → atk-report → atk-optimize → 再次评测。数据与结果浏览均为可选，未判定不算通过。](docs/assets/architecture.svg)
 
 ## 适合谁
 
@@ -66,27 +66,22 @@ atk install
 
 理想情况下，你已经有一个 Codex 能读取和修改的本地 Agent 项目，以及一份评估数据集。数据集建议优先使用 CSV；字段名不必严格固定，Codex 会根据内容判断输入、期望结果和评测方式。
 
-### 路径 A：数据集准备
+### 路径 A：数据集准备（按需）
 
-当你还没有可靠评估数据，或已有数据集但预期结果语义不稳定时，先走这条路径：
+用一个入口准备或修订评测数据；已有合适的数据可以直接复用：
 
 ```text
-$atk-build-dataset <你的业务描述、样例或规则>
-$atk-build-ground-truth
-$atk-visualize-dataset
-$atk-tune-ground-truth
+$atk-dataset 使用 data/eval.csv 准备评测数据，保留原字段和已有答案，只补充缺失且有依据的判断标准。
 ```
 
-这条路径只处理 `.atk/datasets/`，不会运行 Agent，也不会创建 `.atk/results/vN`。
+也可以提供业务示例，或直接说明“修改 atk_id 为 7 的预期结果”。构建样本、补充判断依据和反馈修订由同一个 Skill 按需完成，无需依次调用多个命令。
 
-| 命令 | 作用 | 关键产物 |
-| --- | --- | --- |
-| `$atk-build-dataset` | 从业务描述、样例或规则构建小型高价值评估数据集 | `.atk/datasets/dataset.csv` |
-| `$atk-build-ground-truth` | 为已有数据集补齐统一语义的 `ground_truth` | 更新 `.atk/datasets/dataset.csv` |
-| `$atk-visualize-dataset` | 生成本地离线 HTML，浏览、搜索、筛选、质检数据集，并导出人工反馈 | `.atk/datasets/dataset.html`、浏览器导出的 `dataset_review.csv` |
-| `$atk-tune-ground-truth` | 根据 `dataset_review.csv` 修正 `ground_truth` | 更新 `.atk/datasets/dataset.csv` |
+- 默认产物仍是 `.atk/datasets/dataset.csv`，保留已有字段、有效 `atk_id`、行顺序和未涉及的数据。
+- 直接复用 `expected`、`label`、`acceptance_criteria` 或 `ground_truth`，不强制新增规范答案列或选择全局答案风格。
+- 缺少可信判断依据的样本保留缺口，下游标为未判定，不编造答案。
+- 需要人工浏览时再调用 `$atk-visualize-dataset`。原有 HTML 和 `dataset_review.csv` 反馈格式继续可用，反馈回到 `$atk-dataset`；直接对话反馈无需先导出文件。
 
-`$atk-build-dataset` 会生成包含 `atk_id` 的 `.atk/datasets/dataset.csv`。它不会默认凭空推测规范 `ground_truth`；只有当用户明确提供正确答案或判定标准时才会写入。之后可以用 `$atk-build-ground-truth` 统一补齐预期结果，再用 `$atk-visualize-dataset` 做人工质检。如果 HTML 中导出的 `dataset_review.csv` 指出某些 `ground_truth` 不合理，运行 `$atk-tune-ground-truth` 把反馈写回数据集。
+准备阶段不运行 Agent、不创建结果版本。未接入时继续 `$atk-init`；已有兼容 runner 时继续 `$atk-eval`。数据或标准修订不改写历史结果，也不等于 Agent 改善。
 
 ### 路径 B：Agent 评测与调优
 
@@ -131,7 +126,7 @@ $atk-report
 
 ATK 可选读取本地私有的 `.atk/context.md`，用于保存用户沟通后确认的调优目标、Agent 行为标准、`ground_truth` 判定标准、人工反馈和调优决策。它不是数据集元信息或运行日志文件：字段名、行数、版本路径、执行统计等能从 `.atk/datasets/`、`.atk/results/` 或 runner 中恢复的信息不应写入这里。
 
-`$atk-build-ground-truth` 和 `$atk-tune-ground-truth` 会在用户确认 `ground_truth` 标准变化时更新相关标准；`$atk-diagnose`、`$atk-report` 和 `$atk-optimize` 会在判断失败、归因和调 Agent 时参考这些标准。缺少 `.atk/context.md` 不会阻塞任何流程。
+`$atk-dataset` 在用户确认可复用标准变化时更新相关上下文；`$atk-diagnose`、`$atk-report` 和 `$atk-optimize` 使用这些标准。缺少 `.atk/context.md` 不会阻塞流程。
 
 ## 输出结构
 
@@ -164,10 +159,8 @@ ATK 可选读取本地私有的 `.atk/context.md`，用于保存用户沟通后�
 
 ## 常用 Skill
 
-- `$atk-build-dataset`：从业务描述、样例或规则构建 `.atk/datasets/dataset.csv`。
-- `$atk-build-ground-truth`：为现有 `.atk/datasets/dataset.csv` 补齐规范的 `ground_truth` 列。
+- `$atk-dataset`：统一准备或修订评测数据，保留原字段和 ID，按需处理反馈。
 - `$atk-visualize-dataset`：将 `.atk/datasets/dataset.csv` 生成本地 HTML 浏览页，便于快速查看数据并确认 ground_truth 是否符合预期。
-- `$atk-tune-ground-truth`：根据 `dataset_review.csv` 中的用户反馈修正 `.atk/datasets/dataset.csv` 里的 `ground_truth`。
 - `$atk-init`：生成测试脚本。
 - `$atk-eval`：运行评测并生成新版本结果。
 - `$atk-diagnose`：统一识别失败与未判定样本，按需组合规则与语义判断并初步定位原因。

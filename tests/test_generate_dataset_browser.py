@@ -200,7 +200,7 @@ class GenerateDatasetBrowserTests(unittest.TestCase):
             result = run_generator(project)
 
             self.assertEqual(result.returncode, 2)
-            self.assertIn("run atk-build-dataset or atk-init first", result.stderr)
+            self.assertIn("run atk-dataset or atk-init first", result.stderr)
             self.assertFalse((project / ".atk" / "datasets" / "dataset.html").exists())
 
     def test_overwrite_refusal_then_success(self) -> None:

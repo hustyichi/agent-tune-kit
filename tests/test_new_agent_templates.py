@@ -35,114 +35,13 @@ def test_atk_new_agent_skill_is_pre_init_scaffold() -> None:
     assert "docs/shared-versioning-and-confirmation.md" not in text
 
 
-def test_atk_build_dataset_skill_is_pre_init_dataset_builder() -> None:
-    text = read_rel("skills/atk-build-dataset/SKILL.md")
-    text_lower = text.lower()
-    for phrase in [
-        "name: atk-build-dataset",
-        "pre-init",
-        ".atk/datasets/dataset.csv",
-        "atk_id",
-        "unique positive integers",
-        "at least one clear input column",
-        "expected output or acceptance standard",
-        "dynamic business columns",
-        "1-3 targeted questions",
-        "input fields are unclear",
-        "expected-output semantics are unclear",
-        "multiple incompatible Agent tasks",
-        "domain facts not provided by the user",
-        "main successful flow",
-        "boundary input",
-        "missing or ambiguous information",
-        "refusal, uncertainty, or unsupported request",
-        "output format constraint",
-        "business risk",
-        "ask before overwriting",
-        "large-scale default synthetic expansion",
-        "if an Agent exists",
-        "initialize batch evaluation",
-        "if no Agent exists",
-        "$atk-new-agent",
-        "if Agent existence is unclear",
-        "$atk-init",
-    ]:
-        assert phrase in text
-    for phrase in [
-        "do not automatically merge or append",
-        "do not create `candidate_dataset.csv`",
-    ]:
-        assert phrase in text_lower
-    assert "production-log parsing is not supported in the first version" in text
-    for section in [
-        "## Purpose",
-        "## Inputs",
-        "## Outputs",
-        "## Workflow",
-        "## Confirmation triggers",
-        "## Failure behavior",
-        "## Handoff message",
-    ]:
-        assert section in text
-    assert 'RESULTS_DIR = Path(".atk/results")' not in text
-    assert "docs/shared-versioning-and-confirmation.md" not in text
-    assert ".atk/specs/agent_spec.md" not in text
-    assert "Never write `.atk/datasets/dataset.csv`" not in text
-
-
-def test_atk_build_ground_truth_skill_is_dataset_enricher() -> None:
-    text = read_rel("skills/atk-build-ground-truth/SKILL.md")
-    for phrase in [
-        "name: atk-build-ground-truth",
-        "existing `.atk/datasets/dataset.csv`",
-        "dataset-only / pre-results",
-        "ground_truth",
-        "valid `atk_id`",
-        "unique positive integers",
-        "exact answer",
-        "natural-language acceptance criteria",
-        "global ground-truth style",
-        "dataset-wide",
-        "candidate modification summary",
-        "affected row counts and representative examples",
-        "overwrite existing `ground_truth`",
-        "semantically replace expected-like fields",
-        "multiple incompatible Agent tasks",
-        "required domain facts are absent",
-        "Do not create `.atk/results/vN`",
-        "Do not run the Agent",
-        "Do not run `$atk-eval`",
-        "Do not write `failure_cases.csv`",
-        "Do not change `atk-diagnose` behavior in v1",
-        "eval_results.csv` predates dataset enrichment",
-        ".atk/context.md",
-        "Ground Truth Standard",
-        "Do not use `.atk/context.md` for dataset metadata",
-    ]:
-        assert phrase in text
-    for section in [
-        "## Purpose",
-        "## Inputs",
-        "## Outputs",
-        "## Workflow",
-        "## Confirmation triggers",
-        "## Failure behavior",
-        "## Handoff message",
-    ]:
-        assert section in text
-    assert 'RESULTS_DIR = Path(".atk/results")' not in text
-    assert "docs/shared-versioning-and-confirmation.md" not in text
-    assert ".atk/specs/agent_spec.md" not in text
-    assert "Never write `.atk/datasets/dataset.csv`" not in text
-
-
 def test_local_context_contract_is_private_and_standard_focused() -> None:
     text = read_rel("docs/local-context.md")
     shared_text = read_rel("docs/shared-versioning-and-confirmation.md")
     read_only_skill = read_rel("skills/atk-diagnose/SKILL.md")
     tune_skill = read_rel("skills/atk-optimize/SKILL.md")
     report_skill = read_rel("skills/atk-report/SKILL.md")
-    tune_gt_skill = read_rel("skills/atk-tune-ground-truth/SKILL.md")
+    dataset_skill = read_rel("skills/atk-dataset/SKILL.md")
 
     for phrase in [
         "`./.atk/context.md` is a local, private tuning-consensus document",
@@ -165,8 +64,8 @@ def test_local_context_contract_is_private_and_standard_focused() -> None:
     assert "Do not write `.atk/context.md`" in read_only_skill
     assert "Do not modify `Ground Truth Standard`" in tune_skill
     assert "Append to `.atk/context.md` only when" in report_skill
-    assert "changes the confirmed `Ground Truth Standard`" in tune_gt_skill
-    assert "Do not use `.atk/context.md` for dataset metadata" in tune_gt_skill
+    assert "changes the confirmed `Ground Truth Standard`" in dataset_skill
+    assert "Do not use `.atk/context.md` for dataset metadata" in dataset_skill
 
 
 def test_generated_agent_templates_expose_runtime_contract() -> None:

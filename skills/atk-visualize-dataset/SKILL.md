@@ -12,7 +12,7 @@ reviewer can quickly browse the generated dataset, confirm whether each row's ex
 matches expectations, and spot dataset quality problems such as incorrect, unreasonable, or missing expected results
 before tuning. This is an
 optional, pre-init review Skill that operates only on the dataset stage; it does not read or write `.atk/results/vN`,
-does not participate in result versioning, and does not change `atk-build-dataset`, `atk-init`, or any failure-finding
+does not participate in result versioning, and does not change `atk-dataset`, `atk-init`, or any failure-finding
 semantics. Generation is handled by the fixed plugin-owned stdlib script `scripts/generate_dataset_browser.py`, not by
 model-time HTML synthesis, LLM summaries, or a project-local template.
 
@@ -36,7 +36,7 @@ requirements.
   - `.atk/datasets/dataset.csv`
 
 No version directory is required and no other ATK files are read. The dataset is intentionally non-versioned and lives
-under `.atk/datasets/`, parallel to `atk-build-dataset`.
+under `.atk/datasets/`, parallel to `atk-dataset`.
 
 ## Outputs
 
@@ -51,7 +51,7 @@ Do not write outside the `.atk/datasets/` directory during normal operation. The
 1. Resolve the installed Skill directory and script path as `skills/atk-visualize-dataset/scripts/generate_dataset_browser.py`
    relative to this `SKILL.md`. Run the script from the target project working directory, not from the plugin directory.
 2. Require the dataset CSV at `--dataset-path` (default `.atk/datasets/dataset.csv`). If it is missing, stop and tell the
-   user to run `atk-build-dataset` or `atk-init` first; do not fabricate a dataset.
+   user to run `atk-dataset` or `atk-init` first; do not fabricate a dataset.
 3. Set the output to `dataset.html` next to the dataset CSV and keep all normal output inside `.atk/datasets/`.
 4. If `dataset.html` already exists and may contain user edits, ask before overwriting that HTML artifact only. After
    confirmation, rerun the script with `--overwrite`; do not ask about unrelated dataset files.
@@ -98,7 +98,7 @@ python3 <skill-dir>/scripts/generate_dataset_browser.py [--dataset-path .atk/dat
     while the original row content remains associated through `atk_id` / `row_number` and is not duplicated in the
     review CSV. This keeps the artifact offline and backend-free; use the export to decide whether ordinary dataset
     rows need regeneration or whether canonical `ground_truth` should be created or corrected through
-    `atk-build-ground-truth`.
+    `atk-dataset`.
 15. Render a field-analysis tab using the static payload and vanilla JS: field role mapping, row/field/ground_truth
     KPI cards, detected issue summaries, categorical facet summaries, and per-field statistics. Do not promise a
     runtime React app, browser-upload flow, AI Studio integration, or in-browser dataset editing.
@@ -120,13 +120,13 @@ for temporary review mapping. Do not ask about obvious, low-risk mechanics.
 ## Failure behavior
 
 - Require `.atk/datasets/dataset.csv` (or the `--dataset-path` target); if missing, stop and tell the user to run
-  `atk-build-dataset` or `atk-init` first.
+  `atk-dataset` or `atk-init` first.
 - If `dataset.csv` is empty but has headers, still write a valid `dataset.html` with zero data rows and a clear
   empty-state summary.
 - If `dataset.csv` has blank or duplicate headers, stop with a clear message because preserving columns is uncertain.
 - If HTML generation fails after a temporary file is written, remove the temporary file when safe and leave any existing
   `dataset.html` untouched.
-- Never create metadata JSON, never add dependencies, and never change `atk-build-dataset` or `atk-init` behavior.
+- Never create metadata JSON, never add dependencies, and never change `atk-dataset` or `atk-init` behavior.
 
 ## Handoff message
 
@@ -142,5 +142,5 @@ After writing the visualization, summarize:
 - the `browser_open=...` line from stdout so the user knows whether the page was auto-opened (the Skill should pass
   `--open` by default; if the open attempt is skipped, tell the user to open the printed file path manually);
 - the next useful step: review the dataset, export `dataset_review.csv` with concise `review_feedback` for any
-  incorrect or unreasonable ground_truth, run `atk-build-ground-truth` when canonical `ground_truth` needs explicit
+  incorrect or unreasonable ground_truth, run `atk-dataset` when canonical `ground_truth` needs explicit
   correction, or proceed to `atk-init` when the dataset looks correct.

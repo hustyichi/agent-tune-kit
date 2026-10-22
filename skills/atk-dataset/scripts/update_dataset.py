@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Apply LLM-produced ground_truth updates based on dataset review feedback.
+"""Atomically apply grounded answer updates while preserving dataset fields and IDs.
 
-The script owns deterministic file handling: resolve the exported review CSV,
-validate it against the current canonical dataset, and atomically write approved
-ground_truth updates back to `.atk/datasets/dataset.csv`.
+Accept reviewed CSV feedback or explicit direct updates prepared by atk-dataset.
+The default answer column remains ground_truth for existing review exports.
 """
 
 from __future__ import annotations
@@ -23,7 +22,6 @@ DATASET_FILENAME = "dataset.csv"
 REVIEW_FILENAME = "dataset_review.csv"
 GROUND_TRUTH_FIELD = "ground_truth"
 REVIEW_REQUIRED_FIELDS = ["atk_id", "row_number", "review_feedback"]
-UPDATE_REQUIRED_FIELDS = ["atk_id", GROUND_TRUTH_FIELD]
 
 
 class UserActionRequired(RuntimeError):
@@ -31,9 +29,16 @@ class UserActionRequired(RuntimeError):
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Tune dataset ground_truth from exported dataset review feedback.")
+    parser = argparse.ArgumentParser(description="Update dataset answers from review files or direct feedback.")
     parser.add_argument("--dataset-path", default=str(DATASETS_DIR / DATASET_FILENAME))
-    parser.add_argument("--review-path", default=None)
+    feedback = parser.add_mutually_exclusive_group()
+    feedback.add_argument("--review-path", default=None)
+    feedback.add_argument(
+        "--direct", action="store_true", help="Apply explicitly requested updates without a review export."
+    )
+    parser.add_argument(
+        "--field", default=GROUND_TRUTH_FIELD, help="Answer/criteria column to update; preserve existing names."
+    )
     parser.add_argument("--updates-path", default=None)
     parser.add_argument("--home-dir", default=None, help="Override home directory for Downloads lookup.")
     parser.add_argument(
@@ -46,7 +51,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 def parse_csv(path: Path) -> tuple[list[str], list[dict[str, str]]]:
     try:
-        with path.open(newline="", encoding="utf-8") as handle:
+        with path.open(newline="", encoding="utf-8-sig") as handle:
             reader = csv.DictReader(handle, strict=True)
             fieldnames = list(reader.fieldnames or [])
             if not fieldnames or all(not (name or "").strip() for name in fieldnames):
@@ -99,7 +104,9 @@ def parse_review_csv(path: Path, dataset_rows: list[dict[str, str]]) -> tuple[li
     dataset_ids = {row["atk_id"] for row in dataset_rows}
     unknown = sorted({(row.get("atk_id") or "").strip() for row in review_rows if row.get("atk_id") not in dataset_ids})
     if unknown:
-        raise UserActionRequired(f"{path.as_posix()} contains review atk_id values absent from dataset.csv: {', '.join(unknown)}")
+        raise UserActionRequired(
+            f"{path.as_posix()} contains review atk_id values absent from dataset.csv: {', '.join(unknown)}"
+        )
     duplicates = find_duplicates((row.get("atk_id") or "").strip() for row in review_rows)
     if duplicates:
         raise UserActionRequired(f"{path.as_posix()} contains duplicate review atk_id values: {', '.join(duplicates)}")
@@ -151,16 +158,21 @@ def resolve_review_path(
     return valid_candidates[0]
 
 
-def parse_updates_csv(path: Path, dataset_rows: list[dict[str, str]], review_rows: list[dict[str, str]]) -> list[dict[str, str]]:
+def parse_updates_csv(
+    path: Path,
+    dataset_rows: list[dict[str, str]],
+    review_rows: list[dict[str, str]] | None,
+    field: str = GROUND_TRUTH_FIELD,
+) -> list[dict[str, str]]:
     fieldnames, rows = parse_csv(path)
-    missing = [field for field in UPDATE_REQUIRED_FIELDS if field not in fieldnames]
+    missing = [name for name in ("atk_id", field) if name not in fieldnames]
     if missing:
         raise UserActionRequired(f"{path.as_posix()} is missing required update fields: {', '.join(missing)}")
-    updates = [row for row in rows if (row.get(GROUND_TRUTH_FIELD) or "").strip()]
+    updates = [row for row in rows if (row.get(field) or "").strip()]
     if not updates:
-        raise UserActionRequired(f"{path.as_posix()} contains no non-empty ground_truth updates.")
+        raise UserActionRequired(f"{path.as_posix()} contains no non-empty {field} updates.")
     dataset_ids = {row["atk_id"] for row in dataset_rows}
-    review_ids = {row["atk_id"] for row in review_rows}
+    review_ids = {row["atk_id"] for row in review_rows} if review_rows is not None else dataset_ids
     unknown = sorted({row["atk_id"] for row in updates if row["atk_id"] not in dataset_ids})
     if unknown:
         raise UserActionRequired(f"{path.as_posix()} contains unknown atk_id values: {', '.join(unknown)}")
@@ -177,19 +189,20 @@ def apply_updates(
     fieldnames: list[str],
     dataset_rows: list[dict[str, str]],
     updates: list[dict[str, str]],
+    field: str = GROUND_TRUTH_FIELD,
 ) -> tuple[list[str], list[dict[str, str]], int]:
     output_fields = list(fieldnames)
-    if GROUND_TRUTH_FIELD not in output_fields:
-        output_fields.append(GROUND_TRUTH_FIELD)
+    if field not in output_fields:
+        output_fields.append(field)
         for row in dataset_rows:
-            row[GROUND_TRUTH_FIELD] = ""
+            row[field] = ""
 
-    updates_by_id = {row["atk_id"]: row[GROUND_TRUTH_FIELD] for row in updates}
+    updates_by_id = {row["atk_id"]: row[field] for row in updates}
     updated_count = 0
     for row in dataset_rows:
         atk_id = row["atk_id"]
-        if atk_id in updates_by_id:
-            row[GROUND_TRUTH_FIELD] = updates_by_id[atk_id]
+        if atk_id in updates_by_id and row[field] != updates_by_id[atk_id]:
+            row[field] = updates_by_id[atk_id]
             updated_count += 1
     return output_fields, dataset_rows, updated_count
 
@@ -217,7 +230,9 @@ def relpath_for_output(path: Path) -> str:
         return path.expanduser().as_posix()
 
 
-def build_context(dataset_path: Path, review_path: Path, dataset_rows: list[dict[str, str]], review_rows: list[dict[str, str]]) -> dict[str, Any]:
+def build_context(
+    dataset_path: Path, review_path: Path, dataset_rows: list[dict[str, str]], review_rows: list[dict[str, str]]
+) -> dict[str, Any]:
     rows_by_id = {row["atk_id"]: row for row in dataset_rows}
     return {
         "dataset_path": relpath_for_output(dataset_path),
@@ -237,30 +252,41 @@ def build_context(dataset_path: Path, review_path: Path, dataset_rows: list[dict
 
 def run(argv: list[str]) -> int:
     args = parse_args(argv)
+    if not args.field.strip() or args.field == "atk_id":
+        raise UserActionRequired("Answer field must be non-empty; cannot update atk_id.")
     dataset_path = Path(args.dataset_path)
     if not dataset_path.exists():
-        raise UserActionRequired(f"Dataset {dataset_path.as_posix()} is missing; run atk-build-dataset or atk-init first.")
+        raise UserActionRequired(f"Dataset {dataset_path.as_posix()} is missing; run atk-dataset or atk-init first.")
     if not dataset_path.is_file():
         raise UserActionRequired(f"Dataset path {dataset_path.as_posix()} is not a file; fix the dataset.")
 
     fieldnames, dataset_rows = parse_dataset_csv(dataset_path)
-    home_dir = Path(args.home_dir) if args.home_dir else Path.home()
-    review_path = resolve_review_path(args.review_path, dataset_path.parent, home_dir, dataset_rows)
-    _review_fields, review_rows = parse_review_csv(review_path, dataset_rows)
+    review_path, review_rows = None, None
+    if not args.direct:
+        home_dir = Path(args.home_dir) if args.home_dir else Path.home()
+        review_path = resolve_review_path(args.review_path, dataset_path.parent, home_dir, dataset_rows)
+        _review_fields, review_rows = parse_review_csv(review_path, dataset_rows)
 
     if args.dump_context or not args.updates_path:
-        print(json.dumps(build_context(dataset_path, review_path, dataset_rows, review_rows), ensure_ascii=False, indent=2))
+        context = (
+            build_context(dataset_path, review_path, dataset_rows, review_rows)
+            if review_path
+            else {"dataset_path": relpath_for_output(dataset_path), "field": args.field, "rows": dataset_rows}
+        )
+        print(json.dumps(context, ensure_ascii=False, indent=2))
         if not args.updates_path:
             return 0
 
-    updates = parse_updates_csv(Path(args.updates_path), dataset_rows, review_rows)
-    output_fields, output_rows, updated_count = apply_updates(fieldnames, dataset_rows, updates)
-    write_dataset_atomic(dataset_path, output_fields, output_rows)
+    updates = parse_updates_csv(Path(args.updates_path), dataset_rows, review_rows, args.field)
+    output_fields, output_rows, updated_count = apply_updates(fieldnames, dataset_rows, updates, args.field)
+    if updated_count:
+        write_dataset_atomic(dataset_path, output_fields, output_rows)
     print(f"dataset={relpath_for_output(dataset_path)}")
-    print(f"review={relpath_for_output(review_path)}")
-    print(f"review_rows={len(review_rows)}")
+    if review_path:
+        print(f"review={relpath_for_output(review_path)}")
+        print(f"review_rows={len(review_rows)}")
     print(f"updated_rows={updated_count}")
-    print(f"ground_truth_column={'existing' if GROUND_TRUTH_FIELD in fieldnames else 'appended'}")
+    print(f"{args.field}_column={'existing' if args.field in fieldnames else 'appended'}")
     return 0
 
 

@@ -10,7 +10,7 @@ It focuses on two jobs: first turn evaluation data into a reusable, human-review
 
 ## Architecture
 
-![Agent Tune Kit architecture: dataset preparation and the atk-init → atk-eval → atk-diagnose → atk-report → atk-optimize loop, with optional failure browsing. Unknown outcomes never count as passes.](docs/assets/arch-en.png)
+![Agent Tune Kit workflow: prepare data with atk-dataset and connect the Agent with atk-init as needed, then iterate through atk-eval → atk-diagnose → atk-report → atk-optimize → re-evaluation. Dataset and result browsers are optional. Unknown never counts as passed.](docs/assets/architecture.en.svg)
 
 ## Who It Is For
 
@@ -66,27 +66,22 @@ Run these commands in **your Agent project**, not in this repository.
 
 Ideally, you already have a local Agent project that Codex can inspect and edit, plus an evaluation dataset. CSV is recommended, but column names do not need to follow a strict schema; Codex will infer inputs, expected results, and evaluation shape from the data.
 
-### Path A: Dataset Preparation
+### Path A: Dataset preparation (as needed)
 
-Use this path when you do not yet have reliable evaluation data, or when your existing dataset has weak or unstable expected-result semantics:
+Use one entry point to prepare or revise data; reuse suitable existing data directly:
 
 ```text
-$atk-build-dataset <your business description, examples, or rules>
-$atk-build-ground-truth
-$atk-visualize-dataset
-$atk-tune-ground-truth
+$atk-dataset Prepare data/eval.csv for evaluation. Preserve existing fields and answers; fill only grounded gaps in the judgment criteria.
 ```
 
-This path only touches `.atk/datasets/`. It does not run the Agent or create `.atk/results/vN`.
+You can also supply business examples or directly request a correction for a specific atk_id. Sample construction, grounded criteria and feedback updates happen within the same Skill as needed.
 
-| Command | Purpose | Key output |
-| --- | --- | --- |
-| `$atk-build-dataset` | Build a small, high-value evaluation dataset from business context, examples, or rules | `.atk/datasets/dataset.csv` |
-| `$atk-build-ground-truth` | Add dataset-wide consistent `ground_truth` semantics to an existing dataset | Updates `.atk/datasets/dataset.csv` |
-| `$atk-visualize-dataset` | Generate local offline HTML for browsing, searching, filtering, quality-checking, and exporting human feedback | `.atk/datasets/dataset.html`, browser-exported `dataset_review.csv` |
-| `$atk-tune-ground-truth` | Correct `ground_truth` values from `dataset_review.csv` | Updates `.atk/datasets/dataset.csv` |
+- The default artifact remains `.atk/datasets/dataset.csv`, preserving existing columns, valid IDs, row order and unrelated values.
+- Reuse `expected`, `label`, `acceptance_criteria` or `ground_truth`; no mandatory canonical answer column or global answer style.
+- Missing trustworthy criteria remain gaps and produce unknown judgments downstream, not invented answers.
+- Call `$atk-visualize-dataset` only when human browsing helps. Existing HTML and `dataset_review.csv` exports remain supported; return feedback to `$atk-dataset`. Direct feedback needs no export.
 
-`$atk-build-dataset` writes `.atk/datasets/dataset.csv` with `atk_id`. It does not invent canonical `ground_truth` by default; it writes `ground_truth` only when you explicitly provide correct answers or a judgment policy. Then `$atk-build-ground-truth` can normalize expected-result semantics, `$atk-visualize-dataset` can support human review, and `$atk-tune-ground-truth` can write review feedback back into the dataset.
+Preparation does not run the Agent or create result versions. Continue to `$atk-init` when not connected, or `$atk-eval` with a compatible runner. Dataset/criteria corrections never rewrite historical results or prove Agent improvement.
 
 ### Path B: Agent Evaluation and Tuning
 
@@ -131,7 +126,7 @@ New results are written to a new `.atk/results/vN/`. `--only-failures` maps the 
 
 ATK can optionally read local private `.atk/context.md` to preserve user-confirmed tuning objectives, Agent behavior standards, `ground_truth` judgment standards, human feedback, and tuning decisions. It is not a dataset metadata or run-log file: field names, row counts, result paths, execution metrics, and other facts recoverable from `.atk/datasets/`, `.atk/results/`, or runner files should not be recorded there.
 
-`$atk-build-ground-truth` and `$atk-tune-ground-truth` update the relevant standard when the user confirms a `ground_truth` standard change. `$atk-diagnose`, `$atk-report`, and `$atk-optimize` use those standards when judging failures, attributing causes, and tuning the Agent. Missing `.atk/context.md` never blocks the workflow.
+`$atk-dataset` updates reusable standards when confirmed by the user; `$atk-diagnose`, `$atk-report` and `$atk-optimize` use them. Missing `.atk/context.md` does not block the workflow.
 
 ## Output Structure
 
@@ -164,10 +159,8 @@ Common output files:
 
 ## Common Skills
 
-- `$atk-build-dataset`: build `.atk/datasets/dataset.csv` from business context, examples, or rules.
-- `$atk-build-ground-truth`: enrich an existing `.atk/datasets/dataset.csv` with a canonical `ground_truth` column.
+- `$atk-dataset`: prepare or revise evaluation data while preserving fields and IDs, with feedback applied as needed.
 - `$atk-visualize-dataset`: render `.atk/datasets/dataset.csv` into a local HTML browser for quickly reviewing rows and expected-result fields.
-- `$atk-tune-ground-truth`: correct `.atk/datasets/dataset.csv` `ground_truth` values from user feedback in `dataset_review.csv`.
 - `$atk-init`: generate the test runner.
 - `$atk-eval`: run evaluation and create a new result version.
 - `$atk-diagnose`: identify failures and unknowns using rules and semantic judgment, with initial cause investigation.

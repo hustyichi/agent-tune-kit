@@ -31,7 +31,7 @@
   };
 
   var ROLE_LIST = ["id", "input", "expected"];
-  var ROLE_LABELS = { id: "ID", input: "输入", expected: "ground_truth" };
+  var ROLE_LABELS = { id: "ID", input: "输入", expected: "预期结果" };
   var $ = function (id) { return document.getElementById(id); };
   var el = function (tag, props, children) {
     var node = document.createElement(tag);
@@ -583,7 +583,7 @@
     right.appendChild(el("div", { class: "field-pane gt-box" + (gtValue.trim() ? "" : " empty") }, [
       el("div", { class: "field-pane-head" }, [
         el("span", { text: gtValue.trim() ? "GROUND TRUTH" : "GROUND TRUTH 为空" }),
-        el("span", { text: gtField || "未识别 ground_truth 列" }),
+        el("span", { text: gtField || "未识别预期结果列" }),
       ]),
       gtContentEl,
     ]));
@@ -679,7 +679,7 @@
     ]));
     var feedback = el("textarea", {
       class: "review-note",
-      placeholder: "仅异常项填写：用一句明确反馈描述 ground_truth 应如何调整…",
+      placeholder: "仅异常项填写：用一句明确反馈描述预期结果或验收标准应如何调整…",
       oninput: function (ev) {
         setFeedback(row, ev.target.value);
         renderMeta();

@@ -468,7 +468,7 @@ def run(argv: list[str]) -> int:
     dataset_path = Path(args.dataset_path)
     if not dataset_path.exists():
         raise UserActionRequired(
-            f"Dataset {dataset_path.as_posix()} is missing; run atk-build-dataset or atk-init first."
+            f"Dataset {dataset_path.as_posix()} is missing; run atk-dataset or atk-init first."
         )
     if not dataset_path.is_file():
         raise UserActionRequired(f"Dataset path {dataset_path.as_posix()} is not a file; fix the dataset.")

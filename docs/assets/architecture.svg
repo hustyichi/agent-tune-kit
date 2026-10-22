@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1100" viewBox="0 0 1440 1100" role="img" aria-labelledby="title desc" xml:lang="zh">
+  <title id="title">Agent Tune Kit — 工作流程</title>
+  <desc id="desc">按需使用 atk-dataset 准备数据、atk-init 接入 Agent。核心循环为 atk-eval、atk-diagnose、atk-report、atk-optimize，再次评测。两个浏览 Skill 为可选。未判定不计作通过。</desc>
+  <defs>
+    <marker id="arrow" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0L8 4.5L0 9Z" fill="#617b77"/></marker>
+    <marker id="loop-arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0L9 5L0 10Z" fill="#af492b"/></marker>
+    <style>
+      text { font-family: 'Avenir Next', 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #193733; }
+      .muted { fill: #526b66; }
+      .label { font-size: 17px; font-weight: 600; letter-spacing: 1px; }
+      .command { font-family: 'SFMono-Regular', Consolas, monospace; font-size: 25px; font-weight: 600; }
+      .file { font-family: 'SFMono-Regular', Consolas, monospace; font-size: 18px; fill: #526b66; }
+      .arrow { fill: none; stroke: #617b77; stroke-width: 2; marker-end: url(#arrow); }
+    </style>
+  </defs>
+  <rect width="1440" height="1100" fill="#f7f6f1"/>
+  <text x="56" y="49" font-size="20" class="label" style="fill:#14776a">本地 CODEX 插件  /  工作流程</text>
+  <text x="56" y="108" font-size="48" font-weight="650">Agent Tune Kit</text>
+  <text x="56" y="147" font-size="23" class="muted">按需准备数据与接入，在四步闭环中持续改进 Agent。</text>
+  <path d="M56 176H1384" fill="none" stroke="#d6ded6" stroke-width="1"/>
+  <text x="56" y="210" font-size="20" class="label">准备 · 按需执行</text>
+  <text x="1384" y="210" font-size="17" class="muted" text-anchor="end">已有可用数据和兼容 runner，可直接进入评测</text>
+  <rect x="56" y="231" width="640" height="155" rx="8" fill="#f0f4ed" stroke="#d3dfd5"/>
+  <text x="80" y="266" font-size="18" font-weight="600" style="fill:#14776a">数据准备</text>
+  <text x="672" y="266" font-size="20" class="command" text-anchor="end">$atk-dataset</text>
+  <text x="80" y="307" font-size="21">准备、复用或修订；保留现有字段和 ID</text>
+  <text x="80" y="357" font-size="20" class="file">.atk/datasets/dataset.csv</text>
+  <rect x="744" y="231" width="640" height="155" rx="8" fill="#f0f4ed" stroke="#d3dfd5"/>
+  <text x="768" y="266" font-size="18" font-weight="600" style="fill:#14776a">Agent 接入</text>
+  <text x="1360" y="266" font-size="20" class="command" text-anchor="end">$atk-init</text>
+  <text x="768" y="307" font-size="21">首次接入或输入映射变化时，生成或调整 runner</text>
+  <text x="768" y="357" font-size="20" class="file">.atk/runner/eval_runner.py</text>
+  <path d="M376 386V414H1064V386" fill="none" stroke="#617b77" stroke-width="2"/>
+  <path d="M720 414V448" fill="none" class="arrow"/>
+  <rect x="56" y="448" width="1328" height="376" rx="8" fill="#e9eee8"/>
+  <text x="84" y="490" font-size="20" class="label">持续迭代</text>
+  <text x="1356" y="490" font-size="17" class="muted" text-anchor="end">Codex：判断与修改   ·   本地脚本：执行与保存</text>
+  <rect x="84" y="526" width="276" height="205" rx="8" fill="#fffef9" stroke="#d3dcd2"/>
+  <text x="104" y="557" font-size="15" font-weight="650" style="fill:#af492b">01</text>
+  <text x="104" y="593" font-size="20" class="command">$atk-eval</text>
+  <text x="104" y="632" font-size="25" font-weight="600">批量评测</text>
+  <text x="104" y="657" font-size="17" class="muted">运行 Agent，记录实际输出</text>
+  <text x="104" y="690" font-size="20" class="file">eval_results.csv</text>
+  <path d="M360 618H406" fill="none" class="arrow"/>
+  <rect x="416" y="526" width="276" height="205" rx="8" fill="#fffef9" stroke="#d3dcd2"/>
+  <text x="436" y="557" font-size="15" font-weight="650" style="fill:#af492b">02</text>
+  <text x="436" y="593" font-size="20" class="command">$atk-diagnose</text>
+  <text x="436" y="632" font-size="25" font-weight="600">异常诊断</text>
+  <text x="436" y="657" font-size="17" class="muted">规则与语义判断，初步定位</text>
+  <text x="436" y="690" font-size="20" class="file">judgments.csv</text>
+  <text x="436" y="714" font-size="20" class="file">failure_cases.csv</text>
+  <path d="M692 618H738" fill="none" class="arrow"/>
+  <rect x="748" y="526" width="276" height="205" rx="8" fill="#fffef9" stroke="#d3dcd2"/>
+  <text x="768" y="557" font-size="15" font-weight="650" style="fill:#af492b">03</text>
+  <text x="768" y="593" font-size="20" class="command">$atk-report</text>
+  <text x="768" y="632" font-size="25" font-weight="600">分析报告</text>
+  <text x="768" y="657" font-size="17" class="muted">汇总归因，按条件跨轮复核</text>
+  <text x="768" y="690" font-size="20" class="file">report.md</text>
+  <path d="M1024 618H1070" fill="none" class="arrow"/>
+  <rect x="1080" y="526" width="276" height="205" rx="8" fill="#fffef9" stroke="#d3dcd2"/>
+  <text x="1100" y="557" font-size="15" font-weight="650" style="fill:#af492b">04</text>
+  <text x="1100" y="593" font-size="20" class="command">$atk-optimize</text>
+  <text x="1100" y="632" font-size="25" font-weight="600">实施优化</text>
+  <text x="1100" y="657" font-size="17" class="muted">根据报告修改 Agent</text>
+  <text x="1100" y="690" font-size="20" class="file">tuning_plan.md</text>
+  <path d="M1218 731V779H222V734" fill="none" stroke="#af492b" stroke-width="2.5" marker-end="url(#loop-arrow)"/>
+  <rect x="372" y="760" width="696" height="37" rx="0" fill="#e9eee8"/>
+  <text x="720" y="785" font-size="20" font-weight="550" style="fill:#944025" text-anchor="middle">修改后再次评测 · 按需选择全量或仅确认失败样本</text>
+  <rect x="56" y="850" width="110" height="40" rx="20" fill="#e7eee5"/>
+  <text x="111.0" y="877" font-size="18" font-weight="600" style="fill:#17684e" text-anchor="middle">通过</text>
+  <rect x="182" y="850" width="110" height="40" rx="20" fill="#f5e9df"/>
+  <text x="237.0" y="877" font-size="18" font-weight="600" style="fill:#a03f2b" text-anchor="middle">失败</text>
+  <rect x="308" y="850" width="126" height="40" rx="20" fill="#eeeadb"/>
+  <text x="371.0" y="877" font-size="18" font-weight="600" style="fill:#655327" text-anchor="middle">未判定</text>
+  <text x="458" y="877" font-size="20" font-weight="600">未判定不算通过</text>
+  <text x="1384" y="860" font-size="15" class="muted" text-anchor="end">每轮结果</text>
+  <text x="1384" y="886" font-size="20" class="file" text-anchor="end">.atk/results/vN/</text>
+  <path d="M56 916H1384" fill="none" stroke="#d6ded6" stroke-width="1"/>
+  <text x="56" y="947" font-size="20" class="label">按需浏览 · 不阻塞主流程</text>
+  <text x="56" y="990" font-size="20" class="command">$atk-visualize-dataset</text>
+  <text x="56" y="1024" font-size="20" class="muted">浏览数据；对话或导出反馈返回 atk-dataset</text>
+  <path d="M720 966V1034" fill="none" stroke="#d6ded6" stroke-width="1"/>
+  <text x="764" y="990" font-size="20" class="command">$atk-visualize-failures</text>
+  <text x="764" y="1024" font-size="20" class="muted">诊断后查看结果；报告可作为补充</text>
+  <text x="56" y="1073" font-size="16" class="muted">跨轮复核需要可比证据与上一轮调优计划。</text>
+</svg>
