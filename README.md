@@ -95,7 +95,7 @@ $atk-tune-ground-truth
 ```text
 $atk-init 我的 Agent 入口是 scripts/agent.py，评估数据是 data/eval.csv
 $atk-eval
-$atk-find-failures
+$atk-diagnose
 $atk-report
 $atk-visualize-failures
 $atk-optimize
@@ -105,17 +105,15 @@ $atk-optimize
 | --- | --- | --- |
 | `$atk-init` | 接入已有 Agent 和评估数据，生成 runner，并把数据集规范化到 ATK 固定位置 | `.atk/runner/eval_runner.py`、`.atk/datasets/dataset.csv` |
 | `$atk-eval` | 执行批量评测，由 runner 创建或复用当前结果版本 | `.atk/results/vN/eval_results.csv` |
-| `$atk-find-failures` | 让 Codex 根据当前评测结果判断异常样本 | `.atk/results/vN/failure_cases.csv` |
+| `$atk-diagnose` | 统一判断异常并初步定位原因 | `.atk/results/vN/failure_cases.csv`、`judgments.csv` |
 | `$atk-report` | 生成当前轮分析报告，并在有上一轮时做跨版本验证 | `.atk/results/vN/report.md` |
 | `$atk-visualize-failures` | 生成本地离线 HTML，搜索、筛选、复核失败样本 | `.atk/results/vN/failure_cases.html` |
 | `$atk-optimize` | 基于报告和失败样本调 prompt、代码、参数或工具配置 | Agent 改动、`.atk/results/vN/tuning_plan.md` |
 
-如果你有稳定、可程序化表达的失败判定标准，可以用规则分支替换 `$atk-find-failures`：
-
-```text
-$atk-init-failure-rule 规则：当 expected 字段与 agent_output 字段不一致时判定为异常
-$atk-find-failures-by-rule
-```
+`$atk-diagnose` 统一使用规则检查与 Codex 语义判断。已有规则按需复用，需要时在同一步准备并执行，无需选择模式。
+它保留确认失败的 `failure_cases.csv`，并生成逐条 `judgments.csv`（通过／失败／未判定及理由）。
+未判定样本不会被算作通过，也不混入 `--only-failures`。旧结果缺少判定记录时，仍可查看已知失败，其余状态为未知。
+之后继续 `$atk-report` 汇总归因与跨轮复核，再用 `$atk-optimize` 调优。
 
 #### 验证是否变好
 
@@ -123,7 +121,7 @@ $atk-find-failures-by-rule
 
 ```text
 $atk-eval --only-failures
-$atk-find-failures
+$atk-diagnose
 $atk-report
 ```
 
@@ -133,7 +131,7 @@ $atk-report
 
 ATK 可选读取本地私有的 `.atk/context.md`，用于保存用户沟通后确认的调优目标、Agent 行为标准、`ground_truth` 判定标准、人工反馈和调优决策。它不是数据集元信息或运行日志文件：字段名、行数、版本路径、执行统计等能从 `.atk/datasets/`、`.atk/results/` 或 runner 中恢复的信息不应写入这里。
 
-`$atk-build-ground-truth` 和 `$atk-tune-ground-truth` 会在用户确认 `ground_truth` 标准变化时更新相关标准；`$atk-find-failures`、`$atk-report` 和 `$atk-optimize` 会在判断失败、归因和调 Agent 时参考这些标准。缺少 `.atk/context.md` 不会阻塞任何流程。
+`$atk-build-ground-truth` 和 `$atk-tune-ground-truth` 会在用户确认 `ground_truth` 标准变化时更新相关标准；`$atk-diagnose`、`$atk-report` 和 `$atk-optimize` 会在判断失败、归因和调 Agent 时参考这些标准。缺少 `.atk/context.md` 不会阻塞任何流程。
 
 ## 输出结构
 
@@ -147,6 +145,7 @@ ATK 可选读取本地私有的 `.atk/context.md`，用于保存用户沟通后�
 └── results/
     ├── v1/
     │   ├── eval_results.csv
+    │   ├── judgments.csv
     │   ├── failure_cases.csv
     │   ├── failure_cases.html
     │   ├── report.md
@@ -171,9 +170,7 @@ ATK 可选读取本地私有的 `.atk/context.md`，用于保存用户沟通后�
 - `$atk-tune-ground-truth`：根据 `dataset_review.csv` 中的用户反馈修正 `.atk/datasets/dataset.csv` 里的 `ground_truth`。
 - `$atk-init`：生成测试脚本。
 - `$atk-eval`：运行评测并生成新版本结果。
-- `$atk-find-failures`：让 Codex 判断异常样本。
-- `$atk-init-failure-rule`：创建或更新异常判定规则。
-- `$atk-find-failures-by-rule`：按规则筛选异常样本。
+- `$atk-diagnose`：统一识别失败与未判定样本，按需组合规则与语义判断并初步定位原因。
 - `$atk-report`：生成分析报告和跨轮验证结论。
 - `$atk-visualize-failures`：生成异常样本 HTML 浏览页。
 - `$atk-optimize`：根据报告调优 Agent。

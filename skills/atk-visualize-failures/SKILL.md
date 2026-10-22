@@ -78,7 +78,7 @@ Do not ask merely because same-version `report.md` is missing or unparseable; th
 
 ## Failure behavior
 
-- Require current `failure_cases.csv`; if missing, stop and tell the user to run `atk-find-failures` or `atk-find-failures-by-rule` first.
+- Require current `failure_cases.csv`; if missing, stop and tell the user to run `atk-diagnose` first.
 - If `failure_cases.csv` is empty but has headers, still write a valid `failure_cases.html` with zero failure rows and a clear empty-state summary.
 - If optional `report.md` is missing, malformed, too large, or unparseable, continue and explicitly note that report context was skipped.
 - If HTML generation fails after a temporary file is written, remove the temporary file when safe and leave any existing `failure_cases.html` untouched.
@@ -95,3 +95,6 @@ After writing the visualization, summarize:
 - whether the HTML includes the dataset-style shell, `stat-card-abnormal`, search/filter, pagination, field feature analysis, inspector overlay, schema-adaptive role switching, JSON/code rendering, review export, and safe relative log links;
 - the `browser_open=...` line from stdout so the user knows whether the page was auto-opened (the Skill should pass `--open` by default; if the open attempt is skipped, tell the user to open the printed file path manually);
 - whether the next useful review step is `atk-optimize` after inspecting the failures.
+
+Explicit judgments in `judgments.csv` distinguish passed from unknown. Missing or stale judgments never imply success;
+unknowns are excluded from the normal filter and prevent target-resolution claims. Legacy failure tables remain readable.

@@ -108,7 +108,7 @@ def resolve_latest_failure_cases_version(results_dir: Path = RESULTS_DIR) -> Pat
         if (version_dir / FAILURE_FILENAME).exists():
             return version_dir
     raise UserActionRequired(
-        f"No prior {FAILURE_FILENAME} found; run atk-find-failures or atk-find-failures-by-rule first."
+        f"No prior {FAILURE_FILENAME} found; run atk-diagnose first."
     )
 
 

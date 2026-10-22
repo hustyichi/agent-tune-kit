@@ -38,11 +38,9 @@ def test_atk_init_contract_keeps_structured_output_in_agent_output_only() -> Non
 
 
 def test_failure_finding_handoffs_route_to_report() -> None:
-    direct_text = (ROOT / "skills/atk-find-failures/SKILL.md").read_text(encoding="utf-8")
-    rule_text = (ROOT / "skills/atk-find-failures-by-rule/SKILL.md").read_text(encoding="utf-8")
+    direct_text = (ROOT / "skills/atk-diagnose/SKILL.md").read_text(encoding="utf-8")
     shared_text = (ROOT / "docs/shared-versioning-and-confirmation.md").read_text(encoding="utf-8")
 
     expected_handoff = "next command: `atk-report` to generate `.atk/results/vN/report.md`"
     assert expected_handoff in direct_text
-    assert expected_handoff in rule_text
     assert "After writing `failure_cases.csv`, tell the user to run `atk-report` next." in shared_text

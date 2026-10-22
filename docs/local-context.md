@@ -93,7 +93,7 @@ preserve?" If not, leave it out.
   user confirms dataset-wide `ground_truth` semantics.
 - `atk-tune-ground-truth`: reads `Ground Truth Standard`; updates it when review feedback changes the confirmed
   standard, and records the decision in `Tuning Decisions`.
-- `atk-find-failures`: reads `Tuning Objective`, `Agent Behavior Standard`, and `Ground Truth Standard` before judging
+- `atk-diagnose`: reads `Tuning Objective`, `Agent Behavior Standard`, and `Ground Truth Standard` before judging
   failures; should not write the local context.
 - `atk-report`: reads the whole document when present; may append durable `User Feedback` or `Tuning Decisions` only
   when the report conclusion reflects user-confirmed or human-reviewed guidance rather than routine run facts.

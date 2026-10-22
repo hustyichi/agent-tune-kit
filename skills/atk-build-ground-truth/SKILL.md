@@ -7,7 +7,7 @@ description: Enrich an existing `.atk/datasets/dataset.csv` with a canonical `gr
 
 ## Purpose
 
-Enrich an existing ATK canonical dataset with a dataset-wide-consistent `ground_truth` column before result generation. This is a dataset-only / pre-results Skill: it updates `.atk/datasets/dataset.csv`, but it does not create `.atk/results/vN`, does not run the Agent or eval runner, does not run `$atk-eval`, does not write `failure_cases.csv`, and does not change `atk-find-failures` behavior in v1.
+Enrich an existing ATK canonical dataset with a dataset-wide-consistent `ground_truth` column before result generation. This is a dataset-only / pre-results Skill: it updates `.atk/datasets/dataset.csv`, but it does not create `.atk/results/vN`, does not run the Agent or eval runner, does not run `$atk-eval`, does not write `failure_cases.csv`, and does not change `atk-diagnose` behavior in v1.
 
 Use this when the user already has an ATK dataset but failure judgment is unstable because expected-result semantics are missing, inconsistent, or too weak. The goal is to make downstream evaluation review clearer while preserving ATK's schema-adaptive dataset design.
 
@@ -57,7 +57,7 @@ Do not create `candidate_dataset.csv` or another alternate dataset filename as t
     generation details there.
 12. Handoff based on result freshness:
     - recommend `$atk-eval` if evaluation has not been run yet or if existing `eval_results.csv` predates dataset enrichment;
-    - recommend `$atk-find-failures` if current `eval_results.csv` already reflects the enriched dataset and the user wants failure discovery.
+    - recommend `$atk-diagnose` if current `eval_results.csv` already reflects the enriched dataset and the user wants failure discovery.
 
 ## Confirmation triggers
 
@@ -99,7 +99,7 @@ After updating the dataset, summarize:
 - assumptions, missing domain facts, or rows left unchanged;
 - next step:
   - run `$atk-eval` when no current evaluation exists or when existing `eval_results.csv` predates dataset enrichment;
-  - run `$atk-find-failures` when current `eval_results.csv` already reflects the enriched dataset and the user wants failure discovery.
+  - run `$atk-diagnose` when current `eval_results.csv` already reflects the enriched dataset and the user wants failure discovery.
 
 ## V1 boundaries
 
@@ -108,7 +108,7 @@ After updating the dataset, summarize:
 - Do not run the eval runner.
 - Do not run `$atk-eval`.
 - Do not write `failure_cases.csv`.
-- Do not change `atk-find-failures` behavior in v1.
+- Do not change `atk-diagnose` behavior in v1.
 - Do not silently mix exact-answer and natural-language acceptance-criteria styles.
 - Do not make `ground_truth` a universal schema requirement for all ATK workflows.
 - Do not use `.atk/context.md` for dataset metadata, result versions, or run logs.

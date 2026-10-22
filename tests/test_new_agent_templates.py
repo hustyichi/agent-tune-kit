@@ -113,7 +113,7 @@ def test_atk_build_ground_truth_skill_is_dataset_enricher() -> None:
         "Do not run the Agent",
         "Do not run `$atk-eval`",
         "Do not write `failure_cases.csv`",
-        "Do not change `atk-find-failures` behavior in v1",
+        "Do not change `atk-diagnose` behavior in v1",
         "eval_results.csv` predates dataset enrichment",
         ".atk/context.md",
         "Ground Truth Standard",
@@ -139,7 +139,7 @@ def test_atk_build_ground_truth_skill_is_dataset_enricher() -> None:
 def test_local_context_contract_is_private_and_standard_focused() -> None:
     text = read_rel("docs/local-context.md")
     shared_text = read_rel("docs/shared-versioning-and-confirmation.md")
-    read_only_skill = read_rel("skills/atk-find-failures/SKILL.md")
+    read_only_skill = read_rel("skills/atk-diagnose/SKILL.md")
     tune_skill = read_rel("skills/atk-optimize/SKILL.md")
     report_skill = read_rel("skills/atk-report/SKILL.md")
     tune_gt_skill = read_rel("skills/atk-tune-ground-truth/SKILL.md")

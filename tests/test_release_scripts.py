@@ -91,7 +91,7 @@ class ReleaseScriptTests(unittest.TestCase):
             "Do not run the Agent",
             "Do not run `$atk-eval`",
             "Do not write `failure_cases.csv`",
-            "Do not change `atk-find-failures` behavior in v1",
+            "Do not change `atk-diagnose` behavior in v1",
         ]:
             self.assertIn(phrase, required_phrases)
 

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import html
 import io
 import json
@@ -444,6 +445,40 @@ def _parse_tuning_plan_targets(plan_path: Path) -> dict[str, Any]:
     return out
 
 
+def read_judgments(version_dir: Path) -> dict[str, str]:
+    """Read explicit verdicts only when they refer to the unchanged result file."""
+    try:
+        result_path = version_dir / EVAL_FILENAME
+        if result_path.stat().st_size > HISTORY_EVAL_MAX_BYTES:
+            return {}
+        digest = hashlib.sha256(result_path.read_bytes()).hexdigest()
+        text, truncated = _safe_read_csv_text(version_dir / "judgments.csv", HISTORY_FAILURE_MAX_BYTES)
+        if truncated:
+            return {}
+        reader = csv.DictReader(io.StringIO(text, newline=""), strict=True)
+        required = {"atk_id", "verdict", "reason", "results_sha256"}
+        fields = reader.fieldnames or []
+        if not required <= set(fields) or len(fields) != len(set(fields)):
+            return {}
+        verdicts = {}
+        for row in reader:
+            aid = (row.get("atk_id") or "").strip()
+            verdict = row.get("verdict")
+            if not aid:
+                continue
+            if (
+                aid in verdicts
+                or row.get("results_sha256") != digest
+                or verdict not in {"passed", "failed", "unknown"}
+                or not (row.get("reason") or "").strip()
+            ):
+                verdict = "unknown"
+            verdicts[aid] = verdict
+        return verdicts
+    except (OSError, UnicodeError, csv.Error):
+        return {}
+
+
 def _summarize_version(version_dir: Path) -> dict[str, Any]:
     """Read failure + tested atk_id sets for a single historical version."""
     failure_info = (
@@ -478,7 +513,7 @@ def build_history(
     *,
     skip: bool = False,
 ) -> dict[str, Any]:
-    """Assemble cross-version trend, three-state per-case status, target hit rate, etc."""
+    """Assemble cross-version trend, explicit per-case status, and target resolution."""
     if skip:
         return {
             "status": "skipped",
@@ -530,7 +565,7 @@ def build_history(
                 "isCurrent": True,
                 "hasFailureCsv": True,
                 "failureReadable": True,
-                "failedCount": len(current_rows),
+                "failedCount": len(current_failed_ids),
                 "failedAtkIds": current_failed_ids,
                 "reasonCounts": current_reason_counts,
                 "reasonField": current_reason_field,
@@ -548,7 +583,19 @@ def build_history(
         else:
             summary = _summarize_version(vpath)
             summary["isCurrent"] = False
+        verdicts = read_judgments(vpath)
+        tested_ids = summary["testedAtkIds"]
+        summary["failedAtkIds"] |= {
+            aid for aid, verdict in verdicts.items() if verdict == "failed" and aid in tested_ids
+        }
+        summary["passedAtkIds"] = {
+            aid for aid, verdict in verdicts.items() if verdict == "passed" and aid in tested_ids
+        } - summary["failedAtkIds"]
+        summary["unknownAtkIds"] = tested_ids - summary["failedAtkIds"] - summary["passedAtkIds"]
+        if summary["atkIdField"]:
+            summary["failedCount"] = len(summary["failedAtkIds"])
         version_summaries.append(summary)
+        interesting_ids.update(summary["unknownAtkIds"])
         interesting_ids.update(summary.get("failedAtkIds", set()))
 
     # Heuristic subset-run detection: tested set materially shrinks vs previous.
@@ -562,7 +609,7 @@ def build_history(
         if tested is not None:
             prev_tested = tested
 
-    # Three-state per-case status: passed / failed / not_tested per version.
+    # A missing verdict is unknown, never an implicit pass.
     per_case: list[dict[str, Any]] = []
     if atk_field and interesting_ids:
         for aid in sorted(interesting_ids, key=lambda v: (len(v), v)):
@@ -581,10 +628,10 @@ def build_history(
                         first_seen = vname
                 elif summary["evalAvailable"]:
                     if aid in summary["testedAtkIds"]:
-                        statuses[vname] = "passed"
+                        statuses[vname] = "passed" if aid in summary["passedAtkIds"] else "unknown"
                         tested_versions.append(vname)
                     else:
-                        statuses[vname] = "not_tested"
+                        statuses[vname] = "unknown" if summary["evalTruncated"] else "not_tested"
                 else:
                     statuses[vname] = "unknown"
             per_case.append(
@@ -616,25 +663,20 @@ def build_history(
                 resolution = "indeterminate"
                 detail = "no atk_id reference detected"
             else:
-                failed_now = [i for i in ids if i in current_failed_ids]
-                tested_now = [
-                    i for i in ids if current_summary["evalAvailable"] and i in current_summary["testedAtkIds"]
-                ]
-                if not current_summary["evalAvailable"] and not failed_now:
+                failed_now = [i for i in ids if i in current_summary["failedAtkIds"]]
+                passed_now = [i for i in ids if i in current_summary["passedAtkIds"]]
+                if len(failed_now) + len(passed_now) < len(ids):
                     resolution = "indeterminate"
-                    detail = "eval_results.csv missing in current; cannot confirm pass"
-                elif current_summary["evalAvailable"] and not tested_now and not failed_now:
-                    resolution = "indeterminate"
-                    detail = "target atk_ids were not executed in current version"
-                elif not failed_now:
+                    detail = "some target atk_ids were not executed or lack a valid judgment"
+                elif len(passed_now) == len(ids):
                     resolution = "resolved"
-                    detail = f"{len(ids)}/{len(ids)} target atk_ids passed in current"
+                    detail = f"{len(ids)}/{len(ids)} target atk_ids explicitly passed in current"
                 elif len(failed_now) == len(ids):
                     resolution = "unresolved"
                     detail = f"all {len(ids)} target atk_ids still failing"
                 else:
                     resolution = "partial"
-                    detail = f"{len(ids) - len(failed_now)}/{len(ids)} resolved, {len(failed_now)} still failing"
+                    detail = f"{len(passed_now)}/{len(ids)} resolved, {len(failed_now)} still failing"
             previous_targets.setdefault("targets", []).append(
                 {
                     "text": target["text"],
@@ -655,9 +697,8 @@ def build_history(
     new_regressions: list[str] = []
     persistent: list[str] = []
     if previous is not None and atk_field:
-        prev_failed = previous["failedAtkIds"]
         for aid in current_failed_ids:
-            if aid not in prev_failed:
+            if aid in previous["passedAtkIds"]:
                 new_regressions.append(aid)
     if atk_field:
         for case in per_case:
@@ -684,6 +725,8 @@ def build_history(
                 "failedCount": summary["failedCount"],
                 "evalAvailable": summary["evalAvailable"],
                 "testedCount": summary["testedCount"],
+                "passedCount": len(summary["passedAtkIds"]),
+                "unknownCount": len(summary["unknownAtkIds"]),
                 "evalTruncated": summary["evalTruncated"],
                 "reasonField": summary["reasonField"],
                 "atkIdField": summary["atkIdField"],
@@ -1050,6 +1093,7 @@ def run(argv: list[str]) -> int:
             abnormal_field = "is_abnormal"
             fieldnames.append(abnormal_field)
 
+        judgments = read_judgments(current_dir)
         rows = []
         for erow in eval_rows:
             aid = erow.get(eval_atk_field, "").strip() if eval_atk_field else ""
@@ -1065,7 +1109,8 @@ def run(argv: list[str]) -> int:
                         mrow[f] = frow[f]
                 mrow[abnormal_field] = "true"
             else:
-                mrow[abnormal_field] = "false"
+                verdict = judgments.get(aid, "unknown")
+                mrow[abnormal_field] = {"passed": "false", "failed": "true"}.get(verdict, "unknown")
             rows.append(mrow)
     else:
         fieldnames = list(failure_fieldnames)

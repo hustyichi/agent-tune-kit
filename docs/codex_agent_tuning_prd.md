@@ -65,7 +65,7 @@
 ### 2.1.1 ATK build Ground Truth：为现有数据集补齐统一预期语义（可选前置 Skill）
 - **适用场景**：
   - 用户已经有 `.atk/datasets/dataset.csv`，但缺少清晰的预期结果、答案或验收标准列
-  - 用户希望在不改变异常筛选 Skill 行为的前提下，提高后续 `$atk-find-failures` 对“Agent 输出 vs 预期结果”的判断稳定性
+  - 用户希望在不改变异常筛选 Skill 行为的前提下，提高后续 `$atk-diagnose` 对“Agent 输出 vs 预期结果”的判断稳定性
 - **入口**：
   - Codex Skill：`$atk-build-ground-truth`
   - 产品名：`ATK build Ground Truth`
@@ -77,12 +77,12 @@
   - 候选修改摘要应包含受影响行数和代表性示例；大数据集不需要逐行列出全部变更
 - **边界**：
   - 这是 dataset-only / pre-results Skill；不创建 `.atk/results/vN`，不运行 Agent / `atk-eval` / eval runner，不写 `failure_cases.csv`
-  - 第一版不改变 `$atk-find-failures` 行为，也不强制所有 ATK 数据集都必须拥有 `ground_truth`
+  - 第一版不改变 `$atk-diagnose` 行为，也不强制所有 ATK 数据集都必须拥有 `ground_truth`
   - 不自动挖掘大规模生产日志，不在常规路径创建候选数据集文件，不发明缺失领域事实
   - 当数据集包含多个互不兼容任务、所需领域事实缺失、已有 expected-like 语义冲突或风格选择不明确时，必须先向用户确认
 - **输出**：
   - 更新后的 `.atk/datasets/dataset.csv`，保留原有列并包含规范 `ground_truth`
-  - 下一步建议：若现有 `eval_results.csv` 早于本次数据集补齐，提示重新运行 `$atk-eval`；若当前评测结果已反映补齐后的数据集，可继续 `$atk-find-failures`
+  - 下一步建议：若现有 `eval_results.csv` 早于本次数据集补齐，提示重新运行 `$atk-eval`；若当前评测结果已反映补齐后的数据集，可继续 `$atk-diagnose`
 
 ### 2.1.2 ATK new Agent：仅有数据集时初始化 Agent 项目（可选前置 Skill）
 - **适用场景**：
@@ -156,28 +156,19 @@
   - 若不存在 `failure_cases.csv`、该文件缺少 `atk_id`、异常集为空，或任一异常 `atk_id` 无法在 `.atk/datasets/dataset.csv` 中找到，脚本必须停止并报错，不能静默退回全量运行
   - `--limit` / `--offset` 在异常样本筛选完成后再应用，用于对异常子集做有界运行
 
-### 2.4 异常筛选模块（规则初始化、规则执行与大模型入口）
-- **模式与入口**：用户根据需求选择不同 Skill 入口调用；规则模式将脚本初始化和脚本执行拆开，大模型模式直接写结果
-  1. **规则初始化 Skill (`atk-init-failure-rule`)**：与用户交互确认筛选规则（如字段比较、阈值、关键字等）后，生成或更新共享脚本 `.atk/runner/failure_rule.py`。脚本已存在时，Skill 默认复用并允许用户决定是否更新规则
-  2. **规则执行 Skill (`atk-find-failures-by-rule`)**：只执行已有 `.atk/runner/failure_rule.py`，从当前版本 `eval_results.csv` 输出 `failure_cases.csv`；如果脚本不存在，则提示先运行 `atk-init-failure-rule`
-  3. **大模型模式 Skill (`atk-find-failures`)**：由 Skill 直接读取当前版本目录下的 `eval_results.csv` 与数据集中的预期结果，结合用户给定的判断说明（或由 Skill 基于预期结果自行推断）筛选异常样本，输出 `failure_cases.csv`
-- **写入行为**：规则执行与大模型模式写入的 `failure_cases.csv` 文件名一致；若当前版本目录下已存在该文件，默认覆盖、不做备份或合并，并按各 Skill 的确认规则在覆盖前提示风险
-- **异常定义来源**：
-  - 规则模式由用户在 Skill 交互中显式给出
-  - 大模型模式由用户给出自然语言说明，或在用户未指定时由 Skill 基于"Agent 输出 vs 预期结果"自行推断；当数据集中存在由 `$atk-build-ground-truth` 生成的规范 `ground_truth` 列时，可作为优先的预期语义证据，但第一版不要求改变异常筛选实现行为
-- **数据确认机制**：当 `eval_results.csv` 字段含义不明、缺少预期结果或无法推断异常标准时，Skill 与用户确认后再继续
-- **输出**：
-  - 规则初始化生成共享规则脚本 `.atk/runner/failure_rule.py`
-  - 规则执行或大模型模式生成当前版本目录下的异常筛选数据 `failure_cases.csv`
-- **版本目录兼容要求**：
-  - 规则执行和大模型模式均自动选择当前版本目录（见第 4 章规则），从中读取 `eval_results.csv`，向同一目录写入 `failure_cases.csv`
-  - `.atk/runner/failure_rule.py` 为跨版本共享脚本，不按版本复制
-  - 用户不需要指定版本号或结果目录
+### 2.4 统一异常识别与初步诊断（atk-diagnose）
+- 单一入口组合规则检查与 Codex 语义判断。规则脚本 `.atk/runner/failure_rule.py` 按需准备、复用和执行，不要求用户选择模式。
+- 使用现有行为标准与预期结果；无法确定标准的样本记为 unknown，不阻塞其余样本的判断。
+- `failure_cases.csv` 仅保存确认失败行并保留源字段，继续供失败复测和浏览使用。
+- `judgments.csv` 记录每个已执行 atk_id 的 passed/failed/unknown、reason 和源 eval_results.csv 的 results_sha256。
+- 未检查、缺证据、判定过期或冲突均不能当作通过。规则只覆盖格式时，格式通过不代表业务成功。
+- 查看重点失败的日志与相关代码，区分事实和原因假设；详细归因、跨轮复核及 report.md 仍归 atk-report。
+- 覆盖率与未知样本单独报告；保持原结果不变，尊重用户编辑，不引入自动提交、回退或额外状态管理。
 
 ### 2.5 异常归因分析、跨版本调优验证与最终报告生成（Codex Skill）
 - **功能**：
   - 对当前版本异常数据进行归因分析
-  - 从 `v2` 起，自动对比当前版本与上一版本，验证上一轮 `tuning_plan.md` 中提出的调优措施是否在本轮真实生效（即上一轮要解决的异常在本轮是否不再出现）
+  - 从 `v2` 起，自动对比当前版本与上一版本，验证上一轮 `tuning_plan.md` 中提出的调优措施是否在本轮真实生效（需要目标样本在本轮具有明确有效的判定；未知或未执行不能标为已解决）
   - 若当前版本为 `v1` 或不存在上一版本，则只生成单版本报告，并在报告中说明无上一版本可对比
   - 生成最终 Markdown 报告 `report.md`，包含：
     - 执行摘要
@@ -303,7 +294,7 @@
 ---
 
 ## 3. 技术栈
-- **Codex Skill**：实现测试脚本生成、异常筛选（规则模式 / 大模型模式两个入口）、归因分析与报告、可选异常样本 HTML 可视化、Agent 调优
+- **Codex Skill**：实现测试脚本生成、统一异常诊断（按需组合规则与语义判断）、归因分析与报告、可选异常样本 HTML 可视化、Agent 调优
 - **运行环境**：Python；优先复用待调优 Agent 项目自身的虚拟环境与依赖
 - **数据标准化**：表格类产物统一为 CSV，报告与计划统一为 Markdown
 - **版本化结果目录**：通过 `.atk/results/{version}/` 隔离多轮调优结果，`.atk/runner/` 作为跨版本共享脚本目录
@@ -365,9 +356,7 @@
 1. 完成数据准备：本地待调优的 Agent 服务 + 评估数据集（默认 CSV）；如只有业务描述可先执行 `$atk-build-dataset`，如已有数据集但预期语义薄弱可先执行 `$atk-build-ground-truth` 补齐 `ground_truth`
 2. 执行**批量测试脚本生成 Skill**，生成 `.atk/runner/eval_runner.py`；遇到 Agent 接入或字段不确定时按需与用户确认
 3. 执行 `atk-eval`，由其运行 `.atk/runner/eval_runner.py`，脚本自动创建 `.atk/results/v1/` 并写入 `eval_results.csv`（及可选 `app.log`）
-4. 执行异常筛选（按需选择规则路径或大模型路径）：
-   - **规则路径**：先执行 `atk-init-failure-rule` 交互确认规则并生成 `.atk/runner/failure_rule.py`，再执行 `atk-find-failures-by-rule` 运行该脚本并输出 `failure_cases.csv`
-   - **大模型路径**：执行 `atk-find-failures`，直接读取当前版本 `eval_results.csv` 并输出 `failure_cases.csv`
+4. 执行 `atk-diagnose`，按需组合规则与语义判断，生成 `failure_cases.csv` 和 `judgments.csv`，给出初步定位。
 5. 执行**归因分析与报告生成 Skill**，生成 `.atk/results/v1/report.md`
    - 当前版本为 `v1` 时为单版本报告，说明无上一版本可对比
 6. 可选执行**异常样本可视化 Skill (`atk-visualize-failures`)**：基于当前 `failure_cases.csv` 生成 `.atk/results/v1/failure_cases.html`，同版本 `report.md` 作为可选、非阻塞上下文
@@ -385,7 +374,7 @@
 │   └── dataset.html            # 数据集可视化与质检页（可选，由 atk-visualize-dataset 生成）
 ├── runner/
 │   ├── eval_runner.py          # 跨版本共享测试脚本
-│   └── failure_rule.py          # 跨版本共享失败判定规则脚本（规则模式使用）
+│   └── failure_rule.py          # 跨版本共享失败判定规则脚本（按需使用）
 └── results/
     ├── v1/
     │   ├── eval_results.csv          # v1 测试结果
@@ -407,7 +396,7 @@
 
 ## 7. 产品交付要求
 1. **Codex Skill**：
-   - 模块化 Skill 模板，覆盖：数据集构建、现有数据集 ground truth 补齐、测试脚本生成、异常筛选（规则模式与大模型模式两个独立入口）、归因分析与报告生成、可选异常样本 HTML 可视化、Agent 调优
+   - 模块化 Skill 模板，覆盖：数据集构建、现有数据集 ground truth 补齐、测试脚本生成、统一异常诊断（规则准备和复用为内部行为）、归因分析与报告生成、可选异常样本 HTML 可视化、Agent 调优
    - 内置数据不确定性提示机制，遇到无法可靠推断的字段、Agent 接入方式、异常标准或样本对应关系时引导用户确认
    - 所有模块兼容 `.atk/results/{version}/` 结构，按"数字最大的 `vN`"统一识别当前版本
    - 所有模块在常规流程中不要求用户指定版本号
@@ -415,3 +404,5 @@
    - 调优 Skill 必须在当前版本目录产出 `tuning_plan.md`；报告 Skill 在存在上一版本时必须读取其 `tuning_plan.md` 并产出跨版本调优验证章节（以"目标异常是否复现"为主判定）
 2. **可安装部署**：
    - Codex Skill 可注册至 Codex 系统
+
+判定覆盖与未知状态遵循 `docs/shared-versioning-and-confirmation.md` 的 Judgment coverage：缺少失败记录不表示通过。

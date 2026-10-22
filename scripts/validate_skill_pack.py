@@ -24,9 +24,7 @@ REQUIRED_FILES = [
     "skills/atk-new-agent/SKILL.md",
     "skills/atk-init/SKILL.md",
     "skills/atk-eval/SKILL.md",
-    "skills/atk-init-failure-rule/SKILL.md",
-    "skills/atk-find-failures-by-rule/SKILL.md",
-    "skills/atk-find-failures/SKILL.md",
+    "skills/atk-diagnose/SKILL.md",
     "skills/atk-report/SKILL.md",
     "skills/atk-visualize-failures/SKILL.md",
     "skills/atk-visualize-failures/scripts/generate_failure_browser.py",
@@ -311,7 +309,7 @@ PER_FILE_PHRASES = {
         "Do not run the Agent",
         "Do not run `$atk-eval`",
         "Do not write `failure_cases.csv`",
-        "Do not change `atk-find-failures` behavior in v1",
+        "Do not change `atk-diagnose` behavior in v1",
         "eval_results.csv` predates dataset enrichment",
     ],
     "skills/atk-tune-ground-truth/SKILL.md": [
@@ -371,33 +369,18 @@ PER_FILE_PHRASES = {
         "row-log status: active, downgraded, or unavailable",
         'RESULTS_DIR = Path(".atk/results")',
         "If the runner is missing",
-        "next recommended Skill: `atk-find-failures`",
+        "next recommended Skill: `atk-diagnose`",
     ],
-    "skills/atk-init-failure-rule/SKILL.md": [
-        "atk-init-failure-rule",
-        ".atk/runner/failure_rule.py",
+    "skills/atk-diagnose/SKILL.md": [
+        "judgments.csv",
+        "results_sha256",
+        "passed",
+        "failed",
+        "unknown",
         "templates/.atk/runner/failure_rule.py.md",
-        "This Skill only prepares the rule script",
-        "does not write `.atk/results/vN/failure_cases.csv`",
-        "Tell the user to run `atk-find-failures-by-rule`",
-        'require_current_file(current_dir, "eval_results.csv")',
-    ],
-    "skills/atk-find-failures-by-rule/SKILL.md": [
-        ".atk/runner/failure_rule.py",
-        'require_current_file(current_dir, "eval_results.csv")',
-        "This Skill only runs an existing rule script",
-        "does not create or update `.atk/runner/failure_rule.py`",
-        "run `atk-init-failure-rule` first",
         "<python-runtime> .atk/runner/failure_rule.py",
-        "If `.atk/runner/failure_rule.py` contains `TODO_AGENT_TUNING`",
-        "current `failure_cases.csv` already exists",
-    ],
-    "skills/atk-find-failures/SKILL.md": [
-        "write failing rows to `failure_cases.csv` directly",
-        "expected-result columns or failure criteria are ambiguous",
-        "Overwrites",
-        "No `failure_rule.py` is required",
-        "preserving all original `eval_results.csv` columns",
+        'require_current_file(current_dir, "eval_results.csv")',
+        "next command: `atk-report`",
     ],
     "skills/atk-report/SKILL.md": [
         'require_current_file(current_dir, "eval_results.csv")',
@@ -1045,20 +1028,10 @@ def main() -> int:
         errors,
     )
 
-    init_rules_skill = existing_texts.get("skills/atk-init-failure-rule/SKILL.md", "")
-    rules_skill = existing_texts.get("skills/atk-find-failures-by-rule/SKILL.md", "")
-    llm_skill = existing_texts.get("skills/atk-find-failures/SKILL.md", "")
-    require("atk-init-failure-rule" in init_rules_skill, "rules initializer Skill identity missing", errors)
-    require("atk-find-failures-by-rule" in rules_skill, "rules failure-finding Skill identity missing", errors)
-    require("atk-find-failures" in llm_skill, "LLM failure-finding Skill identity missing", errors)
+    diagnosis_skill = existing_texts.get("skills/atk-diagnose/SKILL.md", "")
     require(
-        "failure_rule.py" in init_rules_skill and "failure_rule.py" in rules_skill,
-        "rules initializer and executor must share failure_rule.py",
-        errors,
-    )
-    require(
-        "failure_cases.csv" in rules_skill and "failure_cases.csv" in llm_skill,
-        "both failure-finding Skills must write failure_cases.csv",
+        "failure_cases.csv" in diagnosis_skill and "judgments.csv" in diagnosis_skill,
+        "diagnosis must preserve failures and explicit judgment coverage",
         errors,
     )
 

@@ -24,7 +24,7 @@ Use `./scripts/release-version.sh <version> --publish --dry-run` only when the u
 
 ## Coding Style & Naming Conventions
 
-Python targets 3.11+. Use 4-space indentation, double quotes, and a 120-character line length. Ruff is the source of truth for formatting and linting; avoid manual style exceptions unless the existing code already requires them. Prefer clear snake_case names for functions, variables, and test modules. Skill directories use kebab-case names such as `skills/atk-find-failures/`.
+Python targets 3.11+. Use 4-space indentation, double quotes, and a 120-character line length. Ruff is the source of truth for formatting and linting; avoid manual style exceptions unless the existing code already requires them. Prefer clear snake_case names for functions, variables, and test modules. Skill directories use kebab-case names such as `skills/atk-diagnose/`.
 
 ## Testing Guidelines
 

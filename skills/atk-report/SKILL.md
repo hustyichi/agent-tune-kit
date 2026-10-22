@@ -19,6 +19,7 @@ Traceability note: section 2.5 defines report and cross-version validation, sect
 - Required current files:
   - `eval_results.csv`
   - `failure_cases.csv`
+- Current `judgments.csv` when available; missing legacy judgments keep unconfirmed outcomes unknown.
 - Optional current files: `app.log` and row logs referenced by `log_path`.
 - Optional local private tuning context: `.atk/context.md`.
 - Previous version files, when available:
@@ -47,7 +48,7 @@ Traceability note: section 2.5 defines report and cross-version validation, sect
 6. Resolve previous version with `resolve_previous_version(current_dir)`.
 7. If no previous version exists, generate a single-version report and explain that no previous version can be compared.
 8. If previous version exists but lacks `tuning_plan.md`, degrade to a single-version or lower-confidence report with explicit explanation.
-9. If previous `tuning_plan.md` exists, extract targets from `## 目标异常清单`, compare them with current `eval_results.csv` and `failure_cases.csv`, and classify each target as `已解决`, `部分解决`, `未解决`, or `无法判断`.
+9. If previous `tuning_plan.md` exists, extract targets from `## 目标异常清单` and classify them using explicit current judgments: all IDs passed → `已解决`; all failed → `未解决`; a fully judged mix → `部分解决`; any unknown/unexecuted target → `无法判断`. Check standards and sample comparability before attributing improvement.
 10. Write `report.md` in the current version directory.
 11. Append to `.atk/context.md` only when the report captures durable user-confirmed feedback or tuning decisions that
     should guide future loops. Do not write dataset headers, row counts, result paths, metrics snapshots, or routine run
@@ -81,7 +82,13 @@ The `## 跨版本调优验证` section must include when applicable:
 
 Prefer stable identifiers from the dataset, such as `case_id`, `id`, `query`, or natural task keys. If no obvious ID exists, match by input content, expected result, previous report descriptions, and target symptoms. Only ask the user when semantic matching is unreliable enough to change validation status.
 
-The main validation basis is whether previous `tuning_plan.md` target failures still appear in the current failure cases. Failure-count changes are useful observations but not the primary success criterion.
+The main validation basis is explicit judgments for the previous `tuning_plan.md` target IDs, not their absence from the failure table.
+Validate `judgments.csv` against the shared Judgment coverage contract: unique IDs, allowed verdicts, non-empty reasons,
+and SHA-256 matching current `eval_results.csv`. Missing, invalid, duplicate, stale or conflicting records cannot prove a pass.
+Do not silently rerun rules or overwrite judgments here; route disputed judgments to `atk-diagnose`.
+Separate executed, judged, passed, failed and unknown counts. Include unknown IDs and missing evidence in the report;
+unknowns must not be counted as successful or business failures. If reporting a rate, state its denominator and coverage.
+A smaller failure count alone does not show improvement, especially after `--only-failures`.
 
 ## Shared version rules
 

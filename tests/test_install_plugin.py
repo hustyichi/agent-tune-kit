@@ -509,6 +509,10 @@ class InstallPluginCliTests(unittest.TestCase):
         self.assertTrue((target / ".codex-plugin" / "plugin.json").exists())
         self.assertTrue((target / ".codex-plugin" / "agent-tune-kit-install.json").exists())
         self.assertTrue((target / "skills" / "atk-build-dataset" / "SKILL.md").exists())
+        self.assertTrue((target / "skills" / "atk-diagnose" / "SKILL.md").exists())
+        self.assertTrue((target / "skills" / "atk-report" / "SKILL.md").exists())
+        for old_skill in ("atk-find-failures", "atk-find-failures-by-rule", "atk-init-failure-rule"):
+            self.assertFalse((target / "skills" / old_skill).exists())
         self.assertTrue((target / "skills" / "atk-build-ground-truth" / "SKILL.md").exists())
         self.assertTrue((target / "skills" / "atk-tune-ground-truth" / "SKILL.md").exists())
         self.assertTrue((target / "skills" / "atk-tune-ground-truth" / "scripts" / "tune_ground_truth.py").exists())

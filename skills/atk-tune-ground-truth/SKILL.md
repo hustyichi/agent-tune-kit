@@ -93,7 +93,7 @@ python3 <skill-dir>/scripts/tune_ground_truth.py --updates-path <updates.csv>
     - recommend `$atk-visualize-dataset` if the user wants to re-review the tuned dataset;
     - recommend `$atk-eval` when no current evaluation exists or when existing `eval_results.csv` predates this
       ground_truth tuning;
-    - recommend `$atk-find-failures` when current `eval_results.csv` already reflects the tuned dataset and the user
+    - recommend `$atk-diagnose` when current `eval_results.csv` already reflects the tuned dataset and the user
       wants failure discovery.
 
 ## Confirmation triggers
@@ -138,7 +138,7 @@ After updating the dataset, summarize:
 - next step:
   - run `$atk-visualize-dataset` to re-review the tuned dataset;
   - run `$atk-eval` when no current evaluation exists or existing results predate tuning;
-  - run `$atk-find-failures` when current results already reflect the tuned dataset.
+  - run `$atk-diagnose` when current results already reflect the tuned dataset.
 
 ## V1 boundaries
 

@@ -59,7 +59,7 @@ Traceability note: section 2.3 defines manual batch execution, section 4 defines
    - if `eval_results.csv` contains non-empty `log_path` values and referenced files exist under `.atk/results/vN/logs/`, report row logs as active;
    - if runner output contains the row-log downgrade message, report row logs as downgraded and explain that no per-row files are expected;
    - otherwise report row logs as unavailable and mention `app.log` fallback when present.
-7. Summarize the output path and recommend `atk-find-failures` as the usual next step.
+7. Summarize the output path and recommend `atk-diagnose` as the usual next step.
 
 ## Shared version rules
 
@@ -106,4 +106,4 @@ After a successful run, summarize:
 - output path `.atk/results/vN/eval_results.csv`;
 - whether optional `app.log` was produced;
 - row-log status: active, downgraded, or unavailable; when active, mention that `log_path` contains relative POSIX paths such as `logs/row_000001.log`;
-- next recommended Skill: `atk-find-failures`.
+- next recommended Skill: `atk-diagnose`.

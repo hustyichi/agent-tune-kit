@@ -95,7 +95,7 @@ Use this loop when you already have a runnable Agent and an evaluation dataset:
 ```text
 $atk-init My Agent entrypoint is scripts/agent.py and the evaluation dataset is data/eval.csv
 $atk-eval
-$atk-find-failures
+$atk-diagnose
 $atk-report
 $atk-visualize-failures
 $atk-optimize
@@ -105,17 +105,15 @@ $atk-optimize
 | --- | --- | --- |
 | `$atk-init` | Connect an existing Agent and evaluation dataset, generate the runner, and normalize the dataset into ATK's fixed location | `.atk/runner/eval_runner.py`, `.atk/datasets/dataset.csv` |
 | `$atk-eval` | Run batch evaluation; the runner creates or reuses the current result version | `.atk/results/vN/eval_results.csv` |
-| `$atk-find-failures` | Let Codex judge failures from the current evaluation results | `.atk/results/vN/failure_cases.csv` |
+| `$atk-diagnose` | Identify failures and investigate initial causes | `.atk/results/vN/failure_cases.csv`, `judgments.csv` |
 | `$atk-report` | Generate the current-loop analysis report and cross-version validation when a prior loop exists | `.atk/results/vN/report.md` |
 | `$atk-visualize-failures` | Generate local offline HTML for searching, filtering, and reviewing failure cases | `.atk/results/vN/failure_cases.html` |
 | `$atk-optimize` | Tune prompts, code, parameters, or tool configuration from the report and failure evidence | Agent edits, `.atk/results/vN/tuning_plan.md` |
 
-If you have a stable, programmable failure rule, use this branch instead of `$atk-find-failures`:
-
-```text
-$atk-init-failure-rule rule: mark a row as failed when expected differs from agent_output
-$atk-find-failures-by-rule
-```
+`$atk-diagnose` combines deterministic checks and Codex semantic judgment. It prepares or reuses rules internally when needed; no mode selection is required.
+It keeps confirmed failures in `failure_cases.csv` and records every executed case in `judgments.csv` (passed/failed/unknown, with reasons).
+Unknowns never count as passes or enter `--only-failures`. Legacy results still show known failures, but missing judgments cannot prove success.
+Continue with `$atk-report` for detailed analysis and cross-version review, then `$atk-optimize`.
 
 #### Verify Improvement
 
@@ -123,7 +121,7 @@ After tuning, run another loop. The common path is to rerun only the prior failu
 
 ```text
 $atk-eval --only-failures
-$atk-find-failures
+$atk-diagnose
 $atk-report
 ```
 
@@ -133,7 +131,7 @@ New results are written to a new `.atk/results/vN/`. `--only-failures` maps the 
 
 ATK can optionally read local private `.atk/context.md` to preserve user-confirmed tuning objectives, Agent behavior standards, `ground_truth` judgment standards, human feedback, and tuning decisions. It is not a dataset metadata or run-log file: field names, row counts, result paths, execution metrics, and other facts recoverable from `.atk/datasets/`, `.atk/results/`, or runner files should not be recorded there.
 
-`$atk-build-ground-truth` and `$atk-tune-ground-truth` update the relevant standard when the user confirms a `ground_truth` standard change. `$atk-find-failures`, `$atk-report`, and `$atk-optimize` use those standards when judging failures, attributing causes, and tuning the Agent. Missing `.atk/context.md` never blocks the workflow.
+`$atk-build-ground-truth` and `$atk-tune-ground-truth` update the relevant standard when the user confirms a `ground_truth` standard change. `$atk-diagnose`, `$atk-report`, and `$atk-optimize` use those standards when judging failures, attributing causes, and tuning the Agent. Missing `.atk/context.md` never blocks the workflow.
 
 ## Output Structure
 
@@ -147,6 +145,7 @@ ATK can optionally read local private `.atk/context.md` to preserve user-confirm
 └── results/
     ├── v1/
     │   ├── eval_results.csv
+    │   ├── judgments.csv
     │   ├── failure_cases.csv
     │   ├── failure_cases.html
     │   ├── report.md
@@ -171,9 +170,7 @@ Common output files:
 - `$atk-tune-ground-truth`: correct `.atk/datasets/dataset.csv` `ground_truth` values from user feedback in `dataset_review.csv`.
 - `$atk-init`: generate the test runner.
 - `$atk-eval`: run evaluation and create a new result version.
-- `$atk-find-failures`: let Codex identify failure cases.
-- `$atk-init-failure-rule`: create or update the failure rule.
-- `$atk-find-failures-by-rule`: apply the rule to identify failures.
+- `$atk-diagnose`: identify failures and unknowns using rules and semantic judgment, with initial cause investigation.
 - `$atk-report`: generate analysis and cross-loop validation.
 - `$atk-visualize-failures`: generate the failure review HTML page.
 - `$atk-optimize`: tune the Agent based on the report.

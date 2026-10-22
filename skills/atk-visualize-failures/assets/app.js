@@ -383,7 +383,8 @@
         var value = abnormalField ? normalizeText(row.values[abnormalField]).trim().toLowerCase() : "";
         var isAbnormal = ["true", "1", "yes", "y", "异常", "失败", "fail", "failed", "bad"].indexOf(value) >= 0;
         if (state.statusFilter === "abnormal" && !isAbnormal) return false;
-        if (state.statusFilter === "normal" && isAbnormal) return false;
+        if (state.statusFilter === "normal" && value !== "false") return false;
+        if (state.statusFilter === "unknown" && value !== "unknown") return false;
       }
       return true;
     });
@@ -438,13 +439,14 @@
   function renderMeta() {
     var total = payload.rowCount || (payload.rows || []).length;
     var abnormal = abnormalCount();
-    var rate = total ? Math.round((abnormal / total) * 100) : 0;
+    var abnormalField = getAbnormalField();
+    var unknown = (payload.rows || []).filter(function (row) { return row.values[abnormalField] === "unknown"; }).length;
     setText("path-context", (payload.currentDir || "当前版本") + " → " + (payload.output || "failure_cases.html"));
     setText("standard-column", roleField("expected") || roleField("actual") || "无定位");
     setText("stat-total", total);
     setText("stat-fields", (payload.fieldnames || []).length);
     setText("stat-abnormal", abnormal);
-    setText("stat-abnormal-rate", "失败率 " + rate + "%");
+    setText("stat-abnormal-rate", "未判定 " + unknown + " / " + total);
     setText("field-count", (payload.fieldnames || []).length);
   }
 
@@ -488,11 +490,12 @@
         return el("div", { class: "cell-text" }, [
           el("span", { class: "badge issue", text: "● 异常" })
         ]);
-      } else {
+      } else if (value.toLowerCase() === "false") {
         return el("div", { class: "cell-text" }, [
           el("span", { class: "badge ok", text: "● 正常" })
         ]);
       }
+      return el("div", { class: "cell-text" }, [el("span", { class: "badge", text: "● 未判定" })]);
     }
     var safeHref = row.safeLogHrefs && row.safeLogHrefs[field];
     if (safeHref) {
@@ -682,6 +685,15 @@
   }
 
   function buildStatusBanner(row, isAbnormal, reasonField) {
+    var value = normalizeText(row.values[getAbnormalField()]).trim().toLowerCase();
+    if (!isAbnormal && value !== "false") {
+      return el("div", { class: "status-banner" }, [
+        el("div", { class: "status-banner-content" }, [
+          el("span", { class: "status-banner-title", text: "未判定 (UNKNOWN)" }),
+          el("div", { class: "status-banner-desc-val", text: "缺少有效判定，不能据此认定通过。请查看 judgments.csv 中的理由，或运行 atk-diagnose 补充判断。" })
+        ])
+      ]);
+    }
     var banner = el("div", { class: "status-banner " + (isAbnormal ? "abnormal" : "normal") });
     
     var iconContainer = el("div", { class: "status-banner-icon" });
@@ -697,7 +709,7 @@
     var badge = el("span", { class: "status-banner-badge" });
     
     if (isAbnormal) {
-      title.textContent = "检测到合并异常 (ABNORMAL RUN)";
+      title.textContent = "确认失败 (FAILED)";
       badge.textContent = "FAIL";
       header.appendChild(title);
       header.appendChild(badge);
@@ -711,13 +723,13 @@
       descBox.appendChild(textVal);
       content.appendChild(descBox);
     } else {
-      title.textContent = "模型对标测试完美通过 (NORMAL RUN)";
+      title.textContent = "判定通过 (PASSED)";
       badge.textContent = "PASS";
       header.appendChild(title);
       header.appendChild(badge);
       content.appendChild(header);
       
-      var descVal = el("div", { class: "status-banner-desc-val text-only", text: "自动测试比对发现：Agent 输出与 ground_truth 完全符合期望约束或断言条件。" });
+      var descVal = el("div", { class: "status-banner-desc-val text-only", text: "本次诊断记录为通过；具体标准与理由见 judgments.csv。" });
       content.appendChild(descVal);
     }
     
@@ -1183,12 +1195,13 @@
   function getStatusCounts() {
     var rows = payload.rows || [];
     var abnormalField = getAbnormalField();
-    var counts = { all: rows.length, normal: 0, abnormal: 0 };
+    var counts = { all: rows.length, normal: 0, abnormal: 0, unknown: 0 };
     rows.forEach(function (row) {
       var value = abnormalField ? normalizeText(row.values[abnormalField]).trim().toLowerCase() : "";
       var isAbnormal = ["true", "1", "yes", "y", "异常", "失败", "fail", "failed", "bad"].indexOf(value) >= 0;
       if (isAbnormal) counts.abnormal += 1;
-      else counts.normal += 1;
+      else if (value === "false") counts.normal += 1;
+      else counts.unknown += 1;
     });
     return counts;
   }
@@ -1241,6 +1254,16 @@
     container.appendChild(allBtn);
     container.appendChild(normalBtn);
     container.appendChild(abnormalBtn);
+    container.appendChild(el("button", {
+      type: "button",
+      class: "status-filter-btn" + (state.statusFilter === "unknown" ? " active" : ""),
+      onclick: function () {
+        state.statusFilter = "unknown";
+        state.page = 0;
+        renderStatusFilters();
+        renderTable();
+      }
+    }, ["未判定 (" + counts.unknown + ")"]));
   }
 
   function resetFilters() {

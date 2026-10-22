@@ -35,7 +35,7 @@ Traceability note: section 2.6 defines Agent tuning, section 4 defines current-v
 3. Read `.atk/context.md` if it exists. Preserve `Tuning Objective`, `Agent Behavior Standard`,
    `Ground Truth Standard`, and prior `Tuning Decisions` when choosing Agent changes.
 4. Read the report and prioritize unresolved problems,新增问题, and high-confidence root causes.
-5. Inspect relevant Agent implementation files before editing.
+5. Inspect relevant Agent implementation files before editing. Unknown outcomes are evidence gaps, not proven Agent defects; do not optimize toward an invented expected answer. Route disputed judgments to `atk-diagnose`.
 6. Make focused, reviewable changes. Do not ask for item-by-item confirmation unless the action is destructive, credential-gated, or materially scope-changing.
 7. Do not modify `Ground Truth Standard`; if the evidence shows the standard is wrong or incomplete, record that as a
    tuning-plan note and route the correction to `$atk-tune-ground-truth`.
