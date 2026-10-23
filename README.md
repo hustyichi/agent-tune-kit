@@ -52,6 +52,15 @@ pipx install agent-tune-kit
 atk install
 ```
 
+如果希望使用本地源码版本，先将所需分支的最新代码更新到本地，再在 **ATK 仓库根目录**执行：
+
+```sh
+uv tool install --reinstall .
+atk install
+```
+
+`.` 表示从当前目录构建并安装 ATK 包；`--reinstall` 确保版本号未变时也重新安装本地改动。后续更新代码后，重新执行这两条命令即可。同版本插件的缓存刷新见[本地开发说明](docs/skill-template-pack-usage.md#contributor-and-maintainer-packaging-notes)。
+
 安装完成后，在 Codex 中打开插件列表：
 
 ```text

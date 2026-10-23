@@ -52,6 +52,15 @@ pipx install agent-tune-kit
 atk install
 ```
 
+To install from local source, update your checkout to the latest code on your chosen branch, then run from the **ATK repository root**:
+
+```sh
+uv tool install --reinstall .
+atk install
+```
+
+`.` builds and installs the ATK package from the current directory; `--reinstall` includes local changes even when the version is unchanged. Rerun both commands after updating the code. For refreshing the plugin cache at the same version, see the [local development notes](docs/skill-template-pack-usage.md#contributor-and-maintainer-packaging-notes).
+
 After installation, open the plugin list in Codex:
 
 ```text
