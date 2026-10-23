@@ -59,9 +59,15 @@ class InstallPluginCliTests(unittest.TestCase):
             ]
             result = run_cli("preview", "--smoke", *common)
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("mode: preview", result.stdout)
-            self.assertIn("payload source: dev-root", result.stdout)
-            self.assertIn("marketplace write: skipped", result.stdout)
+            version = run_cli("version").stdout.strip().split()[-1]
+            self.assertEqual(
+                result.stdout.splitlines(),
+                [
+                    f"将为 Codex 安装 Agent Tune Kit {version}。",
+                    f"位置：{base / 'plugins' / 'agent-tune-kit'}",
+                    "未修改文件。运行 atk install 进行安装。",
+                ],
+            )
             self.assertFalse((base / "marketplace.json").exists())
             self.assertFalse((base / "plugins" / "agent-tune-kit").exists())
             self.assertFalse((base / "backups").exists())
@@ -137,19 +143,81 @@ class InstallPluginCliTests(unittest.TestCase):
             self.assertEqual(run_cli("install", *common).returncode, 0)
             status = run_cli("status", *common)
             self.assertEqual(status.returncode, 0, status.stderr)
-            for phrase in [
-                "payload source: dev-root",
-                "manifest valid: yes",
-                "marketplace registered: yes",
-                "source.path ok: yes",
-                "plugin-store target resolved: yes",
-                "installer does not modify or observe hidden Codex UI enablement state",
-                "open /plugins",
-                "$atk-* autocomplete",
-            ]:
-                self.assertIn(phrase, status.stdout)
-            self.assertNotIn("repo:", status.stdout)
-            self.assertNotIn("status should change from Available to Installed", status.stdout)
+            version = run_cli("version").stdout.strip().split()[-1]
+            self.assertEqual(
+                status.stdout.splitlines(),
+                [
+                    f"Agent Tune Kit {version} 已本地安装。",
+                    f"位置：{base / 'plugins' / 'agent-tune-kit'}",
+                    "在 Codex 打开 /plugins，检查 Agent Tune Kit 是否已启用。",
+                ],
+            )
+
+    def test_status_reports_missing_or_incomplete_installation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            target = base / "plugins" / "agent-tune-kit"
+            marketplace = base / "marketplace.json"
+            common = ["--marketplace-path", str(marketplace), "--plugin-store", str(base / "plugins")]
+            for state in ("missing", "partial", "unreadable"):
+                with self.subTest(state=state):
+                    if state == "partial":
+                        target.mkdir(parents=True)
+                    elif state == "unreadable":
+                        marketplace.write_text("invalid json", encoding="utf-8")
+                    status = run_cli("status", *common)
+                    self.assertEqual(status.returncode, 0, status.stderr)
+                    self.assertEqual(
+                        status.stdout.splitlines(),
+                        [
+                            "Agent Tune Kit 尚未安装或安装不完整。",
+                            f"位置：{target}",
+                            "运行 atk install 安装或修复。",
+                        ],
+                    )
+
+    def test_status_reports_installed_version_and_update_hint(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            common = ["--marketplace-path", str(base / "marketplace.json"), "--plugin-store", str(base / "plugins")]
+            installed = run_cli("install", "--copy", *common)
+            self.assertEqual(installed.returncode, 0, installed.stderr)
+            manifest_path = base / "plugins" / "agent-tune-kit" / ".codex-plugin" / "plugin.json"
+            manifest = json.loads(manifest_path.read_text())
+            manifest["version"] = "0.0.1"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            status = run_cli("status", *common)
+            self.assertEqual(status.returncode, 0, status.stderr)
+            self.assertIn("Agent Tune Kit 0.0.1 已本地安装。", status.stdout)
+            self.assertIn("运行 atk install 更新 Skill。", status.stdout)
+            self.assertEqual(len(status.stdout.splitlines()), 4)
+
+    def test_preview_preserves_conflict_warning_without_writing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            marketplace = base / "marketplace.json"
+            target = base / "plugins" / "agent-tune-kit"
+            for conflict in ("registration", "files"):
+                with self.subTest(conflict=conflict):
+                    if conflict == "registration":
+                        marketplace.write_text(
+                            '{"plugins":[{"name":"agent-tune-kit","source":{"path":"./plugins/old"}}]}',
+                            encoding="utf-8",
+                        )
+                    else:
+                        marketplace.unlink()
+                        target.mkdir(parents=True)
+                        (target / "keep.txt").write_text("keep", encoding="utf-8")
+                    before = marketplace.read_bytes() if marketplace.exists() else None
+                    result = run_cli(
+                        "preview", "--marketplace-path", str(marketplace), "--plugin-store", str(base / "plugins")
+                    )
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertIn("已有文件或注册与本次安装冲突；替换需要确认。", result.stdout)
+                    self.assertEqual(len(result.stdout.splitlines()), 4)
+                    self.assertEqual(marketplace.read_bytes() if marketplace.exists() else None, before)
+                    if conflict == "files":
+                        self.assertEqual((target / "keep.txt").read_text(), "keep")
 
     def test_noninteractive_conflicts_do_not_hang_and_require_yes_force(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -259,7 +327,13 @@ class InstallPluginCliTests(unittest.TestCase):
                 "rollback", "--backup", metadata["id"], "--backup-root", str(base / "backups"), "--force"
             )
             self.assertEqual(rollback.returncode, 0, rollback.stderr)
-            self.assertIn("rollback complete", rollback.stdout)
+            self.assertEqual(
+                rollback.stdout.splitlines(),
+                [
+                    f"已从备份 {metadata['id']} 恢复安装前的状态。",
+                    "下一步：运行 atk status 检查本地安装，按需刷新 Codex 的 /plugins。",
+                ],
+            )
             self.assertEqual(json.loads((base / "marketplace.json").read_text()), original_market)
             self.assertEqual((target / "stale.txt").read_text(encoding="utf-8"), "stale")
 
@@ -488,7 +562,7 @@ class InstallPluginCliTests(unittest.TestCase):
             check=False,
         )
         self.assertEqual(preview.returncode, 0, preview.stderr)
-        self.assertIn("payload source: package-resource", preview.stdout)
+        self.assertIn("未修改文件。运行 atk install 进行安装。", preview.stdout)
         install_cli = subprocess.run(
             [str(atk), "install", *common],
             cwd=run_dir,
@@ -531,7 +605,7 @@ class InstallPluginCliTests(unittest.TestCase):
             check=False,
         )
         self.assertEqual(status.returncode, 0, status.stderr)
-        self.assertIn("plugin-store target resolved: yes", status.stdout)
+        self.assertIn("已本地安装。", status.stdout)
 
 
 if __name__ == "__main__":

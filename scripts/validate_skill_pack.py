@@ -225,7 +225,7 @@ PER_FILE_PHRASES = {
         "copy fallback",
         "smoke-resolved plugin path",
         "Codex UI boundary",
-        "rollback complete",
+        "恢复安装前的状态",
     ],
     "src/agent_tune_kit/cli.py": [
         "installer_main",
@@ -713,7 +713,7 @@ def validate_installer(errors: list[str]) -> None:
         "smoke-resolved plugin path",
         "Codex UI boundary",
         "--yes --force",
-        "rollback complete",
+        "恢复安装前的状态",
         "PayloadSource",
         "package-resource",
         "schema_version",

@@ -659,26 +659,14 @@ def run_preview(args: argparse.Namespace) -> int:
     target = plugin_store / PLUGIN_NAME
     validate_manifest_payload(payload_source.root)
     marketplace = load_json(marketplace_path)
-    marketplace, market_action = update_marketplace(marketplace)
-    store_action = ensure_plugin_store(target, use_copy=args.copy, dry_run=True, payload_source=payload_source)
 
-    print("mode: preview")
-    print(f"payload source: {payload_source.kind}")
-    print(f"package: {PACKAGE_NAME} {payload_source.package_version}")
-    print(f"manifest version: {payload_source.manifest_version}")
-    print(f"payload origin: {payload_source.resource_origin}")
-    print(f"marketplace: {marketplace_path}")
-    print(f"plugin store: {plugin_store}")
-    print(f"marketplace source.path: {SOURCE_PATH}")
-    print(f"marketplace action: would {market_action}")
-    print(f"plugin-store action: {store_action}")
-    print("marketplace write: skipped")
-    print("backup: skipped for preview")
+    print(f"将为 Codex 安装 Agent Tune Kit {payload_source.package_version}。")
+    print(f"位置：{target}")
+    if marketplace_conflict(marketplace) or plugin_store_conflict(target, payload_source):
+        print("已有文件或注册与本次安装冲突；替换需要确认。")
     if args.smoke:
-        print("smoke:")
-        for line in smoke_check(marketplace_path, plugin_store, dry_run=True, payload_source=payload_source):
-            print(f"- {line}")
-        print("temp smoke cleanup: no temporary files created")
+        smoke_check(marketplace_path, plugin_store, dry_run=True, payload_source=payload_source)
+    print("未修改文件。运行 atk install 进行安装。")
     return 0
 
 
@@ -732,14 +720,20 @@ def run_install(args: argparse.Namespace) -> int:
 
 def run_status(args: argparse.Namespace) -> int:
     payload_source = resolve_payload_source(install_mode_hint="copy" if args.copy else None)
-    print("mode: status")
-    print(f"payload source: {payload_source.kind}")
-    print(f"package: {PACKAGE_NAME} {payload_source.package_version}")
-    print(f"payload origin: {payload_source.resource_origin}")
-    print(f"marketplace: {args.marketplace_path.expanduser()}")
-    print(f"plugin store: {args.plugin_store.expanduser()}")
-    for line in collect_status(args.marketplace_path, args.plugin_store, payload_source)[1]:
-        print(f"- {line}")
+    target = args.plugin_store.expanduser() / PLUGIN_NAME
+    facts, _ = collect_status(args.marketplace_path, args.plugin_store, payload_source)
+    if not all(facts.values()):
+        print("Agent Tune Kit 尚未安装或安装不完整。")
+        print(f"位置：{target}")
+        print("运行 atk install 安装或修复。")
+        return 0
+
+    version = current_manifest_version(target)
+    print(f"Agent Tune Kit {version} 已本地安装。")
+    print(f"位置：{target}")
+    if version != payload_source.package_version:
+        print(f"CLI 版本为 {payload_source.package_version}；运行 atk install 更新 Skill。")
+    print("在 Codex 打开 /plugins，检查 Agent Tune Kit 是否已启用。")
     return 0
 
 
@@ -850,19 +844,13 @@ def run_rollback(args: argparse.Namespace) -> int:
     if market.get("existed") and market_backup:
         marketplace_path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(Path(market_backup), marketplace_path)
-        market_result = f"restored marketplace JSON: {marketplace_path}"
     else:
         if marketplace_path.exists():
             marketplace_path.unlink()
-        market_result = f"restored missing marketplace JSON: {marketplace_path}"
 
-    store_result = restore_plugin_store(backup_metadata, target)
-    print("mode: rollback")
-    print(f"backup: {backup_metadata.get('id')} at {backup_dir}")
-    print(market_result)
-    print(store_result)
-    print("result: rollback complete")
-    print("next step: run status, then refresh /plugins if needed")
+    restore_plugin_store(backup_metadata, target)
+    print(f"已从备份 {backup_metadata.get('id')} 恢复安装前的状态。")
+    print("下一步：运行 atk status 检查本地安装，按需刷新 Codex 的 /plugins。")
     return 0
 
 

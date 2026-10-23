@@ -227,8 +227,8 @@ def smoke_installed_artifact(artifact: Path, work_dir: Path) -> None:
     ]
     run([str(atk), "--help"], cwd=run_dir, timeout=30)
     preview = capture([str(atk), "preview", "--smoke", *common], cwd=run_dir)
-    if "payload source: package-resource" not in preview:
-        raise ReleaseCheckError(f"{artifact.name} preview did not use package-resource payload")
+    if "未修改文件。运行 atk install 进行安装。" not in preview:
+        raise ReleaseCheckError(f"{artifact.name} preview failed")
     install_output = capture([str(atk), "install", *common], cwd=run_dir)
     if "已为 Codex 本地安装 Agent Tune Kit" not in install_output:
         raise ReleaseCheckError(f"{artifact.name} install failed")
@@ -246,7 +246,7 @@ def smoke_installed_artifact(artifact: Path, work_dir: Path) -> None:
     if marker.get("payload_source_kind") != "package-resource":
         raise ReleaseCheckError(f"{artifact.name} install did not use package-resource payload")
     status = capture([str(atk), "status", *common], cwd=run_dir)
-    if "plugin-store target resolved: yes" not in status:
+    if "已本地安装。" not in status:
         raise ReleaseCheckError(f"{artifact.name} status smoke failed")
 
 
