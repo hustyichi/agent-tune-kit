@@ -713,37 +713,20 @@ def run_install(args: argparse.Namespace) -> int:
             payload_source=payload_source,
         )
 
-    marketplace, market_action = update_marketplace(marketplace)
-    store_action = ensure_plugin_store(target, use_copy=args.copy, dry_run=False, payload_source=payload_source)
+    marketplace, _ = update_marketplace(marketplace)
+    ensure_plugin_store(target, use_copy=args.copy, dry_run=False, payload_source=payload_source)
     write_json_atomic(marketplace_path, marketplace)
 
-    print("mode: install")
-    print(f"payload source: {payload_source.kind}")
-    print(f"package: {PACKAGE_NAME} {payload_source.package_version}")
-    print(f"manifest version: {payload_source.manifest_version}")
-    print(f"payload origin: {payload_source.resource_origin}")
-    print(f"marketplace: {marketplace_path}")
-    print(f"plugin store: {plugin_store}")
-    print(f"marketplace source.path: {SOURCE_PATH}")
-    print(f"marketplace action: {market_action}")
-    print(f"plugin-store action: {store_action}")
-    print("marketplace write: complete")
     if backup_id:
         print(f"backup: {backup_id} at {backup_dir}")
         print(f"rollback: atk rollback --backup {backup_id} --backup-root {args.backup_root}")
-    else:
-        print("backup: not needed")
 
     if args.smoke:
-        print("smoke:")
-        for line in smoke_check(
-            marketplace_path, plugin_store, dry_run=False, backup_dir=backup_dir, payload_source=payload_source
-        ):
-            print(f"- {line}")
+        smoke_check(marketplace_path, plugin_store, dry_run=False, backup_dir=backup_dir, payload_source=payload_source)
 
-    print("status:")
-    for line in collect_status(marketplace_path, plugin_store, payload_source)[1]:
-        print(f"- {line}")
+    print(f"已为 Codex 本地安装 Agent Tune Kit {payload_source.package_version}。")
+    print("下一步：在 Codex 打开 /plugins，按需启用 Agent Tune Kit。")
+    print("若缺少 $atk-* Skill，请开启新的 Codex 会话。")
     return 0
 
 

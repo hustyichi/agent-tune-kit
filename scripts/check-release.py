@@ -230,8 +230,8 @@ def smoke_installed_artifact(artifact: Path, work_dir: Path) -> None:
     if "payload source: package-resource" not in preview:
         raise ReleaseCheckError(f"{artifact.name} preview did not use package-resource payload")
     install_output = capture([str(atk), "install", *common], cwd=run_dir)
-    if "payload source: package-resource" not in install_output:
-        raise ReleaseCheckError(f"{artifact.name} install did not use package-resource payload")
+    if "已为 Codex 本地安装 Agent Tune Kit" not in install_output:
+        raise ReleaseCheckError(f"{artifact.name} install failed")
     target = run_dir / "plugins" / PLUGIN_NAME
     for required in [
         target / ".codex-plugin" / "plugin.json",
@@ -242,6 +242,9 @@ def smoke_installed_artifact(artifact: Path, work_dir: Path) -> None:
     ]:
         if not required.exists():
             raise ReleaseCheckError(f"installed artifact missing {required}")
+    marker = json.loads((target / ".codex-plugin" / "agent-tune-kit-install.json").read_text(encoding="utf-8"))
+    if marker.get("payload_source_kind") != "package-resource":
+        raise ReleaseCheckError(f"{artifact.name} install did not use package-resource payload")
     status = capture([str(atk), "status", *common], cwd=run_dir)
     if "plugin-store target resolved: yes" not in status:
         raise ReleaseCheckError(f"{artifact.name} status smoke failed")

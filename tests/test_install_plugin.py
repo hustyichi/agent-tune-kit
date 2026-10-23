@@ -108,11 +108,15 @@ class InstallPluginCliTests(unittest.TestCase):
                 str(base / "backups"),
             )
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("mode: install", result.stdout)
-            self.assertIn("payload source: dev-root", result.stdout)
-            self.assertIn("smoke:", result.stdout)
-            self.assertIn("status:", result.stdout)
-            self.assertIn("/plugins", result.stdout)
+            version = run_cli("version").stdout.strip().split()[-1]
+            self.assertEqual(
+                result.stdout.splitlines(),
+                [
+                    f"已为 Codex 本地安装 Agent Tune Kit {version}。",
+                    "下一步：在 Codex 打开 /plugins，按需启用 Agent Tune Kit。",
+                    "若缺少 $atk-* Skill，请开启新的 Codex 会话。",
+                ],
+            )
             data = json.loads((base / "marketplace.json").read_text())
             entry = next(item for item in data["plugins"] if item["name"] == "agent-tune-kit")
             self.assertEqual(entry["source"]["path"], "./plugins/agent-tune-kit")
@@ -495,11 +499,13 @@ class InstallPluginCliTests(unittest.TestCase):
             check=False,
         )
         self.assertEqual(install_cli.returncode, 0, install_cli.stderr)
-        self.assertIn("payload source: package-resource", install_cli.stdout)
+        self.assertIn("已为 Codex 本地安装 Agent Tune Kit", install_cli.stdout)
         target = run_dir / "plugins" / "agent-tune-kit"
         self.assertFalse(target.is_symlink())
         self.assertTrue((target / ".codex-plugin" / "plugin.json").exists())
         self.assertTrue((target / ".codex-plugin" / "agent-tune-kit-install.json").exists())
+        marker = json.loads((target / ".codex-plugin" / "agent-tune-kit-install.json").read_text())
+        self.assertEqual(marker["payload_source_kind"], "package-resource")
         self.assertTrue((target / "skills" / "atk-dataset" / "SKILL.md").exists())
         self.assertTrue((target / "skills" / "atk-diagnose" / "SKILL.md").exists())
         self.assertTrue((target / "skills" / "atk-report" / "SKILL.md").exists())
