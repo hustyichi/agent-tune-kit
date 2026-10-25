@@ -222,8 +222,6 @@ def smoke_installed_artifact(artifact: Path, work_dir: Path) -> None:
         str(run_dir / "marketplace.json"),
         "--plugin-store",
         str(run_dir / "plugins"),
-        "--backup-root",
-        str(run_dir / "backups"),
     ]
     run([str(atk), "--help"], cwd=run_dir, timeout=30)
     preview = capture([str(atk), "preview", "--smoke", *common], cwd=run_dir)
@@ -235,16 +233,14 @@ def smoke_installed_artifact(artifact: Path, work_dir: Path) -> None:
     target = run_dir / "plugins" / PLUGIN_NAME
     for required in [
         target / ".codex-plugin" / "plugin.json",
-        target / ".codex-plugin" / "agent-tune-kit-install.json",
         target / "skills" / "atk-dataset" / "SKILL.md",
         target / "templates" / ".atk" / "runner" / "eval_runner.py.md",
         target / "templates" / ".atk" / "runner" / "failure_rule.py.md",
     ]:
         if not required.exists():
             raise ReleaseCheckError(f"installed artifact missing {required}")
-    marker = json.loads((target / ".codex-plugin" / "agent-tune-kit-install.json").read_text(encoding="utf-8"))
-    if marker.get("payload_source_kind") != "package-resource":
-        raise ReleaseCheckError(f"{artifact.name} install did not use package-resource payload")
+    if target.is_symlink():
+        raise ReleaseCheckError(f"{artifact.name} install did not copy the packaged payload")
     status = capture([str(atk), "status", *common], cwd=run_dir)
     if "已本地安装。" not in status:
         raise ReleaseCheckError(f"{artifact.name} status smoke failed")

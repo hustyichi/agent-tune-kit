@@ -2,7 +2,7 @@
 
 Agent Tune Kit provides a local Codex plugin for the manual Agent tuning loop described in `docs/codex_agent_tuning_prd.md`. The supported setup path is the local plugin installer; do not split-copy individual `skills/*` directories because they reference shared pack assets by relative path.
 
-This pass is a local-product minimum: `.codex-plugin/plugin.json`, personal marketplace registration, one-command installer orchestration, local smoke/status validation, installer-state backup/rollback, and a guided status Skill. It deliberately avoids public marketplace publishing, brand assets/screenshots, hidden one-click orchestration across the Agent tuning loop, bundled example Agent/data fixtures, automatic Agent tuning workflow rollback, universal schemas, old installer command compatibility, and a full E2E test suite against a real Agent service.
+This pass is a local-product minimum: `.codex-plugin/plugin.json`, personal marketplace registration, one-command installer orchestration, local smoke/status validation, and a guided status Skill. It deliberately avoids public marketplace publishing, brand assets/screenshots, hidden one-click orchestration across the Agent tuning loop, bundled example Agent/data fixtures, automatic Agent tuning workflow rollback, universal schemas, old installer command compatibility, and a full E2E test suite against a real Agent service.
 
 ## Local plugin install and smoke
 
@@ -38,18 +38,16 @@ Useful commands:
 ```sh
 atk preview --smoke
 atk status
-atk rollback --backup <backup-id>
 ```
 
-Conflict and rollback behavior:
+Conflict behavior:
 
-- `preview` never writes marketplace/plugin-store files or backups;
+- `preview` never writes marketplace/plugin-store files;
 - interactive terminals prompt before replacing conflicting marketplace/plugin-store state;
 - noninteractive destructive replacement requires `--yes --force`;
 - `--yes` alone does not replace conflicts;
 - `--no-input` never waits for prompts;
-- destructive replacement creates a backup under `~/.agents/plugins/backups/agent-tune-kit/<backup-id>/` by default;
-- rollback restores only installer-managed marketplace/plugin-store state, not Agent tuning workflow changes.
+- after confirmation, replacement overwrites the existing plugin-store target and updates the marketplace entry.
 
 For isolated smoke tests, use temp paths:
 
@@ -57,7 +55,6 @@ For isolated smoke tests, use temp paths:
 atk install \
   --marketplace-path /tmp/agent-tune-marketplace.json \
   --plugin-store /tmp/agent-tune-plugins \
-  --backup-root /tmp/agent-tune-backups \
   --yes --force
 atk status \
   --marketplace-path /tmp/agent-tune-marketplace.json \
@@ -76,7 +73,7 @@ For source checkout development, keep the packaged CLI path first but use the wr
 ```sh
 uv sync
 uv run atk preview --smoke
-uv run atk install --copy --marketplace-path /tmp/agent-tune-marketplace.json --plugin-store /tmp/agent-tune-plugins --backup-root /tmp/agent-tune-backups --yes --force
+uv run atk install --copy --marketplace-path /tmp/agent-tune-marketplace.json --plugin-store /tmp/agent-tune-plugins --yes --force
 python3 scripts/install_plugin.py install  # contributor wrapper only
 ```
 
@@ -92,8 +89,7 @@ For isolated local checks, pass the same installer path overrides; the script fo
 CODEX_PERSONAL_PLUGIN_CACHE_ROOT=/tmp/agent-tune-cache \
   scripts/dev-refresh-install.sh \
   --marketplace-path /tmp/agent-tune-marketplace.json \
-  --plugin-store /tmp/agent-tune-plugins \
-  --backup-root /tmp/agent-tune-backups
+  --plugin-store /tmp/agent-tune-plugins
 ```
 
 Before publishing or TestPyPI verification, run:
@@ -125,7 +121,7 @@ Do not copy a single `skills/*` directory by itself; keep `skills/`, `templates/
 - `templates/.atk/runner/eval_runner.py.md` — script template preserving original dataset columns and appending `agent_output` plus `log_path`.
 - `templates/.atk/runner/failure_rule.py.md` — stdlib CSV rule-filter template.
 - `docs/shared-versioning-and-confirmation.md` — shared current/new version semantics and confirmation triggers.
-- `scripts/install_plugin.py` — safe local marketplace installer/smoke/status/rollback tool.
+- `scripts/install_plugin.py` — safe local marketplace installer/smoke/status tool.
 - `scripts/validate_skill_pack.py` — lightweight static checker for this local plugin pack.
 
 ## Manual 2.2 → 2.6 loop
