@@ -19,7 +19,6 @@ REQUIRED_FILES = [
     ".codex-plugin/plugin.json",
     "skills/atk-dataset/SKILL.md",
     "skills/atk-dataset/scripts/update_dataset.py",
-    "skills/atk-new-agent/SKILL.md",
     "skills/atk-init/SKILL.md",
     "skills/atk-eval/SKILL.md",
     "skills/atk-diagnose/SKILL.md",
@@ -38,11 +37,6 @@ REQUIRED_FILES = [
     "skills/atk-optimize/SKILL.md",
     "templates/.atk/runner/eval_runner.py.md",
     "templates/.atk/runner/failure_rule.py.md",
-    "templates/agent/agent.py",
-    "templates/agent/run_agent.py",
-    "templates/agent/pyproject.toml",
-    "templates/agent/.env.example",
-    "templates/agent/README.md",
     "docs/skill-template-pack-usage.md",
     "docs/shared-versioning-and-confirmation.md",
     "docs/codex_agent_tuning_prd.md",
@@ -60,13 +54,11 @@ REQUIRED_FILES = [
 ]
 
 SKILL_FILES = [path for path in REQUIRED_FILES if path.startswith("skills/") and path.endswith("/SKILL.md")]
-PRE_INIT_SKILL_FILES = {"skills/atk-dataset/SKILL.md", "skills/atk-new-agent/SKILL.md"}
 DATASET_ONLY_PRE_RESULTS_SKILL_FILES = {
     "skills/atk-dataset/SKILL.md",
     "skills/atk-visualize-dataset/SKILL.md",
 }
-NON_LIFECYCLE_SKILL_FILES = PRE_INIT_SKILL_FILES | DATASET_ONLY_PRE_RESULTS_SKILL_FILES
-AGENT_SCAFFOLD_SKILL_FILES = {"skills/atk-new-agent/SKILL.md"}
+NON_LIFECYCLE_SKILL_FILES = DATASET_ONLY_PRE_RESULTS_SKILL_FILES
 LIFECYCLE_SKILL_FILES = [path for path in SKILL_FILES if path not in NON_LIFECYCLE_SKILL_FILES]
 
 REQUIRED_SKILL_SECTIONS = [
@@ -79,7 +71,7 @@ REQUIRED_SKILL_SECTIONS = [
     "## Failure behavior",
 ]
 
-REQUIRED_PRE_INIT_SCAFFOLD_SKILL_SECTIONS = [
+REQUIRED_DATASET_SKILL_SECTIONS = [
     "## Purpose",
     "## Inputs",
     "## Outputs",
@@ -218,26 +210,6 @@ PER_FILE_PHRASES = {
     "src/agent_tune_kit/cli.py": [
         "installer_main",
         "def main",
-    ],
-    "skills/atk-new-agent/SKILL.md": [
-        "atk-new-agent",
-        "ATK new Agent",
-        ".atk/specs/agent_spec.md",
-        "templates/agent/",
-        "run_agent(input_data: dict[str, str]) -> str",
-        "OPENAI_API_KEY",
-        "OPENAI_BASE_URL",
-        "OPENAI_MODEL",
-        "uv run python run_agent.py --input hello",
-        "$atk-init Agent 入口是 agent.py 的 run_agent",
-        "Never write `.atk/datasets/dataset.csv`",
-        "pre-init scaffold",
-        "Risk-triggered confirmation policy",
-        "No risk-triggered confirmation needed",
-        "do not ask the user to confirm obvious, low-risk, or inspectable facts",
-        "do not present default assumptions as user intent",
-        "run `uv sync` from the target repository root",
-        "`uv sync` status",
     ],
     "skills/atk-dataset/SKILL.md": [
         "dataset-only / pre-results",
@@ -499,39 +471,6 @@ PER_FILE_PHRASES = {
         "TODO_AGENT_TUNING",
         'raise UserActionRequired("TODO_AGENT_TUNING: implement confirmed failure rule before running.")',
     ],
-    "templates/agent/agent.py": [
-        "def run_agent(input_data: dict[str, str]) -> str",
-        "OPENAI_API_KEY",
-        "OPENAI_BASE_URL",
-        "OPENAI_MODEL",
-        "AgentConfigurationError",
-        "Missing {name}",
-        "OpenAI(",
-        "client.chat.completions.create",
-    ],
-    "templates/agent/run_agent.py": [
-        "from agent import AgentConfigurationError, run_agent",
-        'parser.add_argument("--input", required=True',
-        "Configuration error:",
-        "json.loads",
-    ],
-    "templates/agent/pyproject.toml": [
-        'name = "atk-generated-agent"',
-        "openai>=1.0.0",
-        "python-dotenv>=1.0.0",
-    ],
-    "templates/agent/.env.example": [
-        "OPENAI_API_KEY=",
-        "OPENAI_BASE_URL=https://api.openai.com/v1",
-        "OPENAI_MODEL=gpt-4.1-mini",
-    ],
-    "templates/agent/README.md": [
-        "ATK Generated Agent",
-        "uv sync",
-        "uv run python run_agent.py --input hello",
-        "$atk-init Agent 入口是 agent.py 的 run_agent",
-        "agent.py::run_agent",
-    ],
     "docs/shared-versioning-and-confirmation.md": [
         "Current version vs new version creation",
         "Only `eval_runner.py` creates or reuses result versions",
@@ -735,7 +674,7 @@ def main() -> int:
         text = existing_texts.get(rel, "")
         require(text.startswith("---\n"), f"{rel} missing YAML front matter", errors)
         required_sections = (
-            REQUIRED_PRE_INIT_SCAFFOLD_SKILL_SECTIONS if rel in NON_LIFECYCLE_SKILL_FILES else REQUIRED_SKILL_SECTIONS
+            REQUIRED_DATASET_SKILL_SECTIONS if rel in NON_LIFECYCLE_SKILL_FILES else REQUIRED_SKILL_SECTIONS
         )
         for section in required_sections:
             require(section in text, f"{rel} missing section {section}", errors)
@@ -762,15 +701,6 @@ def main() -> int:
         require(
             "docs/shared-versioning-and-confirmation.md" not in text,
             f"{rel} must not require shared version doc behavior",
-            errors,
-        )
-
-    for rel in AGENT_SCAFFOLD_SKILL_FILES:
-        text = existing_texts.get(rel, "")
-        require(".atk/specs/agent_spec.md" in text, f"{rel} missing generated Agent spec path", errors)
-        require(
-            "Never write `.atk/datasets/dataset.csv`" in text,
-            f"{rel} must explicitly avoid dataset authoring and hand off dataset validation/normalization",
             errors,
         )
 

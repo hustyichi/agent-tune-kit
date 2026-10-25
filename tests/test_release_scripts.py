@@ -75,6 +75,22 @@ class ReleaseScriptTests(unittest.TestCase):
         self.assertTrue(readme_paths.isdisjoint(validate_skill_pack.PER_FILE_PHRASES))
         self.assertNotIn("explicit subcommands only", validate_skill_pack.PLUGIN_DOC_PHRASES)
 
+    def test_skill_pack_is_limited_to_existing_agent_tuning(self) -> None:
+        validate_skill_pack = load_script("validate_skill_pack.py")
+        supported_skills = {
+            "atk-dataset",
+            "atk-visualize-dataset",
+            "atk-init",
+            "atk-eval",
+            "atk-diagnose",
+            "atk-report",
+            "atk-visualize-failures",
+            "atk-optimize",
+        }
+
+        self.assertEqual({path.parent.name for path in (ROOT / "skills").glob("*/SKILL.md")}, supported_skills)
+        self.assertEqual(set(validate_skill_pack.SKILL_FILES), {f"skills/{name}/SKILL.md" for name in supported_skills})
+
     def test_skill_pack_validation_registers_dataset_as_dataset_only_pre_results_skill(self) -> None:
         validate_skill_pack = load_script("validate_skill_pack.py")
         path = "skills/atk-dataset/SKILL.md"

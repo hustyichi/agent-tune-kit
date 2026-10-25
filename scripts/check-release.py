@@ -29,28 +29,16 @@ PLUGIN_NAME = "agent-tune-kit"
 WHEEL_REQUIRED_PATHS = {
     "agent_tune_kit/plugin_payload/agent-tune-kit/.codex-plugin/plugin.json",
     "agent_tune_kit/plugin_payload/agent-tune-kit/skills/atk-dataset/SKILL.md",
-    "agent_tune_kit/plugin_payload/agent-tune-kit/skills/atk-new-agent/SKILL.md",
     "agent_tune_kit/plugin_payload/agent-tune-kit/templates/.atk/runner/eval_runner.py.md",
     "agent_tune_kit/plugin_payload/agent-tune-kit/templates/.atk/runner/failure_rule.py.md",
-    "agent_tune_kit/plugin_payload/agent-tune-kit/templates/agent/agent.py",
-    "agent_tune_kit/plugin_payload/agent-tune-kit/templates/agent/run_agent.py",
-    "agent_tune_kit/plugin_payload/agent-tune-kit/templates/agent/pyproject.toml",
-    "agent_tune_kit/plugin_payload/agent-tune-kit/templates/agent/.env.example",
-    "agent_tune_kit/plugin_payload/agent-tune-kit/templates/agent/README.md",
     "agent_tune_kit/plugin_payload/agent-tune-kit/docs/skill-template-pack-usage.md",
 }
 
 SDIST_REQUIRED_PATHS = {
     ".codex-plugin/plugin.json",
     "skills/atk-dataset/SKILL.md",
-    "skills/atk-new-agent/SKILL.md",
     "templates/.atk/runner/eval_runner.py.md",
     "templates/.atk/runner/failure_rule.py.md",
-    "templates/agent/agent.py",
-    "templates/agent/run_agent.py",
-    "templates/agent/pyproject.toml",
-    "templates/agent/.env.example",
-    "templates/agent/README.md",
     "docs/skill-template-pack-usage.md",
     "scripts/check-release.py",
     "scripts/publish-release.py",

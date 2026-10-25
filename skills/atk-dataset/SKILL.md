@@ -101,7 +101,7 @@ Do not create `.atk/results/vN`. Do not run the Agent. Do not run `$atk-eval`. D
 Report what was reused/changed, path, row count, input/criteria fields and unresolved IDs/questions. Select one next step:
 - Agent and compatible runner already connected: `$atk-eval` when new data should be tested.
 - Agent exists but is not connected, or input fields changed: `$atk-init` using this dataset.
-- No Agent exists and the user wants one built: `$atk-new-agent`.
+- No Agent exists: explain that an existing runnable Agent is required before `$atk-init`.
 - User wants visual review: optional `$atk-visualize-dataset`; later feedback returns to `$atk-dataset`.
 
 Existing result versions retain their original inputs/expected values and judgments. Never rewrite them when updating data.

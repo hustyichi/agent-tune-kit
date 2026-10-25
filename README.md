@@ -4,7 +4,7 @@
 
 [![PyPI](https://img.shields.io/pypi/v/agent-tune-kit.svg)](https://pypi.org/project/agent-tune-kit/)
 
-Agent Tune Kit 是一个**本地 Codex 插件**，用于把你自己的本地 Agent 从“能跑”推进到“可评测、可诊断、可迭代调优”。
+Agent Tune Kit 是一个**本地 Codex 插件**，用于把你已有的本地 Agent 从“能跑”推进到“可评测、可诊断、可迭代调优”。
 
 它围绕两件事展开：先把评估数据集整理成可复用、可人工校准的资产；再把 Agent 的批量评测、异常发现、报告分析和调优改动串成一个可重复的闭环。
 
@@ -14,7 +14,7 @@ Agent Tune Kit 是一个**本地 Codex 插件**，用于把你自己的本地 Ag
 
 ## 适合谁
 
-适合你，如果你已经有，或准备整理出：
+适合已经拥有本地 Agent、希望开展评测与调优的开发者。开始前请准备：
 
 - 一个本地 Agent、聊天机器人、工具调用 Agent 或 RAG Agent。
 - 一份小型评估数据，推荐 CSV；5 到 20 条样例就能开始。

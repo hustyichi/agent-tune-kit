@@ -61,7 +61,6 @@ but do not automatically apply an unrelated Downloads export solely because its 
 No extra metadata/report artifacts are required. Preserve historical eval_results.csv and judgments when revising data;
 run subsequent evaluations with the new dataset and distinguish criteria corrections from Agent improvements.
 For existing compatible runners, proceed to atk-eval; otherwise use atk-init for input mapping and connection.
-`atk-new-agent` remains an optional pre-init scaffold when the user needs an Agent built.
 
 ## Local private tuning context
 

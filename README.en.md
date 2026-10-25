@@ -4,7 +4,7 @@ English | [简体中文](README.md)
 
 [![PyPI](https://img.shields.io/pypi/v/agent-tune-kit.svg)](https://pypi.org/project/agent-tune-kit/)
 
-Agent Tune Kit is a **local Codex plugin** for moving your local Agent from "it runs" to "it can be evaluated, diagnosed, and iteratively tuned."
+Agent Tune Kit is a **local Codex plugin** for moving your existing local Agent from "it runs" to "it can be evaluated, diagnosed, and iteratively tuned."
 
 It focuses on two jobs: first turn evaluation data into a reusable, human-reviewable asset; then connect Agent batch evaluation, failure discovery, reporting, failure review, and Codex-driven tuning into a repeatable loop.
 
@@ -14,7 +14,7 @@ It focuses on two jobs: first turn evaluation data into a reusable, human-review
 
 ## Who It Is For
 
-Use it if you already have, or are ready to organize:
+For developers with an existing local Agent who want to evaluate and tune it. To start, prepare:
 
 - A local Agent, chatbot, tool-using Agent, or RAG Agent.
 - A small evaluation dataset, preferably CSV; 5 to 20 rows are enough to start.
