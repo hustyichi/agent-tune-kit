@@ -47,23 +47,33 @@ Conflict behavior:
 - noninteractive destructive replacement requires `--yes --force`;
 - `--yes` alone does not replace conflicts;
 - `--no-input` never waits for prompts;
-- after confirmation, replacement overwrites the existing plugin-store target and updates the marketplace entry.
+- after confirmation, replacement overwrites the existing plugin-store target and updates the marketplace entry;
+- after installation validation succeeds, `atk install` clears only the personal marketplace ATK cache, including version-number and `local` directories; installation or validation failure leaves the cache untouched; cleanup failure returns an error;
+- cache cleanup rejects paths overlapping the installation, source or marketplace file, rejects symlink cache roots, and does not follow nested symlinks. Finish active ATK tasks before reinstalling.
 
 For isolated smoke tests, use temp paths:
 
 ```sh
-atk install \
+CODEX_PERSONAL_PLUGIN_CACHE_ROOT=/tmp/agent-tune-cache atk install \
   --marketplace-path /tmp/agent-tune-marketplace.json \
   --plugin-store /tmp/agent-tune-plugins \
   --yes --force
-atk status \
+CODEX_PERSONAL_PLUGIN_CACHE_ROOT=/tmp/agent-tune-cache atk status \
   --marketplace-path /tmp/agent-tune-marketplace.json \
   --plugin-store /tmp/agent-tune-plugins
 ```
 
 The installer writes marketplace JSON atomically where practical and reports smoke status. It does not create a public marketplace package and does not mutate hidden Codex UI enablement state.
 
-After install, the plugin should be visible/available in the Personal marketplace. Open `/plugins`, select `Agent Tune Kit`, and enable it there if needed. If `$atk-*` completions do not appear after enabling the plugin, restart Codex or open a new Codex session for the project. Current Codex sessions may not hot-load Skills from a plugin that was enabled after the session started.
+After install, refresh `/plugins`, select `Agent Tune Kit`, and enable it if needed. Restart Codex and open a new session. Existing sessions do not automatically replace instructions already read.
+
+`atk status` compares relative paths and SHA-256 hashes for `.codex-plugin/`, `skills/`, `templates/`, `docs/`, `README.md` and `README.en.md`. It detects modified, missing and extra files in those assets, while ignoring repository-only files outside them and generated cache directories. It checks all cached ATK versions, accepting the installed version directory and `local`; older version directories are reported as stale. It never writes files.
+
+- Exit `0`: cached assets match, or no cache has been generated yet. An absent cache is explicitly pending Codex loading, not proof of activation.
+- Exit `1`: incomplete installation, CLI/installed version mismatch, stale cache, unreadable files or unsafe paths.
+- CLI checks do not observe Codex UI enablement or in-memory session state; verify the actual Skill path and contents in a new session.
+
+Cache location precedence: `CODEX_PERSONAL_PLUGIN_CACHE_ROOT` (the marketplace cache root, with `agent-tune-kit/` appended), otherwise `$CODEX_HOME/plugins/cache/personal`, otherwise `~/.codex/plugins/cache/personal`. Always set an isolated cache root when using temporary marketplace/plugin-store paths; those overrides alone do not isolate the cache.
 
 
 ## Contributor and maintainer packaging notes
@@ -73,11 +83,11 @@ For source checkout development, keep the packaged CLI path first but use the wr
 ```sh
 uv sync
 uv run atk preview --smoke
-uv run atk install --copy --marketplace-path /tmp/agent-tune-marketplace.json --plugin-store /tmp/agent-tune-plugins --yes --force
+CODEX_PERSONAL_PLUGIN_CACHE_ROOT=/tmp/agent-tune-cache uv run atk install --copy --marketplace-path /tmp/agent-tune-marketplace.json --plugin-store /tmp/agent-tune-plugins --yes --force
 python3 scripts/install_plugin.py install  # contributor wrapper only
 ```
 
-When iterating on the plugin without bumping `.codex-plugin/plugin.json` version, Codex may keep loading the old same-version cache from `~/.codex/plugins/cache/personal/agent-tune-kit/<version>`. Use the dev refresh install helper to clear the current-version cache and reinstall this checkout with copy mode:
+Same-version updates are handled by `atk install` automatically. The dev refresh helper now only delegates to `atk install --copy --yes --force` and `atk status`; it does not delete caches before installation:
 
 ```sh
 scripts/dev-refresh-install.sh

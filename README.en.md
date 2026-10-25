@@ -59,15 +59,17 @@ uv tool install --reinstall .
 atk install
 ```
 
-`.` builds and installs the ATK package from the current directory; `--reinstall` includes local changes even when the version is unchanged. Rerun both commands after updating the code. For refreshing the plugin cache at the same version, see the [local development notes](docs/skill-template-pack-usage.md#contributor-and-maintainer-packaging-notes).
+`.` builds and installs the ATK package from the current directory; `--reinstall` includes local changes even when the version is unchanged. Rerun both commands after updating the code. `atk install` clears all ATK cache versions in the personal marketplace after installation validation succeeds, including same-version reinstalls. Failed installation preserves the cache; failed cache cleanup returns an error.
 
-After installation, open the plugin list in Codex:
+After installation, refresh the plugin list in Codex:
 
 ```text
 /plugins
 ```
 
-Select and enable `Agent Tune Kit`. If `$atk-*` completions do not appear immediately after enabling, restart Codex or reopen the current project session.
+Select and enable `Agent Tune Kit`, then restart Codex and open a new session. Existing sessions do not automatically replace instructions already read; finish active ATK tasks before reinstalling.
+
+Run `atk status` to compare installed and cached plugin contents. It reports pending Codex loading when no cache exists. Incomplete installation, stale/unreadable caches and version mismatches return exit code `1`; matching or pending caches return `0`. This does not confirm plugin enablement or activation in a session. See the [installation and cache notes](docs/skill-template-pack-usage.md#local-plugin-install-and-smoke).
 
 ## Two Core Paths
 

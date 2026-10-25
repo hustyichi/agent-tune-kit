@@ -95,9 +95,9 @@ def run(command: list[str], *, cwd: Path = REPO_ROOT, timeout: int | None = None
     subprocess.run(command, cwd=cwd, env=release_env(), text=True, check=True, timeout=timeout)
 
 
-def capture(command: list[str], *, cwd: Path = REPO_ROOT) -> str:
+def capture(command: list[str], *, cwd: Path = REPO_ROOT, extra_env: dict[str, str] | None = None) -> str:
     print(f"+ {' '.join(command)}", flush=True)
-    return subprocess.check_output(command, cwd=cwd, env=release_env(), text=True).strip()
+    return subprocess.check_output(command, cwd=cwd, env=release_env() | (extra_env or {}), text=True).strip()
 
 
 def require_uv() -> str:
@@ -223,11 +223,12 @@ def smoke_installed_artifact(artifact: Path, work_dir: Path) -> None:
         "--plugin-store",
         str(run_dir / "plugins"),
     ]
+    cache_env = {"CODEX_PERSONAL_PLUGIN_CACHE_ROOT": str(run_dir / "cache" / "personal")}
     run([str(atk), "--help"], cwd=run_dir, timeout=30)
-    preview = capture([str(atk), "preview", "--smoke", *common], cwd=run_dir)
+    preview = capture([str(atk), "preview", "--smoke", *common], cwd=run_dir, extra_env=cache_env)
     if "未修改文件。运行 atk install 进行安装。" not in preview:
         raise ReleaseCheckError(f"{artifact.name} preview failed")
-    install_output = capture([str(atk), "install", *common], cwd=run_dir)
+    install_output = capture([str(atk), "install", *common], cwd=run_dir, extra_env=cache_env)
     if "已为 Codex 本地安装 Agent Tune Kit" not in install_output:
         raise ReleaseCheckError(f"{artifact.name} install failed")
     target = run_dir / "plugins" / PLUGIN_NAME
@@ -241,7 +242,7 @@ def smoke_installed_artifact(artifact: Path, work_dir: Path) -> None:
             raise ReleaseCheckError(f"installed artifact missing {required}")
     if target.is_symlink():
         raise ReleaseCheckError(f"{artifact.name} install did not copy the packaged payload")
-    status = capture([str(atk), "status", *common], cwd=run_dir)
+    status = capture([str(atk), "status", *common], cwd=run_dir, extra_env=cache_env)
     if "已本地安装。" not in status:
         raise ReleaseCheckError(f"{artifact.name} status smoke failed")
 

@@ -59,15 +59,17 @@ uv tool install --reinstall .
 atk install
 ```
 
-`.` 表示从当前目录构建并安装 ATK 包；`--reinstall` 确保版本号未变时也重新安装本地改动。后续更新代码后，重新执行这两条命令即可。同版本插件的缓存刷新见[本地开发说明](docs/skill-template-pack-usage.md#contributor-and-maintainer-packaging-notes)。
+`.` 表示从当前目录构建并安装 ATK 包；`--reinstall` 确保版本号未变时也重新安装本地改动。后续更新代码后，重新执行这两条命令即可。`atk install` 在安装校验成功后自动清理个人 marketplace 下 ATK 的各版本缓存，同版本重装也会刷新。安装失败时保留原缓存；缓存清理失败会返回错误。
 
-安装完成后，在 Codex 中打开插件列表：
+安装完成后，刷新 Codex 插件列表：
 
 ```text
 /plugins
 ```
 
-选择并启用 `Agent Tune Kit`。如果刚启用后当前会话里还看不到 `$atk-*` 自动补全，请重启 Codex，或重新打开当前项目会话。
+选择并启用 `Agent Tune Kit`，然后重启 Codex 并新建会话。旧会话不会自动更新已读取的指令；重装应安排在正在运行的 ATK 任务结束后。
+
+运行 `atk status` 可检查安装目录与缓存的文件内容是否一致。缓存尚未生成时会提示等待 Codex 加载；缓存不一致、不可读取或安装不完整时返回退出码 `1`。内容一致或等待生成时返回 `0`，但这不代表插件已启用或会话已加载最新指令。详情见[安装与缓存说明](docs/skill-template-pack-usage.md#local-plugin-install-and-smoke)。
 
 ## 两条核心路径
 

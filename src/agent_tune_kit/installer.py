@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import shutil
@@ -357,6 +358,82 @@ def ensure_plugin_store(target: Path, *, use_copy: bool, dry_run: bool, payload_
         raise InstallError(f"symlink failed ({exc}); rerun with --copy for explicit copy fallback") from exc
 
 
+def plugin_cache_path(target: Path, marketplace_path: Path, payload_source: PayloadSource) -> Path:
+    codex_home = Path(os.environ.get("CODEX_HOME") or "~/.codex").expanduser()
+    root = Path(
+        os.environ.get("CODEX_PERSONAL_PLUGIN_CACHE_ROOT") or codex_home / "plugins" / "cache" / "personal"
+    ).expanduser()
+    cache = root / PLUGIN_NAME
+    for path in (root, cache):
+        if path.is_symlink() or (path.exists() and not path.is_dir()):
+            raise InstallError(f"unsafe plugin cache path: {path}")
+    cache = cache.resolve()
+    protected = [target, marketplace_path]
+    if isinstance(payload_source.root, Path):
+        protected.append(payload_source.root)
+    for path in protected:
+        resolved = path.resolve()
+        if cache.is_relative_to(resolved) or resolved.is_relative_to(cache):
+            raise InstallError(f"plugin cache overlaps installation/source/marketplace: {cache}")
+    return cache
+
+
+def payload_hashes(root: Path) -> dict[str, str]:
+    hashes: dict[str, str] = {}
+
+    def visit(path: Path) -> None:
+        if path.name in COPY_IGNORE_NAMES:
+            return
+        if path.is_symlink():
+            raise InstallError(f"cannot compare plugin payload symlink: {path}")
+        if path.is_dir():
+            for item in sorted(path.iterdir()):
+                visit(item)
+        elif path.is_file():
+            with path.open("rb") as handle:
+                hashes[path.relative_to(root).as_posix()] = hashlib.file_digest(handle, "sha256").hexdigest()
+        else:
+            raise InstallError(f"cannot compare plugin payload path: {path}")
+
+    for name in DEV_PAYLOAD_NAMES:
+        path = root / name
+        if path.exists() or path.is_symlink():
+            visit(path)
+    return hashes
+
+
+def cache_status(target: Path, cache: Path) -> tuple[bool, list[str]]:
+    entries = sorted(cache.iterdir()) if cache.exists() else []
+    entries = [entry for entry in entries if entry.name not in COPY_IGNORE_NAMES]
+    if not entries:
+        return True, ["缓存尚未生成，等待 Codex 加载；尚未确认会话生效。"]
+    expected = payload_hashes(target)
+    version = current_manifest_version(target)
+    ok = True
+    lines: list[str] = []
+    for entry in entries:
+        if entry.is_symlink() or not entry.is_dir():
+            raise InstallError(f"unsafe plugin cache entry: {entry}")
+        actual = payload_hashes(entry)
+        missing = sorted(expected.keys() - actual.keys())
+        extra = sorted(actual.keys() - expected.keys())
+        changed = sorted(key for key in expected.keys() & actual.keys() if expected[key] != actual[key])
+        version_ok = entry.name in (version, "local")
+        if not (missing or extra or changed) and version_ok:
+            lines.append(f"缓存与安装内容一致：{entry}")
+            continue
+        ok = False
+        lines.append(f"缓存不一致：{entry}（修改 {len(changed)}，缺失 {len(missing)}，多余 {len(extra)}）")
+        if not version_ok:
+            lines.append(f"  缓存目录版本 {entry.name} 与安装版本 {version} 不同。")
+        differences = [("修改", changed), ("缺失", missing), ("多余", extra)]
+        details = [f"  {label}：{name}" for label, names in differences for name in names]
+        lines.extend(details[:5])
+    if not ok:
+        lines.append("运行 atk install 刷新缓存，然后重启 Codex 并新建会话。")
+    return ok, lines
+
+
 def collect_status(
     marketplace_path: Path, plugin_store: Path, payload_source: PayloadSource | None = None
 ) -> tuple[dict[str, bool], list[str]]:
@@ -476,6 +553,7 @@ def run_preview(args: argparse.Namespace) -> int:
     target = plugin_store / PLUGIN_NAME
     validate_manifest_payload(payload_source.root)
     marketplace = load_json(marketplace_path)
+    cache = plugin_cache_path(target, marketplace_path, payload_source)
 
     print(f"将为 Codex 安装 Agent Tune Kit {payload_source.package_version}。")
     print(f"位置：{target}")
@@ -483,6 +561,7 @@ def run_preview(args: argparse.Namespace) -> int:
         print("已有文件或注册与本次安装冲突；替换需要确认。")
     if args.smoke:
         smoke_check(marketplace_path, plugin_store, dry_run=True, payload_source=payload_source)
+    print(f"安装校验成功后将清理 ATK 缓存：{cache}")
     print("未修改文件。运行 atk install 进行安装。")
     return 0
 
@@ -495,6 +574,7 @@ def run_install(args: argparse.Namespace) -> int:
 
     validate_manifest_payload(payload_source.root)
     marketplace = load_json(marketplace_path)
+    cache = plugin_cache_path(target, marketplace_path, payload_source)
     conflicts: list[str] = []
     if marketplace_conflict(marketplace):
         found = find_marketplace_entry(marketplace)
@@ -514,29 +594,41 @@ def run_install(args: argparse.Namespace) -> int:
     if args.smoke:
         smoke_check(marketplace_path, plugin_store, dry_run=False, payload_source=payload_source)
 
+    validate_manifest(target / ".codex-plugin" / "plugin.json")
+    # Invalidate only after a usable installation exists, including with --no-smoke.
+    try:
+        cache = plugin_cache_path(target, marketplace_path, payload_source)
+        remove_path(cache)
+    except (InstallError, OSError) as exc:
+        raise InstallError(f"plugin installed, but cache refresh failed: {cache}: {exc}") from exc
+
     print(f"已为 Codex 本地安装 Agent Tune Kit {payload_source.package_version}。")
-    print("下一步：在 Codex 打开 /plugins，按需启用 Agent Tune Kit。")
-    print("若缺少 $atk-* Skill，请开启新的 Codex 会话。")
+    print("ATK 缓存已清理或尚未生成；等待 Codex 重新加载。")
+    print("下一步：刷新 Codex /plugins，确认启用 Agent Tune Kit；重启 Codex 并新建会话。")
     return 0
 
 
 def run_status(args: argparse.Namespace) -> int:
     payload_source = resolve_payload_source()
     target = args.plugin_store.expanduser() / PLUGIN_NAME
+    cache = plugin_cache_path(target, args.marketplace_path.expanduser(), payload_source)
     facts, _ = collect_status(args.marketplace_path, args.plugin_store, payload_source)
     if not all(facts.values()):
         print("Agent Tune Kit 尚未安装或安装不完整。")
         print(f"位置：{target}")
         print("运行 atk install 安装或修复。")
-        return 0
+        return 1
 
     version = current_manifest_version(target)
     print(f"Agent Tune Kit {version} 已本地安装。")
     print(f"位置：{target}")
     if version != payload_source.package_version:
         print(f"CLI 版本为 {payload_source.package_version}；运行 atk install 更新 Skill。")
+    cache_ok, lines = cache_status(target, cache)
+    for line in lines:
+        print(line)
     print("在 Codex 打开 /plugins，检查 Agent Tune Kit 是否已启用。")
-    return 0
+    return 0 if cache_ok and version == payload_source.package_version else 1
 
 
 def version_text() -> str:
@@ -599,9 +691,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     subparsers.add_parser(
         "preview", parents=[common], help="preview planned marketplace/plugin-store changes without writing"
     )
-    subparsers.add_parser("install", parents=[common], help="install locally, then run smoke/status by default")
+    subparsers.add_parser("install", parents=[common], help="install, validate, then clear personal ATK caches")
     subparsers.add_parser(
-        "status", parents=[common], help="print read-only local install status and Codex UI boundary guidance"
+        "status", parents=[common], help="check local installation and compare cached plugin contents (read-only)"
     )
 
     args = parser.parse_args(argv)

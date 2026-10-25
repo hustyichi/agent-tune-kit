@@ -166,8 +166,6 @@ PER_FILE_PHRASES = {
     "scripts/dev-refresh-install.sh": [
         "Agent Tune Kit dev refresh install",
         "CODEX_PERSONAL_PLUGIN_CACHE_ROOT",
-        ".codex-plugin/plugin.json",
-        "rm -rf",
         "uv run atk install --copy --yes --force",
         "uv run atk status --no-input",
     ],

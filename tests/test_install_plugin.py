@@ -21,6 +21,9 @@ SCRIPT = ROOT / "scripts" / "install_plugin.py"
 def run_cli(*args: str, timeout: float = 10, cwd: Path = ROOT) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
     env["PYTHONPATH"] = str(SRC) + os.pathsep + env.get("PYTHONPATH", "")
+    if "CODEX_PERSONAL_PLUGIN_CACHE_ROOT" not in env and "CODEX_HOME" not in env and "--plugin-store" in args:
+        store = Path(args[args.index("--plugin-store") + 1])
+        env["CODEX_PERSONAL_PLUGIN_CACHE_ROOT"] = str(store.parent / "cache" / "personal")
     return subprocess.run(
         [sys.executable, "-m", "agent_tune_kit.cli", *args],
         cwd=cwd,
@@ -63,6 +66,7 @@ class InstallPluginCliTests(unittest.TestCase):
                 [
                     f"将为 Codex 安装 Agent Tune Kit {version}。",
                     f"位置：{base / 'plugins' / 'agent-tune-kit'}",
+                    f"安装校验成功后将清理 ATK 缓存：{Path(os.environ['CODEX_PERSONAL_PLUGIN_CACHE_ROOT']) / 'agent-tune-kit'}",
                     "未修改文件。运行 atk install 进行安装。",
                 ],
             )
@@ -123,8 +127,8 @@ class InstallPluginCliTests(unittest.TestCase):
                 result.stdout.splitlines(),
                 [
                     f"已为 Codex 本地安装 Agent Tune Kit {version}。",
-                    "下一步：在 Codex 打开 /plugins，按需启用 Agent Tune Kit。",
-                    "若缺少 $atk-* Skill，请开启新的 Codex 会话。",
+                    "ATK 缓存已清理或尚未生成；等待 Codex 重新加载。",
+                    "下一步：刷新 Codex /plugins，确认启用 Agent Tune Kit；重启 Codex 并新建会话。",
                 ],
             )
             data = json.loads((base / "marketplace.json").read_text())
@@ -151,6 +155,7 @@ class InstallPluginCliTests(unittest.TestCase):
                 [
                     f"Agent Tune Kit {version} 已本地安装。",
                     f"位置：{base / 'plugins' / 'agent-tune-kit'}",
+                    "缓存尚未生成，等待 Codex 加载；尚未确认会话生效。",
                     "在 Codex 打开 /plugins，检查 Agent Tune Kit 是否已启用。",
                 ],
             )
@@ -168,7 +173,7 @@ class InstallPluginCliTests(unittest.TestCase):
                     elif state == "unreadable":
                         marketplace.write_text("invalid json", encoding="utf-8")
                     status = run_cli("status", *common)
-                    self.assertEqual(status.returncode, 0, status.stderr)
+                    self.assertEqual(status.returncode, 1, status.stderr)
                     self.assertEqual(
                         status.stdout.splitlines(),
                         [
@@ -189,10 +194,10 @@ class InstallPluginCliTests(unittest.TestCase):
             manifest["version"] = "0.0.1"
             manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
             status = run_cli("status", *common)
-            self.assertEqual(status.returncode, 0, status.stderr)
+            self.assertEqual(status.returncode, 1, status.stderr)
             self.assertIn("Agent Tune Kit 0.0.1 已本地安装。", status.stdout)
             self.assertIn("运行 atk install 更新 Skill。", status.stdout)
-            self.assertEqual(len(status.stdout.splitlines()), 4)
+            self.assertEqual(len(status.stdout.splitlines()), 5)
 
     def test_preview_preserves_conflict_warning_without_writing(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -216,7 +221,7 @@ class InstallPluginCliTests(unittest.TestCase):
                     )
                     self.assertEqual(result.returncode, 0, result.stderr)
                     self.assertIn("已有文件或注册与本次安装冲突；替换需要确认。", result.stdout)
-                    self.assertEqual(len(result.stdout.splitlines()), 4)
+                    self.assertEqual(len(result.stdout.splitlines()), 5)
                     self.assertEqual(marketplace.read_bytes() if marketplace.exists() else None, before)
                     if conflict == "files":
                         self.assertEqual((target / "keep.txt").read_text(), "keep")
@@ -374,6 +379,7 @@ class InstallPluginCliTests(unittest.TestCase):
     def _assert_installed_artifact_smoke(self, artifact: Path, venv_dir: Path, run_dir: Path) -> None:
         env = os.environ.copy()
         env["UV_NO_CONFIG"] = "1"
+        env["CODEX_PERSONAL_PLUGIN_CACHE_ROOT"] = str(run_dir / "cache" / "personal")
         create = subprocess.run(
             ["uv", "venv", str(venv_dir)],
             cwd=run_dir.parent,
@@ -408,6 +414,7 @@ class InstallPluginCliTests(unittest.TestCase):
         preview = subprocess.run(
             [str(atk), "preview", "--smoke", *common],
             cwd=run_dir,
+            env=env,
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -419,6 +426,7 @@ class InstallPluginCliTests(unittest.TestCase):
         install_cli = subprocess.run(
             [str(atk), "install", *common],
             cwd=run_dir,
+            env=env,
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -446,6 +454,14 @@ class InstallPluginCliTests(unittest.TestCase):
         self.assertTrue((target / "skills" / "atk-dataset" / "scripts" / "update_dataset.py").exists())
         self.assertTrue((target / "templates" / ".atk" / "runner" / "eval_runner.py.md").exists())
         self.assertTrue((target / "templates" / ".atk" / "runner" / "failure_rule.py.md").exists())
+        cache = Path(env["CODEX_PERSONAL_PLUGIN_CACHE_ROOT"]) / "agent-tune-kit" / "local"
+        shutil.copytree(target, cache)
+        (cache / "README.md").write_text("stale same-version payload", encoding="utf-8")
+        stale = subprocess.run(
+            [str(atk), "status", *common], cwd=run_dir, env=env, text=True, capture_output=True, timeout=20
+        )
+        self.assertEqual(stale.returncode, 1, stale.stdout + stale.stderr)
+        self.assertIn("README.md", stale.stdout)
         reinstall = subprocess.run(
             [str(atk), "install", "--yes", "--force", *common],
             cwd=run_dir,
@@ -458,10 +474,13 @@ class InstallPluginCliTests(unittest.TestCase):
         )
         self.assertEqual(reinstall.returncode, 0, reinstall.stderr)
         self.assertEqual(reinstall.stdout, install_cli.stdout)
+        self.assertFalse(cache.exists())
+        shutil.copytree(target, cache)
         self.assertFalse((run_dir / ".agents").exists())
         status = subprocess.run(
             [str(atk), "status", *common],
             cwd=run_dir,
+            env=env,
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -470,6 +489,7 @@ class InstallPluginCliTests(unittest.TestCase):
         )
         self.assertEqual(status.returncode, 0, status.stderr)
         self.assertIn("已本地安装。", status.stdout)
+        self.assertIn("缓存与安装内容一致", status.stdout)
 
 
 if __name__ == "__main__":
