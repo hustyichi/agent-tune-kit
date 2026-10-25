@@ -80,7 +80,7 @@ def test_rule_template_preserves_unknown_and_failure_only_rerun_input(tmp_path):
     template = (ROOT / "templates/.atk/runner/failure_rule.py.md").read_text()
     code = template.split("```python\n", 1)[1].split("```", 1)[0]
     # Replace only project-specific judgment; exercise the template's real CSV path.
-    start, end = code.index("def judge("), code.index("\ndef write_", code.index("def judge("))
+    start, end = code.index("def judge("), len(code)
     code = code[:start] + 'def judge(row):\n    return row["expected_verdict"], "test criterion"\n\n' + code[end:]
     script = tmp_path / "rule.py"
     script.write_text(code)
@@ -129,7 +129,7 @@ def test_browser_normal_filter_excludes_unknown(tmp_path):
     runtime = shutil.which("bun") or shutil.which("node")
     if not runtime:
         pytest.skip("JavaScript runtime unavailable")
-    js = (ROOT / "skills/atk-visualize-failures/assets/app.js").read_text()
+    js = (ROOT / "src/agent_tune_kit/visualize/assets/failures/app.js").read_text()
     payload = {
         "fieldnames": ["is_abnormal"],
         "rows": [{"values": {"is_abnormal": value}} for value in ["false", "unknown", "true"]],
@@ -154,7 +154,7 @@ def test_browser_unknown_count_and_detail_never_claim_pass():
     runtime = shutil.which("bun") or shutil.which("node")
     if not runtime:
         pytest.skip("JavaScript runtime unavailable")
-    js = (ROOT / "skills/atk-visualize-failures/assets/app.js").read_text()
+    js = (ROOT / "src/agent_tune_kit/visualize/assets/failures/app.js").read_text()
     payload = {
         "fieldnames": ["is_abnormal"],
         "rows": [{"values": {"is_abnormal": value}} for value in ["false", "unknown", "true"]],
@@ -181,5 +181,5 @@ def test_truncated_judgments_cannot_prove_pass(tmp_path):
     from unittest import mock
 
     fixture = history_fixture(tmp_path, [("1", "passed"), ("2", "passed")])
-    with mock.patch.object(fixture[0], "HISTORY_FAILURE_MAX_BYTES", 20):
+    with mock.patch("agent_tune_kit.visualize.history.HISTORY_FAILURE_MAX_BYTES", 20):
         assert fixture[0].read_judgments(fixture[2]) == {}

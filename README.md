@@ -32,13 +32,7 @@ Agent Tune Kit 的价值不只是“跑一次测试”，而是把 Agent 调优�
 
 ## 安装
 
-一键运行：
-
-```sh
-uvx --from agent-tune-kit atk install
-```
-
-如果希望长期保留 `atk` 命令，可以改用：
+先安装 ATK CLI，再安装配套 Skills：
 
 ```sh
 uv tool install agent-tune-kit
@@ -182,3 +176,25 @@ ATK 可选读取本地私有的 `.atk/context.md`，用于保存用户沟通后�
 ## 能力评估
 
 - [Ground truth 与评分方案支持评估（2026-10-25）](docs/ground-truth-and-grading-assessment-2026-10-25.md)：基于当前源码与 44 项相关测试，梳理数据准备、人工校准和判定支持，区分小规模调优可用性与可信评分体系的缺口；未重新验收业务调优效果。
+
+兼容一次性安装命令 `uvx --from agent-tune-kit atk install`；日常使用 Skill 需要 PATH 中持续可用的 `atk` 命令。
+
+## 统一 CLI 能力
+
+固定操作由 Python 包维护，Skill 继续负责语义诊断、报告分析和 Agent 优化。可在目标 Agent 项目中使用以下命令：
+
+```sh
+atk dataset prepare --source data/eval.csv
+atk dataset inspect --direct --json
+atk dataset update --direct --field expected --updates-path updates.csv
+atk eval --check --json
+atk eval --limit 5 --concurrency 2
+atk results inspect --json
+atk results run-rule
+atk results apply-judgments --judgments-path judgments.csv --source-results .atk/results/v1/eval_results.csv
+atk results compare --ids 1 2 --json
+atk visualize dataset --no-open
+atk visualize failures --no-open
+```
+
+新生成的项目适配文件使用统一执行引擎，已有完整 runner 保留兼容执行路径。数据字段、ID、结果目录、未判定状态、日志和离线浏览页遵循原有约定。各命令参数见对应 `--help`。

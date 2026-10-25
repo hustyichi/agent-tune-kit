@@ -62,12 +62,8 @@ def render_runner(*, concurrent_enabled: bool = True, inject_context_free_log: b
     )
     if inject_context_free_log:
         code = code.replace(
-            "        with capture_python_row_logging(enabled=row_logging_enabled):\n            for completed",
-            (
-                "        with capture_python_row_logging(enabled=row_logging_enabled):\n"
-                '            logging.getLogger("agent_smoke").info("CONTEXT_FREE_DURING_RUN")\n'
-                "            for completed"
-            ),
+            'token = agent_input["token"]',
+            'token = agent_input["token"]\n    context_thread = threading.Thread(target=lambda: logging.getLogger("agent_smoke").info("CONTEXT_FREE_DURING_RUN"))\n    context_thread.start()\n    context_thread.join()',
         )
     return code
 
@@ -139,8 +135,8 @@ class RunnerTemplateRowLoggingTests(unittest.TestCase):
     def test_template_reads_fixed_dataset_snapshot(self) -> None:
         rendered = render_runner()
 
-        self.assertIn('DATASETS_DIR = Path(".atk/datasets")', rendered)
-        self.assertIn('DATASET_PATH = DATASETS_DIR / "dataset.csv"', rendered)
+        self.assertIn("ATK_MANAGED_RUNNER = True", rendered)
+        self.assertNotIn("def allocate_next_results_version", rendered)
         self.assertNotIn("TODO_AGENT_TUNING_DATASET_SNAPSHOT", rendered)
 
     def test_template_requires_canonical_atk_id_column(self) -> None:
@@ -151,7 +147,7 @@ class RunnerTemplateRowLoggingTests(unittest.TestCase):
         )
 
         self.assertNotEqual(completed.returncode, 0)
-        self.assertIn("Dataset is missing required atk_id column", completed.stderr)
+        self.assertIn("missing required atk_id column", completed.stderr)
 
     def test_only_failures_runs_rows_selected_by_previous_failure_atk_ids(self) -> None:
         completed, temp_dir = run_rendered_runner(

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import csv
-import importlib.util
 import json
 import re
 import shutil
@@ -12,6 +11,8 @@ import unittest
 from contextlib import chdir
 from pathlib import Path
 from unittest import mock
+
+from agent_tune_kit.visualize import history
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "skills" / "atk-visualize-failures" / "scripts" / "generate_failure_browser.py"
@@ -30,11 +31,9 @@ def run_generator(project: Path, *args: str) -> subprocess.CompletedProcess[str]
 
 
 def load_generator_module():
-    spec = importlib.util.spec_from_file_location("generate_failure_browser", SCRIPT)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    from agent_tune_kit.visualize import failures
+
+    return failures
 
 
 def write_csv(path: Path, fieldnames: list[str], rows: list[dict[str, str]]) -> None:
@@ -292,9 +291,6 @@ class GenerateFailureBrowserTests(unittest.TestCase):
 
     def test_generator_opens_browser_by_default_and_can_opt_out(self) -> None:
         module = load_generator_module()
-        self.assertTrue(module.parse_args([]).open_browser)
-        self.assertFalse(module.parse_args(["--no-open"]).open_browser)
-        self.assertTrue(module.parse_args(["--no-open", "--open"]).open_browser)
 
         with tempfile.TemporaryDirectory() as tmp:
             project = Path(tmp)
@@ -305,9 +301,9 @@ class GenerateFailureBrowserTests(unittest.TestCase):
                 chdir(project),
                 mock.patch.object(module, "open_in_browser", return_value=(True, "file:///fake.html")) as opened,
             ):
-                result = module.run([])
+                result = module.generate_failures()
 
-            self.assertEqual(result, 0)
+            self.assertTrue(result["browser_open"])
             opened.assert_called_once_with(Path(".atk/results/v1/failure_cases.html"))
 
     def test_nonstandard_fields_can_be_role_switched_and_all_fields_preserved(self) -> None:
@@ -352,7 +348,9 @@ class GenerateFailureBrowserTests(unittest.TestCase):
             self.assertIn("report=skipped (Skipped by --no-report.)", result.stdout)
 
     def test_table_does_not_append_issue_column_to_failure_rows(self) -> None:
-        app_js = (ROOT / "skills" / "atk-visualize-failures" / "assets" / "app.js").read_text(encoding="utf-8")
+        app_js = (ROOT / "src" / "agent_tune_kit" / "visualize" / "assets" / "failures" / "app.js").read_text(
+            encoding="utf-8"
+        )
 
         self.assertNotIn('headerRow.appendChild(el("th", { text: "问题" }));', app_js)
         self.assertNotIn('tr.appendChild(el("td", {}, buildRowBadges(row)));', app_js)
@@ -418,14 +416,14 @@ class GenerateFailureBrowserTests(unittest.TestCase):
             self.assertFalse((project / ".atk" / "visualize_config.json").exists())
 
     def test_historical_eval_results_read_is_byte_bounded(self) -> None:
-        module = load_generator_module()
+        load_generator_module()
         with tempfile.TemporaryDirectory() as tmp:
             eval_path = Path(tmp) / "eval_results.csv"
             eval_path.write_text(
                 "atk_id,agent_output\nCASE-000,ok\nCASE-PARTIAL-SHOULD-NOT-APPEAR,ok\n", encoding="utf-8"
             )
-            with mock.patch.object(module, "HISTORY_EVAL_MAX_BYTES", 45):
-                result = module._read_version_tested_ids(eval_path)
+            with mock.patch("agent_tune_kit.visualize.history.HISTORY_EVAL_MAX_BYTES", 45):
+                result = history._read_version_tested_ids(eval_path)
 
         self.assertTrue(result["truncated"])
         self.assertTrue(result["available"])
@@ -435,15 +433,15 @@ class GenerateFailureBrowserTests(unittest.TestCase):
         self.assertNotIn("CASE-PARTIAL", result["atkIds"])
 
     def test_historical_failure_rows_read_is_byte_bounded(self) -> None:
-        module = load_generator_module()
+        load_generator_module()
         with tempfile.TemporaryDirectory() as tmp:
             failure_path = Path(tmp) / "failure_cases.csv"
             failure_path.write_text(
                 "atk_id,failure_reason\nCASE-000,complete reason\nCASE-PARTIAL-SHOULD-NOT-APPEAR,partial reason\n",
                 encoding="utf-8",
             )
-            with mock.patch.object(module, "HISTORY_FAILURE_MAX_BYTES", 58):
-                result = module._read_version_failures(failure_path)
+            with mock.patch("agent_tune_kit.visualize.history.HISTORY_FAILURE_MAX_BYTES", 58):
+                result = history._read_version_failures(failure_path)
 
         self.assertTrue(result["truncated"])
         self.assertTrue(result["readable"])
@@ -456,7 +454,9 @@ class GenerateFailureBrowserTests(unittest.TestCase):
         node = shutil.which("node")
         if not node:
             self.skipTest("node is not available for generated JavaScript syntax smoke")
-        app_js = (ROOT / "skills" / "atk-visualize-failures" / "assets" / "app.js").read_text(encoding="utf-8")
+        app_js = (ROOT / "src" / "agent_tune_kit" / "visualize" / "assets" / "failures" / "app.js").read_text(
+            encoding="utf-8"
+        )
         payload = json.dumps(
             {
                 "roles": {},
@@ -492,7 +492,9 @@ class GenerateFailureBrowserTests(unittest.TestCase):
         node = shutil.which("node")
         if not node:
             self.skipTest("node is not available for generated JavaScript syntax smoke")
-        app_js = (ROOT / "skills" / "atk-visualize-failures" / "assets" / "app.js").read_text(encoding="utf-8")
+        app_js = (ROOT / "src" / "agent_tune_kit" / "visualize" / "assets" / "failures" / "app.js").read_text(
+            encoding="utf-8"
+        )
         payload = json.dumps(
             {
                 "roles": {},
@@ -527,7 +529,9 @@ class GenerateFailureBrowserTests(unittest.TestCase):
         node = shutil.which("node")
         if not node:
             self.skipTest("node is not available for generated JavaScript syntax smoke")
-        app_js = (ROOT / "skills" / "atk-visualize-failures" / "assets" / "app.js").read_text(encoding="utf-8")
+        app_js = (ROOT / "src" / "agent_tune_kit" / "visualize" / "assets" / "failures" / "app.js").read_text(
+            encoding="utf-8"
+        )
         payload = json.dumps(
             {
                 "roles": {},

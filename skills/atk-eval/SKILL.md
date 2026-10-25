@@ -1,6 +1,7 @@
 ---
 name: atk-eval
 description: Run the generated Agent tuning test runner and summarize the current version results.
+compatibility: Requires the installed ATK CLI on PATH (dataset, eval, results and visualize commands) and a compatible project Python runtime.
 ---
 
 # Agent Tuning — Evaluate Agent
@@ -9,9 +10,13 @@ description: Run the generated Agent tuning test runner and summarize the curren
 
 Use this Skill when a user wants the short ATK command for running the generated Agent tuning test runner. It maps to `docs/codex_agent_tuning_prd.md` sections 2.3, 4, 5, and 7.
 
-This Skill executes the project-local `.atk/runner/eval_runner.py` after `atk-init` has generated it. It keeps `eval_runner.py` as the only component that creates or reuses result versions. It should use the target repository's Python runtime, not blindly assume system `python3` has the project's dependencies.
+This Skill executes `atk eval` using the project-local `.atk/runner/eval_runner.py` adapter after `atk-init` has generated it. Only evaluation execution through the shared engine or an existing legacy runner creates or reuses result versions. It should use the target repository's Python runtime, not blindly assume system `python3` has the project's dependencies.
 
 Traceability note: section 2.3 defines manual batch execution, section 4 defines version management, and section 7 defines delivery requirements.
+
+## CLI dependency
+
+Use the installed `atk` CLI from the target project cwd. Check `atk --version` and the required command's `--help` when first used or when compatibility is uncertain. If unavailable, stop and guide installation with `uv tool install agent-tune-kit`, then `atk install`; do not regenerate fixed scripts as a fallback. Installed Skill and CLI must support the same command contract. A successful `atk status` does not prove the current session loaded new instructions.
 
 ## Inputs
 
@@ -30,7 +35,7 @@ Traceability note: section 2.3 defines manual batch execution, section 4 defines
 ## Workflow
 
 1. Confirm `.atk/runner/eval_runner.py` exists in the current target repository.
-2. Inspect the target repository for the expected Python execution command:
+2. The CLI discovers the project runtime using these priorities; inspect it when needed and pass `--python <interpreter>` for an explicit override:
    - if `uv.lock` or `pyproject.toml` with uv-managed usage is present, prefer `uv run python`;
    - else if `.venv/bin/python` exists, prefer `.venv/bin/python`;
    - else if Poetry metadata and lockfiles are present, prefer `poetry run python`;
@@ -38,19 +43,19 @@ Traceability note: section 2.3 defines manual batch execution, section 4 defines
 3. Execute the runner with the selected runtime:
 
    ```sh
-   <python-runtime> .atk/runner/eval_runner.py
+   atk eval
    ```
 
    If the user supplies extra runner flags such as `--limit 5`, `--offset 10`, or `--concurrency 4`, pass them through after the script path:
 
    ```sh
-   <python-runtime> .atk/runner/eval_runner.py --limit 5 --concurrency 4
+   atk eval --limit 5 --concurrency 4
    ```
 
    If the user asks to rerun only the previous failure set, pass `--only-failures` through. The runner uses `atk_id` values from the latest prior `failure_cases.csv` to select rows from `.atk/datasets/dataset.csv`; it does not run `failure_cases.csv` as an input dataset:
 
    ```sh
-   <python-runtime> .atk/runner/eval_runner.py --only-failures
+   atk eval --only-failures
    ```
 
 4. Read the runner output and inspect `.atk/results/` to identify the numerically largest `vN` directory.
@@ -69,7 +74,7 @@ Use the canonical helper names and semantics from `docs/shared-versioning-and-co
 - `list_version_dirs(results_dir=RESULTS_DIR)`
 - `allocate_next_results_version(results_dir=RESULTS_DIR)`
 
-Only `eval_runner.py` creates or reuses result versions. This Skill is a short command surface for executing that runner; it does not choose a version itself.
+Only evaluation execution (the shared engine or a legacy `eval_runner.py`) creates or reuses result versions. This Skill is a short command surface for executing that runner; it does not choose a version itself.
 
 ## Confirmation triggers
 

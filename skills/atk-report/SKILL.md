@@ -1,6 +1,7 @@
 ---
 name: atk-report
 description: Generate a current-version Markdown report with failure analysis and adjacent-version tuning validation when possible.
+compatibility: Requires the installed ATK CLI on PATH (dataset, eval, results and visualize commands) and a compatible project Python runtime.
 ---
 
 # Agent Tuning — Report and Cross-Version Validation
@@ -12,6 +13,10 @@ Generate `.atk/results/vN/report.md` for the current Agent tuning version. This 
 The report includes current-version statistics, failure-case analysis, root-cause hypotheses, and—when there is a previous version with `tuning_plan.md`—adjacent-version validation of whether the previous tuning goals were achieved.
 
 Traceability note: section 2.5 defines report and cross-version validation, section 4 defines version management, and section 7 defines delivery requirements.
+
+## CLI dependency
+
+Use the installed `atk` CLI from the target project cwd. Check `atk --version` and the required command's `--help` when first used or when compatibility is uncertain. If unavailable, stop and guide installation with `uv tool install agent-tune-kit`, then `atk install`; do not regenerate fixed scripts as a fallback. Installed Skill and CLI must support the same command contract. A successful `atk status` does not prove the current session loaded new instructions.
 
 ## Inputs
 
@@ -39,7 +44,7 @@ Traceability note: section 2.5 defines report and cross-version validation, sect
 
 ## Workflow
 
-1. Resolve current version with `resolve_current_version()` using `RESULTS_DIR = Path(".atk/results")`.
+1. Run `atk results inspect --json` for reliable file state, source hash and coverage counts. Resolve current version with `resolve_current_version()` using `RESULTS_DIR = Path(".atk/results")`.
 2. Require current files with `require_current_file(current_dir, "eval_results.csv")` and `require_current_file(current_dir, "failure_cases.csv")`.
 3. Read `.atk/context.md` if it exists. Use it to distinguish Agent behavior failures, `ground_truth` standard
    conflicts, and dataset-standard repair needs.
@@ -48,7 +53,7 @@ Traceability note: section 2.5 defines report and cross-version validation, sect
 6. Resolve previous version with `resolve_previous_version(current_dir)`.
 7. If no previous version exists, generate a single-version report and explain that no previous version can be compared.
 8. If previous version exists but lacks `tuning_plan.md`, degrade to a single-version or lower-confidence report with explicit explanation.
-9. If previous `tuning_plan.md` exists, extract targets from `## 目标异常清单` and classify them using explicit current judgments: all IDs passed → `已解决`; all failed → `未解决`; a fully judged mix → `部分解决`; any unknown/unexecuted target → `无法判断`. Check standards and sample comparability before attributing improvement.
+9. After explicitly matching target IDs and reviewing comparability, use `atk results compare --ids <id...> --json` per target group. If previous `tuning_plan.md` exists, extract targets from `## 目标异常清单` and classify them using explicit current judgments: all IDs passed → `已解决`; all failed → `未解决`; a fully judged mix → `部分解决`; any unknown/unexecuted target → `无法判断`. Check standards and sample comparability before attributing improvement.
 10. Write `report.md` in the current version directory.
 11. Append to `.atk/context.md` only when the report captures durable user-confirmed feedback or tuning decisions that
     should guide future loops. Do not write dataset headers, row counts, result paths, metrics snapshots, or routine run

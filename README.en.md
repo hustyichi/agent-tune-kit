@@ -32,13 +32,7 @@ This turns Agent tuning from one-off subjective trial and error into an engineer
 
 ## Install
 
-One-command install:
-
-```sh
-uvx --from agent-tune-kit atk install
-```
-
-To keep the `atk` command available:
+Install the ATK CLI, then install its bundled Skills:
 
 ```sh
 uv tool install agent-tune-kit
@@ -178,3 +172,25 @@ Common output files:
 - `$atk-report`: generate analysis and cross-loop validation.
 - `$atk-visualize-failures`: generate the failure review HTML page.
 - `$atk-optimize`: tune the Agent based on the report.
+
+Legacy one-shot installation remains available: `uvx --from agent-tune-kit atk install`. Skills now require the persistent `atk` command on PATH.
+
+## Shared CLI capabilities
+
+Install the ATK CLI first, then run `atk install` to install its bundled Skills. Fixed operations are maintained in the Python package; Skills retain semantic diagnosis, reporting and Agent optimization.
+
+```sh
+atk dataset prepare --source data/eval.csv
+atk dataset inspect --direct --json
+atk dataset update --direct --field expected --updates-path updates.csv
+atk eval --check --json
+atk eval --limit 5 --concurrency 2
+atk results inspect --json
+atk results run-rule
+atk results apply-judgments --judgments-path judgments.csv --source-results .atk/results/v1/eval_results.csv
+atk results compare --ids 1 2 --json
+atk visualize dataset --no-open
+atk visualize failures --no-open
+```
+
+These commands run from the Agent project. New project adapters delegate to the shared engine; existing full runners remain executable. Dataset fields, IDs, result paths, unknown verdicts, logs and offline review pages retain their contracts. Use `--help` on each command for its options.

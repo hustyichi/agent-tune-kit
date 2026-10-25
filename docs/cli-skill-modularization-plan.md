@@ -1,11 +1,11 @@
 # ATK CLI 与 Skill 模块化实现方案
 
 - 日期：2026-10-25（Asia/Shanghai）
-- 状态：实现设计，尚未开发；跨解释器执行方式仍需验证。
-- 基线：当前仓库 2.0.0 的 CLI、8 个 Skill、模板、脚本和测试。
+- 状态：已按本方案实现；验证结果见实现交付记录。
+- 基线：方案形成时仓库 2.0.0 的 CLI、8 个 Skill、模板、脚本和测试。
 - 范围：统一固定能力的代码实现和 CLI 入口，保持现有整体功能及 Skill 职责不变。
 
-本文汇总职责调整、模块组织、CLI 接口、兼容策略和实施验证方案。新增模块、函数和命令均为目标设计，不代表当前版本已经提供。现有 `atk install`、`preview`、`status`、`version` 和 `--version` 继续保留。
+本文汇总职责调整、模块组织、CLI 接口、兼容策略和实施验证方案。新增模块、函数和命令均为目标设计，具体可用命令见实现交付记录。现有 `atk install`、`preview`、`status`、`version` 和 `--version` 继续保留。
 
 ## 1. 目标与使用方式
 
@@ -544,7 +544,7 @@ python scripts/check-release.py
 | 包拆分 | 保持一个 Python 包，减少版本组合与安装成本 |
 | utils 范围 | 只收通用技术能力，业务规则和可视化语义分别留在对应模块 |
 | 前端合并 | 保留两个页面与数据结构，不在本次同时重写 UI |
-| 项目执行 | 优先由项目解释器加载安装包内标准库优先的引擎；具体 bootstrap 需验证 |
+| 项目执行 | 优先由项目解释器加载安装包内标准库优先的引擎；bootstrap 已验证，见实现交付记录 |
 | 旧 runner | 保留原执行路径，明确区分新适配文件，不自动迁移手改内容 |
 | 新判定与历史读取 | 写入严格校验；旧数据允许降级为未知，不能扩大严格规则导致浏览能力丢失 |
 | 实现与现有规范差异 | 先记录并区分重构和行为修复，不静默选择某一方 |
@@ -557,7 +557,7 @@ python scripts/check-release.py
 
 - [项目说明与当前流程](../README.md)
 - [打包配置](../pyproject.toml)
-- [当前 CLI 入口](../src/agent_tune_kit/cli.py)
+- [当前 CLI 入口](../src/agent_tune_kit/cli/main.py)
 - [当前安装实现](../src/agent_tune_kit/installer.py)
 - [共享版本、判定与确认规则](shared-versioning-and-confirmation.md)
 - [本地持久调优上下文](local-context.md)
@@ -582,3 +582,18 @@ python scripts/check-release.py
 - [Python 命令入口规范](https://packaging.python.org/en/latest/specifications/entry-points/)：Python 包通过 console entry point 提供 shell 命令。
 - [uv 工具环境](https://docs.astral.sh/uv/concepts/tools/)：持久工具安装与项目环境隔离，需要显式处理项目依赖。
 - [Git Plumbing and Porcelain](https://git-scm.com/book/en/v2/Git-Internals-Plumbing-and-Porcelain)：可组合操作与用户工作流分层的参考。
+
+## 14. 实现交付记录
+
+本次在现有 2.1.0 工作版本上完成模块迁移，未执行发版。目录、CLI 和公开接口已按本方案落地，原安装入口保持兼容。
+
+- 固定实现位于 `cli`、`utils`、`datasets`、`results`、`execution`、`visualize`；Skill 脚本只保留兼容转发。
+- 新 runner／规则模板仅保留项目适配内容。完整旧 runner 的快照保存在测试 fixture，用于验证旧项目仍自行分配结果版本且只执行一次。
+- runtime 使用目标项目解释器，通过参数数组传入已安装 ATK 包的位置，由包内 worker 加载执行模块；无需给项目环境再次安装 ATK。已验证独立虚拟环境和仅项目环境存在的依赖；保留虚拟环境解释器路径，不解析到其底层 Python symlink。
+- `eval --check` 不创建结果目录，并检查同步／异步输入映射；评测保留增量产物、并发行日志和中断状态。
+- 新判定统一校验并保存；旧判定的重复身份、过期哈希及未知状态不能证明通过，重新判定保留既有失败解释列。
+- 两套前端资源按原字节迁移到 Python 包；浏览中的异常 ID、额外 CSV 值及原字段角色优先级继续保留。
+- 静态验证器改为检查共享实现、资源、薄模板和 CLI 依赖，不再要求模板复制执行引擎。
+- 新增 CLI 工作流与运行契约测试；同时保留原有行为测试，调整其导入位置和资源路径。
+
+交付验证包括完整 pytest、Ruff、Skill 包验证、wheel／sdist 构建，以及在仓库外安装两类包后执行数据准备、独立项目解释器评测、判定保存、离线页面生成、失败重跑和旧 Skill 脚本转发。本次完整回归为 134 项测试通过，另有 15 个 subtest 通过；Ruff、Skill 包校验和 `scripts/check-release.py` 均通过。未调用真实业务 Agent 或付费模型服务，未验证业务语义判定质量，也未发布 PyPI。

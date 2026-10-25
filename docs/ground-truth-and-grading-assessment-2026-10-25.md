@@ -88,7 +88,7 @@ ATK 对这三层都有入口，但只有部分环节有固定脚本保障。能�
 
 数据浏览页所谓 ground truth confirmation，实际是展示预期并收集异常自由文本。导出仅含 `atk_id,row_number,review_feedback`，只导出非空反馈。没有反馈无法区分“已看过且正确”与“未看过”。也没有多人标注分歧处理或一致性统计；对于个人小规模使用，后者未必需要立即建设，但已审与未审的区分直接影响可信覆盖率。
 
-证据：[浏览器 app.js 第 557–590、676–735 行](../skills/atk-visualize-dataset/assets/app.js)、[本地 context 边界](local-context.md)。
+证据：[浏览器 app.js 第 557–590、676–735 行](../src/agent_tune_kit/visualize/assets/dataset/app.js)、[本地 context 边界](local-context.md)。
 
 ### 3. 校准裁判的支持不足
 
@@ -119,7 +119,7 @@ Skill 提醒选常见成功、已知失败和边界样本；报告也提醒 fail
 1. **反馈来源校验依赖 Skill。** Skill 要求确认导出属于本数据集，不可只靠 ID 或时间戳；helper 的缺省发现逻辑仍会选择 Downloads 中最新且 ID 可匹配的文件。导出缺少数据集身份或内容摘要，因此不同项目的相同 ID 无法由脚本区分。正常遵守 Skill、传入已核对的显式路径可以降低这一风险。
 2. **验收条件列的默认浏览体验未完全贯通。** 写回支持 `acceptance_criteria`，但浏览器自动识别预期列的候选未包含它；用户可手动切换，切换后却不会重算 Python 生成时固化的质量标签。不能将这些标签理解为所有验收字段都已得到检查。
 
-证据：[update_dataset.py 第 126–158 行](../skills/atk-dataset/scripts/update_dataset.py)、[expected 候选及 lint](../skills/atk-visualize-dataset/scripts/generate_dataset_browser.py)、[字段切换第 1026–1044 行](../skills/atk-visualize-dataset/assets/app.js)。
+证据：[update_dataset.py 第 126–158 行](../skills/atk-dataset/scripts/update_dataset.py)、[expected 候选及 lint](../skills/atk-visualize-dataset/scripts/generate_dataset_browser.py)、[字段切换第 1026–1044 行](../src/agent_tune_kit/visualize/assets/dataset/app.js)。
 
 另做了一个临时合成检查：v1/v2 使用相同 `atk_id`、不同 `expected`，v2 写入合法的 passed 与本轮结果哈希；失败浏览器仍将旧目标标为 `resolved`。该状态说明当前裁判认为此 ID 通过，不能自动证明标准未变。**这不等于 atk-report 一定会误报提升**：报告另有检查可比性的指令，只是程序尚未强制该检查。相关实现为 `generate_failure_browser.py` 的 `read_judgments`（第 448 行）和目标状态计算（第 659 行附近）。
 

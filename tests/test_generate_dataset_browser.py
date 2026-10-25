@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import csv
-import importlib.util
 import subprocess
 import sys
 import tempfile
@@ -26,11 +25,9 @@ def run_generator(project: Path, *args: str) -> subprocess.CompletedProcess[str]
 
 
 def load_generator_module():
-    spec = importlib.util.spec_from_file_location("generate_dataset_browser", SCRIPT)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    from agent_tune_kit.visualize import dataset
+
+    return dataset
 
 
 def write_csv(path: Path, fieldnames: list[str], rows: list[dict[str, str]]) -> None:
@@ -187,7 +184,9 @@ class GenerateDatasetBrowserTests(unittest.TestCase):
             self.assertNotIn("visualize_config", text)
 
     def test_table_does_not_append_issue_column(self) -> None:
-        app_js = (ROOT / "skills" / "atk-visualize-dataset" / "assets" / "app.js").read_text(encoding="utf-8")
+        app_js = (ROOT / "src" / "agent_tune_kit" / "visualize" / "assets" / "dataset" / "app.js").read_text(
+            encoding="utf-8"
+        )
 
         self.assertNotIn('headerRow.appendChild(el("th", { text: "问题" }));', app_js)
         self.assertNotIn('tr.appendChild(el("td", {}, buildRowBadges(row)));', app_js)
@@ -324,11 +323,15 @@ class DatasetQualityLintTests(unittest.TestCase):
         self.assertEqual(roles["expected"]["field"], "ground_truth")
 
     def test_frontend_skips_null_dom_attributes(self) -> None:
-        app_js = (ROOT / "skills" / "atk-visualize-dataset" / "assets" / "app.js").read_text(encoding="utf-8")
+        app_js = (ROOT / "src" / "agent_tune_kit" / "visualize" / "assets" / "dataset" / "app.js").read_text(
+            encoding="utf-8"
+        )
         self.assertIn("if (props[k] == null) continue;", app_js)
 
     def test_frontend_review_keys_include_row_number_for_duplicate_atk_ids(self) -> None:
-        app_js = (ROOT / "skills" / "atk-visualize-dataset" / "assets" / "app.js").read_text(encoding="utf-8")
+        app_js = (ROOT / "src" / "agent_tune_kit" / "visualize" / "assets" / "dataset" / "app.js").read_text(
+            encoding="utf-8"
+        )
         self.assertIn('"id:" + row.atkId + ":row:" + row.rowNumber', app_js)
 
 

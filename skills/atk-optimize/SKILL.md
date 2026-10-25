@@ -1,6 +1,7 @@
 ---
 name: atk-optimize
 description: Optimize the Agent from the current report and write a fixed-heading tuning_plan.md for the next iteration's validation.
+compatibility: Requires the installed ATK CLI on PATH (dataset, eval, results and visualize commands) and a compatible project Python runtime.
 ---
 
 # Agent Tuning — Optimize Agent
@@ -12,6 +13,10 @@ Use current `report.md` to improve the local Agent, then write `.atk/results/vN/
 The Skill may adjust prompts, code, parameters, tool config, or other Agent implementation details as appropriate. It does not implement automatic rollback, baseline management, or historical restore; rollback is user-git-only guidance.
 
 Traceability note: section 2.6 defines Agent tuning, section 4 defines current-version behavior, and section 7 defines delivery requirements.
+
+## CLI dependency
+
+Use the installed `atk` CLI from the target project cwd. Check `atk --version` and the required command's `--help` when first used or when compatibility is uncertain. If unavailable, stop and guide installation with `uv tool install agent-tune-kit`, then `atk install`; do not regenerate fixed scripts as a fallback. Installed Skill and CLI must support the same command contract. A successful `atk status` does not prove the current session loaded new instructions.
 
 ## Inputs
 
@@ -30,7 +35,7 @@ Traceability note: section 2.6 defines Agent tuning, section 4 defines current-v
 
 ## Workflow
 
-1. Resolve current version with `resolve_current_version()` using `RESULTS_DIR = Path(".atk/results")`.
+1. Use `atk results inspect --json` for current artifact paths when needed. Resolve current version with `resolve_current_version()` using `RESULTS_DIR = Path(".atk/results")`.
 2. Require `report.md` with `require_current_file(current_dir, "report.md")`.
 3. Read `.atk/context.md` if it exists. Preserve `Tuning Objective`, `Agent Behavior Standard`,
    `Ground Truth Standard`, and prior `Tuning Decisions` when choosing Agent changes.

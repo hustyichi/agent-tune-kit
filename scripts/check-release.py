@@ -8,6 +8,8 @@ those artifacts outside the repository, and smoke the packaged ``atk`` command.
 
 from __future__ import annotations
 
+import csv
+import hashlib
 import json
 import os
 import re
@@ -28,6 +30,11 @@ PLUGIN_NAME = "agent-tune-kit"
 
 WHEEL_REQUIRED_PATHS = {
     "agent_tune_kit/plugin_payload/agent-tune-kit/.codex-plugin/plugin.json",
+    "agent_tune_kit/cli/main.py",
+    "agent_tune_kit/execution/runner.py",
+    "agent_tune_kit/results/judgments.py",
+    "agent_tune_kit/visualize/assets/dataset/vendor/echarts.min.js",
+    "agent_tune_kit/visualize/assets/failures/app.js",
     "agent_tune_kit/plugin_payload/agent-tune-kit/skills/atk-dataset/SKILL.md",
     "agent_tune_kit/plugin_payload/agent-tune-kit/templates/.atk/runner/eval_runner.py.md",
     "agent_tune_kit/plugin_payload/agent-tune-kit/templates/.atk/runner/failure_rule.py.md",
@@ -46,7 +53,7 @@ SDIST_REQUIRED_PATHS = {
 
 PYTHON_FILES = [
     "src/agent_tune_kit/__init__.py",
-    "src/agent_tune_kit/cli.py",
+    "src/agent_tune_kit/cli/main.py",
     "src/agent_tune_kit/installer.py",
     "scripts/install_plugin.py",
     "scripts/validate_skill_pack.py",
@@ -233,6 +240,57 @@ def smoke_installed_artifact(artifact: Path, work_dir: Path) -> None:
     status = capture([str(atk), "status", *common], cwd=run_dir, extra_env=cache_env)
     if "已本地安装。" not in status:
         raise ReleaseCheckError(f"{artifact.name} status smoke failed")
+    smoke_shared_capabilities(atk, run_dir, target)
+
+
+def smoke_shared_capabilities(atk: Path, project: Path, plugin: Path) -> None:
+    """Exercise installed code and resources outside the source checkout."""
+
+    def command(*args: str) -> dict:
+        return json.loads(capture([str(atk), *args, "--json"], cwd=project))
+
+    source = project / "source.csv"
+    source.write_text("input,expected\nhello,hello\n", encoding="utf-8")
+    command("dataset", "prepare", "--source", str(source))
+    adapter = project / ".atk/runner/eval_runner.py"
+    adapter.parent.mkdir()
+    adapter.write_text(
+        "ATK_MANAGED_RUNNER = True\n"
+        "def build_agent_input(row): return row['input']\n"
+        "def call_agent(value): return {'answer': value}\n",
+        encoding="utf-8",
+    )
+    runtime = project / "project-python"
+    run([require_uv(), "venv", str(runtime)], cwd=project, timeout=60)
+    python = bin_path(runtime, "python")
+    command("eval", "--check", "--python", str(python))
+    if (project / ".atk/results").exists():
+        raise ReleaseCheckError("eval --check created result versions")
+    command("eval", "--python", str(python))
+    current = project / ".atk/results/v1"
+    results = current / "eval_results.csv"
+    digest = hashlib.sha256(results.read_bytes()).hexdigest()
+    judgments = project / "judgments.csv"
+    with judgments.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(["atk_id", "verdict", "reason", "results_sha256"])
+        writer.writerow(["1", "failed", "smoke criterion", digest])
+    command("results", "apply-judgments", "--judgments-path", str(judgments), "--source-results", str(results))
+    if command("results", "inspect")["failed"] != 1:
+        raise ReleaseCheckError("installed judgment projection failed")
+    command("visualize", "dataset", "--no-open")
+    command("visualize", "failures", "--no-open")
+    command("eval", "--python", str(python), "--only-failures")
+    if not (project / ".atk/results/v2/eval_results.csv").is_file():
+        raise ReleaseCheckError("installed failure-only rerun did not create v2")
+    wrapper = plugin / "skills/atk-visualize-dataset/scripts/generate_dataset_browser.py"
+    output = capture(
+        [str(python), str(wrapper), "--no-open", "--overwrite"],
+        cwd=project,
+        extra_env={"PATH": str(atk.parent) + os.pathsep + os.environ.get("PATH", "")},
+    )
+    if "rows=1" not in output:
+        raise ReleaseCheckError("legacy Skill wrapper could not find the installed CLI")
 
 
 def main() -> int:

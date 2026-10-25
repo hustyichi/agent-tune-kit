@@ -1,6 +1,7 @@
 ---
 name: atk-diagnose
 description: Identify failures and uncertain cases from batch results, combining reusable checks with Codex judgment, and investigate initial causes before atk-report.
+compatibility: Requires the installed ATK CLI on PATH (dataset, eval, results and visualize commands) and a compatible project Python runtime.
 ---
 
 # Agent Tuning — Diagnose Results
@@ -12,6 +13,10 @@ Use one entry point for rules and semantic judgment; the user does not choose a 
 This Skill maps to `docs/codex_agent_tuning_prd.md` sections 2.4, 4, 5, and 7.
 Traceability note: section 2.4 defines unified diagnosis.
 `atk-report` still owns the detailed report and cross-version review; `atk-optimize` owns Agent changes.
+
+## CLI dependency
+
+Use the installed `atk` CLI from the target project cwd. Check `atk --version` and the required command's `--help` when first used or when compatibility is uncertain. If unavailable, stop and guide installation with `uv tool install agent-tune-kit`, then `atk install`; do not regenerate fixed scripts as a fallback. Installed Skill and CLI must support the same command contract. A successful `atk status` does not prove the current session loaded new instructions.
 
 ## Inputs
 
@@ -33,7 +38,7 @@ Traceability note: section 2.4 defines unified diagnosis.
 
 ## Workflow
 
-1. Resolve current version and require its `eval_results.csv`. Inspect fields and existing standards.
+1. Run `atk results inspect --json`, record `current_dir` and `results_sha256`, and require current `eval_results.csv`. Inspect fields and existing standards.
    Do not require a universal Schema for expected-result columns. Ask only about ambiguities that affect decisions;
    continue judging unaffected cases, marking the others `unknown` with the unresolved question.
 2. Choose checks per requirement, not per batch. Use deterministic checks for explicit hard constraints and current-session
@@ -58,7 +63,7 @@ Traceability note: section 2.4 defines unified diagnosis.
 7. Regenerate `failure_cases.csv` from exactly the failed IDs, preserving source columns. Unknowns never enter this file,
    so `atk-eval --only-failures` continues to select confirmed failures only. To revisit unknowns, rejudge existing evidence
    or explicitly select cases for a new run; do not silently redefine failure-only execution.
-8. Write files through temporary files and atomic replacement. Compute all rows and validate IDs/verdicts before replacement.
+8. Prepare a temporary complete judgments CSV outside `.atk/results/` with the recorded source hash. Submit it with `atk results apply-judgments --judgments-path <csv> --source-results <current/eval_results.csv> --json`; the CLI owns projection and atomic persistence. Do not recompute hashes to legitimize stale judgments. The fixed implementation writes files through temporary files and atomic replacement. Compute all rows and validate IDs/verdicts before replacement.
    Before replacing the failure table, invalidate old passes with a header-only `judgments.csv`; then replace the failure
    table and finally the complete judgments. If interrupted, remaining unjudged rows stay unknown. Respect user edits.
 9. Summarize coverage, failures, unknown IDs/questions, priority findings and evidence paths. Continue with `atk-report`.
@@ -71,7 +76,7 @@ are present. Read plugin-root-relative `templates/.atk/runner/failure_rule.py.md
 The relative fallback is available, but plugin-root discovery is the preferred resolution rule.
 Prepare `.atk/runner/failure_rule.py` only as needed. Its `judge(row)` returns `(verdict, reason)`; unimplemented rules must
 not execute. Use the target project's Python runtime: `uv run python`, `.venv/bin/python`, Poetry, then `python3`.
-The command is `<python-runtime> .atk/runner/failure_rule.py`; keep dependencies stdlib-first.
+The command is `atk results run-rule`; keep dependencies stdlib-first.
 Rule results are provisional when semantic requirements remain; finalize both outputs consistently after review.
 
 ## Shared version rules

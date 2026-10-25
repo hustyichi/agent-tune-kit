@@ -1,15 +1,13 @@
 #!/usr/bin/env python3
-"""Static validation for the Agent Tune Kit local Codex plugin.
-
-This intentionally avoids third-party dependencies and checks source/template/plugin
-contracts. It does not run an end-to-end Agent tuning flow.
-"""
+"""Validate bundled Skill contracts and their shared CLI implementations."""
 
 from __future__ import annotations
 
+import ast
 import json
 import re
 import sys
+import tomllib
 from pathlib import Path
 from typing import Any
 
@@ -25,15 +23,8 @@ REQUIRED_FILES = [
     "skills/atk-report/SKILL.md",
     "skills/atk-visualize-failures/SKILL.md",
     "skills/atk-visualize-failures/scripts/generate_failure_browser.py",
-    "skills/atk-visualize-failures/assets/page.html",
-    "skills/atk-visualize-failures/assets/styles.css",
-    "skills/atk-visualize-failures/assets/app.js",
     "skills/atk-visualize-dataset/SKILL.md",
     "skills/atk-visualize-dataset/scripts/generate_dataset_browser.py",
-    "skills/atk-visualize-dataset/assets/page.html",
-    "skills/atk-visualize-dataset/assets/styles.css",
-    "skills/atk-visualize-dataset/assets/app.js",
-    "skills/atk-visualize-dataset/assets/vendor/echarts.min.js",
     "skills/atk-optimize/SKILL.md",
     "templates/.atk/runner/eval_runner.py.md",
     "templates/.atk/runner/failure_rule.py.md",
@@ -47,72 +38,147 @@ REQUIRED_FILES = [
     "scripts/publish-pypi.sh",
     "pyproject.toml",
     "src/agent_tune_kit/__init__.py",
-    "src/agent_tune_kit/cli.py",
     "src/agent_tune_kit/installer.py",
     "README.md",
     "README.en.md",
+    "src/agent_tune_kit/cli/__init__.py",
+    "src/agent_tune_kit/cli/__main__.py",
+    "src/agent_tune_kit/cli/dataset.py",
+    "src/agent_tune_kit/cli/evaluation.py",
+    "src/agent_tune_kit/cli/main.py",
+    "src/agent_tune_kit/cli/output.py",
+    "src/agent_tune_kit/cli/results.py",
+    "src/agent_tune_kit/cli/visualize.py",
+    "src/agent_tune_kit/datasets/__init__.py",
+    "src/agent_tune_kit/datasets/prepare.py",
+    "src/agent_tune_kit/datasets/updates.py",
+    "src/agent_tune_kit/datasets/validation.py",
+    "src/agent_tune_kit/errors.py",
+    "src/agent_tune_kit/execution/__init__.py",
+    "src/agent_tune_kit/execution/logs.py",
+    "src/agent_tune_kit/execution/rules.py",
+    "src/agent_tune_kit/execution/runner.py",
+    "src/agent_tune_kit/execution/runtime.py",
+    "src/agent_tune_kit/results/__init__.py",
+    "src/agent_tune_kit/results/judgments.py",
+    "src/agent_tune_kit/results/summary.py",
+    "src/agent_tune_kit/results/versions.py",
+    "src/agent_tune_kit/utils/__init__.py",
+    "src/agent_tune_kit/utils/csv_io.py",
+    "src/agent_tune_kit/utils/files.py",
+    "src/agent_tune_kit/visualize/__init__.py",
+    "src/agent_tune_kit/visualize/dataset.py",
+    "src/agent_tune_kit/visualize/failures.py",
+    "src/agent_tune_kit/visualize/fields.py",
+    "src/agent_tune_kit/visualize/history.py",
+    "src/agent_tune_kit/visualize/render.py",
+    "src/agent_tune_kit/workspace.py",
+    "src/agent_tune_kit/visualize/assets/dataset/app.js",
+    "src/agent_tune_kit/visualize/assets/dataset/page.html",
+    "src/agent_tune_kit/visualize/assets/dataset/styles.css",
+    "src/agent_tune_kit/visualize/assets/dataset/vendor/echarts.min.js",
+    "src/agent_tune_kit/visualize/assets/failures/app.js",
+    "src/agent_tune_kit/visualize/assets/failures/page.html",
+    "src/agent_tune_kit/visualize/assets/failures/styles.css",
 ]
 
-SKILL_FILES = [path for path in REQUIRED_FILES if path.startswith("skills/") and path.endswith("/SKILL.md")]
-DATASET_ONLY_PRE_RESULTS_SKILL_FILES = {
+SKILL_FILES = [
     "skills/atk-dataset/SKILL.md",
+    "skills/atk-init/SKILL.md",
+    "skills/atk-eval/SKILL.md",
+    "skills/atk-diagnose/SKILL.md",
+    "skills/atk-report/SKILL.md",
+    "skills/atk-visualize-failures/SKILL.md",
     "skills/atk-visualize-dataset/SKILL.md",
+    "skills/atk-optimize/SKILL.md",
+]
+
+PER_FILE_PHRASES = {
+    ".codex-plugin/plugin.json": ['"name": "agent-tune-kit"', '"version": "2.1.0"', '"skills": "./skills/"'],
+    "skills/atk-dataset/SKILL.md": [
+        "## Purpose",
+        "## Inputs",
+        "## Outputs",
+        "## Workflow",
+        "## Failure behavior",
+        "## CLI dependency",
+        "uv tool install agent-tune-kit",
+        "Do not create `.atk/results/vN`",
+        "Do not run the Agent",
+        "Do not run `$atk-eval`",
+        "Do not write `failure_cases.csv`",
+        "atk dataset update",
+        "atk dataset inspect",
+    ],
+    "skills/atk-init/SKILL.md": [
+        "## Purpose",
+        "## Inputs",
+        "## Outputs",
+        "## Workflow",
+        "## Failure behavior",
+        "## CLI dependency",
+        "uv tool install agent-tune-kit",
+    ],
+    "skills/atk-eval/SKILL.md": [
+        "## Purpose",
+        "## Inputs",
+        "## Outputs",
+        "## Workflow",
+        "## Failure behavior",
+        "## CLI dependency",
+        "uv tool install agent-tune-kit",
+        "atk eval",
+    ],
+    "skills/atk-diagnose/SKILL.md": [
+        "## Purpose",
+        "## Inputs",
+        "## Outputs",
+        "## Workflow",
+        "## Failure behavior",
+        "## CLI dependency",
+        "uv tool install agent-tune-kit",
+        "atk results apply-judgments",
+    ],
+    "skills/atk-report/SKILL.md": [
+        "## Purpose",
+        "## Inputs",
+        "## Outputs",
+        "## Workflow",
+        "## Failure behavior",
+        "## CLI dependency",
+        "uv tool install agent-tune-kit",
+        "atk results compare",
+    ],
+    "skills/atk-visualize-failures/SKILL.md": [
+        "## Purpose",
+        "## Inputs",
+        "## Outputs",
+        "## Workflow",
+        "## Failure behavior",
+        "## CLI dependency",
+        "uv tool install agent-tune-kit",
+        "atk visualize failures",
+    ],
+    "skills/atk-visualize-dataset/SKILL.md": [
+        "## Purpose",
+        "## Inputs",
+        "## Outputs",
+        "## Workflow",
+        "## Failure behavior",
+        "## CLI dependency",
+        "uv tool install agent-tune-kit",
+        "atk visualize dataset",
+    ],
+    "skills/atk-optimize/SKILL.md": [
+        "## Purpose",
+        "## Inputs",
+        "## Outputs",
+        "## Workflow",
+        "## Failure behavior",
+        "## CLI dependency",
+        "uv tool install agent-tune-kit",
+    ],
 }
-NON_LIFECYCLE_SKILL_FILES = DATASET_ONLY_PRE_RESULTS_SKILL_FILES
-LIFECYCLE_SKILL_FILES = [path for path in SKILL_FILES if path not in NON_LIFECYCLE_SKILL_FILES]
-
-REQUIRED_SKILL_SECTIONS = [
-    "## Purpose",
-    "## Inputs",
-    "## Outputs",
-    "## Workflow",
-    "## Shared version rules",
-    "## Confirmation triggers",
-    "## Failure behavior",
-]
-
-REQUIRED_DATASET_SKILL_SECTIONS = [
-    "## Purpose",
-    "## Inputs",
-    "## Outputs",
-    "## Workflow",
-    "## Confirmation triggers",
-    "## Failure behavior",
-    "## Handoff message",
-]
-
-GLOBAL_PHRASES = [
-    'RESULTS_DIR = Path(".atk/results")',
-    "def list_version_dirs(results_dir=RESULTS_DIR)",
-    "def resolve_current_version(results_dir=RESULTS_DIR)",
-    "def resolve_previous_version(current_dir, results_dir=RESULTS_DIR)",
-    "def require_current_file(current_dir, filename)",
-    "def allocate_next_results_version(results_dir=RESULTS_DIR)",
-    "No vN results directory exists; run eval_runner.py first or confirm repair.",
-    "Current version {current_dir.name} is missing {filename}; fix or rerun the prior step.",
-    ".atk/results/vN/eval_results.csv",
-    ".atk/datasets/",
-    ".atk/results/vN/failure_cases.csv",
-    ".atk/results/vN/failure_cases.html",
-    ".atk/results/vN/report.md",
-    ".atk/results/vN/tuning_plan.md",
-    "agent_output",
-    "log_path",
-    "logs/row_",
-    "failure_cases.csv",
-    "tuning_plan.md",
-]
-
-NON_GOALS = [
-    "no public marketplace",
-    "no brand assets",
-    "no hidden one-click orchestration",
-    "no universal Schema",
-    "no bundled example Agent/data fixtures",
-    "no automatic Agent tuning workflow rollback",
-    "no old installer command compatibility",
-    "no full E2E test suite",
-]
 
 PLUGIN_DOC_PHRASES = [
     "local Codex plugin",
@@ -130,411 +196,21 @@ PLUGIN_DOC_PHRASES = [
     "Codex UI enablement state",
 ]
 
-PRD_REFERENCES = [
-    "docs/codex_agent_tuning_prd.md",
-    "section 2.2",
-    "section 2.4",
-    "section 2.5",
-    "section 2.6",
-    "section 4",
-    "section 7",
+DATASET_ONLY_PRE_RESULTS_SKILL_FILES = {"skills/atk-dataset/SKILL.md", "skills/atk-visualize-dataset/SKILL.md"}
+
+NON_GOALS = [
+    "no public marketplace",
+    "no brand assets",
+    "no hidden one-click orchestration",
+    "no universal Schema",
+    "no bundled example Agent/data fixtures",
+    "no automatic Agent tuning workflow rollback",
+    "no old installer command compatibility",
+    "no full E2E test suite",
 ]
 
-PER_FILE_PHRASES = {
-    ".codex-plugin/plugin.json": [
-        '"name": "agent-tune-kit"',
-        '"version": "2.1.0"',
-        '"skills": "./skills/"',
-        '"displayName": "Agent Tune Kit"',
-        '"defaultPrompt"',
-    ],
-    "scripts/install_plugin.py": [
-        "Compatibility wrapper",
-        "atk install",
-        "uvx --from agent-tune-kit atk install",
-        "agent_tune_kit.cli",
-        "authorize_conflicts",
-    ],
-    "scripts/dev-refresh-install.sh": [
-        "Agent Tune Kit dev refresh install",
-        "CODEX_PERSONAL_PLUGIN_CACHE_ROOT",
-        "uv run atk install --copy --yes --force",
-        "uv run atk status --no-input",
-    ],
-    "scripts/check-release.py": [
-        "Release check target",
-        "uv build",
-        "--no-sources",
-        "copy the packaged payload",
-        "templates/.atk/runner/eval_runner.py.md",
-        "release-check: OK",
-    ],
-    "scripts/publish-release.py": [
-        "--repository",
-        "testpypi",
-        "--publish",
-        "UV_PUBLISH_TOKEN",
-        "--publish-url",
-        "--check-url",
-        "dry-run: OK",
-        "publish-release: OK",
-    ],
-    "scripts/publish-pypi.sh": [
-        "UV_PUBLISH_TOKEN",
-        "UV_NO_CONFIG=1",
-        "scripts/publish-release.py --repository pypi --publish",
-    ],
-    "pyproject.toml": [
-        'name = "agent-tune-kit"',
-        'atk = "agent_tune_kit.cli:main"',
-        "hatchling",
-        "force-include",
-        "agent_tune_kit/plugin_payload/agent-tune-kit/.codex-plugin",
-        "templates/.atk",
-        "pytest",
-    ],
-    "src/agent_tune_kit/installer.py": [
-        "argparse",
-        "PayloadSource",
-        "package-resource",
-        "dev-root",
-        "importlib.resources",
-        'SOURCE_PATH = f"./plugins/{PLUGIN_NAME}"',
-        "write_json_atomic",
-        "refusing destructive replacement",
-        "symlink",
-        "copy fallback",
-        "smoke-resolved plugin path",
-        "Codex UI boundary",
-    ],
-    "src/agent_tune_kit/cli.py": [
-        "installer_main",
-        "def main",
-    ],
-    "skills/atk-dataset/SKILL.md": [
-        "dataset-only / pre-results",
-        ".atk/datasets/dataset.csv",
-        "unique positive integers",
-        "Preserve all valid existing IDs",
-        "Do not create `candidate_dataset.csv`",
-        "ground_truth",
-        "--direct --field expected --updates-path",
-        "--review-path <dataset_review.csv> --dump-context",
-        "Do not create `.atk/results/vN`",
-        "Do not run the Agent",
-        "Do not run `$atk-eval`",
-        "Do not write `failure_cases.csv`",
-    ],
-    "skills/atk-dataset/scripts/update_dataset.py": [
-        'DATASETS_DIR = Path(".atk/datasets")',
-        'REVIEW_FILENAME = "dataset_review.csv"',
-        'GROUND_TRUTH_FIELD = "ground_truth"',
-        "def resolve_review_path(",
-        "Downloads",
-        "dataset_review*.csv",
-        "def parse_review_csv(",
-        "def parse_updates_csv(",
-        "def write_dataset_atomic(",
-        "os.replace",
-        "--dump-context",
-        "--updates-path",
-        "unknown atk_id values",
-    ],
-    "skills/atk-init/SKILL.md": [
-        ".atk/runner/eval_runner.py",
-        "Preserve all original dataset columns",
-        "atk_id",
-        "Append the fixed actual-output column `agent_output`",
-        "log_path",
-        "CONCURRENT_ROW_LOGGING_ENABLED",
-        "no version directory is required",
-        "ask the user to confirm before writing `eval_runner.py`",
-        "Agent invocation, dataset path/format, log source, Python logger names, invalid `atk_id`, or `agent_output` / `log_path` column conflict",
-        "Write the input dataset into `.atk/datasets/`",
-    ],
-    "skills/atk-eval/SKILL.md": [
-        "atk-eval",
-        ".atk/runner/eval_runner.py",
-        "<python-runtime> .atk/runner/eval_runner.py",
-        "uv run python",
-        "--limit",
-        "--concurrency",
-        "--only-failures",
-        "log_path",
-        "row-log status: active, downgraded, or unavailable",
-        'RESULTS_DIR = Path(".atk/results")',
-        "If the runner is missing",
-        "next recommended Skill: `atk-diagnose`",
-    ],
-    "skills/atk-diagnose/SKILL.md": [
-        "judgments.csv",
-        "results_sha256",
-        "passed",
-        "failed",
-        "unknown",
-        "templates/.atk/runner/failure_rule.py.md",
-        "<python-runtime> .atk/runner/failure_rule.py",
-        'require_current_file(current_dir, "eval_results.csv")',
-        "next command: `atk-report`",
-    ],
-    "skills/atk-report/SKILL.md": [
-        'require_current_file(current_dir, "eval_results.csv")',
-        'require_current_file(current_dir, "failure_cases.csv")',
-        "resolve_previous_version(current_dir)",
-        "已解决",
-        "部分解决",
-        "未解决",
-        "无法判断",
-        "log_path",
-        "fall back to `app.log`",
-        "degrade to single-version or lower-confidence report with explicit explanation",
-    ],
-    "skills/atk-visualize-failures/SKILL.md": [
-        "atk-visualize-failures",
-        'require_current_file(current_dir, "failure_cases.csv")',
-        "failure_cases.html",
-        "report.md",
-        "best-effort",
-        "non-blocking",
-        "csv.DictReader",
-        "html.escape",
-        "dataset-visualize",
-        "dataset-style shell",
-        "stat-card-abnormal",
-        "field feature analysis",
-        "inspector overlay",
-        "JSON/code rendering",
-        "failure_cases_review.csv",
-        "search/filter",
-        "expected_output",
-        "agent_output",
-        "log_path",
-        "Do not create `report_summary.json`",
-        "metadata JSON",
-        "Do not write outside the resolved current version directory",
-        "same-version",
-        "ask before overwriting that HTML artifact only",
-        "never change `atk-report` behavior",
-        "scripts/generate_failure_browser.py",
-        "--overwrite",
-        "--results-dir .atk/results",
-        "--no-report",
-        "--no-history",
-        "safe JSON/HTML embedding",
-        "schema-adaptive role switching",
-        "safe relative log links",
-        "LLM summaries",
-        "project-local template",
-        "historical compatibility metadata",
-        "HISTORY_FAILURE_MAX_BYTES",
-        "HISTORY_EVAL_MAX_BYTES",
-        "HISTORY_TUNING_PLAN_MAX_BYTES",
-    ],
-    "skills/atk-visualize-failures/scripts/generate_failure_browser.py": [
-        'RESULTS_DIR = Path(".atk/results")',
-        "def list_version_dirs(results_dir: Path = RESULTS_DIR)",
-        "def resolve_current_version(results_dir: Path = RESULTS_DIR)",
-        "def require_current_file(current_dir: Path, filename: str)",
-        "csv.DictReader",
-        "html.escape",
-        "json.dumps",
-        "ensure_ascii=False",
-        "REPORT_MAX_BYTES = 256 * 1024",
-        "REPORT_MAX_EXCERPTS = 5",
-        "REPORT_EXCERPT_MAX_CHARS = 800",
-        "SNIPPET_MAX_CHARS = 240",
-        "PAGE_SIZES = [25, 50, 100, 250]",
-        "DEFAULT_PAGE_SIZE = 50",
-        "--overwrite",
-        "--results-dir",
-        "--no-report",
-        "--no-history",
-        'EVAL_FILENAME = "eval_results.csv"',
-        'TUNING_PLAN_FILENAME = "tuning_plan.md"',
-        "HISTORY_FAILURE_MAX_BYTES",
-        "HISTORY_EVAL_MAX_BYTES",
-        "HISTORY_TUNING_PLAN_MAX_BYTES",
-        "HISTORY_PERSISTENT_MIN_FAILS",
-        "def build_history(",
-        "def detect_atk_id_field(",
-        "dataset-visualize shell",
-        "stat-card-abnormal",
-        "field feature analysis",
-        "JSON/code enhanced inspector",
-        "failure_cases_review.csv export",
-        "role switching",
-        "Search / filter / pagination",
-        "safe_log_href",
-        "os.replace",
-        "No vN results directory exists",
-        "Refusing to overwrite existing",
-    ],
-    "skills/atk-visualize-dataset/SKILL.md": [
-        "atk-visualize-dataset",
-        ".atk/datasets/dataset.csv",
-        ".atk/datasets/dataset.html",
-        "scripts/generate_dataset_browser.py",
-        "csv.DictReader",
-        "html.escape",
-        "--dataset-path",
-        "--overwrite",
-        "input-vs-ground_truth comparison",
-        "ground_truth confirmation",
-        "dataset quality lint",
-        "client-side review export",
-        "dataset_review.csv",
-        "schema-adaptive role switching",
-        "row inspector details",
-        "ground_truth",
-        "atk_id",
-        "bundled offline ECharts",
-        "assets/vendor/echarts.min.js",
-        "Do not create `dataset_summary.json`",
-        "metadata JSON",
-        "Do not write outside the `.atk/datasets/` directory",
-        "never change `atk-dataset`",
-        "atk-dataset",
-        "atk-init",
-    ],
-    "skills/atk-visualize-dataset/scripts/generate_dataset_browser.py": [
-        'DATASETS_DIR = Path(".atk/datasets")',
-        'DATASET_FILENAME = "dataset.csv"',
-        'OUTPUT_FILENAME = "dataset.html"',
-        "def detect_atk_id_field(",
-        "def compute_issues(",
-        "def detect_roles(",
-        "def detect_facets(",
-        "csv.DictReader",
-        "html.escape",
-        "json.dumps",
-        "ensure_ascii=False",
-        "SNIPPET_MAX_CHARS = 240",
-        "PAGE_SIZES = [25, 50, 100, 250]",
-        "DEFAULT_PAGE_SIZE = 50",
-        "VENDOR_ECHARTS_NAME",
-        "--dataset-path",
-        "--overwrite",
-        "input-vs-ground_truth comparison",
-        "dataset quality lint",
-        "ground_truth confirmation",
-        "client-side review export",
-        "bundled offline ECharts",
-        "os.replace",
-        "Refusing to overwrite existing",
-        "run atk-dataset or atk-init first",
-    ],
-    "skills/atk-optimize/SKILL.md": [
-        'require_current_file(current_dir, "report.md")',
-        "## 目标异常清单",
-        "## 调优手段",
-        "## 关联改动",
-        "user-git-only guidance",
-        "never perform automatic rollback",
-    ],
-    "templates/.atk/runner/eval_runner.py.md": [
-        'DATASETS_DIR = Path(".atk/datasets")',
-        'DATASET_PATH = DATASETS_DIR / "dataset.csv"',
-        'ATK_ID_FIELD = "atk_id"',
-        "def allocate_next_results_version(results_dir: Path = RESULTS_DIR) -> Path",
-        "class AgentExecutionError(RuntimeError)",
-        "parser.add_argument(",
-        "--limit",
-        "--concurrency",
-        "--only-failures",
-        "ThreadPoolExecutor",
-        "os.fsync(handle.fileno())",
-        "except UserActionRequired:",
-        "except AgentExecutionError as exc:",
-        "agent_output",
-        "log_path",
-        "PYTHON_LOGGING_CAPTURE_ENABLED",
-        "ROW_LOGGER_NAMES",
-        "ROW_LOG_FORMAT",
-        "ROW_LOG_LEVEL",
-        "ROW_LOGS_DIRNAME",
-        "ATKRowLogHandler",
-        "contextvars",
-        "CONCURRENT_ROW_LOGGING_ENABLED",
-        "row_{source_index:06d}.log",
-        "relative_path.as_posix()",
-        "ROW_LOGGING_CONCURRENCY_DOWNGRADE_MESSAGE",
-        "output_status",
-        "error_type",
-        "Preserves all original dataset columns",
-        "Current max version",
-    ],
-    "templates/.atk/runner/failure_rule.py.md": [
-        "def resolve_current_version(results_dir=RESULTS_DIR)",
-        "def require_current_file(current_dir, filename)",
-        'FAILURE_FILENAME = "failure_cases.csv"',
-        "Overwrote {failure_path}",
-        "TODO_AGENT_TUNING",
-        'raise UserActionRequired("TODO_AGENT_TUNING: implement confirmed failure rule before running.")',
-    ],
-    "docs/shared-versioning-and-confirmation.md": [
-        "Current version vs new version creation",
-        "Only `eval_runner.py` creates or reuses result versions",
-        "Do not filter current-version selection by required files",
-        "never fall back to an older version",
-        "log_path",
-        "logs/row_{source_index:06d}.log",
-        "Per-Skill preconditions and failure behavior",
-        ".atk/results/vN/failure_cases.html",
-        "atk-visualize-failures",
-        "scripts/generate_failure_browser.py",
-        "best-effort and non-blocking",
-        "local Codex plugin",
-        "atk install",
-        "atk status",
-        "python3 scripts/install_plugin.py install",
-    ],
-    "docs/skill-template-pack-usage.md": [
-        "Local plugin install and smoke",
-        "Repository layout boundary",
-        "keep `skills/`, `templates/`, and `docs/` together",
-        "Manual 2.2 → 2.6 loop",
-        "v1 → v2",
-        "log_path",
-        "logs/row_{source_index:06d}.log",
-        "python3 scripts/validate_skill_pack.py",
-        "skills/atk-visualize-failures/SKILL.md",
-        "failure_cases.html",
-        "same-version `report.md` is optional best-effort context",
-        "scripts/generate_failure_browser.py",
-        "atk install",
-        "atk status",
-        "python3 scripts/install_plugin.py install",
-    ],
-}
-
-VERSION_HELPER_SNIPPETS = {
-    "templates/.atk/runner/eval_runner.py.md": [
-        'RESULTS_DIR = Path(".atk/results")',
-        "def list_version_dirs(results_dir: Path = RESULTS_DIR) -> list[tuple[int, Path]]:",
-        "if not results_dir.exists():\n        return []",
-        "def allocate_next_results_version(results_dir: Path = RESULTS_DIR) -> Path:",
-        'target = results_dir / "v1"',
-        'target = results_dir / f"v{max_n + 1}" if (current / "eval_results.csv").exists() else current',
-    ],
-    "templates/.atk/runner/failure_rule.py.md": [
-        'RESULTS_DIR = Path(".atk/results")',
-        "def list_version_dirs(results_dir=RESULTS_DIR):",
-        "if not results_dir.exists():\n        return []",
-        "def resolve_current_version(results_dir=RESULTS_DIR):",
-        "def require_current_file(current_dir, filename):",
-        'raise UserActionRequired(f"Current version {current_dir.name} is missing {filename}; fix or rerun the prior step.")',
-    ],
-    "docs/shared-versioning-and-confirmation.md": [
-        'RESULTS_DIR = Path(".atk/results")',
-        'DATASETS_DIR = Path(".atk/datasets")',
-        "def list_version_dirs(results_dir=RESULTS_DIR):",
-        "if not results_dir.exists():\n        return []",
-        "def resolve_current_version(results_dir=RESULTS_DIR):",
-        "def resolve_previous_version(current_dir, results_dir=RESULTS_DIR):",
-        "def require_current_file(current_dir, filename):",
-        "def allocate_next_results_version(results_dir=RESULTS_DIR):",
-    ],
-}
+NON_LIFECYCLE_SKILL_FILES = DATASET_ONLY_PRE_RESULTS_SKILL_FILES
+LIFECYCLE_SKILL_FILES = [p for p in SKILL_FILES if p not in NON_LIFECYCLE_SKILL_FILES]
 
 
 def read_rel(rel: str) -> str:
@@ -660,65 +336,23 @@ def validate_plugin_root_template_resolution(existing_texts: dict[str, str], err
             require(phrase in text, f"{rel} missing plugin-root template resolution phrase: {phrase}", errors)
 
 
-def main() -> int:
-    errors: list[str] = []
-
+def main():
+    errors = []
     for rel in REQUIRED_FILES:
-        path = ROOT / rel
-        require(path.exists(), f"missing required file: {rel}", errors)
-
-    existing_texts = {rel: read_rel(rel) for rel in REQUIRED_FILES if (ROOT / rel).exists()}
-    all_text = "\n".join(existing_texts.values())
-
-    for rel in SKILL_FILES:
-        text = existing_texts.get(rel, "")
-        require(text.startswith("---\n"), f"{rel} missing YAML front matter", errors)
-        required_sections = (
-            REQUIRED_DATASET_SKILL_SECTIONS if rel in NON_LIFECYCLE_SKILL_FILES else REQUIRED_SKILL_SECTIONS
-        )
-        for section in required_sections:
-            require(section in text, f"{rel} missing section {section}", errors)
-
-    for rel in LIFECYCLE_SKILL_FILES:
-        text = existing_texts.get(rel, "")
-        require(
-            "docs/shared-versioning-and-confirmation.md" in text, f"{rel} missing shared version doc reference", errors
-        )
-        require('RESULTS_DIR = Path(".atk/results")' in text, f"{rel} missing canonical RESULTS_DIR", errors)
-        require(
-            "Failure behavior" in text and "Confirmation triggers" in text,
-            f"{rel} missing precondition/failure behavior",
-            errors,
-        )
-
-    for rel in NON_LIFECYCLE_SKILL_FILES:
-        text = existing_texts.get(rel, "")
-        require(
-            'RESULTS_DIR = Path(".atk/results")' not in text,
-            f"{rel} must not require lifecycle RESULTS_DIR behavior",
-            errors,
-        )
-        require(
-            "docs/shared-versioning-and-confirmation.md" not in text,
-            f"{rel} must not require shared version doc behavior",
-            errors,
-        )
-
-    for phrase in GLOBAL_PHRASES:
-        require(phrase in all_text, f"missing global phrase/snippet: {phrase}", errors)
-
+        require((ROOT / rel).is_file(), f"missing required file: {rel}", errors)
+    texts = {rel: read_rel(rel) for rel in REQUIRED_FILES if (ROOT / rel).is_file()}
     for rel, phrases in PER_FILE_PHRASES.items():
-        text = existing_texts.get(rel, "")
         for phrase in phrases:
-            require(phrase in text, f"{rel} missing phrase: {phrase}", errors)
-
-    for rel, snippets in VERSION_HELPER_SNIPPETS.items():
-        text = existing_texts.get(rel, "")
-        for snippet in snippets:
-            require(snippet in text, f"{rel} missing canonical version helper snippet: {snippet}", errors)
-
-    docs_and_readme = "\n".join(
-        existing_texts.get(rel, "")
+            require(phrase in texts.get(rel, ""), f"{rel} missing contract: {phrase}", errors)
+    for rel in SKILL_FILES:
+        text = texts.get(rel, "")
+        require(text.startswith("---\n"), f"{rel} missing front matter", errors)
+        require("compatibility:" in text, f"{rel} must declare CLI dependency", errors)
+    validate_manifest(errors)
+    validate_installer(errors)
+    validate_plugin_root_template_resolution(texts, errors)
+    docs = "\n".join(
+        texts.get(rel, "")
         for rel in [
             "README.md",
             "README.en.md",
@@ -727,185 +361,46 @@ def main() -> int:
             "docs/codex_agent_tuning_prd.md",
         ]
     )
-    for phrase in NON_GOALS:
-        require(phrase.lower() in docs_and_readme.lower(), f"missing non-goal documentation: {phrase}", errors)
-    for phrase in PLUGIN_DOC_PHRASES:
-        require(phrase.lower() in docs_and_readme.lower(), f"missing plugin documentation phrase: {phrase}", errors)
-
-    for phrase in PRD_REFERENCES:
-        require(contains_any(all_text, [phrase]), f"missing PRD traceability phrase: {phrase}", errors)
-
-    tuning_text = existing_texts.get("skills/atk-optimize/SKILL.md", "")
+    for phrase in NON_GOALS + PLUGIN_DOC_PHRASES:
+        require(phrase.lower() in docs.lower(), f"missing documentation contract: {phrase}", errors)
+    version = tomllib.loads(read_rel("pyproject.toml"))["project"]["version"]
+    manifest = json.loads(read_rel(".codex-plugin/plugin.json"))
+    require(manifest["version"] == version, "package/plugin version mismatch", errors)
+    for name, marker, entry in [
+        ("eval_runner", "ATK_MANAGED_RUNNER", "call_agent"),
+        ("failure_rule", "ATK_MANAGED_RULE", "judge"),
+    ]:
+        rel = f"templates/.atk/runner/{name}.py.md"
+        match = re.search(r"```python\n(.*?)\n```", texts.get(rel, ""), re.S)
+        require(bool(match), f"{rel} needs executable Python template", errors)
+        if match:
+            try:
+                tree = ast.parse(match.group(1))
+                functions = {n.name for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+                require(entry in functions and marker in match.group(1), f"{rel} missing adapter contract", errors)
+                require(
+                    not {"allocate_next_results_version", "run_rows", "write_failures"} & functions,
+                    f"{rel} duplicates shared engine",
+                    errors,
+                )
+                require(
+                    "TODO_AGENT_TUNING" in match.group(1) and "UserActionRequired" in match.group(1),
+                    f"{rel} must reject unimplemented invocation",
+                    errors,
+                )
+            except SyntaxError as exc:
+                errors.append(f"{rel} invalid Python: {exc}")
     for heading in ["## 目标异常清单", "## 调优手段", "## 关联改动"]:
-        require(heading in tuning_text, f"tuning Skill missing exact heading {heading}", errors)
-
-    report_text = existing_texts.get("skills/atk-report/SKILL.md", "")
+        require(heading in texts.get("skills/atk-optimize/SKILL.md", ""), f"missing tuning heading {heading}", errors)
     for status in ["已解决", "部分解决", "未解决", "无法判断"]:
-        require(status in report_text, f"report Skill missing cross-version status {status}", errors)
-
-    runner_template = existing_texts.get("templates/.atk/runner/eval_runner.py.md", "")
-    require(
-        'return list(source_fieldnames) + ["agent_output"] + fixed_output_fields + auxiliary_fields' in runner_template,
-        "runner template must append agent_output, fixed status fields, and auxiliary agent_output_* columns after original columns",
-        errors,
-    )
-    require(
-        '"agent_output"' in runner_template and "reserved_output_fields" in runner_template,
-        "runner template must guard source agent_output conflict",
-        errors,
-    )
-    require(
-        'AGENT_OUTPUT_LOG_PATH_FIELD = "log_path"' in runner_template,
-        "runner template must define stable log_path field",
-        errors,
-    )
-    require(
-        'DATASETS_DIR = Path(".atk/datasets")' in runner_template
-        and 'DATASET_PATH = DATASETS_DIR / "dataset.csv"' in runner_template,
-        "runner template must read the dataset from a .atk/datasets canonical dataset",
-        errors,
-    )
-    require(
-        'ATK_ID_FIELD = "atk_id"' in runner_template
-        and "Dataset is missing required" in runner_template
-        and "duplicate {ATK_ID_FIELD}" in runner_template,
-        "runner template must require the canonical atk_id dataset column",
-        errors,
-    )
-    require(
-        "PYTHON_LOGGING_CAPTURE_ENABLED" in runner_template
-        and "ROW_LOGGER_NAMES" in runner_template
-        and "ROW_LOG_FORMAT" in runner_template
-        and "ROW_LOG_LEVEL" in runner_template
-        and "ROW_LOGS_DIRNAME" in runner_template
-        and "CONCURRENT_ROW_LOGGING_ENABLED" in runner_template,
-        "runner template must expose row-log generated config constants",
-        errors,
-    )
-    require(
-        "contextvars" in runner_template and "ContextVar" in runner_template,
-        "runner template must use contextvars for row attribution",
-        errors,
-    )
-    require(
-        "class ATKRowLogHandler(logging.Handler)" in runner_template,
-        "runner template must use an ATK-owned stdlib logging.Handler router for row logs",
-        errors,
-    )
-    require(
-        "def capture_python_app_logging" in runner_template
-        and 'logging.FileHandler(log_path, mode="w", encoding="utf-8")' in runner_template
-        and "logger.addHandler(app_handler)" in runner_template
-        and "logger.removeHandler(app_handler)" in runner_template,
-        "runner template must write configured Python logging records to global app.log",
-        errors,
-    )
-    require(
-        'log_path.open("w", encoding="utf-8").close()' in runner_template,
-        "runner template must truncate row logs on reused partial versions",
-        errors,
-    )
-    require(
-        "_ACTIVE_ROW_LOG_CONTEXT.reset(token)" in runner_template,
-        "runner template must reset row logging context tokens in finally",
-        errors,
-    )
-    require(
-        "row_{source_index:06d}.log" in runner_template,
-        "runner template must use source-row-numbered row log filenames",
-        errors,
-    )
-    require(".as_posix()" in runner_template, "runner template must serialize row-log CSV paths as POSIX paths", errors)
-    require(
-        "AGENT_OUTPUT_LOG_PATH_FIELD" in runner_template and "reserved_output_fields" in runner_template,
-        "runner template must guard log_path source conflicts",
-        errors,
-    )
-    require(
-        "ROW_LOGGING_CONCURRENCY_DOWNGRADE_MESSAGE" in runner_template and "sys.__stderr__" in runner_template,
-        "runner template must report concurrency row-log downgrade outside app.log redirect",
-        errors,
-    )
-    require(
-        "logger.setLevel(ROW_LOG_LEVEL)" in runner_template
-        and "logger.setLevel(previous_levels[logger])" in runner_template,
-        "runner template must restore row logger levels",
-        errors,
-    )
-    require(
-        "logger.addHandler(row_handler)" in runner_template and "logger.removeHandler(row_handler)" in runner_template,
-        "runner template must install and remove the ATK row handler once per run",
-        errors,
-    )
-    require(
-        "except Exception as exc" not in runner_template,
-        "runner template must not catch broad Exception and mask configuration failures",
-        errors,
-    )
-    require(
-        "except UserActionRequired:" in runner_template
-        and "# Configuration/TODO/confirmation failures must stop the run" in runner_template,
-        "runner template must propagate UserActionRequired before row-error handling",
-        errors,
-    )
-    require(
-        "--limit" in runner_template and "--offset" in runner_template,
-        "runner template must support bounded runs",
-        errors,
-    )
-    require(
-        "--concurrency" in runner_template and "ThreadPoolExecutor" in runner_template,
-        "runner template must support concurrent runs",
-        errors,
-    )
-    require(
-        "--only-failures" in runner_template
-        and "resolve_latest_failure_cases_version" in runner_template
-        and "load_failure_atk_ids" in runner_template
-        and "select_failure_dataset_rows" in runner_template,
-        "runner template must support atk_id-based reruns of prior failure cases",
-        errors,
-    )
-    require(
-        "row_logging_enabled=row_logging_enabled" in runner_template,
-        "concurrent worker path must receive row logging state instead of forcing false",
-        errors,
-    )
-    require(
-        "writer.writerow(result_row)" in runner_template and "os.fsync(handle.fileno())" in runner_template,
-        "runner template must write and flush results incrementally",
-        errors,
-    )
-
-    diagnosis_skill = existing_texts.get("skills/atk-diagnose/SKILL.md", "")
-    require(
-        "failure_cases.csv" in diagnosis_skill and "judgments.csv" in diagnosis_skill,
-        "diagnosis must preserve failures and explicit judgment coverage",
-        errors,
-    )
-
-    filter_template = existing_texts.get("templates/.atk/runner/failure_rule.py.md", "")
-    require(
-        "Conservative placeholder" not in filter_template,
-        "filter template must not ship a runnable placeholder heuristic",
-        errors,
-    )
-
-    validate_manifest(errors)
-    validate_installer(errors)
-    validate_plugin_root_template_resolution(existing_texts, errors)
-
+        require(status in texts.get("skills/atk-report/SKILL.md", ""), f"missing comparison status {status}", errors)
     if errors:
-        print("Agent Tune Kit validation FAILED", file=sys.stderr)
+        print("Agent Tune Kit validation failed", file=sys.stderr)
         for error in errors:
-            if error:
-                print(f"- {error}", file=sys.stderr)
+            print(f"- {error}", file=sys.stderr)
         return 1
-
     print("Agent Tune Kit validation passed")
-    print(
-        f"Checked {len(REQUIRED_FILES)} files, {len(SKILL_FILES)} Skill templates, plugin manifest, and installer tooling"
-    )
+    print(f"Checked {len(REQUIRED_FILES)} files, {len(SKILL_FILES)} Skill templates and shared CLI resources")
     return 0
 
 

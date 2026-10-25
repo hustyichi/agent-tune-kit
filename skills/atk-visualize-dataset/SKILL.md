@@ -1,146 +1,51 @@
 ---
 name: atk-visualize-dataset
 description: Generate a dependency-free HTML browser for the ATK dataset to review rows and expected-result fields.
+compatibility: Requires the installed ATK CLI on PATH (dataset, eval, results and visualize commands) and a compatible project Python runtime.
 ---
 
 # Agent Tuning — Dataset Visualization
 
 ## Purpose
 
-Generate `.atk/datasets/dataset.html` from the non-versioned project dataset `.atk/datasets/dataset.csv` so a
-reviewer can quickly browse the generated dataset, confirm whether each row's expected-result or ground_truth field
-matches expectations, and spot dataset quality problems such as incorrect, unreasonable, or missing expected results
-before tuning. This is an
-optional, pre-init review Skill that operates only on the dataset stage; it does not read or write `.atk/results/vN`,
-does not participate in result versioning, and does not change `atk-dataset`, `atk-init`, or any failure-finding
-semantics. Generation is handled by the fixed plugin-owned stdlib script `scripts/generate_dataset_browser.py`, not by
-model-time HTML synthesis, LLM summaries, or a project-local template.
+Generate the optional non-versioned dataset browser for human input/expected-answer review. Fixed parsing, rendering, safety and frontend assets are maintained in the installed ATK package. Do not synthesize HTML, copy frontend assets into the project or install frontend dependencies.
 
-The page shell (HTML/CSS/JS) is shipped as plugin-owned assets under `skills/atk-visualize-dataset/assets/`
-(`page.html`, `styles.css`, `app.js`) plus the bundled offline ECharts build retained at
-`skills/atk-visualize-dataset/assets/vendor/echarts.min.js` for the self-contained asset contract. All four files are
-inlined into the single output HTML at generation time. These assets are plugin-owned, never copied into the user
-project, and never written outside the `.atk/datasets/` directory; the final artifact remains a single self-contained
-file with zero CDN, zero runtime dependencies, no sidecar files, no per-project asset copies, and no requirement for the
-reviewer to install Node, React, Vite, or any frontend package.
+## CLI dependency
 
-The visual target is a static, vanilla-JS adaptation of the external `dataset-visualize` experience: prioritize the
-orange/slate product feel, sticky app header, two-tab dataset browsing/field-analysis workflow, polished grid controls,
-and row inspector interactions while omitting browser-upload, Gemini/AI Studio, dataset-editing, and source-level React
-requirements.
+Use the installed `atk` CLI from the target project cwd. Check `atk --version` and the command's `--help` when needed. If absent, guide installation with `uv tool install agent-tune-kit`, then `atk install`; do not regenerate fixed scripts. CLI/Skill contracts must be compatible. A successful `atk status` does not prove the current session loaded updated instructions.
 
 ## Inputs
 
-- Dataset CSV resolved from `--dataset-path`, default `.atk/datasets/dataset.csv`.
-- Required current file:
-  - `.atk/datasets/dataset.csv`
-
-No version directory is required and no other ATK files are read. The dataset is intentionally non-versioned and lives
-under `.atk/datasets/`, parallel to `atk-dataset`.
+Canonical `.atk/datasets/dataset.csv` (or explicit `--dataset-path`). No result version is required.
 
 ## Outputs
 
-- `.atk/datasets/dataset.html` only.
-
-Do not create `dataset_summary.json`, metadata JSON, sidecar data files, package manifests, or dependency files.
-Do not write outside the `.atk/datasets/` directory during normal operation. The client-side review export
-(`dataset_review.csv`) is produced by the reviewer's browser via a download, not by this Skill or the generator.
+Only `.atk/datasets/dataset.html`, a self-contained offline HTML file. Review CSV downloads are created by the browser. Do not create metadata JSON, package manifests, sidecar assets, LLM summaries or project-local visualization templates.
 
 ## Workflow
 
-1. Resolve the installed Skill directory and script path as `skills/atk-visualize-dataset/scripts/generate_dataset_browser.py`
-   relative to this `SKILL.md`. Run the script from the target project working directory, not from the plugin directory.
-2. Require the dataset CSV at `--dataset-path` (default `.atk/datasets/dataset.csv`). If it is missing, stop and tell the
-   user to run `atk-dataset` or `atk-init` first; do not fabricate a dataset.
-3. Set the output to `dataset.html` next to the dataset CSV and keep all normal output inside `.atk/datasets/`.
-4. If `dataset.html` already exists and may contain user edits, ask before overwriting that HTML artifact only. After
-   confirmation, rerun the script with `--overwrite`; do not ask about unrelated dataset files.
-5. Invoke the fixed stdlib generator. The generator opens the freshly written HTML in the user's default browser via
-   Python `webbrowser` by default; pass `--no-open` only when the user explicitly opts out (for example a headless CI
-   shell). `--open` remains accepted as an explicit compatibility flag:
+1. Confirm the required CSV exists; if missing, guide the prior data preparation or diagnosis step. Do not fabricate input.
+2. Preserve any existing HTML that may contain user edits. Use `--overwrite` only when replacement is already authorized or has been confirmed.
+3. Invoke the fixed CLI from the target project:
 
 ```sh
-python3 <skill-dir>/scripts/generate_dataset_browser.py [--dataset-path .atk/datasets/dataset.csv] [--overwrite] [--open|--no-open]
+atk visualize dataset [--dataset-path .atk/datasets/dataset.csv] [--overwrite] [--open|--no-open]
 ```
 
-6. Interpret exit codes: `0` means HTML was written (and, when `--open` was passed, a browser open was attempted; the
-   open result is reported on the `browser_open=...` stdout line and is non-fatal); `2` means a user-action/input
-   blocker such as a missing `dataset.csv`, overwrite refusal, or unreliable CSV structure; `1` means an unexpected
-   generation error.
-7. The script parses `dataset.csv` with Python stdlib `csv.DictReader`, preserving all source columns and tolerating
-   varied datasets. Keep arbitrary schemas intact rather than assuming a universal schema.
-8. The script generates dependency-free static HTML using only the Python standard library. It uses safe JSON/HTML
-   embedding, including `html.escape` for directly interpolated HTML and protection for `</script>`, `<`, `>`, `&`,
-   U+2028, and U+2029 in embedded data, and neutralizes any literal `</script` inside inlined CSS/JS.
-9. Inline plugin-owned `assets/page.html`, `assets/styles.css`, `assets/app.js`, and `assets/vendor/echarts.min.js`
-   into the single output HTML; do not add runtime/package dependencies, external CDN links, sidecar asset files, or
-   per-project copies.
-10. Detect schema roles without requiring them: `atk_id`, an input column, and a ground_truth/expected column from
-    candidates such as `expected`, `expected_output`, `ground_truth`, `answer`, `label`, or `target`. Label role
-    mappings as auto-detected or manually selected in the generated frontend, and let reviewers remap them through the
-    settings drawer for this session only.
-11. Surface an **input-vs-ground_truth comparison** in the detail view so reviewers can confirm whether each
-    ground_truth matches expectations, with a dedicated ground_truth confirmation panel that highlights empty
-    ground_truth.
-12. Compute a **dataset quality lint** per row and expose it as a one-click quality filter bar and row/field summaries.
-    Detected
-    issues include: empty ground_truth, empty input, duplicate or missing/non-positive-integer `atk_id`, conflicting
-    samples (same input but different ground_truth), exact duplicate samples, and ground_truth length outliers
-    (too short / too long).
-13. Render the migrated static browser shell with a Chinese-first **数据列表 / 字段特征分析** tab structure, orange/slate
-    sticky header, summary cards, client-side search/filter controls, low-cardinality facet filters, column visibility
-    controls, sortable/paginated table browsing with default page size 50, and a slide-in row inspector that preserves
-    all source columns with empty-field folding and copy affordances.
-14. Provide a **client-side review export**: one free-text `review_feedback` field per row, persisted in the reviewer's
-    browser `localStorage` (keyed by `atk_id` plus row number), and an export button that downloads
-    `dataset_review.csv` (`atk_id`, `row_number`, `review_feedback`) entirely client-side. Export only rows with
-    non-empty feedback. The feedback should describe how anomalous or unreasonable `ground_truth` should be adjusted,
-    while the original row content remains associated through `atk_id` / `row_number` and is not duplicated in the
-    review CSV. This keeps the artifact offline and backend-free; use the export to decide whether ordinary dataset
-    rows need regeneration or whether canonical `ground_truth` should be created or corrected through
-    `atk-dataset`.
-15. Render a field-analysis tab using the static payload and vanilla JS: field role mapping, row/field/ground_truth
-    KPI cards, detected issue summaries, categorical facet summaries, and per-field statistics. Do not promise a
-    runtime React app, browser-upload flow, AI Studio integration, or in-browser dataset editing.
-16. Write `dataset.html` atomically where practical, for example by writing a temporary file in the dataset directory
-    and replacing the final path.
-17. Do not create a project-local visualization template, `.atk/visualize_config.json`, LLM summaries, sidecar metadata
-    JSON, package manifests, or dependency files.
+4. Browser opening is the default. Use `--no-open` only when the user opts out or requests headless operation. An unsuccessful open is non-fatal; report the output path for manual opening.
+5. The CLI preserves source columns and supplies field role switching, search/filter, sorting, pagination, field analysis, row inspection and browser-local review notes/export. Describe the available evidence without claiming that structural checks prove semantic correctness.
+6. For feedback, export dataset_review.csv (`atk_id,row_number,review_feedback`); route corrections back to `atk-dataset`. Direct conversation feedback remains usable without an export.
 
 ## Confirmation triggers
 
-Ask before writing only when:
-
-- overwriting existing `dataset.html` might discard user-edited visualization notes;
-- `dataset.csv` is malformed enough that preserving rows/columns is uncertain.
-
-Do not ask merely because field names are nonstandard; the generated frontend provides schema-adaptive role switching
-for temporary review mapping. Do not ask about obvious, low-risk mechanics.
+Ask only when overwriting would discard user edits, input structure prevents reliable preservation, or the intended input is ambiguous. Nonstandard field names alone are not a blocker. Respect already-authorized replacements.
 
 ## Failure behavior
 
-- Require `.atk/datasets/dataset.csv` (or the `--dataset-path` target); if missing, stop and tell the user to run
-  `atk-dataset` or `atk-init` first.
-- If `dataset.csv` is empty but has headers, still write a valid `dataset.html` with zero data rows and a clear
-  empty-state summary.
-- If `dataset.csv` has blank or duplicate headers, stop with a clear message because preserving columns is uncertain.
-- If HTML generation fails after a temporary file is written, remove the temporary file when safe and leave any existing
-  `dataset.html` untouched.
-- Never create metadata JSON, never add dependencies, and never change `atk-dataset` or `atk-init` behavior.
+Exit 0 means generation succeeded; 2 identifies an input/overwrite blocker; 1 indicates an unexpected failure. Existing output remains intact on failed generation. Empty data with headers still produces a valid empty state. Blank/duplicate headers prevent reliable generation. Do not silently switch inputs, create result versions, alter CSV data or change diagnosis/report behavior.
+
+The page includes input-vs-ground_truth comparison, a ground_truth confirmation panel, dataset quality lint and bundled offline ECharts. Missing/duplicate IDs and other review issues must remain viewable; do not impose evaluation's strict ID gate before browsing. Preserve the dataset's field order and answer naming.
 
 ## Handoff message
 
-After writing the visualization, summarize:
-
-- dataset path and row count;
-- output path `.atk/datasets/dataset.html`;
-- the number of rows flagged by the dataset quality lint and which issue categories appeared;
-- whether the HTML includes the migrated Dataset Visualizer shell, 数据列表 / 字段特征分析 tabs, summary counts,
-  search/filter, column controls, pagination, input-vs-ground_truth comparison, ground_truth confirmation,
-  schema-adaptive role switching, dynamic categorical facets, dataset quality lint, row inspector details,
-  client-side review export, and the self-contained bundled assets;
-- the `browser_open=...` line from stdout so the user knows whether the page was auto-opened (the Skill should pass
-  `--open` by default; if the open attempt is skipped, tell the user to open the printed file path manually);
-- the next useful step: review the dataset, export `dataset_review.csv` with concise `review_feedback` for any
-  incorrect or unreasonable ground_truth, run `atk-dataset` when canonical `ground_truth` needs explicit
-  correction, or proceed to `atk-init` when the dataset looks correct.
+Report input/version, row count, output path, overwrite status, browser-open result and next review step. Mention detected dataset quality issues or skipped report/history context when applicable. Explain how to export feedback; do not claim semantic correctness from the page's structural lint or a smaller failure count.

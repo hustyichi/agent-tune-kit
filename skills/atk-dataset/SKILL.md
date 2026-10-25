@@ -1,6 +1,7 @@
 ---
 name: atk-dataset
 description: Prepare or revise evaluation datasets from files, examples, rules or feedback, preserving existing fields and IDs; browsing is optional and the Agent is not run.
+compatibility: Requires the installed ATK CLI on PATH (dataset, eval, results and visualize commands) and a compatible project Python runtime.
 ---
 
 # Agent Tuning — Prepare Dataset
@@ -10,6 +11,10 @@ description: Prepare or revise evaluation datasets from files, examples, rules o
 Prepare a usable evaluation dataset through one entry point. Import or build samples, clarify only missing judgment
 criteria, and apply feedback as needed. Do not require separate build, ground-truth generation or review-writeback calls.
 This is dataset-only / pre-results work and may also revise data between runs. Detailed diagnosis remains in `atk-diagnose`.
+
+## CLI dependency
+
+Use the installed `atk` CLI from the target project cwd. Check `atk --version` and the required command's `--help` when first used or when compatibility is uncertain. If unavailable, stop and guide installation with `uv tool install agent-tune-kit`, then `atk install`; do not regenerate fixed scripts as a fallback. Installed Skill and CLI must support the same command contract. A successful `atk status` does not prove the current session loaded new instructions.
 
 ## Inputs
 
@@ -50,7 +55,7 @@ This is dataset-only / pre-results work and may also revise data between runs. D
 6. Apply targeted answer/criteria edits with the bundled helper below. Preserve every unrelated field, sample and original
    input. An explicit request or clear review feedback authorizes the corresponding correction; do not ask for a second
    approval just because an existing value changes. Ask before unrequested replacement or a conflicting standard change.
-7. When creating/importing a dataset, validate CSV structure, IDs and input/answer roles before atomic replacement. Preserve
+7. Use `atk dataset prepare --source <prepared.csv>` for canonical creation/import; reuse identical content, pass `--append` for authorized additions or `--overwrite` only for authorized replacement. When creating/importing a dataset, validate CSV structure, IDs and input/answer roles before atomic replacement. Preserve
    an existing canonical dataset unless replacement was requested; if the mapping is unchanged, reuse it. Do not send answer
    fields or ATK metadata to the Agent as input. `atk-init` handles the actual input mapping and runner connection.
 8. If feedback changes the confirmed `Ground Truth Standard`, update that section of `.atk/context.md` and a concise
@@ -60,7 +65,7 @@ This is dataset-only / pre-results work and may also revise data between runs. D
 
 ## Targeted writeback
 
-Use the existing project's Python runtime (or `python3`) for `<skill-dir>/scripts/update_dataset.py`.
+Use `atk dataset inspect` and `atk dataset update`; the old `scripts/update_dataset.py` is a compatibility entrypoint only.
 Prepare a temporary updates CSV containing `atk_id` and the exact target answer field, with only authorized, grounded edits.
 The default field is `ground_truth` for existing workflows; always select the existing answer field when it has another name.
 Only the selected field is updated. Empty update values are skipped; do not use this helper to clear fields or edit sample IDs.
@@ -68,17 +73,17 @@ Only the selected field is updated. Empty update values are skipped; do not use 
 Direct feedback or grounded enrichment, without a review file:
 
 ```sh
-python3 <skill-dir>/scripts/update_dataset.py --direct --field expected --updates-path <updates.csv>
+atk dataset update --direct --field expected --updates-path <updates.csv>
 ```
 
 Existing browser feedback, using the same exported format as before:
 
 ```sh
-python3 <skill-dir>/scripts/update_dataset.py --review-path <dataset_review.csv> --dump-context
-python3 <skill-dir>/scripts/update_dataset.py --review-path <dataset_review.csv> --field ground_truth --updates-path <updates.csv>
+atk dataset inspect --review-path <dataset_review.csv> --json
+atk dataset update --review-path <dataset_review.csv> --field ground_truth --updates-path <updates.csv>
 ```
 
-`--dataset-path` defaults to `.atk/datasets/dataset.csv`. `--direct --dump-context` inspects it without requiring review feedback.
+`--dataset-path` defaults to `.atk/datasets/dataset.csv`. `atk dataset inspect --direct --json` inspects it without requiring review feedback.
 The helper validates IDs and feedback scope, preserves column order, and writes atomically. A no-op leaves file bytes unchanged.
 Keep the temporary update file outside `.atk/datasets/`; remove only this task's disposable file after successful verification.
 Do not delete user feedback, source data or existing results.

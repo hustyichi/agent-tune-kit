@@ -1,6 +1,7 @@
 ---
 name: atk-init
 description: Generate a reusable test runner for a local Agent and dataset, preserving source columns and writing versioned eval_results.csv with agent_output.
+compatibility: Requires the installed ATK CLI on PATH (dataset, eval, results and visualize commands) and a compatible project Python runtime.
 ---
 
 # Agent Tuning — Generate Runner
@@ -12,6 +13,10 @@ Create `.atk/runner/eval_runner.py` for the target repository. This Skill maps t
 This is a Codex Skill template. It is copy/register-ready, but it is not a plugin install UX or full automation flow.
 
 Traceability note: section 2.2 defines runner generation, section 4 defines version management, and section 7 defines delivery requirements.
+
+## CLI dependency
+
+Use the installed `atk` CLI from the target project cwd. Check `atk --version` and the required command's `--help` when first used or when compatibility is uncertain. If unavailable, stop and guide installation with `uv tool install agent-tune-kit`, then `atk install`; do not regenerate fixed scripts as a fallback. Installed Skill and CLI must support the same command contract. A successful `atk status` does not prove the current session loaded new instructions.
 
 ## Inputs
 
@@ -64,9 +69,9 @@ In the current package layout, this is also reachable from this Skill file as `.
    - if `.atk/datasets/dataset.csv` exists and has identical canonical content, reuse it instead of creating a duplicate;
    - if `.atk/datasets/dataset.csv` exists with different canonical content, ask before overwriting because the fixed name is the canonical runnable dataset slot;
    - keep the runner pointed at `.atk/datasets/dataset.csv`, not the original external path.
-4. If safe, create `.atk/runner/` and write `eval_runner.py` from plugin-root-relative `templates/.atk/runner/eval_runner.py.md`.
+4. Use `atk dataset prepare --source <csv>` for canonical CSV persistence, preserving the reuse/overwrite rules above. If safe, create `.atk/runner/` and write the thin `eval_runner.py` adapter from plugin-root-relative `templates/.atk/runner/eval_runner.py.md`.
 5. Keep the generated script project-local and low dependency. Prefer Python stdlib plus the target project environment.
-6. Verify the generated runner with the lightest check that proves the handoff is usable:
+6. First run `atk eval --check --json` to verify imports and one-row input shaping without creating results. Verify the generated runner with the lightest check that proves the handoff is usable:
    - syntax check with the same interpreter shape expected for execution;
    - import/load checks for the runner and target Agent entrypoint;
    - dataset load and one-row input-shaping check.
@@ -74,7 +79,9 @@ In the current package layout, this is also reachable from this Skill file as `.
    - after smoke cleanup, confirm `.atk/results/` has returned to the pre-smoke version state. Do not remove any pre-existing version that contained user data before the smoke command.
 7. Tell the user the next command is `atk-eval`.
 
-## Required runner behavior
+## Required evaluation behavior
+
+These are shared-engine guarantees. Generate only project adaptation and configuration; do not copy version allocation, CSV writers, worker pools or logging routing into the adapter.
 
 - Preserve all original dataset columns and their order, with the ATK metadata column `atk_id` appended when the source dataset does not already provide it.
 - Require `.atk/datasets/dataset.csv` to contain `atk_id`; generated runners should stop with repair guidance if that column is missing, empty, duplicated, or not a positive integer.
@@ -109,7 +116,7 @@ Use the canonical helper names and semantics from `docs/shared-versioning-and-co
 - `list_version_dirs(results_dir=RESULTS_DIR)`
 - `allocate_next_results_version(results_dir=RESULTS_DIR)`
 
-The runner is the only module that creates a new version. If the largest `vN` contains `eval_results.csv`, create `v{N+1}`. If it does not contain `eval_results.csv`, reuse it.
+Evaluation execution is the only operation that creates a new version; generated adapters delegate fixed behavior to the shared ATK engine. If the largest `vN` contains `eval_results.csv`, create `v{N+1}`. If it does not contain `eval_results.csv`, reuse it.
 
 ## Confirmation triggers
 

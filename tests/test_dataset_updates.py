@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import csv
-import importlib.util
 import subprocess
 import sys
 import tempfile
@@ -38,11 +37,9 @@ def run_script(project: Path, *args: str) -> subprocess.CompletedProcess[str]:
 
 
 def load_module():
-    spec = importlib.util.spec_from_file_location("tune_ground_truth", SCRIPT)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    from agent_tune_kit.datasets import updates
+
+    return updates
 
 
 class TuneGroundTruthTests(unittest.TestCase):

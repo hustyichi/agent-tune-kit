@@ -174,7 +174,7 @@
 - **HTML 生成要求**：
   - 使用 Python 标准库读取 CSV，保留所有原始列并兼容不同数据集字段
   - 对所有 CSV 与报告派生内容进行 HTML 转义
-  - 使用内嵌 CSS/JS 与内嵌的离线 ECharts 构建（位于 `skills/atk-visualize-failures/assets/vendor/echarts.min.js`，由插件持有，零 CDN、零外链、零运行时依赖），包含摘要计数、搜索/筛选、分页、expected-vs-actual 对比、长字段展开或详情视图
+  - 使用包内 `src/agent_tune_kit/visualize/assets/failures/` 的内嵌 CSS/JS 构建（零 CDN、零外链、零运行时依赖），包含摘要计数、搜索/筛选、分页、expected-vs-actual 对比、长字段展开或详情视图
   - 当存在历史版本数据时，HTML 提供三标签视图（`总览` / `跨版本` / `Case 浏览`）：跨版本趋势（执行数 / 失败数 / 失败率双轴）、按版本演化的失败原因堆叠柱、三态/四态 per-case 状态（`passed` / `failed` / `not_tested` / `unknown`）、上一轮调优目标命中率（resolved / partial / unresolved / indeterminate）、顽固 case 列表（在 2 个及以上历史版本中均失败的 atk_id，表格显示上限 200 行），并在某版本执行样本数显著少于上一版本（< 50%）时显示 subset run 提示条，避免与全量执行版本直接同口径比较
   - 当存在 expected/expected_output、`agent_output`、failure/failure_reason/explanation/root-cause 类字段时优先展示，但不强制要求统一 Schema；前端提供临时角色切换以适配非标准字段
   - 同版本 `report.md` 缺失、格式异常或不可解析时继续生成 HTML，并说明报告上下文被跳过；报告解析是 best-effort 且 non-blocking
@@ -197,7 +197,7 @@
 - **HTML 生成要求**：
   - 使用 Python 标准库读取 CSV，保留所有原始列并兼容不同数据集字段
   - 对所有 CSV 派生内容进行 HTML 转义，并中和内联 JSON 中的 `</script>` 等风险序列
-  - 使用插件持有的内嵌 HTML/CSS/JS 与自包含离线资源构建，保留 `skills/atk-visualize-dataset/assets/vendor/echarts.min.js` 的单文件资产内联契约；零 CDN、零外链、零运行时依赖，用户不需要安装 Node、React、Vite 或任何前端依赖
+  - 使用插件持有的内嵌 HTML/CSS/JS 与自包含离线资源构建，保留 `src/agent_tune_kit/visualize/assets/dataset/vendor/echarts.min.js` 的单文件资产内联契约；零 CDN、零外链、零运行时依赖，用户不需要安装 Node、React、Vite 或任何前端依赖
   - 提供尽可能还原 `dataset-visualize` 视觉与交互的一体化静态页面：橙色/石板色 sticky header、产品化卡片布局，以及两标签视图（`数据列表` / `字段特征分析`）
   - `数据列表` 支持全字段搜索、动态分类 facet 过滤、字段显示控制、排序、分页、质量标签过滤、详情抽屉，并突出「输入 vs ground_truth」对照
   - `字段特征分析` 提供字段角色映射、总行/总列/ground_truth/问题样本 KPI、分类分布摘要和逐字段统计；首版以核心视觉还原和静态阅读体验优先，不迁移浏览器上传、Gemini/AI Studio、数据集编辑或源码级 React 要求
