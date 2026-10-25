@@ -178,3 +178,7 @@ ATK 可选读取本地私有的 `.atk/context.md`，用于保存用户沟通后�
 - `$atk-report`：生成分析报告和跨轮验证结论。
 - `$atk-visualize-failures`：生成异常样本 HTML 浏览页。
 - `$atk-optimize`：根据报告调优 Agent。
+
+## 能力评估
+
+- [Ground truth 与评分方案支持评估（2026-10-25）](docs/ground-truth-and-grading-assessment-2026-10-25.md)：基于当前源码与 44 项相关测试，梳理数据准备、人工校准和判定支持，区分小规模调优可用性与可信评分体系的缺口；未重新验收业务调优效果。
