@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import shutil
 from pathlib import Path
 
@@ -16,7 +17,9 @@ def installed(tmp_path: Path) -> tuple[list[str], Path]:
     return common, tmp_path / "plugins" / "agent-tune-kit"
 
 
-def seed_cache(root: Path, target: Path, version: str = "2.0.0") -> Path:
+def seed_cache(root: Path, target: Path, version: str | None = None) -> Path:
+    if version is None:
+        version = json.loads((target / ".codex-plugin" / "plugin.json").read_text())["version"]
     cache = root / "agent-tune-kit" / version
     shutil.copytree(target, cache)
     return cache
@@ -45,7 +48,7 @@ def test_status_missing_cache_is_pending(installed):
     assert "缓存尚未生成" in result.stdout
 
 
-@pytest.mark.parametrize("version", ["2.0.0", "local"])
+@pytest.mark.parametrize("version", [None, "local"])
 def test_status_matching_cache_ignores_repo_extras(installed, isolated_plugin_cache, version):
     common, target = installed
     cache = seed_cache(isolated_plugin_cache, target, version)
@@ -59,7 +62,7 @@ def test_status_matching_cache_ignores_repo_extras(installed, isolated_plugin_ca
 @pytest.mark.parametrize("change", ["changed", "missing", "extra", "version"])
 def test_status_detects_content_drift_without_writing(installed, isolated_plugin_cache, change):
     common, target = installed
-    cache = seed_cache(isolated_plugin_cache, target, "1.0.0" if change == "version" else "2.0.0")
+    cache = seed_cache(isolated_plugin_cache, target, "1.0.0" if change == "version" else None)
     file = cache / "docs" / "shared-versioning-and-confirmation.md"
     if change == "changed":
         file.write_text("old")
