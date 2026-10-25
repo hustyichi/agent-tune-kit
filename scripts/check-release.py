@@ -52,9 +52,9 @@ SDIST_REQUIRED_PATHS = {
 }
 
 PYTHON_FILES = [
-    "src/agent_tune_kit/__init__.py",
-    "src/agent_tune_kit/cli/main.py",
-    "src/agent_tune_kit/installer.py",
+    "agent_tune_kit/__init__.py",
+    "agent_tune_kit/cli/main.py",
+    "agent_tune_kit/installer.py",
     "scripts/install_plugin.py",
     "scripts/validate_skill_pack.py",
     "scripts/check-release.py",
@@ -125,10 +125,10 @@ def read_project_identity() -> ProjectIdentity:
     if not isinstance(plugin_version, str) or not plugin_version:
         raise ReleaseCheckError(".codex-plugin/plugin.json is missing version")
 
-    init_text = (REPO_ROOT / "src" / PACKAGE_IMPORT / "__init__.py").read_text(encoding="utf-8")
+    init_text = (REPO_ROOT / PACKAGE_IMPORT / "__init__.py").read_text(encoding="utf-8")
     match = re.search(r'^__version__\s*=\s*["\']([^"\']+)["\']', init_text, re.MULTILINE)
     if not match:
-        raise ReleaseCheckError("src/agent_tune_kit/__init__.py is missing __version__")
+        raise ReleaseCheckError("agent_tune_kit/__init__.py is missing __version__")
     return ProjectIdentity(name=name, version=version, plugin_version=plugin_version, module_version=match.group(1))
 
 

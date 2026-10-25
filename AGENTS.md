@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-This repository packages Agent Tune Kit, a local Codex plugin distributed as a Python package. Core Python code lives in `src/agent_tune_kit/`, with the CLI entry point in `cli.py` and installer logic in `installer.py`. Plugin payload files are under `.codex-plugin/`, `skills/`, `templates/`, and `docs/`; keep these paths stable because `pyproject.toml` force-includes them in built wheels. Tests are in `tests/`, while release and validation helpers are in `scripts/`.
+This repository packages Agent Tune Kit, a local Codex plugin distributed as a Python package. Core Python code lives in `agent_tune_kit/`, with the CLI entry point in `cli/main.py` and installer logic in `installer.py`. Plugin payload files are under `.codex-plugin/`, `skills/`, `templates/`, and `docs/`; keep these paths stable because `pyproject.toml` force-includes them in built wheels. Tests are in `tests/`, while release and validation helpers are in `scripts/`.
 
 ## Build, Test, and Development Commands
 

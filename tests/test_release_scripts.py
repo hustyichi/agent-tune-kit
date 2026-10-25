@@ -201,7 +201,7 @@ class ReleaseScriptTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / ".codex-plugin").mkdir()
-            (root / "src" / "agent_tune_kit").mkdir(parents=True)
+            (root / "agent_tune_kit").mkdir(parents=True)
             (root / "tests").mkdir()
             (root / "scripts").mkdir()
 
@@ -222,7 +222,7 @@ class ReleaseScriptTests(unittest.TestCase):
                 encoding="utf-8",
             )
             (root / ".codex-plugin" / "plugin.json").write_text('"version": "0.3.8"\n', encoding="utf-8")
-            (root / "src" / "agent_tune_kit" / "__init__.py").write_text('__version__ = "0.3.8"\n', encoding="utf-8")
+            (root / "agent_tune_kit" / "__init__.py").write_text('__version__ = "0.3.8"\n', encoding="utf-8")
             (root / "tests" / "test_release_scripts.py").write_text(
                 'self.assertEqual(identity.version, "0.3.8")\nexample_version = "1.2.3"\n',
                 encoding="utf-8",
@@ -238,7 +238,7 @@ class ReleaseScriptTests(unittest.TestCase):
                     ".codex-plugin/plugin.json",
                     "pyproject.toml",
                     "scripts/validate_skill_pack.py",
-                    "src/agent_tune_kit/__init__.py",
+                    "agent_tune_kit/__init__.py",
                     "tests/test_install_plugin.py",
                     "tests/test_release_scripts.py",
                 ],
@@ -275,7 +275,7 @@ class ReleaseScriptTests(unittest.TestCase):
                 ".codex-plugin/plugin.json",
                 "pyproject.toml",
                 "scripts/validate_skill_pack.py",
-                "src/agent_tune_kit/__init__.py",
+                "agent_tune_kit/__init__.py",
                 "tests/test_install_plugin.py",
                 "tests/test_release_scripts.py",
                 "uv.lock",

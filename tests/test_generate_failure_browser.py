@@ -348,9 +348,7 @@ class GenerateFailureBrowserTests(unittest.TestCase):
             self.assertIn("report=skipped (Skipped by --no-report.)", result.stdout)
 
     def test_table_does_not_append_issue_column_to_failure_rows(self) -> None:
-        app_js = (ROOT / "src" / "agent_tune_kit" / "visualize" / "assets" / "failures" / "app.js").read_text(
-            encoding="utf-8"
-        )
+        app_js = (ROOT / "agent_tune_kit" / "visualize" / "assets" / "failures" / "app.js").read_text(encoding="utf-8")
 
         self.assertNotIn('headerRow.appendChild(el("th", { text: "问题" }));', app_js)
         self.assertNotIn('tr.appendChild(el("td", {}, buildRowBadges(row)));', app_js)
@@ -454,9 +452,7 @@ class GenerateFailureBrowserTests(unittest.TestCase):
         node = shutil.which("node")
         if not node:
             self.skipTest("node is not available for generated JavaScript syntax smoke")
-        app_js = (ROOT / "src" / "agent_tune_kit" / "visualize" / "assets" / "failures" / "app.js").read_text(
-            encoding="utf-8"
-        )
+        app_js = (ROOT / "agent_tune_kit" / "visualize" / "assets" / "failures" / "app.js").read_text(encoding="utf-8")
         payload = json.dumps(
             {
                 "roles": {},
@@ -492,9 +488,7 @@ class GenerateFailureBrowserTests(unittest.TestCase):
         node = shutil.which("node")
         if not node:
             self.skipTest("node is not available for generated JavaScript syntax smoke")
-        app_js = (ROOT / "src" / "agent_tune_kit" / "visualize" / "assets" / "failures" / "app.js").read_text(
-            encoding="utf-8"
-        )
+        app_js = (ROOT / "agent_tune_kit" / "visualize" / "assets" / "failures" / "app.js").read_text(encoding="utf-8")
         payload = json.dumps(
             {
                 "roles": {},
@@ -529,9 +523,7 @@ class GenerateFailureBrowserTests(unittest.TestCase):
         node = shutil.which("node")
         if not node:
             self.skipTest("node is not available for generated JavaScript syntax smoke")
-        app_js = (ROOT / "src" / "agent_tune_kit" / "visualize" / "assets" / "failures" / "app.js").read_text(
-            encoding="utf-8"
-        )
+        app_js = (ROOT / "agent_tune_kit" / "visualize" / "assets" / "failures" / "app.js").read_text(encoding="utf-8")
         payload = json.dumps(
             {
                 "roles": {},

@@ -25,15 +25,15 @@ ATK 在每轮评测中保存可核验的运行条件、实际输入输出、应�
 
 ## 2 当前基础与缺口
 
-当前模块化方案已经把固定能力放入 `src/agent_tune_kit/`。本方案以模块化后的实现为设计依据，不把已有改造的测试记录当作轨迹能力已通过验收。
+当前模块化方案已经把固定能力放入 `agent_tune_kit/`。本方案以模块化后的实现为设计依据，不把已有改造的测试记录当作轨迹能力已通过验收。
 
 | 当前入口 | 已有能力 | 本次需要补充的能力 |
 | --- | --- | --- |
-| [runtime.py](../src/agent_tune_kit/execution/runtime.py) | 选择项目解释器、加载安装包执行代码、执行旧 runner、传播退出状态 | 明确启动／中断证据及采集结束状态 |
-| [runner.py](../src/agent_tune_kit/execution/runner.py) | 按行同步／异步调用、并发、失败重跑、增量 CSV | 执行单位、输入输出现场、调用上下文与收尾 |
-| [logs.py](../src/agent_tune_kit/execution/logs.py) | 标准日志的全局与行级采集 | 原日志配置保护、结构化字段、Loguru、可靠归属和采集错误报告 |
-| [versions.py](../src/agent_tune_kit/results/versions.py) | 依据当前 CSV 存在性创建／复用版本 | 已有现场保护、并发分配及运行占用 |
-| [judgments.py](../src/agent_tune_kit/results/judgments.py) | CSV 哈希绑定、判定有效性和失败表投影 | 使用轨迹时绑定对应证据，并保留引用字段 |
+| [runtime.py](../agent_tune_kit/execution/runtime.py) | 选择项目解释器、加载安装包执行代码、执行旧 runner、传播退出状态 | 明确启动／中断证据及采集结束状态 |
+| [runner.py](../agent_tune_kit/execution/runner.py) | 按行同步／异步调用、并发、失败重跑、增量 CSV | 执行单位、输入输出现场、调用上下文与收尾 |
+| [logs.py](../agent_tune_kit/execution/logs.py) | 标准日志的全局与行级采集 | 原日志配置保护、结构化字段、Loguru、可靠归属和采集错误报告 |
+| [versions.py](../agent_tune_kit/results/versions.py) | 依据当前 CSV 存在性创建／复用版本 | 已有现场保护、并发分配及运行占用 |
+| [judgments.py](../agent_tune_kit/results/judgments.py) | CSV 哈希绑定、判定有效性和失败表投影 | 使用轨迹时绑定对应证据，并保留引用字段 |
 | [适配模板](../templates/.atk/runner/eval_runner.py.md) | 输入构造、Agent 调用、日志设置 | 采集声明、可选执行分组及观察接口接入 |
 
 当前日志模块会临时调整所接入 logger 的级别，且主要保存格式化文本；行上下文不能自动证明线程内部、延迟队列或后台工作的归属。结果文件哈希也不能保护独立日志和附件的内容。
@@ -430,5 +430,5 @@ atk results evidence --version v3 --artifact-id <id> --offset 0 --limit 8000 --j
 - [CLI 与 Skill 模块化方案](cli-skill-modularization-plan.md)：固定能力、项目解释器、职责分工、兼容和安装模型。
 - [共享版本与确认规则](shared-versioning-and-confirmation.md)：当前路径、版本、判定与历史读取的权威契约，实施时需同步更新受影响部分。
 - [本地调优上下文](local-context.md)：长期标准与运行事实分开保存。
-- [当前执行入口](../src/agent_tune_kit/execution/runner.py)、[日志实现](../src/agent_tune_kit/execution/logs.py)、[结果判定](../src/agent_tune_kit/results/judgments.py)：当前能力与联动位置。
+- [当前执行入口](../agent_tune_kit/execution/runner.py)、[日志实现](../agent_tune_kit/execution/logs.py)、[结果判定](../agent_tune_kit/results/judgments.py)：当前能力与联动位置。
 - Python 与 Loguru 官方文档链接位于相关设计段落，支持所用日志和上下文机制；执行身份、存储布局、CLI 和分阶段方案是针对 ATK 的设计选择。

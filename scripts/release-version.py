@@ -20,7 +20,7 @@ VERSION_FILES = [
     ".codex-plugin/plugin.json",
     "pyproject.toml",
     "scripts/validate_skill_pack.py",
-    "src/agent_tune_kit/__init__.py",
+    "agent_tune_kit/__init__.py",
     "tests/test_install_plugin.py",
     "tests/test_release_scripts.py",
 ]
@@ -30,7 +30,7 @@ VERSION_PATTERNS = {
     ".codex-plugin/plugin.json": re.compile(r'("version":\s*")(?<!\d)\d+\.\d+\.\d+(?!\d)(")'),
     "pyproject.toml": re.compile(r'(version\s*=\s*")(?<!\d)\d+\.\d+\.\d+(?!\d)(")'),
     "scripts/validate_skill_pack.py": re.compile(r'(\'"version":\s*")(?<!\d)\d+\.\d+\.\d+(?!\d)("\')'),
-    "src/agent_tune_kit/__init__.py": re.compile(r'(__version__\s*=\s*")(?<!\d)\d+\.\d+\.\d+(?!\d)(")'),
+    "agent_tune_kit/__init__.py": re.compile(r'(__version__\s*=\s*")(?<!\d)\d+\.\d+\.\d+(?!\d)(")'),
     "tests/test_install_plugin.py": re.compile(r'(agent-tune-kit )(?<!\d)\d+\.\d+\.\d+(?!\d)(")'),
     "tests/test_release_scripts.py": re.compile(
         r'^(\s*self\.assertEqual\(identity\.version,\s*")(?<!\d)\d+\.\d+\.\d+(?!\d)("\))',

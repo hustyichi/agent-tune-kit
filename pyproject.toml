@@ -28,7 +28,7 @@ atk = "agent_tune_kit.cli:main"
 
 [tool.hatch.build]
 include = [
-  "src/agent_tune_kit/**",
+  "agent_tune_kit/**",
   ".codex-plugin/**",
   "skills/**",
   "templates/**",
@@ -39,7 +39,7 @@ include = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/agent_tune_kit"]
+packages = ["agent_tune_kit"]
 [tool.hatch.build.targets.wheel.force-include]
 ".codex-plugin" = "agent_tune_kit/plugin_payload/agent-tune-kit/.codex-plugin"
 "skills" = "agent_tune_kit/plugin_payload/agent-tune-kit/skills"
@@ -51,7 +51,7 @@ packages = ["src/agent_tune_kit"]
 [tool.hatch.build.targets.sdist]
 include = [
   "/pyproject.toml",
-  "/src/agent_tune_kit/**",
+  "/agent_tune_kit/**",
   "/.codex-plugin/**",
   "/skills/**",
   "/templates/**",

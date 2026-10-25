@@ -222,6 +222,6 @@ causal improvement claim without compatible reassessment. Do not modify the Agen
 
 ## Shared CLI implementation
 
-Fixed behavior lives under `src/agent_tune_kit/`: dataset operations, result versions and judgments, execution, and visualization. Skills require the persistent CLI, installed with `uv tool install agent-tune-kit` then `atk install`. They call `atk dataset`, `atk eval`, `atk results` and `atk visualize`; old Skill script paths are compatibility entrypoints only. Project runner/rule templates contain adaptation logic rather than copies of the engine.
+Fixed behavior lives under `agent_tune_kit/`: dataset operations, result versions and judgments, execution, and visualization. Skills require the persistent CLI, installed with `uv tool install agent-tune-kit` then `atk install`. They call `atk dataset`, `atk eval`, `atk results` and `atk visualize`; old Skill script paths are compatibility entrypoints only. Project runner/rule templates contain adaptation logic rather than copies of the engine.
 
 Use `atk results inspect --json` to record the result path/hash before diagnosis; submit complete judgments with `atk results apply-judgments --judgments-path <csv> --source-results <eval_results.csv>`. Source changes invalidate the submission. `atk results compare --ids <id...>` calculates a matched target group's state; standards and comparability remain Skill judgments. Runtime and on-disk artifact semantics above still apply.

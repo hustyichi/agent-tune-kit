@@ -124,7 +124,7 @@ def validate_manifest(path: Path) -> dict[str, Any]:
 
 
 def repo_dev_root() -> Path | None:
-    candidate = Path(__file__).resolve().parents[2]
+    candidate = Path(__file__).resolve().parents[1]
     try:
         if (candidate / ".codex-plugin" / "plugin.json").is_file() and (candidate / "skills").is_dir():
             return candidate

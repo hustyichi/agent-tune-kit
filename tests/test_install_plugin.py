@@ -14,13 +14,12 @@ from pathlib import Path
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
-SRC = ROOT / "src"
 SCRIPT = ROOT / "scripts" / "install_plugin.py"
 
 
 def run_cli(*args: str, timeout: float = 10, cwd: Path = ROOT) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
-    env["PYTHONPATH"] = str(SRC) + os.pathsep + env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = str(ROOT) + os.pathsep + env.get("PYTHONPATH", "")
     if "CODEX_PERSONAL_PLUGIN_CACHE_ROOT" not in env and "CODEX_HOME" not in env and "--plugin-store" in args:
         store = Path(args[args.index("--plugin-store") + 1])
         env["CODEX_PERSONAL_PLUGIN_CACHE_ROOT"] = str(store.parent / "cache" / "personal")
@@ -255,7 +254,7 @@ class InstallPluginCliTests(unittest.TestCase):
             self.assertTrue((base / "plugins" / "agent-tune-kit" / ".codex-plugin" / "plugin.json").exists())
 
     def test_interactive_prompt_can_authorize_conflict(self) -> None:
-        sys.path.insert(0, str(SRC))
+        sys.path.insert(0, str(ROOT))
         from agent_tune_kit.installer import authorize_conflicts
 
         with (

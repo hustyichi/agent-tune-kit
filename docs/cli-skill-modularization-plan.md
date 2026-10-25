@@ -32,7 +32,7 @@ atk install
 
 核心目标：
 
-1. 固定能力只有一份实现，统一放在 `src/agent_tune_kit/`。
+1. 固定能力只有一份实现，统一放在 `agent_tune_kit/`。
 2. Skill 通过稳定的 CLI 操作调用这些能力，继续负责理解、判断、编排和解释。
 3. 项目只保留确实需要定制的 Agent 适配代码、判定规则和现有工作产物。
 4. 复用现有实现及测试，减少复制、行为漂移和模型重复生成固定代码。
@@ -139,7 +139,7 @@ flowchart TD
 以下是目标结构，随能力迁移逐步形成，不提前创建空模块或扩展框架。
 
 ```text
-src/agent_tune_kit/
+agent_tune_kit/
 ├── __init__.py
 ├── errors.py
 ├── workspace.py
@@ -557,8 +557,8 @@ python scripts/check-release.py
 
 - [项目说明与当前流程](../README.md)
 - [打包配置](../pyproject.toml)
-- [当前 CLI 入口](../src/agent_tune_kit/cli/main.py)
-- [当前安装实现](../src/agent_tune_kit/installer.py)
+- [当前 CLI 入口](../agent_tune_kit/cli/main.py)
+- [当前安装实现](../agent_tune_kit/installer.py)
 - [共享版本、判定与确认规则](shared-versioning-and-confirmation.md)
 - [本地持久调优上下文](local-context.md)
 - [安装与 Skill 包使用说明](skill-template-pack-usage.md)

@@ -129,7 +129,7 @@ def test_browser_normal_filter_excludes_unknown(tmp_path):
     runtime = shutil.which("bun") or shutil.which("node")
     if not runtime:
         pytest.skip("JavaScript runtime unavailable")
-    js = (ROOT / "src/agent_tune_kit/visualize/assets/failures/app.js").read_text()
+    js = (ROOT / "agent_tune_kit/visualize/assets/failures/app.js").read_text()
     payload = {
         "fieldnames": ["is_abnormal"],
         "rows": [{"values": {"is_abnormal": value}} for value in ["false", "unknown", "true"]],
@@ -154,7 +154,7 @@ def test_browser_unknown_count_and_detail_never_claim_pass():
     runtime = shutil.which("bun") or shutil.which("node")
     if not runtime:
         pytest.skip("JavaScript runtime unavailable")
-    js = (ROOT / "src/agent_tune_kit/visualize/assets/failures/app.js").read_text()
+    js = (ROOT / "agent_tune_kit/visualize/assets/failures/app.js").read_text()
     payload = {
         "fieldnames": ["is_abnormal"],
         "rows": [{"values": {"is_abnormal": value}} for value in ["false", "unknown", "true"]],
