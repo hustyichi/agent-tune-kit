@@ -1,6 +1,7 @@
 # ATK 执行现场与调用轨迹增强方案
 
 - 日期：2026-10-25，Asia/Shanghai。
+- 最近核验：2026-10-26，补充当前源码、下游现场与行业一手资料；未实施采集改造。
 - 状态：范围已确认，设计待审阅，尚未实现本方案。
 - 基础：[CLI 与 Skill 模块化方案](cli-skill-modularization-plan.md)、模块化提交 `afd9b68` 及本次读取的共享执行、日志、结果和适配实现。
 - 本次交付：设计、兼容策略、分阶段实施与验收要求；不修改执行代码、不迁移业务项目、不运行真实模型。
@@ -38,7 +39,17 @@ ATK 在每轮评测中保存可核验的运行条件、实际输入输出、应�
 
 当前日志模块会临时调整所接入 logger 的级别，且主要保存格式化文本；行上下文不能自动证明线程内部、延迟队列或后台工作的归属。结果文件哈希也不能保护独立日志和附件的内容。
 
-前期检查手术项目 `.atk/results/v1` 时，10 条结果实际来自 5 次 Case 执行，同一 Case 的行日志成对重复；详细模型和检索证据位于业务 audit 与 checkpoint。该观察用于说明执行单位和产物关联需求，不代表业务正确率、最新运行状态或通用接入已经验收。
+2026-10-26 核对的 ATK 源码为 `2.1.1`（`241bc48`），PATH 中的 `atk --version` 返回 `2.1.0`。两者不能混为同一执行实现，历史结果也没有冻结足以证明当时引擎版本的材料。本次未安装或升级 CLI。
+
+手术项目当前仅有 `.atk/results/v1`，执行记录时间为 2026-10-25 20:43:08–20:48:16（Asia/Shanghai）。本次只读取结构、检查引用与哈希，不复制业务正文，也不重新验收业务正确率：
+
+- 10 条结果实际来自 5 次 Case 执行，10 个行日志按 Case 两两相同，每份仅 4–6 行；应用日志共 24 行。执行分组和日志复制见项目 `.atk/runner/eval_runner.py` 的 `run_case`、`capture_case_python_logs`。
+- 已有 8 条 LLM audit、6 条 retrieval audit，以及输入工作簿、阶段 checkpoint、结果和项目 manifest。模型审计保留请求、原始与解析后响应、错误及可见的重试信息；记录数不能解释为全部物理网络尝试数。
+- `agent_output` 所引用的 preflight、result、audit 文件均存在；当前 dataset 哈希与应用日志中记录一致，判定表绑定的结果哈希也一致。这证明当前可读文件一致，不证明运行期间未变或采集无遗漏。
+- 项目运行日志有意排除提示词和响应正文（项目 `backend/README.md` 的日志约定）；成功模型调用使用 DEBUG，而 runner 以 INFO 接入。详细内容应从受控 audit 获取，不能以提高运行日志等级替代审计接入。
+- 当前缺少 ATK 通用运行清单、实际执行与样本的显式映射、源码／runner／环境／有效配置／判定标准的冻结，以及可查询的采集覆盖与缺失状态。已有资产哈希不能替代可取得的资产内容。
+
+因此当前优先事项是保全、索引并校验已有证据，再补确实缺失的观察点。该项目使用完整旧 runner；升级 ATK 核心不会自动迁移它，也不能把其业务审计能力当作 ATK 已提供的通用能力。
 
 ## 3 设计原则与兼容边界
 
@@ -432,3 +443,84 @@ atk results evidence --version v3 --artifact-id <id> --offset 0 --limit 8000 --j
 - [本地调优上下文](local-context.md)：长期标准与运行事实分开保存。
 - [当前执行入口](../agent_tune_kit/execution/runner.py)、[日志实现](../agent_tune_kit/execution/logs.py)、[结果判定](../agent_tune_kit/results/judgments.py)：当前能力与联动位置。
 - Python 与 Loguru 官方文档链接位于相关设计段落，支持所用日志和上下文机制；执行身份、存储布局、CLI 和分阶段方案是针对 ATK 的设计选择。
+
+## 16 行业实践核验（2026-10-26）
+
+本节记录本次讨论的一手资料核验与设计推论，不新增已确认承诺，也不表示相关能力已经实现。
+核验日期为 2026-10-26，Asia/Shanghai；官方文档的当前状态不能代替 ATK 的实现与验收证据。
+Context7 的 Python、Loguru 查询因月额度耗尽未返回资料，本次改用对应官方文档核对。
+
+### 16.1 日志接入应保留项目原出口
+
+**一手事实：** Python 标准日志支持增加 Handler；源 logger 的有效级别会过滤消息，
+`propagate=False` 会停止向祖先传播，同时在多个祖先挂 Handler 可能产生重复记录。
+因此，挂在 root 的采集器只能覆盖实际传播到它的记录。
+来源：[Python logging](https://docs.python.org/3.13/library/logging.html#logging.Logger.propagate)。
+
+**对 ATK 的推论：** 用附加 Handler 接入已有日志是合理的最小接口，但不能据此宣称全覆盖。
+接入检查应展示声明来源、有效级别、传播路径及桥接关系；缺失来源作为证据缺口报告。
+项目显式调整评测日志级别，与 ATK 静默改变全局配置，需要在契约中区别处理。
+
+### 16.2 Loguru 上下文和收尾有明确条件
+
+**一手事实：** Loguru 的 `add()` 增加 sink，`contextualize()` 基于 `contextvars` 保存上下文；
+`complete()` 等待队列消息，并提供 awaitable 完成当前事件循环内的相关异步 sink。
+`diagnose=True` 会展示异常中的变量值，官方建议生产环境关闭以避免泄漏。
+来源：[Loguru logger API](https://loguru.readthedocs.io/en/stable/api/logger.html)。
+
+**对 ATK 的推论：** 保存允许的结构化 record，按自身 sink ID 清理，并核验队列排空结果。
+事件身份应在产生时绑定；日志队列排空不能证明所有项目后台任务已经结束。
+标准日志 Cookbook 的上下文方案也支持线程与异步请求隔离，但任务传播仍需明确接入。
+来源：[Python Logging Cookbook](https://docs.python.org/3/howto/logging-cookbook.html#use-of-contextvars)。
+
+### 16.3 可映射 OTel 语义，不依赖其默认导出保证完整性
+
+**一手事实：** OTel 日志模型包含发生时间、观察时间、TraceId、SpanId、结构化正文和来源信息。
+这些字段用于关联日志和调用，不要求先将结构化记录压平为文本。
+来源：[OTel Logs Data Model](https://opentelemetry.io/docs/specs/otel/logs/data-model/)。
+
+标准 Simple／Batch SpanProcessor 导出的是已经结束的 span；常规 exporter 不是实时事件日志。
+SDK 允许按上限丢弃事件与链接，规范默认事件数上限为 128；批处理队列满也会丢 span。
+`ForceFlush` 可以失败或超时，成功返回不能恢复之前已经丢弃的数据。
+来源：[OTel Tracing SDK](https://opentelemetry.io/docs/specs/otel/trace/sdk/)。
+Collector 的内存队列、重试超时和进程故障也存在丢失窗口；持久队列只能降低对应风险。
+来源：[OTel Collector Resiliency](https://opentelemetry.io/docs/collector/resiliency/)。
+
+**对 ATK 的推论：** 保留 OTel 可映射的身份和父子关系，完整正文与增量事实先按本地证据契约保存。
+后续可以导出观测视图；单纯安装一个文件 exporter，不能满足中断现场和全量事件留存要求。
+接入已有 OTel 时，应记录采样、限制和导出状态；不能用“有 trace”代替完整性校验。
+
+### 16.4 Run、Trace 与版本快照分别承担不同责任
+
+**一手事实：** MLflow Run 保存参数、指标、时间等元信息及产物；Trace 展示调用树、输入输出、
+异常等执行信息，且可以关联所属 Run 和加载的 Prompt 版本。
+来源：[MLflow Tracking](https://mlflow.org/docs/latest/ml/tracking/)、
+[MLflow View Traces](https://mlflow.org/docs/latest/genai/tracing/observe-with-traces/ui)。
+其 Git 应用版本能力会关联 trace 与代码版本，并捕获未提交 diff；该能力被官方标为实验性。
+来源：[MLflow Git Application Versions](https://mlflow.org/docs/latest/genai/version-tracking/track-application-versions-with-mlflow/)。
+LangSmith 对数据集增删改建立版本，历史版本只读，评测可以指定使用的版本。
+来源：[LangSmith Manage Datasets](https://docs.langchain.com/langsmith/manage-datasets)。
+
+**对 ATK 的推论：** 轮次条件、单次执行轨迹和冻结正文应通过引用关联，而不是混成一份长日志。
+Git commit 只是版本证据的一部分；未提交代码、实际 Prompt、动态配置和外部资产需要另行冻结或声明缺口。
+上述产品能力支持版本关联的设计方向，不证明它们自动保存了任意应用的全部现场。
+
+### 16.5 GenAI 规范需固定映射版本，正文按声明留存
+
+**一手事实：** OTel GenAI 语义规范现位于独立仓库，仍标记为 Development。
+其逻辑操作 span 包含自动重试；请求与响应正文可能敏感且较大，规范建议显式启用采集，
+也允许正文独立存储、在 span 上记录引用。
+来源：[GenAI 规范状态](https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/README.md)、
+[GenAI Spans](https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-spans.md)。
+
+**对 ATK 的推论：** ATK 证据 schema 与外部语义映射分别版本化，不将当前字段名当成永久契约。
+逐次 attempt 可作为补充子 span，逻辑请求数量与尝试数量分开统计。
+已允许留存的正文保存完整文件；预览、摘要和外部导出可以有界，但不能覆盖原始证据。
+
+### 16.6 本次核验支持的取舍
+
+本次建议继续以本地证据包为核心，先复用 logging、Loguru 与已有 audit/checkpoint，
+在公共模型和工具调用位置补充必要观察；暂不引入远程观测平台作为强制依赖。
+LangSmith 已提供标准 OTel 接入，可作为后续互操作路径的实例，而非首版必须部署的服务。
+来源：[LangSmith OpenTelemetry 接入](https://docs.langchain.com/langsmith/trace-with-opentelemetry)。
+是否采用某个 SDK 或增加导出模块，应由实际接入实验决定；本次未做性能、故障恢复或业务效果验收。
