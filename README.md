@@ -176,7 +176,7 @@ ATK 可选读取本地私有的 `.atk/context.md`，用于保存用户沟通后�
 ## 能力评估
 
 - [Ground truth 与评分方案支持评估（2026-10-25）](docs/ground-truth-and-grading-assessment-2026-10-25.md)：基于当前源码与 44 项相关测试，梳理数据准备、人工校准和判定支持，区分小规模调优可用性与可信评分体系的缺口；未重新验收业务调优效果。
-- [执行项现场与调用轨迹改造实现方案（2026-10-26）](docs/execution-evidence-and-tracing-plan.md)：明确每项独立现场、V2 适配契约、持久格式及五阶段工作包，覆盖日志与调用接入、有效判定、历史兼容和安装验收；包含下游现场与行业依据，尚未实现。
+- [执行项现场与调用轨迹改造实现方案（2026-10-26）](docs/execution-evidence-and-tracing-plan.md)：明确每项独立现场、V2 托管采集及外部 runner 本地证据导入，结合 Magic 双 Case 实践补齐来源身份、文件变更与验收；首版不做封存后补采，五阶段实现尚未开始。
 
 兼容一次性安装命令 `uvx --from agent-tune-kit atk install`；日常使用 Skill 需要 PATH 中持续可用的 `atk` 命令。
 
