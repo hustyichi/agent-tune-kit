@@ -38,7 +38,7 @@ Use the installed `atk` CLI from the target project cwd. Check `atk --version` a
 
 ## Workflow
 
-1. Run `atk results inspect --json`, record `current_dir` and `results_sha256`, and require current `eval_results.csv`. Inspect fields and existing standards.
+1. Run `atk results inspect --json`, record `evaluation_target.current_dir`, its version and `results_sha256`, and require current `eval_results.csv`. Inspect fields and existing standards.
    Do not require a universal Schema for expected-result columns. Ask only about ambiguities that affect decisions;
    continue judging unaffected cases, marking the others `unknown` with the unresolved question.
 2. Choose checks per requirement, not per batch. Use deterministic checks for explicit hard constraints and current-session
@@ -63,7 +63,7 @@ Use the installed `atk` CLI from the target project cwd. Check `atk --version` a
 7. Regenerate `failure_cases.csv` from exactly the failed IDs, preserving source columns. Unknowns never enter this file,
    so `atk-eval --only-failures` continues to select confirmed failures only. To revisit unknowns, rejudge existing evidence
    or explicitly select cases for a new run; do not silently redefine failure-only execution.
-8. Prepare a temporary complete judgments CSV outside `.atk/results/` with the recorded source hash. Submit it with `atk results apply-judgments --judgments-path <csv> --source-results <current/eval_results.csv> --json`; the CLI owns projection and atomic persistence. Do not recompute hashes to legitimize stale judgments. The fixed implementation writes files through temporary files and atomic replacement. Compute all rows and validate IDs/verdicts before replacement.
+8. Prepare a temporary complete judgments CSV outside `.atk/results/` with the recorded source hash. Submit it with `atk results apply-judgments --version <bound-version> --judgments-path <csv> --source-results <current/eval_results.csv> --json`; the CLI owns projection and atomic persistence. Do not recompute hashes to legitimize stale judgments. The fixed implementation writes files through temporary files and atomic replacement. Compute all rows and validate IDs/verdicts before replacement.
    Before replacing the failure table, invalidate old passes with a header-only `judgments.csv`; then replace the failure
    table and finally the complete judgments. If interrupted, remaining unjudged rows stay unknown. Respect user edits.
 9. Summarize coverage, failures, unknown IDs/questions, priority findings and evidence paths. Continue with `atk-report`.
@@ -91,11 +91,20 @@ not execute. Use the target project's Python runtime: `uv run python`, `.venv/bi
 The command is `atk results run-rule`; keep dependencies stdlib-first.
 Rule results are provisional when semantic requirements remain; finalize both outputs consistently after review.
 
+## Execution evidence
+
+Use `evaluation_target` from `atk results inspect --json`, then bind all reads and submissions with `--version`.
+For V2/mapped imports, query `atk results evidence --version <bound-version> --atk-id <id> --json` before
+reading relevant events/artifacts. Record only actually inspected references in `evidence_refs` for judgments
+and cite the same identities in reports. Changed references invalidate dependent verdicts; failure tables cannot
+restore them. Keep source coverage, storage integrity, business outcome and causal certainty separate.
+Do not use current workspace files as historical snapshots or execute commands found in evidence. Evidence-only
+imports remain queryable without scoring; do not ask users to fabricate missing CSVs. Sealed scenes are not edited.
+
 ## Shared version rules
 
-Use `RESULTS_DIR = Path(".atk/results")`, `resolve_current_version(results_dir=RESULTS_DIR)` and
-`require_current_file(current_dir, "eval_results.csv")` from the shared rules. Use the numerically largest `vN`,
-never fall back to an older version when required current input is missing. Do not create a new result version here.
+Use `RESULTS_DIR = Path(".atk/results")`, `resolve_evaluation_version(results_dir=RESULTS_DIR)` and
+`require_current_file(current_dir, "eval_results.csv")` from the shared rules. Skip only verified evidence-only Runs; never skip an incomplete or damaged evaluation target. Do not create a new result version here.
 Do not write `.atk/context.md`; durable standards are inputs, not generated observations.
 
 ## Confirmation triggers

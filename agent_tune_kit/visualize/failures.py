@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import csv
 import html
+import json
 import re
 from importlib import resources
 from pathlib import Path
@@ -18,7 +19,7 @@ from urllib.parse import unquote, urlsplit
 
 from agent_tune_kit.errors import UserActionRequired
 from agent_tune_kit.results.assessment import has_assessments
-from agent_tune_kit.results.versions import require_current_file, resolve_current_version
+from agent_tune_kit.results.versions import require_current_file, resolve_evaluation_version, run_kind
 from agent_tune_kit.utils.files import write_text_atomic as write_atomic
 
 from .fields import detect_atk_id_field, normalize_name
@@ -256,6 +257,12 @@ def safe_log_href(value: str, current_dir: Path) -> str:
         return ""
     if parts[0] == ".atk":
         return ""
+    from agent_tune_kit.results.evidence import safe_path
+
+    try:
+        safe_path(current_dir, Path(*parts).as_posix())
+    except UserActionRequired:
+        return ""
     return Path(*parts).as_posix()
 
 
@@ -360,10 +367,11 @@ def render_html(payload: dict[str, Any]) -> str:
 
 
 def generate_failures(
-    results_dir=RESULTS_DIR, *, overwrite=False, no_report=False, no_history=False, open_browser=True
+    results_dir=RESULTS_DIR, *, overwrite=False, no_report=False, no_history=False, open_browser=True, version=None
 ):
     results_dir = Path(results_dir)
-    current_dir = resolve_current_version(results_dir)
+    current_dir = resolve_evaluation_version(results_dir, version)
+    new_format = run_kind(current_dir) != "legacy"
     failure_csv = require_current_file(current_dir, FAILURE_FILENAME)
     output_path = current_dir / OUTPUT_FILENAME
     if output_path.exists() and not overwrite:
@@ -372,7 +380,7 @@ def generate_failures(
         )
 
     failure_fieldnames, failure_rows, failure_warnings = parse_failure_csv(failure_csv)
-    strict_verdicts = has_assessments(current_dir)
+    strict_verdicts = new_format or has_assessments(current_dir)
     warnings = list(failure_warnings)
 
     eval_csv = current_dir / EVAL_FILENAME
@@ -443,6 +451,30 @@ def generate_failures(
             mrow[abnormal_field] = "unknown" if strict_verdicts else "true"
             rows.append(mrow)
 
+    if new_format:
+        from agent_tune_kit.results.evidence import inspect_execution, locate_execution, read_events
+
+        fieldnames.append("execution_evidence")
+        for row in rows:
+            try:
+                directory = locate_execution(current_dir, atk_id=row.get("atk_id"))
+                item = inspect_execution(directory)
+                preview = read_events(directory, limit=20)
+                row["execution_evidence"] = json.dumps(
+                    {
+                        "execution_id": item["execution_id"],
+                        "status": item["status"],
+                        "sealed": item["sealed"],
+                        "coverage": item["coverage"],
+                        "evidence_id": item.get("evidence_id"),
+                        "events_preview": json.dumps(preview["events"], ensure_ascii=False)[:8000],
+                        "read_more": f"atk results evidence --version {current_dir.name} --execution-id {item['execution_id']}",
+                    },
+                    ensure_ascii=False,
+                )
+            except UserActionRequired as exc:
+                row["execution_evidence"] = json.dumps({"unavailable": str(exc)})
+                warnings.append("Execution evidence unavailable; dependent judgments are unknown.")
     roles = detect_roles(fieldnames)
     facets = detect_facets(fieldnames, rows, roles)
     report = read_report_context(current_dir / REPORT_FILENAME, skip=no_report)

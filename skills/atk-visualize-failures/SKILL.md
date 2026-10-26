@@ -16,7 +16,7 @@ Use the installed `atk` CLI from the target project cwd. Check `atk --version` a
 
 ## Inputs
 
-Current `.atk/results/vN/failure_cases.csv`; optional same-version `report.md` and bounded, read-only historical metadata. Use the numerically largest vN without falling back to older required files. Follow `docs/shared-versioning-and-confirmation.md`.
+Current `.atk/results/vN/failure_cases.csv`; optional same-version `report.md` and bounded, read-only historical metadata. Use the evaluation_target from inspect, skipping only verified evidence-only Runs and never an incomplete evaluation. Follow `docs/shared-versioning-and-confirmation.md`.
 
 ## Outputs
 
@@ -29,7 +29,7 @@ Only `.atk/results/vN/failure_cases.html`, a self-contained offline HTML file. R
 3. Invoke the fixed CLI from the target project:
 
 ```sh
-atk visualize failures [--results-dir .atk/results] [--overwrite] [--no-report] [--no-history] [--open|--no-open]
+atk visualize failures [--results-dir .atk/results] [--version <bound-version>] [--overwrite] [--no-report] [--no-history] [--open|--no-open]
 ```
 
 4. Browser opening is the default. Use `--no-open` only when the user opts out or requests headless operation. An unsuccessful open is non-fatal; report the output path for manual opening.
@@ -47,6 +47,8 @@ Exit 0 means generation succeeded; 2 identifies an input/overwrite blocker; 1 in
 ## Shared version rules
 
 Read current failure_cases.csv only. Optional report context and bounded history are best-effort and non-blocking; missing optional data does not prevent rendering. `--no-report` skips report excerpts; `--no-history` skips historical metadata. Preserve explicit passed/failed/unknown semantics. Missing or stale judgments never imply a pass; legacy known failures remain reviewable. Safe same-version log links and nested JSON/code evidence remain available. Never modify the report or choose an older version to bypass a missing current failure table.
+
+New evidence rows include bounded execution previews, coverage and CLI references. An invalid evidence reference makes the dependent verdict unknown in the current page and history. Verify linked artifacts through the evidence reader; do not infer completeness from a log link.
 
 ## Handoff message
 

@@ -11,7 +11,8 @@ from agent_tune_kit.utils.files import read_text_bounded
 from agent_tune_kit.workspace import RESULTS_DIR
 
 from .assessment import archive_judgments, validate_assessment
-from .versions import require_current_file, resolve_current_version
+from .evidence import validate_references
+from .versions import require_current_file, resolve_evaluation_version
 
 JUDGMENT_FIELDS = ["atk_id", "verdict", "reason", "results_sha256"]
 VERDICTS = {"passed", "failed", "unknown"}
@@ -63,6 +64,7 @@ def read_judgments(version_dir, *, max_bytes=64 * 1024 * 1024):
                     and (row.get("reason") or "").strip()
                     and None not in row
                     and validate_assessment(by_id.get(aid, {}), row)
+                    and validate_references(version_dir, row.get("evidence_refs"))
                 )
                 else "unknown"
             )
@@ -73,8 +75,8 @@ def read_judgments(version_dir, *, max_bytes=64 * 1024 * 1024):
         return {}
 
 
-def apply_judgments(judgments_path, *, source_results=None, results_dir=RESULTS_DIR):
-    current = resolve_current_version(Path(results_dir))
+def apply_judgments(judgments_path, *, source_results=None, results_dir=RESULTS_DIR, version=None):
+    current = resolve_evaluation_version(Path(results_dir), version)
     result_path = require_current_file(current, "eval_results.csv")
     if source_results is not None and Path(source_results).resolve() != result_path.resolve():
         raise UserActionRequired("Source results no longer belong to the current version; recheck before judging.")
@@ -99,6 +101,8 @@ def apply_judgments(judgments_path, *, source_results=None, results_dir=RESULTS_
         for row in judgments
     ):
         raise UserActionRequired("Invalid or stale judgment; preserve the source hash and recheck the criteria.")
+    if any(not validate_references(current, row.get("evidence_refs")) for row in judgments):
+        raise UserActionRequired("Invalid or changed evidence references; nothing was written.")
     verdicts = {row["atk_id"]: row["verdict"] for row in judgments}
     by_id = {row["atk_id"]: row for row in rows}
     if any(not validate_assessment(by_id[row["atk_id"]], row) for row in judgments):
@@ -122,12 +126,13 @@ def apply_judgments(judgments_path, *, source_results=None, results_dir=RESULTS_
         if verdicts[row["atk_id"]] == "failed"
     ]
     if (
-        resolve_current_version(Path(results_dir)) != current
+        (version is None and resolve_evaluation_version(Path(results_dir)) != current)
         or hashlib.sha256(result_path.read_bytes()).hexdigest() != digest
+        or any(not validate_references(current, row.get("evidence_refs")) for row in judgments)
     ):
         raise UserActionRequired("Results changed during diagnosis; nothing was written.")
     # Invalidate old passes before replacing failures; interruption stays conservative.
-    stored_fields = list(JUDGMENT_FIELDS)
+    stored_fields = JUDGMENT_FIELDS + (["evidence_refs"] if "evidence_refs" in judgment_fields else [])
     if "assessment" in judgment_fields:
         stored_fields.append("assessment")
     archive_judgments(current / "judgments.csv")

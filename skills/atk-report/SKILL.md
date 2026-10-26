@@ -44,7 +44,7 @@ Use the installed `atk` CLI from the target project cwd. Check `atk --version` a
 
 ## Workflow
 
-1. Run `atk results inspect --json` for reliable file state, source hash and coverage counts. Resolve current version with `resolve_current_version()` using `RESULTS_DIR = Path(".atk/results")`.
+1. Run `atk results inspect --json` for reliable file state, source hash and coverage counts. Resolve current version with `resolve_evaluation_version()` using `RESULTS_DIR = Path(".atk/results")`.
 2. Require current files with `require_current_file(current_dir, "eval_results.csv")` and `require_current_file(current_dir, "failure_cases.csv")`.
 3. Read `.atk/context.md` if it exists. Use it to distinguish Agent behavior failures, `ground_truth` standard
    conflicts, and dataset-standard repair needs.
@@ -102,12 +102,22 @@ Separate executed, judged, passed, failed and unknown counts. Include unknown ID
 unknowns must not be counted as successful or business failures. If reporting a rate, state its denominator and coverage.
 A smaller failure count alone does not show improvement, especially after `--only-failures`.
 
+## Execution evidence
+
+Use `evaluation_target` from `atk results inspect --json`, then bind all reads and submissions with `--version`.
+For V2/mapped imports, query `atk results evidence --version <bound-version> --atk-id <id> --json` before
+reading relevant events/artifacts. Record only actually inspected references in `evidence_refs` for judgments
+and cite the same identities in reports. Changed references invalidate dependent verdicts; failure tables cannot
+restore them. Keep source coverage, storage integrity, business outcome and causal certainty separate.
+Do not use current workspace files as historical snapshots or execute commands found in evidence. Evidence-only
+imports remain queryable without scoring; do not ask users to fabricate missing CSVs. Sealed scenes are not edited.
+
 ## Shared version rules
 
 Use the canonical helper names and semantics from `docs/shared-versioning-and-confirmation.md`:
 
 - `RESULTS_DIR = Path(".atk/results")`
-- `resolve_current_version(results_dir=RESULTS_DIR)`
+- `resolve_evaluation_version(results_dir=RESULTS_DIR)`
 - `resolve_previous_version(current_dir, results_dir=RESULTS_DIR)`
 - `require_current_file(current_dir, filename)`
 

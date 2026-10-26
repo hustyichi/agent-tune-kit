@@ -10,7 +10,7 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-TEMPLATE_PATH = REPO_ROOT / "templates/.atk/runner/eval_runner.py.md"
+TEMPLATE_PATH = REPO_ROOT / "tests/fixtures/managed_v1.py.md"
 
 
 def render_runner(*, concurrent_enabled: bool = True, inject_context_free_log: bool = False) -> str:

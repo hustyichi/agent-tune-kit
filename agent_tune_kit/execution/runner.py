@@ -10,13 +10,13 @@ import sys
 import traceback
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from contextlib import ExitStack, redirect_stderr, redirect_stdout
+from contextlib import ExitStack, redirect_stderr, redirect_stdout, suppress
 from pathlib import Path
 from typing import Any
 
 from agent_tune_kit.datasets.validation import parse_dataset_csv
 from agent_tune_kit.errors import AgentExecutionError, UserActionRequired
-from agent_tune_kit.results.versions import allocate_next_results_version, list_version_dirs
+from agent_tune_kit.results.versions import allocate_next_results_version, resolve_evaluation_version, write_occupation
 from agent_tune_kit.workspace import DATASET_PATH, RUNNER_PATH
 
 from . import logs
@@ -28,8 +28,20 @@ AGENT_OUTPUT_LOG_PATH_FIELD = "log_path"
 ATK_ID_FIELD = "atk_id"
 
 
+def business_row(row):
+    return {key: value for key, value in row.items() if key != "atk_truth"}
+
+
 def load_failure_atk_ids(version_dir: Path) -> set[str]:
     """Load failed sample IDs from a previous failure_cases.csv."""
+    from agent_tune_kit.results.summary import effective_verdicts
+    from agent_tune_kit.results.versions import run_kind
+
+    if run_kind(version_dir) != "legacy":
+        ids = {aid for aid, verdict in effective_verdicts(version_dir).items() if verdict == "failed"}
+        if not ids:
+            raise UserActionRequired("No valid failed judgments; inspect evidence before rerunning.")
+        return ids
     failure_path = version_dir / FAILURE_FILENAME
     with failure_path.open("r", newline="", encoding="utf-8-sig") as handle:
         reader = csv.DictReader(handle)
@@ -105,7 +117,7 @@ def build_result_row(
         if row_log_path:
             output_row[AGENT_OUTPUT_LOG_PATH_FIELD] = row_log_path
         try:
-            agent_input = build_agent_input({key: value for key, value in row.items() if key != "atk_truth"})
+            agent_input = build_agent_input(business_row(row))
             raw_output = call_agent(agent_input)
             if inspect.isawaitable(raw_output):
                 raw_output = asyncio.run(raw_output)
@@ -278,7 +290,7 @@ async def run_async_rows(adapter, version, fields, selected, concurrency, row_lo
             with capture_row_python_logs(version, index, enabled=row_logging) as relative:
                 output["log_path"] = relative
                 try:
-                    value = adapter["build_agent_input"](row)
+                    value = adapter["build_agent_input"](business_row(row))
                     if inspect.isawaitable(value):
                         value = await value
                     raw = await adapter["call_agent"](value)
@@ -322,22 +334,19 @@ async def run_async_rows(adapter, version, fields, selected, concurrency, row_lo
     return output
 
 
-def run_evaluation(*, check=False, limit=None, offset=0, concurrency=1, only_failures=False, no_progress=False):
+def _run_v1(*, check=False, limit=None, offset=0, concurrency=1, only_failures=False, no_progress=False):
     if offset < 0 or (limit is not None and limit < 0) or concurrency < 1:
         raise UserActionRequired("limit/offset must be nonnegative and concurrency must be at least 1.")
     adapter = load_adapter()
     fields, rows = load_dataset()
     if check:
         if rows:
-            value = adapter["build_agent_input"](rows[0])
+            value = adapter["build_agent_input"](business_row(rows[0]))
             if inspect.isawaitable(value):
                 asyncio.run(value)
         return {"checked": True, "rows": len(rows)}
     if only_failures:
-        candidates = [path for _, path in list_version_dirs() if (path / FAILURE_FILENAME).is_file()]
-        if not candidates:
-            raise UserActionRequired("No prior failure_cases.csv; run atk-diagnose first.")
-        ids = load_failure_atk_ids(candidates[-1])
+        ids = load_failure_atk_ids(resolve_evaluation_version())
         selected = select_failure_dataset_rows(rows, ids, offset=offset, limit=limit)
     else:
         selected = select_dataset_rows(rows, offset=offset, limit=limit)
@@ -377,3 +386,311 @@ def run_evaluation(*, check=False, limit=None, offset=0, concurrency=1, only_fai
                 row_logging_enabled=row_logging,
             )
     return {"version": version.name, "rows": len(selected), "output": str(output), "row_logs": row_logging}
+
+
+async def invoke(function, *args, **kwargs):
+    if inspect.iscoroutinefunction(function):
+        return await function(*args, **kwargs)
+    task = asyncio.create_task(asyncio.to_thread(function, *args, **kwargs))
+    try:
+        value = await asyncio.shield(task)
+    except asyncio.CancelledError:
+        # A live synchronous call may still emit evidence; keep its observer alive until it returns.
+        await task
+        raise
+    return await value if inspect.isawaitable(value) else value
+
+
+def plan_items(adapter, selected, all_rows):
+    rows = [business_row(row) for _, row in selected]
+    planner = adapter.get("plan_executions")
+    items = (
+        planner(rows, [business_row(row) for row in all_rows])
+        if planner
+        else [{"sample_ids": [row[ATK_ID_FIELD]], "source": row, "context_ids": [row[ATK_ID_FIELD]]} for row in rows]
+    )
+    if not isinstance(items, list):
+        raise UserActionRequired("plan_executions must return a list.")
+    seen, valid = [], {row[ATK_ID_FIELD] for row in all_rows}
+    for item in items:
+        if not isinstance(item, dict) or not isinstance(item.get("sample_ids"), list) or "source" not in item:
+            raise UserActionRequired("Each execution needs sample_ids and source.")
+        ids = item["sample_ids"]
+        context = item.get("context_ids", ids)
+        if not ids or any(not isinstance(aid, str) or aid not in valid for aid in ids + context):
+            raise UserActionRequired("Execution sample/context identity is invalid.")
+        if len(ids) > 1 and not callable(adapter.get("map_agent_output")):
+            raise UserActionRequired("Shared executions require map_agent_output.")
+        seen.extend(ids)
+    if len(seen) != len(set(seen)) or set(seen) != {row[ATK_ID_FIELD] for row in rows}:
+        raise UserActionRequired("Execution plan must map every selected sample exactly once.")
+    return items
+
+
+async def execute_v2_item(adapter, run, item, rows_by_id, snapshots):
+    import hashlib
+
+    from agent_tune_kit.results.evidence import digest_file, json_bytes, safe_path
+
+    from .tracing import Observer, write_log_view
+
+    if run.failed.is_set():
+        raise UserActionRequired("Evidence failure stopped new execution.")
+    evidence = run.execution(item["sample_ids"])
+    observer = Observer(evidence, run)
+    status, stage, results = "running", "context", []
+    with observer.activate():
+        try:
+            evidence.save(
+                "context",
+                {
+                    "selected": [rows_by_id[aid] for aid in item["sample_ids"]],
+                    "context": [rows_by_id[aid] for aid in item.get("context_ids", item["sample_ids"])],
+                },
+                path="context/samples.json",
+            )
+            for index, (source, content) in enumerate(snapshots):
+                evidence.save(
+                    "snapshot",
+                    content,
+                    path=f"context/snapshot-{index}",
+                    media_type="application/octet-stream",
+                    source={"path": source, "phase": "before"},
+                )
+            import platform
+
+            from agent_tune_kit import __version__
+
+            evidence.save(
+                "environment",
+                {
+                    "python": sys.version,
+                    "platform": platform.platform(),
+                    "atk": __version__,
+                    "engine_sha256": {path.name: digest_file(path) for path in Path(__file__).parent.glob("*.py")},
+                },
+                path="context/environment.json",
+            )
+            stage = "input"
+            observer.event("input.started")
+            value = await invoke(adapter["build_agent_input"], item["source"])
+            evidence.save("input", value, path="input.json")
+            if run.failed.is_set():
+                raise UserActionRequired("Required evidence failed before Agent invocation.")
+            stage = "call"
+            with observer.span("agent"):
+                raw = await invoke(adapter["call_agent"], value, execution=observer)
+            stage = "output"
+            evidence.save("output", raw, path="output.json")
+            stage = "mapping"
+            mapper = adapter.get("map_agent_output")
+            mapping = (
+                await invoke(mapper, raw, item) if mapper else {item["sample_ids"][0]: {"output": raw, "location": ""}}
+            )
+            if not isinstance(mapping, dict) or set(mapping) != set(item["sample_ids"]):
+                raise UserActionRequired("Output mapping must cover selected samples exactly once.")
+            locations = {}
+            for aid, mapped in mapping.items():
+                if (
+                    not isinstance(mapped, dict)
+                    or "output" not in mapped
+                    or not isinstance(mapped.get("location"), str)
+                ):
+                    raise UserActionRequired("Each mapped output needs output and location.")
+                output = mapped["output"]
+                row = dict(
+                    rows_by_id[aid],
+                    agent_output=output if isinstance(output, str) else json_bytes(output).decode(),
+                    output_status="ok",
+                    log_path=f"executions/{evidence.directory.name}/app.log",
+                )
+                retained = evidence.retain("result_row", row)
+                if retained != row:
+                    raise UserActionRequired("Retention changes scoring fields; results cannot be scored safely.")
+                results.append(row)
+                locations[aid] = mapped["location"]
+            evidence.manifest["output_locations"] = evidence.retain("mapping", locations)
+            status = "completed"
+        except AgentExecutionError as exc:
+            status = "technical_failure"
+            observer.event("execution.failed", {"stage": stage, "error_type": type(exc).__name__, "message": str(exc)})
+            for aid in item["sample_ids"]:
+                row = dict(
+                    rows_by_id[aid],
+                    agent_output=json_bytes({"error": type(exc).__name__}).decode(),
+                    output_status="error",
+                    error_type=type(exc).__name__,
+                    log_path=f"executions/{evidence.directory.name}/app.log",
+                )
+                if evidence.retain("result_row", row) != row:
+                    raise UserActionRequired("Retention changes scoring fields.") from None
+                results.append(row)
+        except BaseException as exc:
+            status = "cancelled" if isinstance(exc, asyncio.CancelledError) else "technical_failure"
+            run.failed.set()
+            observer.event("execution.failed", {"stage": stage, "error_type": type(exc).__name__, "message": str(exc)})
+            raise
+        finally:
+            evidence.manifest["status"] = status
+            for source, content in snapshots:
+                try:
+                    changed = digest_file(safe_path(Path.cwd(), source)) != hashlib.sha256(content).hexdigest()
+                except (OSError, UserActionRequired):
+                    changed = True
+                if changed:
+                    observer.gaps.append({"reason": "snapshot_drift", "source": source})
+            sources = evidence.retain("coverage", adapter["EVIDENCE"].get("sources", []))
+            complete = (
+                bool(sources)
+                and not observer.failed
+                and not observer.gaps
+                and all(source.get("source") in observer.closed_sources for source in sources)
+            )
+            evidence.manifest["coverage"] = {
+                "status": "complete_declared" if complete else "partial",
+                "sources": sources,
+                "closure_events": observer.closed_sources,
+                "limits": [
+                    "Closure is adapter-declared; hidden SDK attempts and undeclared background work are outside scope."
+                ],
+                "gaps": ([] if complete else ["declared_source_closure_unverified"])
+                + observer.gaps
+                + (["capture_failed"] if observer.failed else []),
+            }
+            try:
+                evidence.register_direct_artifacts()
+                write_log_view(evidence)
+                evidence.seal(status)
+            except Exception:
+                run.failed.set()
+    if observer.failed or run.failed.is_set():
+        raise UserActionRequired("Execution evidence collection failed; partial scene preserved.")
+    return results
+
+
+async def run_v2_items(adapter, run, items, fields, rows, concurrency, snapshots):
+    pending, iterator = set(), iter(items)
+    by_id = {row[ATK_ID_FIELD]: row for row in rows}
+    output, handle, writer = open_results_writer(run.directory, fields, rows)
+    os.chmod(output, 0o600)
+    try:
+        while True:
+            while len(pending) < concurrency and not run.failed.is_set():
+                item = next(iterator, None)
+                if item is None:
+                    break
+                pending.add(asyncio.create_task(execute_v2_item(adapter, run, item, by_id, snapshots)))
+            if not pending:
+                break
+            done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+            errors = []
+            for task in done:
+                try:
+                    results = task.result()
+                except BaseException as exc:
+                    errors.append(exc)
+                    run.failed.set()
+                else:
+                    for row in results:
+                        writer.writerow(row)
+                    handle.flush()
+                    os.fsync(handle.fileno())
+            if errors:
+                raise errors[0]
+            if run.failed.is_set():
+                raise UserActionRequired("Capture failed; no further executions scheduled.")
+    finally:
+        for task in pending:
+            task.cancel()
+        await asyncio.gather(*pending, return_exceptions=True)
+        handle.close()
+    return output
+
+
+def _run_v2(*, check=False, limit=None, offset=0, concurrency=1, only_failures=False, no_progress=False):
+    from agent_tune_kit.results.evidence import RunEvidence, safe_path
+
+    from .tracing import capture_logs
+
+    fields, rows = load_dataset()
+    selected = (
+        select_failure_dataset_rows(
+            rows, load_failure_atk_ids(resolve_evaluation_version()), offset=offset, limit=limit
+        )
+        if only_failures
+        else select_dataset_rows(rows, offset=offset, limit=limit)
+    )
+    if check:
+        adapter = load_adapter()
+        if not callable(adapter.get("EVIDENCE", {}).get("retain")):
+            raise UserActionRequired("V2 requires EVIDENCE.retain(role, value).")
+        items = plan_items(adapter, selected, rows)
+        for item in items:
+            asyncio.run(invoke(adapter["build_agent_input"], item["source"]))
+        return {"checked": True, "rows": len(selected), "executions": len(items), "adapter_version": 2}
+    version = allocate_next_results_version()
+    run = RunEvidence(version, policy={})
+    try:
+        adapter = load_adapter()
+        policy = adapter.get("EVIDENCE", {})
+        if not isinstance(policy, dict) or not callable(policy.get("retain")):
+            raise UserActionRequired("V2 requires EVIDENCE.retain(role, value).")
+        run.policy = policy
+        items = plan_items(adapter, selected, rows)
+        run.manifest["planned"] = [item["sample_ids"] for item in items]
+        run.flush()
+        snapshots = []
+        defaults = [
+            name for name in [".atk/context.md", "uv.lock", "poetry.lock", "requirements.txt"] if Path(name).is_file()
+        ]
+        for relative in dict.fromkeys([str(RUNNER_PATH), *defaults, *policy.get("snapshots", [])]):
+            path = safe_path(Path.cwd(), relative)
+            before = path.stat()
+            content = path.read_bytes()
+            if before != path.stat():
+                raise UserActionRequired("Snapshot source changed while reading.")
+            snapshots.append((relative, content))
+        with capture_logs(run, policy):
+            output = asyncio.run(run_v2_items(adapter, run, items, fields, rows, concurrency, snapshots))
+        if run.failed.is_set():
+            raise UserActionRequired("Evidence collection failed.")
+        run.seal("completed")
+        return {
+            "version": version.name,
+            "run_id": run.manifest["run_id"],
+            "rows": len(selected),
+            "executions": len(items),
+            "output": str(output),
+            "adapter_version": 2,
+        }
+    except BaseException as exc:
+        run.manifest.update(
+            status="interrupted" if isinstance(exc, (KeyboardInterrupt, asyncio.CancelledError)) else "failed"
+        )
+        run.manifest["gaps"].append("run_not_completed")
+        with suppress(OSError):
+            run.flush()
+        if isinstance(exc, KeyboardInterrupt):
+            raise
+        raise UserActionRequired("V2 evaluation failed; preserved scene contains available details and gaps.") from None
+
+
+def run_evaluation(*, check=False, limit=None, offset=0, concurrency=1, only_failures=False, no_progress=False):
+    from .runtime import adapter_version
+
+    if offset < 0 or (limit is not None and limit < 0) or concurrency < 1:
+        raise UserActionRequired("limit/offset must be nonnegative and concurrency must be at least 1.")
+    version = adapter_version()
+    operation = _run_v2 if version == 2 else _run_v1
+    options = dict(
+        check=check,
+        limit=limit,
+        offset=offset,
+        concurrency=concurrency,
+        only_failures=only_failures,
+        no_progress=no_progress,
+    )
+    if check:
+        return operation(**options)
+    with write_occupation():
+        return operation(**options)

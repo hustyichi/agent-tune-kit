@@ -29,6 +29,9 @@ PACKAGE_IMPORT = "agent_tune_kit"
 PLUGIN_NAME = "agent-tune-kit"
 
 WHEEL_REQUIRED_PATHS = {
+    "agent_tune_kit/results/evidence.py",
+    "agent_tune_kit/execution/tracing.py",
+    "agent_tune_kit/plugin_payload/agent-tune-kit/templates/.atk/runner/import_evidence.py.md",
     "agent_tune_kit/plugin_payload/agent-tune-kit/.codex-plugin/plugin.json",
     "agent_tune_kit/cli/main.py",
     "agent_tune_kit/execution/runner.py",
@@ -42,6 +45,9 @@ WHEEL_REQUIRED_PATHS = {
 }
 
 SDIST_REQUIRED_PATHS = {
+    "agent_tune_kit/results/evidence.py",
+    "agent_tune_kit/execution/tracing.py",
+    "templates/.atk/runner/import_evidence.py.md",
     ".codex-plugin/plugin.json",
     "skills/atk-dataset/SKILL.md",
     "templates/.atk/runner/eval_runner.py.md",
@@ -291,6 +297,41 @@ def smoke_shared_capabilities(atk: Path, project: Path, plugin: Path) -> None:
     )
     if "rows=1" not in output:
         raise ReleaseCheckError("legacy Skill wrapper could not find the installed CLI")
+    adapter.write_text(
+        "ATK_MANAGED_RUNNER = True\nATK_ADAPTER_VERSION = 2\n"
+        "EVIDENCE = {'retain': lambda role, value: value}\n"
+        "def build_agent_input(row): return row['input']\n"
+        "def call_agent(value, *, execution):\n"
+        "    with execution.span('fixture'): return {'answer': value}\n",
+        encoding="utf-8",
+    )
+    evaluated = command("eval", "--python", str(python))
+    evidence_run = command("results", "evidence", "--version", evaluated["version"])
+    identity, relative = next(iter(evidence_run["executions"].items()))
+    copied = project / "independent-execution"
+    shutil.copytree(project / ".atk/results" / evaluated["version"] / relative, copied)
+    if command("results", "evidence", "--execution-dir", str(copied))["execution_id"] != identity:
+        raise ReleaseCheckError("installed independent evidence read failed")
+    native = project / "native-evidence"
+    native.mkdir()
+    (native / "output.txt").write_text("retained fixture", encoding="utf-8")
+    importer = project / "importer.py"
+    importer.write_text(
+        "ATK_IMPORT_VERSION = 1\nEVIDENCE = {'retain': lambda role, value: value}\n"
+        "def load_evidence(source_root):\n"
+        "    return {'source_system': 'fixture', 'source_run_id': 'one', 'executions': [\n"
+        "        {'source_id': 'case', 'files': [{'path': 'output.txt', 'role': 'output', 'media_type': 'text/plain'}]}]}\n",
+        encoding="utf-8",
+    )
+    imported = command("results", "import-evidence", "--source", str(native), "--adapter", str(importer))
+    if imported["run_kind"] != "evidence-only":
+        raise ReleaseCheckError("installed evidence-only import produced incorrect purpose")
+    state = command("results", "inspect")
+    if state["evaluation_target"]["version"] != evaluated["version"]:
+        raise ReleaseCheckError("installed import displaced the evaluation target")
+    reused = command("results", "import-evidence", "--source", str(native), "--adapter", str(importer))
+    if not reused["reused"]:
+        raise ReleaseCheckError("installed import deduplication failed")
 
 
 def main() -> int:

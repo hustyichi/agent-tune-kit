@@ -181,7 +181,7 @@ ATK 可选读取本地私有的 `.atk/context.md`，用于保存用户沟通后�
 ## 能力评估
 
 - [Ground truth 与评分方案支持评估（2026-10-25）](docs/ground-truth-and-grading-assessment-2026-10-25.md)：基于当前源码与 44 项相关测试，梳理数据准备、人工校准和判定支持，区分小规模调优可用性与可信评分体系的缺口；未重新验收业务调优效果。
-- [执行项现场与调用轨迹改造实现方案（2026-10-26）](docs/execution-evidence-and-tracing-plan.md)：明确每项独立现场、V2 托管采集及外部 runner 本地证据导入，结合 Magic 双 Case 实践补齐来源身份、文件变更与验收；首版不做封存后补采，五阶段实现尚未开始。
+- [执行项现场与调用轨迹改造实现方案（2026-10-26）](docs/execution-evidence-and-tracing-plan.md)：明确每项独立现场、V2 托管采集及外部 runner 本地证据导入，结合 Magic 双 Case 实践补齐来源身份、文件变更与验收；首版不做封存后补采，按 P0–P5 实施，详见方案中的验收状态。
 
 兼容一次性安装命令 `uvx --from agent-tune-kit atk install`；日常使用 Skill 需要 PATH 中持续可用的 `atk` 命令。
 
@@ -203,4 +203,25 @@ atk visualize dataset --no-open
 atk visualize failures --no-open
 ```
 
-新生成的项目适配文件使用统一执行引擎，已有完整 runner 保留兼容执行路径。数据字段、ID、结果目录、未判定状态、日志和离线浏览页遵循原有约定。各命令参数见对应 `--help`。
+新生成的项目适配文件使用统一执行引擎，旧完整 runner 与新证据现场共存时需先满足写入保护，否则启动前提示迁移。数据字段、ID、结果目录、未判定状态、日志和离线浏览页遵循原有约定。各命令参数见对应 `--help`。
+
+
+## 本地执行证据 / Local execution evidence
+
+V2 adapters declare `ATK_ADAPTER_VERSION = 2` and `EVIDENCE.retain(role, value)`.
+Each execution saves independent input/output, context, structured events and artifacts beneath
+`.atk/results/vN/executions/<id>/`; shared Cases map multiple selected samples to one directory.
+Retention runs before persistence. Existing V1 adapters remain explicit; no historical migration is automatic.
+
+```sh
+atk results inspect --json
+atk results evidence --version v1 --atk-id 1 --json
+atk results evidence --execution-dir ./copied-execution --json
+atk results import-evidence --source ./native-run --adapter ./importer.py --json
+```
+
+`inspect` separates latest Run from the evaluation target. Evidence-only imports do not displace the latter.
+Diagnosis and reports bind `--version`; changed evidence invalidates dependent judgments. Import adapters are
+trusted Python code, not a sandbox. No Agent call, remote fetch, automatic cleanup or post-seal supplementation
+is performed. Declared capture coverage is distinct from successful persistence and business verdicts.
+See [execution evidence plan](docs/execution-evidence-and-tracing-plan.md) for interfaces, source limitations, recovery and validation.

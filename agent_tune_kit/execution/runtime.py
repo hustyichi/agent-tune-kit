@@ -34,18 +34,38 @@ def python_command(python=None):
 
 
 def managed_runner(path=RUNNER_PATH):
+    return adapter_version(path) != 0
+
+
+def adapter_version(path=RUNNER_PATH):
     if not Path(path).is_file():
         raise UserActionRequired(f"Runner {path} is missing; run atk-init first.")
+    declarations = {}
     for node in ast.parse(Path(path).read_text(encoding="utf-8")).body:
-        if isinstance(node, ast.Assign) and any(
-            isinstance(target, ast.Name) and target.id == "ATK_MANAGED_RUNNER" for target in node.targets
-        ):
-            return isinstance(node.value, ast.Constant) and node.value.value is True
-    return False
+        targets = (
+            node.targets if isinstance(node, ast.Assign) else [node.target] if isinstance(node, ast.AnnAssign) else []
+        )
+        for target in targets:
+            if isinstance(target, ast.Name) and target.id in {"ATK_MANAGED_RUNNER", "ATK_ADAPTER_VERSION"}:
+                if target.id in declarations or not isinstance(node.value, ast.Constant):
+                    raise UserActionRequired("Adapter markers must be unique static constants.")
+                declarations[target.id] = node.value.value
+    if declarations.get("ATK_MANAGED_RUNNER") is not True:
+        return 0
+    version = declarations.get("ATK_ADAPTER_VERSION", 1)
+    if type(version) is not int or version not in {1, 2}:
+        raise UserActionRequired("Unsupported adapter version; module was not loaded.")
+    return version
 
 
 def launch(operation, *, python=None, **options):
     if operation == "eval" and not managed_runner() and not options.get("check"):
+        from agent_tune_kit.results.versions import list_version_dirs, run_kind, write_occupation
+
+        if any(run_kind(path) != "legacy" for _, path in list_version_dirs()):
+            raise UserActionRequired(
+                "Legacy runner cannot safely write beside evidence Runs; migrate to a managed adapter."
+            )
         flags = []
         for key, value in options.items():
             if value is True:
@@ -53,7 +73,8 @@ def launch(operation, *, python=None, **options):
             elif value is not False and value is not None:
                 flags.extend(["--" + key.replace("_", "-"), str(value)])
         command = python_command(python) + [str(RUNNER_PATH), *flags]
-        result = subprocess.run(command, stdout=sys.stderr, check=False)
+        with write_occupation():
+            result = subprocess.run(command, stdout=sys.stderr, check=False)
         if result.returncode:
             raise ExecutionFailed(result.returncode)
         from agent_tune_kit.results.versions import list_version_dirs

@@ -6,7 +6,7 @@ from typing import Any
 
 from agent_tune_kit.results.assessment import has_assessments
 from agent_tune_kit.results.judgments import read_judgments as _read_judgments
-from agent_tune_kit.results.versions import list_version_dirs
+from agent_tune_kit.results.versions import list_version_dirs, run_kind
 
 from .fields import detect_atk_id_field, normalize_name
 from .fields import detect_roles as _detect_roles
@@ -295,6 +295,9 @@ def build_history(
     version_summaries: list[dict[str, Any]] = []
     interesting_ids: set[str] = set(current_failed_ids)
     for _, vpath in versions:
+        kind = run_kind(vpath)
+        if kind == "evidence-only":
+            continue
         if vpath.resolve() == current_dir.resolve():
             summary = {
                 "name": current_dir.name,
@@ -322,7 +325,7 @@ def build_history(
             summary["isCurrent"] = False
         verdicts = read_judgments(vpath)
         tested_ids = summary["testedAtkIds"]
-        if has_assessments(vpath):
+        if kind != "legacy" or has_assessments(vpath):
             summary["failedAtkIds"] = set()
         summary["failedAtkIds"] |= {
             aid for aid, verdict in verdicts.items() if verdict == "failed" and aid in tested_ids

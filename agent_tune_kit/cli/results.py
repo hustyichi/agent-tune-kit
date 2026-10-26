@@ -18,10 +18,12 @@ def register(subparsers):
     calibration.add_argument("--instructions")
     calibration.add_argument("--python")
     calibration.add_argument("--json", action="store_true")
-    for name in ["inspect", "run-rule", "apply-judgments", "compare"]:
+    for name in ["inspect", "run-rule", "apply-judgments", "compare", "evidence", "import-evidence"]:
         parser = commands.add_parser(name)
         parser.add_argument("--results-dir", default=".atk/results")
         parser.add_argument("--json", action="store_true")
+        if name != "import-evidence":
+            parser.add_argument("--version")
         if name == "run-rule":
             parser.add_argument("--rule-path", default=".atk/runner/failure_rule.py")
             parser.add_argument("--python")
@@ -30,6 +32,18 @@ def register(subparsers):
             parser.add_argument("--source-results")
         elif name == "compare":
             parser.add_argument("--ids", nargs="+", required=True)
+        elif name == "import-evidence":
+            parser.add_argument("--source", required=True)
+            parser.add_argument("--adapter", required=True, help="explicit trusted Python adapter (not sandboxed)")
+        elif name == "evidence":
+            parser.add_argument("--execution-dir")
+            parser.add_argument("--atk-id")
+            parser.add_argument("--execution-id")
+            parser.add_argument("--event-id")
+            parser.add_argument("--artifact-id")
+            parser.add_argument("--after-seq", type=int)
+            parser.add_argument("--offset", type=int, default=0)
+            parser.add_argument("--limit", type=int)
 
 
 def execute(args):
@@ -50,12 +64,36 @@ def execute(args):
                 )
             }
         )
+    if args.action == "import-evidence":
+        from agent_tune_kit.results.evidence import import_evidence
+
+        return import_evidence(args.source, args.adapter, args.results_dir)
+    if args.action == "evidence":
+        from agent_tune_kit.results.evidence import query_evidence
+
+        return query_evidence(
+            **{
+                key: getattr(args, key)
+                for key in [
+                    "results_dir",
+                    "version",
+                    "execution_dir",
+                    "atk_id",
+                    "execution_id",
+                    "event_id",
+                    "artifact_id",
+                    "after_seq",
+                    "offset",
+                    "limit",
+                ]
+            }
+        )
     if args.action == "inspect":
-        return results.inspect_results(args.results_dir)
+        return results.inspect_results(args.results_dir, version=args.version)
     if args.action == "compare":
-        return results.compare_targets(args.ids, args.results_dir)
+        return results.compare_targets(args.ids, args.results_dir, version=args.version)
     if args.action == "apply-judgments":
         return results.apply_judgments(
-            args.judgments_path, source_results=args.source_results, results_dir=args.results_dir
+            args.judgments_path, source_results=args.source_results, results_dir=args.results_dir, version=args.version
         )
-    return run_rule(rule_path=args.rule_path, results_dir=args.results_dir, python=args.python)
+    return run_rule(rule_path=args.rule_path, results_dir=args.results_dir, python=args.python, version=args.version)

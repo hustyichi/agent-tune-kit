@@ -66,7 +66,11 @@ include = [
 ]
 
 [dependency-groups]
-dev = ["pytest>=8.0", "ruff>=0.8"]
+dev = [
+    "loguru>=0.7",
+    "pytest>=8.0",
+    "ruff>=0.8",
+]
 
 [tool.ruff]
 line-length = 120

@@ -16,6 +16,7 @@ def add_options(parser, kind):
         parser.add_argument("--dataset-path", default=".atk/datasets/dataset.csv")
     else:
         parser.add_argument("--results-dir", default=".atk/results")
+        parser.add_argument("--version")
         parser.add_argument("--no-report", action="store_true")
         parser.add_argument("--no-history", action="store_true")
 
@@ -32,7 +33,9 @@ def execute(args):
     options = dict(overwrite=args.overwrite, open_browser=args.open_browser)
     if args.action == "dataset":
         return generate_dataset(args.dataset_path, **options)
-    return generate_failures(args.results_dir, no_report=args.no_report, no_history=args.no_history, **options)
+    return generate_failures(
+        args.results_dir, no_report=args.no_report, no_history=args.no_history, version=args.version, **options
+    )
 
 
 def legacy_main(kind, argv=None):

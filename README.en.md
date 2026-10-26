@@ -199,4 +199,25 @@ atk visualize dataset --no-open
 atk visualize failures --no-open
 ```
 
-These commands run from the Agent project. New project adapters delegate to the shared engine; existing full runners remain executable. Dataset fields, IDs, result paths, unknown verdicts, logs and offline review pages retain their contracts. Use `--help` on each command for its options.
+These commands run from the Agent project. New project adapters delegate to the shared engine; legacy full runners require migration before writing alongside new evidence Runs. Dataset fields, IDs, result paths, unknown verdicts, logs and offline review pages retain their contracts. Use `--help` on each command for its options.
+
+
+## 本地执行证据 / Local execution evidence
+
+V2 adapters declare `ATK_ADAPTER_VERSION = 2` and `EVIDENCE.retain(role, value)`.
+Each execution saves independent input/output, context, structured events and artifacts beneath
+`.atk/results/vN/executions/<id>/`; shared Cases map multiple selected samples to one directory.
+Retention runs before persistence. Existing V1 adapters remain explicit; no historical migration is automatic.
+
+```sh
+atk results inspect --json
+atk results evidence --version v1 --atk-id 1 --json
+atk results evidence --execution-dir ./copied-execution --json
+atk results import-evidence --source ./native-run --adapter ./importer.py --json
+```
+
+`inspect` separates latest Run from the evaluation target. Evidence-only imports do not displace the latter.
+Diagnosis and reports bind `--version`; changed evidence invalidates dependent judgments. Import adapters are
+trusted Python code, not a sandbox. No Agent call, remote fetch, automatic cleanup or post-seal supplementation
+is performed. Declared capture coverage is distinct from successful persistence and business verdicts.
+See [execution evidence plan](docs/execution-evidence-and-tracing-plan.md) for interfaces, source limitations, recovery and validation.

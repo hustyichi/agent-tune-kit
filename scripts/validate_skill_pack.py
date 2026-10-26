@@ -14,6 +14,9 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 
 REQUIRED_FILES = [
+    "agent_tune_kit/results/evidence.py",
+    "agent_tune_kit/execution/tracing.py",
+    "templates/.atk/runner/import_evidence.py.md",
     ".codex-plugin/plugin.json",
     "skills/atk-dataset/SKILL.md",
     "skills/atk-dataset/scripts/update_dataset.py",
@@ -378,6 +381,12 @@ def main():
                 tree = ast.parse(match.group(1))
                 functions = {n.name for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
                 require(entry in functions and marker in match.group(1), f"{rel} missing adapter contract", errors)
+                if name == "eval_runner":
+                    require(
+                        "ATK_ADAPTER_VERSION = 2" in match.group(1) and "retain" in functions,
+                        f"{rel} must declare V2 and explicit retention",
+                        errors,
+                    )
                 require(
                     not {"allocate_next_results_version", "run_rows", "write_failures"} & functions,
                     f"{rel} duplicates shared engine",

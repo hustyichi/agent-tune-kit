@@ -10,7 +10,7 @@ compatibility: Requires the installed ATK CLI on PATH (dataset, eval, results an
 
 Use this Skill when a user wants the short ATK command for running the generated Agent tuning test runner. It maps to `docs/codex_agent_tuning_prd.md` sections 2.3, 4, 5, and 7.
 
-This Skill executes `atk eval` using the project-local `.atk/runner/eval_runner.py` adapter after `atk-init` has generated it. Only evaluation execution through the shared engine or an existing legacy runner creates or reuses result versions. It should use the target repository's Python runtime, not blindly assume system `python3` has the project's dependencies.
+This Skill executes `atk eval` using the project-local `.atk/runner/eval_runner.py` adapter after `atk-init` has generated it. Evaluation and explicitly requested local evidence imports allocate protected versions. It should use the target repository's Python runtime, not blindly assume system `python3` has the project's dependencies.
 
 Traceability note: section 2.3 defines manual batch execution, section 4 defines version management, and section 7 defines delivery requirements.
 
@@ -29,7 +29,7 @@ Use the installed `atk` CLI from the target project cwd. Check `atk --version` a
 - Runtime results created by `eval_runner.py`:
   - `.atk/results/vN/eval_results.csv`
   - optional `.atk/results/vN/app.log`
-  - optional row logs under `.atk/results/vN/logs/`, linked from `log_path`
+  - V2 `run.json` and `executions/<id>/` evidence, linked from `log_path`; legacy row logs remain supported
 - A concise run summary with the version directory and next recommended Skill.
 
 ## Workflow
@@ -52,19 +52,28 @@ Use the installed `atk` CLI from the target project cwd. Check `atk --version` a
    atk eval --limit 5 --concurrency 4
    ```
 
-   If the user asks to rerun only the previous failure set, pass `--only-failures` through. The runner uses `atk_id` values from the latest prior `failure_cases.csv` to select rows from `.atk/datasets/dataset.csv`; it does not run `failure_cases.csv` as an input dataset:
+   If the user asks to rerun only the previous failure set, pass `--only-failures` through. The runner uses valid failed `atk_id` values from the current evaluation target to select rows from `.atk/datasets/dataset.csv`; it does not run `failure_cases.csv` as an input dataset:
 
    ```sh
    atk eval --only-failures
    ```
 
-4. Read the runner output and inspect `.atk/results/` to identify the numerically largest `vN` directory.
+4. Bind the version returned by the command; inspect `latest_run` and `evaluation_target` separately with `atk results inspect --json`.
 5. Confirm whether `eval_results.csv` exists in that version.
 6. Inspect row-log status:
    - if `eval_results.csv` contains non-empty `log_path` values and referenced files exist under `.atk/results/vN/logs/`, report row logs as active;
    - if runner output contains the row-log downgrade message, report row logs as downgraded and explain that no per-row files are expected;
    - otherwise report row logs as unavailable and mention `app.log` fallback when present.
 7. Summarize the output path and recommend `atk-diagnose` as the usual next step.
+
+## Local evidence import
+
+When the user asks to import an already available local run, use
+`atk results import-evidence --source <directory> --adapter <trusted-project-file> --json`.
+The adapter executes trusted Python, not sandboxed data; never load code named by the evidence itself.
+This path does not run the Agent, fetch traces or run business checks. Evidence-only output is valid without CSV;
+query by execution ID. Identical imports reuse a verified sealed package; changed material and post-seal additions
+are rejected. Report source limitations separately from import success. Do not clean up partial scenes or unknown occupation.
 
 ## Shared version rules
 
@@ -74,7 +83,7 @@ Use the canonical helper names and semantics from `docs/shared-versioning-and-co
 - `list_version_dirs(results_dir=RESULTS_DIR)`
 - `allocate_next_results_version(results_dir=RESULTS_DIR)`
 
-Only evaluation execution (the shared engine or a legacy `eval_runner.py`) creates or reuses result versions. This Skill is a short command surface for executing that runner; it does not choose a version itself.
+Evaluation and explicitly requested local evidence imports create protected result versions. This Skill is a short command surface for executing that runner; it does not choose a version itself.
 
 ## Confirmation triggers
 
@@ -93,7 +102,7 @@ Do not ask before passing through safe runner controls such as `--limit`, `--off
 - If the runner is missing, stop and tell the user to run `atk-init` first.
 - If the runner fails with `ModuleNotFoundError` or dependency import errors under bare `python3`, retry once with the best project runtime discovered from the repository (`uv run python`, `.venv/bin/python`, or `poetry run python`) before reporting failure.
 - If the runner still cannot import the target Agent, report this as an `atk-init` generation/runtime inference problem and recommend regenerating the runner after updating setup rules.
-- If the runner exits non-zero, report the failure output and do not claim a result version was produced unless `eval_results.csv` exists.
+- If the runner exits non-zero, report the failure output and report any available Run/execution scene even when CSV was not produced; do not claim execution completed.
 - If `eval_results.csv` is missing from the current version after execution, tell the user the run did not complete and point to the runner output for repair.
 - If `--only-failures` cannot find a prior `failure_cases.csv`, the file lacks `atk_id`, or any failure `atk_id` is absent from `.atk/datasets/dataset.csv`, report the runner error and do not silently fall back to a full run.
 - If row-level logging was downgraded under `--concurrency > 1` because concurrent row logging is disabled, do not treat missing `logs/row_*.log` files as a failure; report the downgrade and suggest serial execution or enabling the generated concurrent row-log flag when trustworthy same-process Python logging evidence is needed.

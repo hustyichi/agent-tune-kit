@@ -37,3 +37,4 @@ node_modules/
 
 # Agent tune kit generated outputs
 .atk/
+!templates/.atk/

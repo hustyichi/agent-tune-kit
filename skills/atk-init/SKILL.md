@@ -44,7 +44,7 @@ In the current package layout, this is also reachable from this Skill file as `.
 - Runtime results are produced later by running `atk-eval`, which executes the generated script:
   - `.atk/results/vN/eval_results.csv`
   - optional `.atk/results/vN/app.log`
-  - optional row logs under `.atk/results/vN/logs/`, referenced by `log_path`
+  - V2 independent `executions/<id>/` evidence; per-execution `app.log` referenced by `log_path`
 
 ## Workflow
 
@@ -90,7 +90,7 @@ These are shared-engine guarantees. Generate only project adaptation and configu
 - Preserve all original dataset columns and their order, with the ATK metadata column `atk_id` appended when the source dataset does not already provide it.
 - Require `.atk/datasets/dataset.csv` to contain `atk_id`; generated runners should stop with repair guidance if that column is missing, empty, duplicated, or not a positive integer.
 - Append the fixed actual-output column `agent_output`.
-- Append the stable row-log evidence column `log_path`. When same-process Python logging capture is configured and active, it must contain a relative POSIX path such as `logs/row_000001.log`; otherwise it should be blank.
+- Append the stable row-log evidence column `log_path`. V2 uses `executions/<id>/app.log`; legacy V1 row paths remain readable.
 - If Agent output has multiple fields, serialize the complete structured result as JSON in `agent_output`; do not add auxiliary `agent_output_*` columns.
 - If the input dataset already contains `agent_output` or `log_path`, ask the user to confirm a rename strategy before writing the script.
 - Write the input dataset into `.atk/datasets/` during `atk-init`, specifically `.atk/datasets/dataset.csv`, as the ATK canonical runnable dataset with `atk_id`. Reuse it when canonical content is identical and ask before overwriting different canonical content. The generated runner must read this fixed `.atk/datasets/` dataset so later source dataset moves do not break `atk-eval`.
@@ -103,10 +103,10 @@ These are shared-engine guarantees. Generate only project adaptation and configu
 - Write `eval_results.csv` incrementally row-by-row, flushing after each row, so interrupted long runs leave inspectable partial evidence.
 - Emit visible per-row progress by default, with a `--no-progress` option for quiet runs.
 - Do not clean up partial version directories on crash.
-- Prefer Python stdlib `logging` as the first-choice log source when configured Agent loggers can be inferred safely. In that case, generated runners must write run-scoped global logging records to `.atk/results/vN/app.log` and also write row-specific records to `logs/row_*.log` while an ATK row context is active.
-- Use stdout/stderr redirection for `app.log` only as a fallback when no reliable Python `logging` source is available but stdout/stderr is useful. If the Agent writes its own trustworthy log file, copy or read that file into the current version's `app.log`. Omit `app.log` only when no reliable global log source exists, and explain why.
-- Generated row-log capture should use ATK-owned context state and stdlib logging routing: create row files when Python logging capture is configured and an ATK row context is active, including same-process `--concurrency > 1` while `CONCURRENT_ROW_LOGGING_ENABLED` remains enabled; create the referenced file even if it remains empty; never include stdout/stderr, subprocess, multiprocess, context-free, or post-row background logs. Context-free same-process Python logging should still appear in `app.log`.
-- When configured row-log capture is downgraded because `--concurrency > 1` and concurrent row logging is disabled, make that downgrade visible in runner output outside the redirected `app.log`.
+- Generate the V2 marker and `EVIDENCE` declaration from the template. Define safe retention for context, input/output, events, result rows and declared snapshots before real execution; do not use a permissive catch-all for unknown material.
+- Declare logging sources and optional Loguru explicitly. ATK adds its own handler/sink without changing existing logger levels or exits. Excluded DEBUG records, queues without propagated identity and unmanaged background work remain coverage gaps.
+- Use the optional observer at existing public calls. Preserve business retry/stream behavior; propagate ContextVar state per internal thread submission and finish managed background work before returning.
+- For external local evidence, generate an explicit trusted importer instead of wrapping an empty Agent call. Inspect `docs/execution-evidence-and-tracing-plan.md` section 6.5; never fetch remote traces or execute commands from native manifests.
 - Add the target repository import roots required by the Agent before importing local modules. For Python `src/` layout projects, generated runners should add `REPO_ROOT / "src"` to `sys.path`; for package-at-root projects, add `REPO_ROOT` when needed.
 - If the target project declares a managed runtime (`uv`, Poetry, pipenv, `.venv`, etc.), record that execution command in the setup summary and generate a runner that can be executed by that runtime. Do not assume bare system `python3` has project dependencies.
 - For sync Agents, generated runners should be concurrency-ready with a standard-library worker pool. For async Agents, use an explicit async runner (`asyncio.run(...)`) with an async semaphore or equivalent bounded concurrency. In both cases, preserve incremental row writes from a single writer path.
