@@ -21,6 +21,7 @@ from importlib import resources
 from pathlib import Path
 from typing import Any
 
+from agent_tune_kit.datasets.truth import TRUTH_FIELD, review_context, truth_status
 from agent_tune_kit.errors import UserActionRequired
 from agent_tune_kit.utils.files import write_text_atomic as write_atomic
 
@@ -92,7 +93,16 @@ AUDIT_MARKERS = [
 ROLE_CANDIDATES: dict[str, list[str]] = {
     "id": ["atk_id", "case_id", "id", "row_id", "index"],
     "input": ["input", "query", "question", "prompt", "task", "user_input", "instruction", "source"],
-    "expected": ["ground_truth", "expected", "expected_output", "reference", "answer", "label", "target"],
+    "expected": [
+        "ground_truth",
+        "expected",
+        "expected_output",
+        "reference",
+        "answer",
+        "label",
+        "target",
+        "acceptance_criteria",
+    ],
 }
 
 
@@ -291,7 +301,19 @@ def build_payload(
     issues: list[list[str]],
     warnings: list[str],
 ) -> dict[str, Any]:
+    binding = review_context(dataset_path, [], roles.get("expected", {}).get("field", ""))
+    enriched = enrich_rows(rows, fieldnames, roles, issues)
+    for item in enriched:
+        item["truth"] = {}
+        for field in fieldnames:
+            if field in {TRUTH_FIELD, "atk_id"}:
+                continue
+            try:
+                item["truth"][field] = truth_status(item["values"], field, standard=binding["standard"])
+            except UserActionRequired as exc:
+                item["truth"][field] = {"status": "invalid", "reason": str(exc)}
     return {
+        "reviewBinding": {k: binding[k] for k in ("dataset_sha256", "dataset_scope", "standard")},
         "datasetName": dataset_path.name,
         "datasetPath": dataset_path.as_posix(),
         "output": output_path.as_posix(),
@@ -299,7 +321,7 @@ def build_payload(
         "fieldnames": fieldnames,
         "roles": roles,
         "facets": facets,
-        "rows": enrich_rows(rows, fieldnames, roles, issues),
+        "rows": enriched,
         "issueOrder": ISSUE_ORDER,
         "issueLabels": ISSUE_LABELS,
         "warnings": warnings,

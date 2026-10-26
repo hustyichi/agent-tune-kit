@@ -4,6 +4,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from agent_tune_kit.results.assessment import has_assessments
 from agent_tune_kit.results.judgments import read_judgments as _read_judgments
 from agent_tune_kit.results.versions import list_version_dirs
 
@@ -321,6 +322,8 @@ def build_history(
             summary["isCurrent"] = False
         verdicts = read_judgments(vpath)
         tested_ids = summary["testedAtkIds"]
+        if has_assessments(vpath):
+            summary["failedAtkIds"] = set()
         summary["failedAtkIds"] |= {
             aid for aid, verdict in verdicts.items() if verdict == "failed" and aid in tested_ids
         }

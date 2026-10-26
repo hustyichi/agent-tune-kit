@@ -61,6 +61,13 @@ Use the installed `atk` CLI from the target project cwd. Check `atk --version` a
 
 ## Required report structure
 
+Read plugin-root `docs/truth-and-assessment.md` (also `../../docs/truth-and-assessment.md`) for trust and calibration
+interpretation. Report recorded review scope separately from judgment coverage; one confirmed field does not prove
+all criteria are covered. Include unknown reasons and calibration disagreements when available. compare.current_status
+describes current targets; comparison_differences limits improvement claims. Do not turn status=无法判断 into a causal
+claim because current targets passed. Cite the actual standard/judge and preserve evidence_refs. Legacy remains readable,
+not certified; do not imply calibration happened without its evidence.
+
 Include these sections:
 
 ```markdown

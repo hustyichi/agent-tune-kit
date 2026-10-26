@@ -9,7 +9,8 @@
   var issueOrder = payload.issueOrder || [];
   var config = payload.config || { snippetMaxChars: 240, pageSizes: [25, 50, 100, 250], defaultPageSize: 50 };
 
-  var STORAGE_KEY = "atk-dataset-review:" + (payload.datasetPath || "dataset.csv");
+  var binding = payload.reviewBinding || {};
+  var STORAGE_KEY = "atk-dataset-review:" + (binding.dataset_scope || payload.datasetPath || "dataset.csv") + ":" + (binding.dataset_sha256 || "legacy") + ":" + ((binding.standard || {}).sha256 || "");
   var review = loadReview();
   var columnMeta = buildColumnMeta();
   var initialGt = roleField("expected");
@@ -225,7 +226,7 @@
     var gt = roleField("expected");
     for (var i = 0; i < payload.fieldnames.length; i++) {
       var field = payload.fieldnames[i];
-      out[field] = i < 5 || field === gt;
+      out[field] = field !== "atk_truth" && (i < 5 || field === gt);
     }
     return out;
   }
@@ -302,7 +303,25 @@
   }
 
   function rowKey(row) {
-    return (row.atkId != null && row.atkId !== "") ? ("id:" + row.atkId + ":row:" + row.rowNumber) : ("row:" + row.rowNumber);
+    return ((row.atkId != null && row.atkId !== "") ? ("id:" + row.atkId + ":row:" + row.rowNumber) : ("row:" + row.rowNumber)) + ":field:" + roleField("expected");
+  }
+
+  function currentTruth(row) {
+    return (row.truth || {})[roleField("expected")] || { status: "unreviewed" };
+  }
+
+  function setReviewField(row, name, value) {
+    var k = rowKey(row);
+    var r = review[k] || {};
+    var record = currentTruth(row).record || {};
+    r.atkId = row.atkId;
+    r.rowNumber = row.rowNumber;
+    r.field = roleField("expected");
+    r.input_fields = r.input_fields || record.input_fields || [roleField("input")];
+    ["source", "evidence", "reviewer"].forEach(function (key) { if (r[key] == null) r[key] = record[key] || ""; });
+    r[name] = value;
+    review[k] = r;
+    saveReview();
   }
 
   function getFeedback(row) {
@@ -311,12 +330,7 @@
   }
 
   function setFeedback(row, feedback) {
-    var k = rowKey(row);
-    var r = review[k] || {};
-    r.review_feedback = feedback;
-    r.atkId = row.atkId;
-    if (!r.review_feedback) delete review[k]; else review[k] = r;
-    saveReview();
+    setReviewField(row, "review_feedback", feedback);
   }
 
   function rowMatchesQuery(row, query) {
@@ -341,8 +355,8 @@
     var filter = state.issueFilter;
     if (!filter) return true;
     if (filter === "any") return row.issues && row.issues.length > 0;
-    if (filter === "reviewed") return !!getFeedback(row).trim();
-    if (filter === "unreviewed") return !getFeedback(row).trim();
+    if (filter === "reviewed") return currentTruth(row).status === "confirmed";
+    if (["unreviewed", "pending", "confirmed", "disputed", "stale", "invalid"].indexOf(filter) >= 0) return currentTruth(row).status === filter;
     return row.issues && row.issues.indexOf(filter) >= 0;
   }
 
@@ -371,7 +385,7 @@
   function reviewCounts() {
     var counts = { reviewed: 0, total: payload.rows.length };
     payload.rows.forEach(function (row) {
-      if (getFeedback(row).trim()) counts.reviewed += 1;
+      if (currentTruth(row).status === "confirmed") counts.reviewed += 1;
     });
     return counts;
   }
@@ -400,7 +414,7 @@
     var elIssues = $("meta-issues");
     if (elIssues) elIssues.textContent = issueRowCount() + " 问题行";
     var elReview = $("meta-review");
-    if (elReview) elReview.textContent = reviews.reviewed ? ("已审 " + reviews.reviewed + "/" + reviews.total) : "未审阅";
+    if (elReview) elReview.textContent = "有效确认 " + reviews.reviewed + "/" + reviews.total + "（本地选择需导入）";
     $("path-context").textContent = (payload.datasetPath || "dataset.csv") + " → " + (payload.output || "dataset.html");
     $("standard-column").textContent = gt || "无定位";
     $("stat-total").textContent = payload.rowCount;
@@ -545,7 +559,7 @@
     var right = el("div", { class: "inspector-column" });
     var hiddenEmpty = 0;
     payload.fieldnames.forEach(function (field) {
-      if (field === gtField || field === idField) return;
+      if (field === gtField || field === idField || field === "atk_truth") return;
       var value = normalizeText(row.values[field]);
       if (!value.trim() && !state.showEmptyFields) {
         hiddenEmpty += 1;
@@ -673,10 +687,37 @@
 
   function buildReviewBox(row) {
     var box = el("div", { class: "review-box" });
+    var truth = currentTruth(row);
+    var record = truth.record || {};
+    var local = review[rowKey(row)] || {};
+    var labels = { unreviewed: "未复核", pending: "待复核", confirmed: "已确认", disputed: "有争议", stale: "已过期", invalid: "记录无效" };
     box.appendChild(el("div", { class: "review-title" }, [
-      el("span", { text: "Ground Truth 修正反馈" }),
-      el("span", { text: "本地保存" }),
+      el("span", { text: "Ground Truth · " + (labels[truth.status] || truth.status) }),
+      el("span", { text: "确认字段：" + roleField("expected") }),
     ]));
+    box.appendChild(el("p", { text: truth.reason || "尚无复核记录" }));
+    box.appendChild(el("pre", { class: "review-note", text: "适用标准：\n" + ((binding.standard || {}).text || "未设置项目标准；确认依据请明确填写") }));
+    [["source", "依据来源及版本"], ["evidence", "支持答案的证据或明确业务裁决"], ["reviewer", "复核人"], ["input_fields", "绑定的输入/上下文字段（逗号分隔）"]].forEach(function (entry) {
+      var key = entry[0];
+      var input = el("textarea", { class: "review-note", "aria-label": entry[1], placeholder: entry[1],
+        oninput: function (ev) {
+          setReviewField(row, key, key === "input_fields" ? ev.target.value.split(",").map(function (s) { return s.trim(); }).filter(Boolean) : ev.target.value);
+        }
+      });
+      input.value = key === "input_fields" ? (local.input_fields || record.input_fields || [roleField("input")]).join(",") : (local[key] == null ? record[key] || "" : local[key]);
+      box.appendChild(el("label", { text: entry[1] }));
+      box.appendChild(input);
+    });
+    var select = el("select", { "aria-label": "本次复核决定", onchange: function (ev) {
+      setReviewField(row, "review_status", ev.target.value);
+    }});
+    [["", "仅反馈（不确认）"], ["confirmed", "确认当前答案"], ["disputed", "标记争议"], ["pending", "需要复核"]].forEach(function (pair) {
+      var option = el("option", { value: pair[0], text: pair[1] });
+      option.selected = pair[0] === (local.review_status || "");
+      select.appendChild(option);
+    });
+    box.appendChild(select);
+    box.appendChild(el("p", { text: "导出后由 atk-dataset 导入生效；修改答案不会继承旧确认。" }));
     var feedback = el("textarea", {
       class: "review-note",
       placeholder: "仅异常项填写：用一句明确反馈描述预期结果或验收标准应如何调整…",
@@ -721,18 +762,22 @@
     return copied;
   }
 
+  function reviewExportRows() {
+    return Object.keys(review).map(function (key) {
+      var r = review[key];
+      return { atk_id: r.atkId, row_number: r.rowNumber, review_feedback: r.review_feedback || "",
+        review_status: r.review_status || "", field: r.field, input_fields: JSON.stringify(r.input_fields || []),
+        source: r.source || "", evidence: r.evidence || "", reviewer: r.reviewer || "",
+        dataset_sha256: binding.dataset_sha256 || "", dataset_scope: binding.dataset_scope || "",
+        standard_sha256: (binding.standard || {}).sha256 || "" };
+    }).filter(function (r) { return r.review_feedback.trim() || r.review_status; });
+  }
+
   function exportReview() {
-    var headers = ["atk_id", "row_number", "review_feedback"];
+    var headers = ["atk_id", "row_number", "review_feedback", "review_status", "field", "input_fields", "source", "evidence", "reviewer", "dataset_sha256", "dataset_scope", "standard_sha256"];
     var lines = [headers.join(",")];
-    payload.rows.forEach(function (row) {
-      var r = review[rowKey(row)];
-      var feedback = r ? (r.review_feedback || "") : "";
-      if (!feedback.trim()) return;
-      lines.push([
-        csvCell(row.atkId == null ? "" : row.atkId),
-        csvCell(row.rowNumber),
-        csvCell(feedback),
-      ].join(","));
+    reviewExportRows().forEach(function (row) {
+      lines.push(headers.map(function (field) { return csvCell(row[field]); }).join(","));
     });
     var blob = new Blob(["\ufeff" + lines.join("\r\n")], { type: "text/csv;charset=utf-8;" });
     var url = URL.createObjectURL(blob);
@@ -1086,12 +1131,16 @@
     state.sortDirection = "asc";
     state.page = 0;
     $("search").value = "";
-    renderQualityBar();
-    renderFacets();
+    $("truth-filter").value = "";
     renderTable();
   }
 
   function bindEvents() {
+    $("truth-filter").addEventListener("change", function (ev) {
+      state.issueFilter = ev.target.value;
+      state.page = 0;
+      renderTable();
+    });
     $("search").addEventListener("input", function (ev) {
       state.query = ev.target.value;
       state.page = 0;

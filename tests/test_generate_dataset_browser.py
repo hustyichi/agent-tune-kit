@@ -177,7 +177,7 @@ class GenerateDatasetBrowserTests(unittest.TestCase):
                 '"id:" + row.atkId + ":row:" + row.rowNumber',
             ]:
                 self.assertIn(phrase, text)
-            self.assertIn('["atk_id", "row_number", "review_feedback"]', text)
+            self.assertIn('"review_status", "field", "input_fields"', text)
             self.assertNotIn('["atk_id", "row_number", "verdict", "note", "detected_issues"]', text)
             self.assertNotIn("reviewFeedback", text)
             self.assertNotIn("dataset_summary.json", text)

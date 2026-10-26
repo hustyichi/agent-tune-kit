@@ -65,10 +65,21 @@ Use the installed `atk` CLI from the target project cwd. Check `atk --version` a
 
 ## Targeted writeback
 
+For source-backed preparation and review, read plugin-root `docs/truth-and-assessment.md` (also
+`../../docs/truth-and-assessment.md`). Propose required conditions, allowed variations, hard failures and unknown
+conditions from supplied evidence; show source/version and unresolved conflicts alongside candidate answers.
+Use `atk dataset inspect --direct --field <answer> --input-fields <business-fields...> --json` for current bindings.
+Record explicit decisions using the extended review CSV and `atk dataset update --review-path <csv>`; an updates
+file is optional for confirmation-only operations. Dialogue confirmation can produce this CSV without HTML.
+Never fabricate reviewer identity or treat self-check as confirmation. A correction does not confirm newly generated
+text. `atk_truth` holds per-answer evidence and review bindings; inspect detects stale input/answer/standard content.
+Report scoped confirmation and pending/disputed/stale gaps separately. Do not manually edit the metadata column.
+
 Use `atk dataset inspect` and `atk dataset update`; the old `scripts/update_dataset.py` is a compatibility entrypoint only.
 Prepare a temporary updates CSV containing `atk_id` and the exact target answer field, with only authorized, grounded edits.
 The default field is `ground_truth` for existing workflows; always select the existing answer field when it has another name.
-Only the selected field is updated. Empty update values are skipped; do not use this helper to clear fields or edit sample IDs.
+Answer updates affect only the selected field; explicit reviews also update `atk_truth`. Empty answer updates are skipped;
+do not use this helper to clear fields or edit sample IDs.
 
 Direct feedback or grounded enrichment, without a review file:
 
@@ -76,7 +87,7 @@ Direct feedback or grounded enrichment, without a review file:
 atk dataset update --direct --field expected --updates-path <updates.csv>
 ```
 
-Existing browser feedback, using the same exported format as before:
+Existing browser feedback (legacy three-column feedback stays readable; new exports add bindings):
 
 ```sh
 atk dataset inspect --review-path <dataset_review.csv> --json

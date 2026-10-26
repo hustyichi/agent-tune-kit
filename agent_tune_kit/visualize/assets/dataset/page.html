@@ -55,6 +55,15 @@ __ATK_STYLES__
               </span>
               <input id="search" type="search" placeholder="在整个数据集搜索..." aria-label="搜索全部字段">
             </div>
+            <select id="truth-filter" aria-label="真值复核状态">
+              <option value="">全部复核状态</option>
+              <option value="unreviewed">未复核</option>
+              <option value="pending">待复核</option>
+              <option value="confirmed">已确认</option>
+              <option value="disputed">有争议</option>
+              <option value="stale">已过期</option>
+              <option value="invalid">记录无效</option>
+            </select>
             <button type="button" class="btn ghost" id="clear-filters-btn">重置所有过滤器</button>
             <span class="filtered-count" id="filtered-count">0 / 0</span>
           </div>

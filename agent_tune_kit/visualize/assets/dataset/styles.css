@@ -652,6 +652,10 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, 
   resize: vertical;
 }
 .review-note:focus { outline: none; border-color: var(--brand); box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.14); background: white; }
+.review-box label { display: block; margin: 10px 0 4px; font-weight: 600; }
+.review-box pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.review-box textarea[aria-label] { min-height: 48px; }
+.review-box select, #truth-filter { padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: white; color: var(--text); }
 
 .drawer-backdrop {
   position: fixed;

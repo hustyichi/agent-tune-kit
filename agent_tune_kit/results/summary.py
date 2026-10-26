@@ -4,6 +4,7 @@ from pathlib import Path
 from agent_tune_kit.utils.csv_io import parse_csv
 from agent_tune_kit.workspace import RESULTS_DIR
 
+from .assessment import compare_assessments, has_assessments, truth_counts
 from .judgments import read_judgments
 from .versions import resolve_current_version, resolve_previous_version
 
@@ -11,7 +12,7 @@ from .versions import resolve_current_version, resolve_previous_version
 def effective_verdicts(current):
     verdicts = read_judgments(current)
     path = current / "failure_cases.csv"
-    if path.is_file():
+    if path.is_file() and not has_assessments(current):
         _, failures = parse_csv(path)
         for row in failures:
             if row.get("atk_id"):
@@ -42,6 +43,7 @@ def inspect_results(results_dir=RESULTS_DIR):
         for row in rows:
             counts[verdicts.get(row.get("atk_id"), "unknown")] += 1
         result.update(counts, executed=len(rows), judged=counts["passed"] + counts["failed"])
+        result["truth_counts"] = truth_counts(rows)
     return result
 
 
@@ -57,10 +59,14 @@ def compare_targets(ids, results_dir=RESULTS_DIR):
     status = "无法判断"
     if previous and states and "unknown" not in states:
         status = "已解决" if set(states) == {"passed"} else "未解决" if set(states) == {"failed"} else "部分解决"
+    differences = compare_assessments(current, previous, ids)
+    assessed = has_assessments(current)
     return {
         "version": current.name,
         "previous_version": previous.name if previous else None,
-        "status": status,
+        "status": "无法判断" if assessed and differences else status,
+        "current_status": status,
+        "comparison_differences": differences,
         "targets": dict(zip(ids, states, strict=True)),
         "comparability_requires_review": True,
     }

@@ -81,6 +81,10 @@ In the current package layout, this is also reachable from this Skill file as `.
 
 ## Required evaluation behavior
 
+- Keep `atk_truth`, answers and hidden tests out of Agent inputs. The managed runner strips atk_truth; verify the
+  project whitelist for remaining reference fields and legacy runners. Read plugin-root `docs/truth-and-assessment.md`
+  when connecting trust-aware data. Preserve metadata in canonical data/results; init must not silently confirm it.
+
 These are shared-engine guarantees. Generate only project adaptation and configuration; do not copy version allocation, CSV writers, worker pools or logging routing into the adapter.
 
 - Preserve all original dataset columns and their order, with the ATK metadata column `atk_id` appended when the source dataset does not already provide it.

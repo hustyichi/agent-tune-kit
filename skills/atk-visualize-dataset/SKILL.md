@@ -8,6 +8,12 @@ compatibility: Requires the installed ATK CLI on PATH (dataset, eval, results an
 
 ## Purpose
 
+The browser also displays per-answer truth evidence and review validity. Local confirmation choices only take effect
+after `atk-dataset` imports the export; distinguish them from stored confirmed/pending/disputed/stale states. Explain
+selected input fields and source/version before confirmation. Exports bind data, location and relevant standards;
+legacy feedback stays readable without proving effective confirmation. See plugin-root `docs/truth-and-assessment.md`
+(also `../../docs/truth-and-assessment.md`) for the contract.
+
 Generate the optional non-versioned dataset browser for human input/expected-answer review. Fixed parsing, rendering, safety and frontend assets are maintained in the installed ATK package. Do not synthesize HTML, copy frontend assets into the project or install frontend dependencies.
 
 ## CLI dependency

@@ -1,5 +1,11 @@
 # Agent Tune Kit
 
+Ground-truth reviews, judge calibration and assessment provenance are documented in
+[the trust contract](docs/truth-and-assessment.md). Existing datasets remain readable, not automatically certified.
+`atk dataset inspect/update` supports content-bound confirmations; `atk results calibrate` checks reviewed outputs
+without executing the Agent or allocating an evaluation version. Rejudgments preserve history and comparisons expose
+changes to their criteria and judge.
+
 English | [简体中文](README.md)
 
 [![PyPI](https://img.shields.io/pypi/v/agent-tune-kit.svg)](https://pypi.org/project/agent-tune-kit/)

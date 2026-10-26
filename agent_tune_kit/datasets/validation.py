@@ -4,6 +4,8 @@ from typing import Any
 from agent_tune_kit.errors import UserActionRequired
 from agent_tune_kit.utils.csv_io import parse_csv
 
+from .truth import truth_records
+
 
 def validate_dataset_rows(fieldnames: list[str], rows: list[dict[str, str]]) -> None:
     if "atk_id" not in fieldnames:
@@ -11,6 +13,7 @@ def validate_dataset_rows(fieldnames: list[str], rows: list[dict[str, str]]) -> 
     seen: set[str] = set()
     invalid: list[str] = []
     for row in rows:
+        truth_records(row)
         atk_id = (row.get("atk_id") or "").strip()
         if not atk_id or not atk_id.isdigit() or int(atk_id) <= 0 or atk_id in seen:
             invalid.append(atk_id or "<empty>")

@@ -1,5 +1,18 @@
 # Shared Versioning and Confirmation Rules
 
+## Truth reviews and assessment provenance
+
+The additive contract in [truth-and-assessment.md](truth-and-assessment.md) defines optional `atk_truth` dataset
+metadata, content-bound review exports and the optional `assessment` judgment column. Legacy three-column feedback
+remains readable for corrections, but does not establish reviewed truth. Confirmation-only updates need no answer
+update file. Related standard/input/answer changes expire confirmation; unrelated tuning notes do not.
+Keep review validity, semantic outcome and execution evidence integrity distinct. CLI validates declared scope and
+bindings, not source authority or human identity. Skills still establish applicable criteria from actual evidence.
+Calibration writes an explicitly selected new CSV, never an evaluation version or Agent call. Replacing non-empty
+judgments archives their original bytes in the same version's `judgment-history/`; no automatic cleanup occurs.
+Standards/references must not be silently substituted during comparison. Existing evidence_refs, when provided,
+must independently pass their validation contract.
+
 This document is the single source of truth for the Agent Tune Kit Skills. It extracts the version rules and uncertainty-confirmation behavior from `docs/codex_agent_tuning_prd.md` so every Skill uses the same terms when the repo is loaded as a local Codex plugin.
 
 ## Delivery boundary

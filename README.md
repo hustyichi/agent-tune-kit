@@ -1,5 +1,10 @@
 # Agent Tune Kit
 
+真值复核、裁判校准和判定追溯见[可信度契约](docs/truth-and-assessment.md)：数据集可按答案字段记录来源和
+有效确认，输入/答案/标准变化会使确认过期；`atk dataset update --review-path dataset_review.csv` 可只导入
+确认而不改答案。`atk results calibrate` 用已复核输出检查裁判，不调用 Agent 或创建评测轮次。
+判定可绑定标准与裁判快照，重判保存历史，比较显式列出可比性差异。旧数据可读，但不自动标为已确认。
+
 简体中文 | [English](README.en.md)
 
 [![PyPI](https://img.shields.io/pypi/v/agent-tune-kit.svg)](https://pypi.org/project/agent-tune-kit/)

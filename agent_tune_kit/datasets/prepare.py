@@ -4,6 +4,7 @@ from agent_tune_kit.errors import UserActionRequired
 from agent_tune_kit.utils.csv_io import parse_csv, write_csv_atomic
 from agent_tune_kit.workspace import DATASET_PATH
 
+from .truth import TRUTH_FIELD
 from .validation import validate_dataset_rows
 
 
@@ -15,8 +16,10 @@ def prepare_dataset(source, dataset_path=DATASET_PATH, *, append=False, overwrit
         raise UserActionRequired("Append requires an existing canonical dataset.")
     if append:
         validate_dataset_rows(old_fields, old_rows)
-        if set(fields) - {"atk_id"} != set(old_fields) - {"atk_id"}:
+        if set(fields) - {"atk_id", TRUTH_FIELD} != set(old_fields) - {"atk_id", TRUTH_FIELD}:
             raise UserActionRequired("Append fields differ; confirm the field mapping before appending.")
+        if TRUTH_FIELD in fields and TRUTH_FIELD not in old_fields:
+            old_fields = old_fields + [TRUTH_FIELD]
     if "atk_id" not in fields:
         fields = fields + ["atk_id"]
         start = max((int(row["atk_id"]) for row in old_rows), default=0) + 1 if append else 1

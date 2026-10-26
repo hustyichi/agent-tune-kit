@@ -17,6 +17,7 @@ from typing import Any
 from urllib.parse import unquote, urlsplit
 
 from agent_tune_kit.errors import UserActionRequired
+from agent_tune_kit.results.assessment import has_assessments
 from agent_tune_kit.results.versions import require_current_file, resolve_current_version
 from agent_tune_kit.utils.files import write_text_atomic as write_atomic
 
@@ -371,6 +372,7 @@ def generate_failures(
         )
 
     failure_fieldnames, failure_rows, failure_warnings = parse_failure_csv(failure_csv)
+    strict_verdicts = has_assessments(current_dir)
     warnings = list(failure_warnings)
 
     eval_csv = current_dir / EVAL_FILENAME
@@ -421,7 +423,11 @@ def generate_failures(
                 for f in failure_fieldnames:
                     if frow.get(f):
                         mrow[f] = frow[f]
-                mrow[abnormal_field] = "true"
+                mrow[abnormal_field] = (
+                    {"passed": "false", "failed": "true"}.get(judgments.get(aid), "unknown")
+                    if strict_verdicts
+                    else "true"
+                )
             else:
                 verdict = judgments.get(aid, "unknown")
                 mrow[abnormal_field] = {"passed": "false", "failed": "true"}.get(verdict, "unknown")
@@ -434,7 +440,7 @@ def generate_failures(
         rows = []
         for row in failure_rows:
             mrow = dict(row)
-            mrow[abnormal_field] = "true"
+            mrow[abnormal_field] = "unknown" if strict_verdicts else "true"
             rows.append(mrow)
 
     roles = detect_roles(fieldnames)

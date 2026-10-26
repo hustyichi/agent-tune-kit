@@ -6,6 +6,7 @@ from agent_tune_kit.workspace import DATASET_PATH
 def add_options(parser):
     parser.add_argument("--dataset-path", default=str(DATASET_PATH))
     parser.add_argument("--field", default="ground_truth")
+    parser.add_argument("--input-fields", nargs="+")
     parser.add_argument("--home-dir")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--review-path")
@@ -27,7 +28,7 @@ def register(subparsers):
     add_options(commands.add_parser("inspect"))
     update = commands.add_parser("update")
     add_options(update)
-    update.add_argument("--updates-path", required=True)
+    update.add_argument("--updates-path")
 
 
 def execute(args):
@@ -39,6 +40,7 @@ def execute(args):
         review_path=args.review_path,
         field=args.field,
         home_dir=args.home_dir,
+        input_fields=args.input_fields,
     )
     if args.action == "inspect":
         return datasets.inspect_dataset(**options)
@@ -61,6 +63,7 @@ def legacy_main(argv=None):
         review_path=args.review_path,
         field=args.field,
         home_dir=args.home_dir,
+        input_fields=args.input_fields,
     )
     try:
         if args.dump_context or not args.updates_path:

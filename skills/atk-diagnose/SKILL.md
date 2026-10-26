@@ -70,6 +70,18 @@ Use the installed `atk` CLI from the target project cwd. Check `atk --version` a
 
 ## Optional rule template
 
+For trust-aware data, read plugin-root `docs/truth-and-assessment.md` (also `../../docs/truth-and-assessment.md`).
+Include `assessment` JSON naming the actual standard snapshot, input/reference fields and judge identity/instructions.
+Truth-dependent definite judgments need confirmed references under that standard; independent applicable hard failures
+may fail without a reference. Format checks alone cannot prove task success; unsupported requirements stay unknown.
+Check new/changed judges against a small human-reviewed calibration CSV with `atk results calibrate`; semantic
+predictions remain Codex's responsibility. Record semantic predictions before reading gold verdicts; if gold was already
+visible in this session, disclose non-blind calibration instead of claiming independent accuracy. Do not invent calibration
+or model-version evidence. Calibration does not
+run the Agent or allocate evaluation versions. When standards change, a confirmed `reference_snapshot` for the same
+input permits rejudging existing output when sufficient, without rewriting results or scenes. The CLI archives replaced
+judgments in judgment-history. Preserve the separate execution evidence contract below.
+
 Template paths are plugin-root-relative, not relative to this Skill directory.
 Locate the plugin root by walking upward from this `SKILL.md` until `.codex-plugin/plugin.json`, `skills/`, and `templates/`
 are present. Read plugin-root-relative `templates/.atk/runner/failure_rule.py.md` (also `../../templates/.atk/runner/failure_rule.py.md`).

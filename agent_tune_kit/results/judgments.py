@@ -10,6 +10,7 @@ from agent_tune_kit.utils.csv_io import parse_csv, write_csv_atomic
 from agent_tune_kit.utils.files import read_text_bounded
 from agent_tune_kit.workspace import RESULTS_DIR
 
+from .assessment import archive_judgments, validate_assessment
 from .versions import require_current_file, resolve_current_version
 
 JUDGMENT_FIELDS = ["atk_id", "verdict", "reason", "results_sha256"]
@@ -30,7 +31,9 @@ def read_judgments(version_dir, *, max_bytes=64 * 1024 * 1024):
         digest = hashlib.sha256(result_bytes).hexdigest()
         source = csv.DictReader(io.StringIO(result_bytes.decode("utf-8-sig")), strict=True)
         source_fields = source.fieldnames or []
-        ids = [(row.get("atk_id") or "").strip() for row in source]
+        source_rows = list(source)
+        ids = [(row.get("atk_id") or "").strip() for row in source_rows]
+        by_id = dict(zip(ids, source_rows, strict=True))
         if (
             "atk_id" not in source_fields
             or len(source_fields) != len(set(source_fields))
@@ -59,6 +62,7 @@ def read_judgments(version_dir, *, max_bytes=64 * 1024 * 1024):
                     and row.get("results_sha256") == digest
                     and (row.get("reason") or "").strip()
                     and None not in row
+                    and validate_assessment(by_id.get(aid, {}), row)
                 )
                 else "unknown"
             )
@@ -96,6 +100,9 @@ def apply_judgments(judgments_path, *, source_results=None, results_dir=RESULTS_
     ):
         raise UserActionRequired("Invalid or stale judgment; preserve the source hash and recheck the criteria.")
     verdicts = {row["atk_id"]: row["verdict"] for row in judgments}
+    by_id = {row["atk_id"]: row for row in rows}
+    if any(not validate_assessment(by_id[row["atk_id"]], row) for row in judgments):
+        raise UserActionRequired("Unsupported assessment: confirm the applicable truth/standard or record unknown.")
     explanations = {row["atk_id"]: row for row in judgments}
     extra_fields = [field for field in judgment_fields if field not in JUDGMENT_FIELDS and field not in fields]
     previous = {}
@@ -120,7 +127,11 @@ def apply_judgments(judgments_path, *, source_results=None, results_dir=RESULTS_
     ):
         raise UserActionRequired("Results changed during diagnosis; nothing was written.")
     # Invalidate old passes before replacing failures; interruption stays conservative.
-    write_csv_atomic(current / "judgments.csv", JUDGMENT_FIELDS, [])
+    stored_fields = list(JUDGMENT_FIELDS)
+    if "assessment" in judgment_fields:
+        stored_fields.append("assessment")
+    archive_judgments(current / "judgments.csv")
+    write_csv_atomic(current / "judgments.csv", stored_fields, [])
     write_csv_atomic(current / "failure_cases.csv", fields + extra_fields, failures)
-    write_csv_atomic(current / "judgments.csv", JUDGMENT_FIELDS, judgments)
+    write_csv_atomic(current / "judgments.csv", stored_fields, judgments)
     return {"version": current.name, "failed": len(failures), "judged": len(judgments), "results_sha256": digest}

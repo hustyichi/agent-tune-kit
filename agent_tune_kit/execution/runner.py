@@ -105,7 +105,7 @@ def build_result_row(
         if row_log_path:
             output_row[AGENT_OUTPUT_LOG_PATH_FIELD] = row_log_path
         try:
-            agent_input = build_agent_input(row)
+            agent_input = build_agent_input({key: value for key, value in row.items() if key != "atk_truth"})
             raw_output = call_agent(agent_input)
             if inspect.isawaitable(raw_output):
                 raw_output = asyncio.run(raw_output)
