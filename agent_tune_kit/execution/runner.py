@@ -698,7 +698,12 @@ def _run_v2(*, check=False, limit=None, offset=0, concurrency=1, only_failures=F
             path = safe_path(Path.cwd(), relative)
             before = path.stat()
             content = path.read_bytes()
-            if before != path.stat():
+            after = path.stat()
+            # Reading may update atime without changing the snapshot source.
+            if any(
+                getattr(before, field) != getattr(after, field)
+                for field in ("st_dev", "st_ino", "st_size", "st_mtime_ns", "st_ctime_ns")
+            ):
                 raise UserActionRequired("Snapshot source changed while reading.")
             snapshots.append((relative, content))
         with capture_logs(run, policy):
