@@ -121,7 +121,10 @@ Use the canonical helper names and semantics from `docs/shared-versioning-and-co
 - `list_version_dirs(results_dir=RESULTS_DIR)`
 - `allocate_next_results_version(results_dir=RESULTS_DIR)`
 
-Evaluation execution is the only operation that creates a new version; generated adapters delegate fixed behavior to the shared ATK engine. If the largest `vN` contains `eval_results.csv`, create `v{N+1}`. If it does not contain `eval_results.csv`, reuse it.
+Evaluation and explicit local evidence imports use the shared allocator and write occupation. Follow
+`docs/shared-versioning-and-confirmation.md#current-version-vs-new-version-creation`: only a completely empty
+latest directory can be reused; every nonempty directory is protected even without a CSV. Do not implement a
+second allocation algorithm in generated adapters or silently clean up interrupted evidence.
 
 ## Confirmation triggers
 

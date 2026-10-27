@@ -52,9 +52,9 @@
 - **功能**：
   - Skill 阅读待调优 Agent 的源码与用户提供的数据集，生成 Python 测试脚本 `eval_runner.py`
   - Skill 在生成脚本前将用户提供的数据集写入 `.atk/datasets/` 作为 ATK 可持续运行数据集，生成的脚本读取该项目内数据集，避免外部数据集移动导致后续执行失败
-  - 脚本需要能够：批量读取数据集、调用本地 Agent、记录每条样本的输入/输出/预期结果到 `eval_results.csv`、按需采集 Agent 运行日志到 `app.log`，并在可信场景下写入逐行日志引用 `log_path`
-  - **日志采集方案**：由 Skill 在阅读 Agent 源码后自行决定采集方式，并将逻辑固化在生成的 `eval_runner.py` 中；当可识别的日志源是同进程 Python `logging` 时，必须优先用 `logging` 生成当前版本的全局 `app.log`，并同时启用可信逐行日志；只有无法可靠识别 Python `logging` 时，才考虑 stdout/stderr 重定向、读取 Agent 写入的日志文件等全局 `app.log` 来源；若 Agent 无可识别日志，则不生成 `app.log`
-  - **逐行日志方案**：当可识别的日志源是同进程 Python `logging` 时，生成的 runner 可默认使用 stdlib `contextvars` 与 ATK 自有 `logging.Handler` 路由器，为每条源 data 行写入 `.atk/results/vN/logs/row_{source_index:06d}.log`，并在 `eval_results.csv` 的 `log_path` 中写入相对 POSIX 路径；同一批 Python `logging` 记录也应进入全局 `app.log`。即使该行没有日志记录，也要创建被引用的空文件。逐行日志只能包含 ATK 行上下文处于活动状态时发出的记录；stdout/stderr、子进程、多进程和行结束后的后台日志不进入逐行日志。若生成的并发逐行日志开关被禁用，`--concurrency > 1` 必须在运行输出中显式降级并使用 `app.log` 作为回退证据。
+  - 共享引擎批量读取数据集、调用 Agent，并逐项写入 `eval_results.csv`；项目 runner 只保留输入构造、调用、分组、输出映射及留存策略，不复制引擎实现
+  - **V2 日志与证据**：按声明采集 Python `logging`、可选 Loguru 及项目显式事件，写入每个 `executions/<id>/events.jsonl`；`app.log` 是同目录下的日志浏览视图，可能为空。逐样本 `log_path` 指向该执行目录；同病例的多个样本可共享一次执行与日志，不承诺逐术式隔离。采集边界与覆盖缺口回源执行证据契约
+  - **V1 兼容日志**：共享 V1 接入仍支持版本级 `app.log` 和可信 `logs/row_*.log`。逐行日志仅覆盖活动行上下文内的同进程 Python logging，子进程、未传播上下文的后台工作等不在其范围；禁止将旧 V1 路径要求套用到 V2
   - **数据集适配**：以 CSV 为主，列名由 Skill 推断；若数据集为其它格式，由 Skill 自行扩展读取逻辑
   - **数据集快照命名与去重**：init 阶段的 ATK 可持续运行数据集固定为 `.atk/datasets/dataset.csv`，表达这是 ATK 评测流程使用的项目内数据集，便于在不同业务流程中复用。该文件不要求与用户原始文件字节级一致：若源 CSV 缺少 `atk_id`，Skill 需追加 `atk_id` 列，并按源数据行号从 `1` 开始填充；若源 CSV 已有 `atk_id`，仅在其值非空、唯一且为正整数时复用。若该文件不存在则写入规范化后的数据集；若规范化后内容完全一致则复用；若已存在但内容不同，则需在覆盖前确认。内容比较应使用可靠摘要（如 `sha256`），可先用文件大小做快速预筛。
   - **`eval_results.csv` 字段约定**：
@@ -78,21 +78,17 @@
 - **功能**：
   - 用户触发 `atk-eval`，由该 Skill 执行 `.atk/runner/eval_runner.py`
   - 简单机制实现批量测试执行和结果收集
-  - 支持通过 `--only-failures` 仅运行最近一份 `failure_cases.csv` 中出现的 `atk_id` 对应样本；该模式必须回到 `.atk/datasets/dataset.csv` 按 `atk_id` 筛选原始样本执行，不得直接把 `failure_cases.csv` 当作输入数据集运行
-  - 仅在「上一轮已有结果」时才新建版本目录；否则直接复用当前最新版本目录重跑
+  - 通过 `--only-failures` 从当前评测目标的有效 failed 判定中选择 canonical 样本；仅 legacy 目标兼容其自身失败表，不搜索旧轮次，不直接执行结果 CSV
+  - 支持 `--ids ID...` 显式补测 unknown 或技术失败，与 `--only-failures` 互斥；先校验全部 ID、按 canonical 顺序筛选，再应用 offset/limit，分组适配器保留完整病例上下文
+  - V2 mapper 可声明逐样本 `output_status=ok/error` 及字符串错误详情；摘要独立统计技术失败和 ID，不自动转换为业务 failed
 - **输出**：
   - 结果输出为目标版本目录下的 `eval_results.csv`
-  - 如果服务中存在执行日志，则采集并存储为同版本目录下的 `app.log`
+  - V2 保存 `run.json` 和独立 `executions/` 现场及日志；V1 兼容版本级日志。默认执行进度写入 stderr，`--no-progress` 可关闭，不污染 JSON stdout
 - **版本目录创建/复用规则**：
-  - 扫描 `.atk/results/` 下所有 `vN` 目录，取数字最大的目录 `vMax`
-  - 若不存在任何 `vN` 目录：创建 `v1` 并写入结果
-  - 若 `vMax` 目录下**已存在 `eval_results.csv`**：新建 `v{Max+1}` 并写入结果（即使中间版本被删，也不补号）
-  - 若 `vMax` 目录下**不存在 `eval_results.csv`**（例如上一次脚本跑挂未产出结果）：直接复用 `vMax` 目录，覆盖该目录下可能残留的中间文件
-  - 脚本崩溃时不主动清理已创建的目录，由用户手工处理
-  - 用户不需要指定版本号或结果目录
+  - 唯一规则回源[共享版本契约](shared-versioning-and-confirmation.md#current-version-vs-new-version-creation)；评测和显式本地证据导入均使用共享分配器及写占用
+  - 只复用完全空目录；任何非空目录即使没有 CSV 也受保护，失败现场不自动清理。正常流程不要求用户指定版本号
 - **异常样本回放规则**：
-  - `--only-failures` 从数字最大的、且包含 `failure_cases.csv` 的已有版本读取异常 `atk_id`
-  - 若不存在 `failure_cases.csv`、该文件缺少 `atk_id`、异常集为空，或任一异常 `atk_id` 无法在 `.atk/datasets/dataset.csv` 中找到，脚本必须停止并报错，不能静默退回全量运行
+  - 先固定当前评测目标，再分配新版本。缺少有效失败判定、失败集为空或 ID 不在 canonical 数据集中时停止，不回退全量或更旧的失败表
   - `--limit` / `--offset` 在异常样本筛选完成后再应用，用于对异常子集做有界运行
 
 ### 2.4 统一异常识别与初步诊断（atk-diagnose）
@@ -116,7 +112,7 @@
     - 归因分析
     - 跨版本调优验证章节（存在上一版本时）
 - **跨版本验证逻辑（以"目标异常是否复现"为主判定）**：
-  - 当前版本与上一版本均按第 4 章"数字最大的 vN 目录"规则确定
+  - 当前及上一评测目标按第 4 章及共享契约的版本选择规则确定
   - 报告 Skill 读取上一版本目录下的 `tuning_plan.md`，逐条获取上一轮宣称要解决的异常 / 目标样本
   - 在当前版本的 `eval_results.csv` 与 `failure_cases.csv` 中查找对应样本，判断该异常本轮是否仍然出现
   - 样本对应识别策略（由 AI 自行推理，无需用户预先指定标识列）：
@@ -136,7 +132,7 @@
 - **输出文件**：
   - 当前版本目录下的 `report.md`
 - **版本目录兼容要求**：
-  - 当前版本目录按第 4 章规则识别（数字最大的 `vN`）
+  - 当前评测目标目录按第 4 章及共享契约识别
   - 读取当前版本目录下的 `eval_results.csv`、`failure_cases.csv`，若存在 `app.log` 一并读取
   - 若存在上一版本目录，读取其 `tuning_plan.md`、`report.md`、`eval_results.csv`、`failure_cases.csv`，若存在 `app.log` 一并读取
   - 报告写入当前版本目录的 `report.md`
@@ -167,7 +163,7 @@
   - 当前版本目录下的 `failure_cases.html`
   - 不生成 `report_summary.json`、其他 metadata JSON、sidecar 数据文件或依赖文件
 - **版本目录兼容要求**：
-  - 按第 4 章规则识别当前版本（数字最大的 `vN`）
+  - 按第 4 章及共享契约识别当前评测目标
   - 必须读取：当前版本的 `failure_cases.csv`
   - 可选读取：同版本 `report.md`；以及历史版本 `v1..v(N-1)` 下的 `failure_cases.csv`、`eval_results.csv`（仅 `atk_id` 列）、`v(N-1)/tuning_plan.md`，全部 best-effort 非阻塞，任意缺失/超限/解析失败均降级处理而不报错
   - 仅向同一版本目录写入 `failure_cases.html`，不修改任何历史版本目录下的任何文件
@@ -221,7 +217,7 @@
   - 上述章节标题为强约束（一级 `##` + 中文标题原文），章节内部允许自由 Markdown
   - 建议（非强制）调优 Skill 在结束时引导用户创建一个 git commit，以便回滚和后续 diff 追溯
 - **版本目录兼容要求**：
-  - 调优模块按第 4 章规则识别当前版本目录（数字最大的 `vN`），并要求该目录已存在 `report.md`，否则提示用户
+  - 调优模块按第 4 章及共享契约识别当前评测目标目录，并要求该目录已存在 `report.md`，否则提示用户
   - `tuning_plan.md` 写入与 `report.md` 同一版本目录
   - 下一轮测试执行时由批量执行模块自动创建新的版本目录
   - 当前阶段不要求实现自动回滚、基线版本管理或跨多版本趋势汇总
@@ -238,7 +234,7 @@
 - **数据标准化**：表格类产物统一为 CSV，报告与计划统一为 Markdown
 - **版本化结果目录**：通过 `.atk/results/{version}/` 隔离多轮调优结果，`.atk/runner/` 作为跨版本共享脚本目录
 - **自动版本识别**：各模块通过扫描 `.atk/results/` 自动创建或识别当前版本，减少用户手工传参
-- **相邻版本对比**：报告 Skill 通过 `vN-1` 的 `tuning_plan.md` 与 `vN` 的 `eval_results.csv` / `failure_cases.csv` 完成上一轮调优验证，对比结果写入当前版本 `report.md`
+- **相邻版本对比**：报告 Skill 通过上一评测目标的 `tuning_plan.md` 与当前目标的结果及有效判定完成上一轮调优验证，对比结果写入当前版本 `report.md`
 - **回滚策略**：依赖用户的 git 工作流，本期不在产品内实现自动回滚
 
 ---
@@ -253,22 +249,18 @@
   - 每一轮调优结果使用 `v1`、`v2`、`v3` 等目录表示（`v` + 正整数）
   - 版本号由系统自动生成，用户不需要手工指定
 - **"当前版本"统一定义**：
-  - 除批量执行模块外，所有模块均把 `.atk/results/` 下**形如 `vN` 且 N 为正整数的目录中数字最大的那个**视为"当前版本"，不附加"必须包含某文件"的过滤
-  - 非 `vN` 命名的目录被忽略
-  - 若当前版本缺少模块所需的输入文件，模块**不回退到更早版本**，而是提示用户确认或修复
-- **新版本创建规则（批量执行模块专用）**：
-  - 判定依据是「当前最大 `vN` 目录下是否已存在 `eval_results.csv`」：
-    - 不存在任何 `vN`：创建 `v1`
-    - 当前最大 `vN` 下**已有 `eval_results.csv`**：新建 `v{N+1}`（即使中间版本被删，例如现存 `v1`、`v3`，仍创建 `v4`，不补号）
-    - 当前最大 `vN` 下**没有 `eval_results.csv`**（例如上一次脚本跑挂未产出）：直接复用 `vN`，在原目录写入新结果
-  - 脚本运行失败时不主动清理目录，由用户手工处理
+  - 最新 Run 与当前评测目标分开识别。诊断、报告、调优、失败浏览和失败复测使用 `resolve_evaluation_version()`；仅跳过已验证的 evidence-only Run
+  - 非 `vN` 命名目录被忽略；当前评测身份损坏或必需文件缺失时停止，不按“找到一个可用 CSV”回退
+- **新版本创建规则（评测及显式证据导入）**：
+  - 完整算法及写占用边界回源[共享版本契约](shared-versioning-and-confirmation.md#current-version-vs-new-version-creation)，实现回源共享 `allocate_next_results_version()`
+  - 无版本时创建 v1；最大版本完全为空才可复用，非空则按最大编号加一，不补号。未知写占用阻止写入，不自动接管、清理或续写失败目录
 - **各模块的输入 / 输出版本目录**：
   - 异常筛选：从当前版本读取 `eval_results.csv`，向同目录写入 `failure_cases.csv`
-  - 报告生成：从当前版本读取 `eval_results.csv`、`failure_cases.csv`、可选 `app.log`；若存在上一版本（数字次大的 `vN`）则读取其 `tuning_plan.md`、`report.md`、`eval_results.csv`、`failure_cases.csv`；向当前版本写入 `report.md`
+  - 报告生成：从当前评测目标读取结果、判定、失败表及可用执行证据；上一评测目标通过 `resolve_previous_version()` 识别，跳过 evidence-only；向当前目录写入 `report.md`
   - 异常可视化：从当前版本读取 `failure_cases.csv`，可选读取同版本 `report.md` 的有界摘要，向同目录写入 `failure_cases.html`
   - Agent 调优：从当前版本读取 `report.md`，向同目录写入 `tuning_plan.md`，并对 Agent 源码进行修改
 - **相邻版本验证规则**：
-  - 默认只比较当前版本 `vN` 与上一版本（数字次大的 `vN`，通常为 `vN-1`，存在跳号时为实际存在的次大版本）
+  - 默认只比较当前评测目标与上一评测目标，不把 evidence-only Run 当作被评分版本
   - 跨版本验证结果写入当前版本 `report.md`，不新增独立对比报告文件
   - 当上一版本不存在或缺少 `tuning_plan.md` 时，报告 Skill 退化为单版本报告并说明原因
 - **目录职责**：
@@ -294,7 +286,7 @@
 ## 5. 使用示例（手工执行）
 1. 需要准备或修订评估数据时执行 `$atk-dataset`；已有合适数据可直接接入或评测，浏览与反馈导出均为可选。
 2. 执行**批量测试脚本生成 Skill**，生成 `.atk/runner/eval_runner.py`；遇到 Agent 接入或字段不确定时按需与用户确认
-3. 执行 `atk-eval`，由其运行 `.atk/runner/eval_runner.py`，脚本自动创建 `.atk/results/v1/` 并写入 `eval_results.csv`（及可选 `app.log`）
+3. 执行 `atk-eval`，由共享引擎调用项目适配器，首次运行写入 `.atk/results/v1/`；V2 同时保存 run/execution 现场
 4. 执行 `atk-diagnose`，按需组合规则与语义判断，生成 `failure_cases.csv` 和 `judgments.csv`，给出初步定位。
 5. 执行**归因分析与报告生成 Skill**，生成 `.atk/results/v1/report.md`
    - 当前版本为 `v1` 时为单版本报告，说明无上一版本可对比
@@ -306,30 +298,10 @@
 ---
 
 ## 6. 输出文件结构
-```text
-/.atk/
-├── datasets/
-│   ├── dataset.csv             # ATK 可运行数据集（含 atk_id），可由 atk-dataset 创建并由 atk-init 校验/规范化
-│   └── dataset.html            # 数据集可视化与质检页（可选，由 atk-visualize-dataset 生成）
-├── runner/
-│   ├── eval_runner.py          # 跨版本共享测试脚本
-│   └── failure_rule.py          # 跨版本共享失败判定规则脚本（按需使用）
-└── results/
-    ├── v1/
-    │   ├── eval_results.csv          # v1 测试结果
-    │   ├── app.log              # v1 执行日志（可选）
-    │   ├── failure_cases.csv   # v1 异常数据
-    │   ├── failure_cases.html  # v1 异常样本可视化（可选）
-    │   ├── report.md            # v1 最终报告（无上一版本时为单版本报告）
-    │   └── tuning_plan.md       # v1 调优计划（由调优 Skill 生成，下一轮报告读取）
-    └── v2/
-        ├── eval_results.csv          # v2 测试结果
-        ├── app.log              # v2 执行日志（可选）
-        ├── failure_cases.csv   # v2 异常数据
-        ├── failure_cases.html  # v2 异常样本可视化（可选）
-        ├── report.md            # v2 最终报告（含基于 v1/tuning_plan.md 的跨版本验证）
-        └── tuning_plan.md       # v2 调优计划
-```
+
+当前正式文件树、按需产物及阅读用途统一见 [README 的完整输出结构](../README.md#完整输出结构)。
+V2 使用独立 execution 现场；V1 旧结果和日志继续可读。仅导入证据的 Run 不要求评分 CSV，
+有目录或封存文件不等于业务通过；字段、版本及错误语义以[共享契约](shared-versioning-and-confirmation.md)为准。
 
 ---
 
@@ -337,7 +309,7 @@
 1. **Codex Skill**：
    - 模块化 Skill 模板，覆盖：数据集构建、现有数据集 ground truth 补齐、测试脚本生成、统一异常诊断（规则准备和复用为内部行为）、归因分析与报告生成、可选异常样本 HTML 可视化、Agent 调优
    - 内置数据不确定性提示机制，遇到无法可靠推断的字段、Agent 接入方式、异常标准或样本对应关系时引导用户确认
-   - 所有模块兼容 `.atk/results/{version}/` 结构，按"数字最大的 `vN`"统一识别当前版本
+   - 所有模块兼容 `.atk/results/{version}/`，按共享契约区分最新 Run、当前及上一评测目标
    - 所有模块在常规流程中不要求用户指定版本号
    - `.atk/runner/` 中的脚本为跨版本共享脚本，不按版本重复生成
    - 调优 Skill 必须在当前版本目录产出 `tuning_plan.md`；报告 Skill 在存在上一版本时必须读取其 `tuning_plan.md` 并产出跨版本调优验证章节（以"目标异常是否复现"为主判定）
