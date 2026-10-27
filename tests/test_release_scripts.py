@@ -64,7 +64,7 @@ class ReleaseScriptTests(unittest.TestCase):
         check_release = load_script("check-release.py")
         identity = check_release.read_project_identity()
         self.assertEqual(identity.name, "agent-tune-kit")
-        self.assertEqual(identity.version, "2.1.1")
+        self.assertEqual(identity.version, "2.2.0")
         check_release.assert_versions_aligned(identity)
 
     def test_skill_pack_validation_does_not_phrase_scan_readmes(self) -> None:
