@@ -72,6 +72,8 @@ $atk-init 我的 Agent 入口是 scripts/agent.py，评测数据是 data/eval.cs
 
 Codex 会读取项目、准备接入文件并整理可运行的数据集。已经完成接入且仍兼容时，可直接开始评测。
 
+评测会追加 `agent_output`、`output_status`、`error_type`、`error_message`、`log_path` 五个保留输出列。共享引擎的 V1/V2 接入及 `atk eval --check` 都会在调用 Agent、创建结果版本前检查重名，报错会列出数据集路径和冲突列。例如，业务中的 `output_status` 可在确认后改为 `review_status`，并同步适配器和判定规则的字段引用。ATK 不会自动改名或覆盖原值；数据准备阶段仍可原样保留这些业务字段。旧的自管 runner 需单独核对或迁移到共享引擎。
+
 ### 3. 评测、诊断并查看报告
 
 依次发送：

@@ -5,6 +5,9 @@ Preserves all original dataset columns through the shared CLI engine. The engine
 `.atk/datasets/dataset.csv`, requires `atk_id`, appends `agent_output` and `log_path`, and
 writes `.atk/results/vN/eval_results.csv` plus independent `executions/<id>/` evidence.
 Version selection, retention, observation and sealing are implemented in ATK.
+Managed V1/V2 reserve `agent_output`, `output_status`, `error_type`, `error_message`, and `log_path` for output.
+Evaluation and `--check` reject source-column collisions before Agent calls or version allocation. Confirm explicit
+business-field renames and update adapter/rule references; do not implement automatic renaming in this adapter.
 Direct execution remains supported with `--limit`, `--offset`, `--concurrency`,
 `--only-failures` and `--no-progress`. Replace all TODO_AGENT_TUNING blocks.
 

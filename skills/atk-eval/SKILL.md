@@ -99,6 +99,7 @@ Do not ask before passing through safe runner controls such as `--limit`, `--off
 
 ## Failure behavior
 
+- Managed V1/V2 and `atk eval --check` stop on reserved output-column conflicts before Agent invocation or version allocation. Report the dataset path and all conflicting names, follow the shared rename-confirmation rules, and preserve data/history; do not rerun unchanged input or silently rename fields. Old standalone runners need separate verification or migration to the shared engine.
 - If the runner is missing, stop and tell the user to run `atk-init` first.
 - If the runner fails with `ModuleNotFoundError` or dependency import errors under bare `python3`, retry once with the best project runtime discovered from the repository (`uv run python`, `.venv/bin/python`, or `poetry run python`) before reporting failure.
 - If the runner still cannot import the target Agent, report this as an `atk-init` generation/runtime inference problem and recommend regenerating the runner after updating setup rules.

@@ -53,7 +53,7 @@ In the current package layout, this is also reachable from this Skill file as `.
    - inspect the repository's expected Python invocation path (`uv run python`, `.venv/bin/python`, `poetry run python`, or `python3`) and import layout (`src/` layout, package-at-root, or script-only);
    - inspect dataset headers/sample rows and infer input/expected-result fields;
    - inspect logging behavior, Python `logging` logger names, stdout/stderr use, and log file paths;
-   - check whether the dataset already has a column named `atk_id`, `agent_output`, or `log_path`.
+   - check `atk_id` validity and collisions with reserved evaluation output columns from the shared rules.
 2. Apply the uncertainty confirmation pattern from `docs/shared-versioning-and-confirmation.md`.
 3. Reuse a suitable dataset already prepared by `atk-dataset`: preserve IDs, row order, expected-field names and values.
    Do not repeat ground-truth generation or ask again about fields/criteria already established in the request or context.
@@ -92,7 +92,7 @@ These are shared-engine guarantees. Generate only project adaptation and configu
 - Append the fixed actual-output column `agent_output`.
 - Append the stable row-log evidence column `log_path`. V2 uses `executions/<id>/app.log`; legacy V1 row paths remain readable.
 - If Agent output has multiple fields, serialize the complete structured result as JSON in `agent_output`; do not add auxiliary `agent_output_*` columns.
-- If the input dataset already contains `agent_output` or `log_path`, ask the user to confirm a rename strategy before writing the script.
+- Reserve `agent_output`, `output_status`, `error_type`, `error_message`, and `log_path` for engine output. If the input dataset uses any of these names, obtain an explicit rename decision before writing the script unless already authorized; update adapter/rule field references too. Do not silently rename, drop or overwrite source columns. Managed V1/V2 and `atk eval --check` reject conflicts before calling the Agent or allocating a version; the writer independently rejects duplicate final headers before opening the output file. Dataset preparation may preserve the original business fields until the rename is agreed.
 - Write the input dataset into `.atk/datasets/` during `atk-init`, specifically `.atk/datasets/dataset.csv`, as the ATK canonical runnable dataset with `atk_id`. Reuse it when canonical content is identical and ask before overwriting different canonical content. The generated runner must read this fixed `.atk/datasets/` dataset so later source dataset moves do not break `atk-eval`.
 - Automatically allocate the output version with `allocate_next_results_version()`.
 - Use `RESULTS_DIR = Path(".atk/results")`.
@@ -131,14 +131,14 @@ Ask the user before writing `eval_runner.py` if any of these cannot be inferred 
 - dataset path, format, encoding, delimiter, input fields, or expected-result fields;
 - whether an existing `.atk/datasets/dataset.csv` path should be reused or overwritten when content comparison cannot be completed safely or shows different content;
 - log source, Python logger names, or capture method;
-- existing dataset column named `atk_id` with invalid/non-unique values, or existing dataset column named `agent_output` or `log_path` and the rename strategy;
+- existing dataset column named `atk_id` with invalid/non-unique values, or any reserved output-column collision whose rename strategy is unresolved;
 - whether writing `.atk/runner/eval_runner.py` would overwrite a hand-edited runner.
 
 Do not ask about routine creation of `.atk/runner/` or version-number selection.
 
 ## Failure behavior
 
-- If Agent invocation, dataset path/format, log source, Python logger names, invalid `atk_id`, or `agent_output` / `log_path` column conflict cannot be inferred safely, stop and ask the user to confirm before writing `eval_runner.py`.
+- If Agent invocation, dataset path/format, log source, Python logger names, invalid `atk_id`, or any reserved output-column conflict cannot be inferred safely, stop and ask the user to confirm before writing `eval_runner.py`.
 - If required source files or dataset are missing, report the missing path and do not create a misleading runner.
 - If the dataset cannot be written into `.atk/datasets/` as canonical `dataset.csv` with `atk_id`, or duplicate-content comparison cannot be completed safely, report the reason and do not write a runner that points at the external source dataset.
 - If the generated runner cannot import the target Agent under the inferred project runtime, fix the import/runtime inference before handing off.

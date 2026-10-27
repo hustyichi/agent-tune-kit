@@ -14,7 +14,7 @@ from contextlib import ExitStack, redirect_stderr, redirect_stdout, suppress
 from pathlib import Path
 from typing import Any
 
-from agent_tune_kit.datasets.validation import parse_dataset_csv
+from agent_tune_kit.datasets.validation import find_duplicates, parse_dataset_csv
 from agent_tune_kit.errors import AgentExecutionError, UserActionRequired
 from agent_tune_kit.results.versions import allocate_next_results_version, resolve_evaluation_version, write_occupation
 from agent_tune_kit.workspace import DATASET_PATH, RUNNER_PATH
@@ -26,6 +26,7 @@ RESULTS_FILENAME = "eval_results.csv"
 FAILURE_FILENAME = "failure_cases.csv"
 AGENT_OUTPUT_LOG_PATH_FIELD = "log_path"
 ATK_ID_FIELD = "atk_id"
+OUTPUT_FIELDS = ("agent_output", "output_status", "error_type", "error_message", AGENT_OUTPUT_LOG_PATH_FIELD)
 
 
 def business_row(row):
@@ -148,21 +149,15 @@ def get_output_fieldnames(
     source_fieldnames: list[str],
     rows: list[dict[str, str]],
 ) -> list[str]:
-    fixed_output_fields = [
-        "output_status",
-        "error_type",
-        "error_message",
-        AGENT_OUTPUT_LOG_PATH_FIELD,
-    ]
     auxiliary_fields = sorted(
         {
             key
             for row in rows
             for key in row
-            if key.startswith("agent_output_") and key not in source_fieldnames and key not in fixed_output_fields
+            if key.startswith("agent_output_") and key not in source_fieldnames and key not in OUTPUT_FIELDS
         }
     )
-    return list(source_fieldnames) + ["agent_output"] + fixed_output_fields + auxiliary_fields
+    return list(source_fieldnames) + list(OUTPUT_FIELDS) + auxiliary_fields
 
 
 def open_results_writer(
@@ -172,6 +167,12 @@ def open_results_writer(
 ) -> tuple[Path, Any, csv.DictWriter[str]]:
     output_path = version_dir / RESULTS_FILENAME
     fieldnames = get_output_fieldnames(source_fieldnames, rows)
+    duplicates = find_duplicates(fieldnames)
+    if duplicates:
+        raise UserActionRequired(
+            f"Cannot write {output_path}: duplicate output columns: {', '.join(duplicates)}. "
+            "Confirm a rename strategy before evaluation."
+        )
     handle = output_path.open("w", newline="", encoding="utf-8")
     writer = csv.DictWriter(handle, fieldnames=fieldnames, extrasaction="ignore")
     writer.writeheader()
@@ -276,8 +277,13 @@ def load_adapter(path=RUNNER_PATH):
 
 def load_dataset(path=DATASET_PATH):
     fields, rows = parse_dataset_csv(Path(path))
-    if {"agent_output", "log_path"} & set(fields):
-        raise UserActionRequired("Dataset already contains reserved output columns; confirm a rename strategy.")
+    conflicts = sorted(set(fields) & set(OUTPUT_FIELDS))
+    if conflicts:
+        raise UserActionRequired(
+            f"{path} contains reserved ATK output columns: {', '.join(conflicts)}. "
+            "Confirm a rename strategy and update adapter/rule field references before evaluation. "
+            "No automatic renaming was applied."
+        )
     return fields, rows
 
 
