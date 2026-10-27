@@ -602,8 +602,10 @@ async def execute_v2_item(adapter, run, item, rows_by_id, snapshots):
     return results
 
 
-async def run_v2_items(adapter, run, items, fields, rows, concurrency, snapshots):
+async def run_v2_items(adapter, run, items, fields, rows, concurrency, snapshots, *, show_progress=True):
     pending, iterator = set(), iter(items)
+    started, completed, scored = 0, 0, 0
+    total_samples = sum(len(item["sample_ids"]) for item in items)
     by_id = {row[ATK_ID_FIELD]: row for row in rows}
     output, handle, writer = open_results_writer(run.directory, fields, rows)
     os.chmod(output, 0o600)
@@ -613,6 +615,13 @@ async def run_v2_items(adapter, run, items, fields, rows, concurrency, snapshots
                 item = next(iterator, None)
                 if item is None:
                     break
+                started += 1
+                if show_progress:
+                    print(
+                        f"Starting execution {started}/{len(items)} ({len(item['sample_ids'])} scored samples)",
+                        file=sys.__stderr__,
+                        flush=True,
+                    )
                 pending.add(asyncio.create_task(execute_v2_item(adapter, run, item, by_id, snapshots)))
             if not pending:
                 break
@@ -629,6 +638,14 @@ async def run_v2_items(adapter, run, items, fields, rows, concurrency, snapshots
                         writer.writerow(row)
                     handle.flush()
                     os.fsync(handle.fileno())
+                    completed += 1
+                    scored += len(results)
+                    if show_progress:
+                        print(
+                            f"Completed executions {completed}/{len(items)}; scored samples {scored}/{total_samples}",
+                            file=sys.__stderr__,
+                            flush=True,
+                        )
             if errors:
                 raise errors[0]
             if run.failed.is_set():
@@ -685,7 +702,9 @@ def _run_v2(*, check=False, limit=None, offset=0, concurrency=1, only_failures=F
                 raise UserActionRequired("Snapshot source changed while reading.")
             snapshots.append((relative, content))
         with capture_logs(run, policy):
-            output = asyncio.run(run_v2_items(adapter, run, items, fields, rows, concurrency, snapshots))
+            output = asyncio.run(
+                run_v2_items(adapter, run, items, fields, rows, concurrency, snapshots, show_progress=not no_progress)
+            )
         if run.failed.is_set():
             raise UserActionRequired("Evidence collection failed.")
         run.seal("completed")

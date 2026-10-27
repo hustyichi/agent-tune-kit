@@ -92,6 +92,8 @@ $atk-report
 
 Use `$atk-visualize-failures` for a local offline page to search, filter, and review individual failures.
 
+V2 shows start/completion progress by default, counting executions and scored samples separately for grouped cases. Progress goes to stderr so `--json` stdout remains valid JSON. Use `--no-progress` to suppress it; `--check` emits no execution progress.
+
 **Unknown does not count as passed.** Missing answers, criteria, or valid judgment records cannot establish that the Agent behaved correctly.
 
 ### 4. Tune from the Results

@@ -105,6 +105,7 @@ Evaluation and explicit `atk results import-evidence` allocate versions under on
 - Do not clean up an incomplete directory automatically after script failure.
 - Runners write `eval_results.csv` incrementally and flush after each row; partial output does not prove complete evaluation.
 - Runners support `--limit`, `--offset`, `--concurrency`, `--only-failures` and `--no-progress`.
+- V2 emits flushed execution-start and completion progress on stderr, with separate execution/sample totals. It counts selected scored samples, not unscored context rows; `--json` stdout stays machine-readable. `--no-progress` suppresses these messages, and `--check` emits no execution progress.
 - If `atk-init` performs a smoke run, it must record the pre-smoke version state and clean up only the version directory created or reused solely by that smoke run. Never remove pre-existing user data.
 - `--only-failures` fixes the current evaluation target before allocating the next version, then selects canonical dataset rows by valid failed judgments. Legacy targets may use their own failure table. Never search older failure tables or fall back to running all rows.
 - Managed V1/V2 accept explicit `--ids ID...` for unknowns or technical-error reruns, mutually exclusive with `--only-failures`. Validate every ID before allocating a version, filter in canonical row order, then apply offset/limit. Missing IDs never fall back to a full run. Grouped execution retains declared full context. Standalone runners must migrate before using this flag.
