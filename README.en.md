@@ -122,6 +122,10 @@ A new evaluation does not overwrite existing nonempty result directories. From t
 
 **Rerunning failures does not measure the full-dataset pass rate.** To check effects on other samples, run `$atk-eval` again, then diagnose and report for a full regression check. Changing data or evaluation criteria alone does not prove Agent improvement.
 
+Execution summaries and `atk results inspect` expose `technical_failures` and `technical_failure_ids`, separately from business judgments. They count reported `output_status=error` rows; a V2 mapper must explicitly translate failures embedded in business outputs. ATK does not guess domain field meanings. Technical errors do not automatically become business failures or enter `--only-failures`.
+
+Use `$atk-eval --ids 7 9` to revisit unknown or selected samples. Managed V1/V2 filter IDs in canonical dataset order before offset/limit; grouped adapters retain full case context. Missing IDs stop execution, and `--ids` is mutually exclusive with `--only-failures`. A selected rerun is not a full regression run.
+
 ### Complete Output Structure
 
 This tree lists persistent evaluation outputs and optional files produced by the latest version. They appear as the corresponding steps and configuration require, rather than all being created at installation.

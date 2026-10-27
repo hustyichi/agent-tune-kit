@@ -20,6 +20,14 @@ def effective_verdicts(current):
     return verdicts
 
 
+def execution_summary(fields, rows):
+    ids = [row["atk_id"] for row in rows if row.get("output_status") == "error"]
+    return {
+        "technical_failures": len(ids) if "output_status" in fields else None,
+        "technical_failure_ids": ids,
+    }
+
+
 def _inspect_version(current, results_dir):
     previous = resolve_previous_version(current, Path(results_dir))
     names = ["eval_results.csv", "judgments.csv", "failure_cases.csv", "report.md", "tuning_plan.md", "app.log"]
@@ -33,16 +41,19 @@ def _inspect_version(current, results_dir):
         "passed": None,
         "failed": None,
         "unknown": None,
+        "technical_failures": None,
+        "technical_failure_ids": [],
     }
     if result["files"]["eval_results.csv"]:
         result["results_sha256"] = hashlib.sha256((current / "eval_results.csv").read_bytes()).hexdigest()
-        _, rows = parse_csv(current / "eval_results.csv")
+        fields, rows = parse_csv(current / "eval_results.csv")
         verdicts = effective_verdicts(current)
         counts = {verdict: 0 for verdict in ["passed", "failed", "unknown"]}
         for row in rows:
             counts[verdicts.get(row.get("atk_id"), "unknown")] += 1
         result.update(counts, executed=len(rows), judged=counts["passed"] + counts["failed"])
         result["truth_counts"] = truth_counts(rows)
+        result.update(execution_summary(fields, rows))
     return result
 
 

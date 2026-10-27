@@ -59,6 +59,10 @@ Use the installed `atk` CLI from the target project cwd. Check `atk --version` a
    ```
 
 4. Bind the version returned by the command; inspect `latest_run` and `evaluation_target` separately with `atk results inspect --json`.
+   For unknown or technical-error samples, pass explicit `--ids ID...`; never combine it with `--only-failures`.
+   IDs are validated and selected in canonical order before offset/limit, retaining grouped context. Report
+   `technical_failures` and `technical_failure_ids` separately from business verdicts; zero counts only reported errors,
+   not failures hidden by an adapter's default ok mapping. Run completed is evaluation completion, not universal success.
 5. Confirm whether `eval_results.csv` exists in that version.
 6. Inspect row-log status:
    - if `eval_results.csv` contains non-empty `log_path` values and referenced files exist under `.atk/results/vN/logs/`, report row logs as active;
@@ -117,6 +121,7 @@ After a successful run, summarize:
 
 - command executed;
 - any runner flags used, especially `--limit`, `--offset`, `--concurrency`, or `--only-failures`;
+- technical failure count/IDs when available, independent of business pass/fail/unknown;
 - current version directory;
 - output path `.atk/results/vN/eval_results.csv`;
 - whether optional `app.log` was produced;

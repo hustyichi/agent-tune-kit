@@ -122,6 +122,10 @@ $atk-report
 
 **只重跑失败样本不能代表全量通过率。** 需要确认改动是否影响其他样本时，再运行 `$atk-eval` 并继续诊断、报告，完成全量回归。修改数据或评测标准本身，也不能证明 Agent 改善。
 
+超时等技术失败与业务判定分开统计：运行摘要和 `atk results inspect` 提供 `technical_failures` 与 `technical_failure_ids`。它们只统计适配器已上报的 `output_status=error`；业务输出内部的失败需要 V2 mapper 显式映射，默认不会猜测字段含义。技术失败不会自动写成业务 failed，也不会自动进入 `--only-failures`。
+
+要补测 unknown 或指定样本，可用 `$atk-eval --ids 7 9`。共享 V1/V2 按 canonical 数据集顺序筛选 ID，再应用 offset/limit；分组适配器仍保留完整病例上下文。未知 ID 会停止，`--ids` 与 `--only-failures` 不能同时使用；局部补测不代表完整回归。
+
 ### 完整输出结构
 
 下面列出最新版本评测流程中持续保存的正式产物及可选文件。它们随对应步骤和配置生成，不会在安装后一次性出现。

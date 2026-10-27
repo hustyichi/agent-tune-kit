@@ -59,6 +59,8 @@ def adapter_version(path=RUNNER_PATH):
 
 
 def launch(operation, *, python=None, **options):
+    if operation == "eval" and options.get("ids") is not None and not managed_runner():
+        raise UserActionRequired("Explicit IDs require a managed adapter; migrate the standalone runner first.")
     if operation == "eval" and not managed_runner() and not options.get("check"):
         from agent_tune_kit.results.versions import list_version_dirs, run_kind, write_occupation
 

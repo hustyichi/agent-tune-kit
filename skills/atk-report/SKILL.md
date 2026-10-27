@@ -101,6 +101,8 @@ Do not silently rerun rules or overwrite judgments here; route disputed judgment
 Separate executed, judged, passed, failed and unknown counts. Include unknown IDs and missing evidence in the report;
 unknowns must not be counted as successful or business failures. If reporting a rate, state its denominator and coverage.
 A smaller failure count alone does not show improvement, especially after `--only-failures`.
+Report `technical_failures` and `technical_failure_ids` separately when available. They count declared CSV execution
+errors; inspect domain outputs when the adapter did not map those states. Run completed is not a business pass.
 
 ## Execution evidence
 

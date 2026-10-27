@@ -16,7 +16,9 @@ from typing import Any
 
 from agent_tune_kit.datasets.validation import find_duplicates, parse_dataset_csv
 from agent_tune_kit.errors import AgentExecutionError, UserActionRequired
+from agent_tune_kit.results.summary import execution_summary
 from agent_tune_kit.results.versions import allocate_next_results_version, resolve_evaluation_version, write_occupation
+from agent_tune_kit.utils.csv_io import parse_csv
 from agent_tune_kit.workspace import DATASET_PATH, RUNNER_PATH
 
 from . import logs
@@ -66,8 +68,17 @@ def select_dataset_rows(
     *,
     offset: int,
     limit: int | None,
+    ids: list[str] | None = None,
 ) -> list[tuple[int, dict[str, str]]]:
     indexed_rows = list(enumerate(rows, start=1))
+    if ids is not None:
+        requested = set(ids)
+        missing = requested - {row[ATK_ID_FIELD] for row in rows}
+        if not requested or missing:
+            raise UserActionRequired(
+                "Requested atk_id values are empty or missing from the dataset: " + ", ".join(sorted(missing))
+            )
+        indexed_rows = [(index, row) for index, row in indexed_rows if row[ATK_ID_FIELD] in requested]
     selected = indexed_rows[offset:]
     if limit is not None:
         selected = selected[:limit]
@@ -340,22 +351,22 @@ async def run_async_rows(adapter, version, fields, selected, concurrency, row_lo
     return output
 
 
-def _run_v1(*, check=False, limit=None, offset=0, concurrency=1, only_failures=False, no_progress=False):
+def _run_v1(*, check=False, limit=None, offset=0, concurrency=1, only_failures=False, no_progress=False, ids=None):
     if offset < 0 or (limit is not None and limit < 0) or concurrency < 1:
         raise UserActionRequired("limit/offset must be nonnegative and concurrency must be at least 1.")
     adapter = load_adapter()
     fields, rows = load_dataset()
+    if only_failures:
+        failure_ids = load_failure_atk_ids(resolve_evaluation_version())
+        selected = select_failure_dataset_rows(rows, failure_ids, offset=offset, limit=limit)
+    else:
+        selected = select_dataset_rows(rows, offset=offset, limit=limit, ids=ids)
     if check:
-        if rows:
-            value = adapter["build_agent_input"](business_row(rows[0]))
+        if selected:
+            value = adapter["build_agent_input"](business_row(selected[0][1]))
             if inspect.isawaitable(value):
                 asyncio.run(value)
-        return {"checked": True, "rows": len(rows)}
-    if only_failures:
-        ids = load_failure_atk_ids(resolve_evaluation_version())
-        selected = select_failure_dataset_rows(rows, ids, offset=offset, limit=limit)
-    else:
-        selected = select_dataset_rows(rows, offset=offset, limit=limit)
+        return {"checked": True, "rows": len(selected)}
     version = allocate_next_results_version()
     enabled = adapter.get("PYTHON_LOGGING_CAPTURE_ENABLED", False)
     concurrent_logs = adapter.get("CONCURRENT_ROW_LOGGING_ENABLED", True)
@@ -391,7 +402,13 @@ def _run_v1(*, check=False, limit=None, offset=0, concurrency=1, only_failures=F
                 concurrency=concurrency,
                 row_logging_enabled=row_logging,
             )
-    return {"version": version.name, "rows": len(selected), "output": str(output), "row_logs": row_logging}
+    return {
+        "version": version.name,
+        "rows": len(selected),
+        "output": str(output),
+        "row_logs": row_logging,
+        **execution_summary(*parse_csv(output)),
+    }
 
 
 async def invoke(function, *args, **kwargs):
@@ -504,10 +521,21 @@ async def execute_v2_item(adapter, run, item, rows_by_id, snapshots):
                 ):
                     raise UserActionRequired("Each mapped output needs output and location.")
                 output = mapped["output"]
+                output_status = mapped.get("output_status", "ok")
+                errors = {key: mapped.get(key, "") for key in ("error_type", "error_message")}
+                if (
+                    output_status not in ("ok", "error")
+                    or any(not isinstance(value, str) for value in errors.values())
+                    or (output_status == "ok" and any(errors.values()))
+                ):
+                    raise UserActionRequired(
+                        "Mapped status must be ok/error with string error details only for errors."
+                    )
                 row = dict(
                     rows_by_id[aid],
                     agent_output=output if isinstance(output, str) else json_bytes(output).decode(),
-                    output_status="ok",
+                    output_status=output_status,
+                    **errors,
                     log_path=f"executions/{evidence.directory.name}/app.log",
                 )
                 retained = evidence.retain("result_row", row)
@@ -516,7 +544,7 @@ async def execute_v2_item(adapter, run, item, rows_by_id, snapshots):
                 results.append(row)
                 locations[aid] = mapped["location"]
             evidence.manifest["output_locations"] = evidence.retain("mapping", locations)
-            status = "completed"
+            status = "technical_failure" if any(row["output_status"] == "error" for row in results) else "completed"
         except AgentExecutionError as exc:
             status = "technical_failure"
             observer.event("execution.failed", {"stage": stage, "error_type": type(exc).__name__, "message": str(exc)})
@@ -613,7 +641,7 @@ async def run_v2_items(adapter, run, items, fields, rows, concurrency, snapshots
     return output
 
 
-def _run_v2(*, check=False, limit=None, offset=0, concurrency=1, only_failures=False, no_progress=False):
+def _run_v2(*, check=False, limit=None, offset=0, concurrency=1, only_failures=False, no_progress=False, ids=None):
     from agent_tune_kit.results.evidence import RunEvidence, safe_path
 
     from .tracing import capture_logs
@@ -624,7 +652,7 @@ def _run_v2(*, check=False, limit=None, offset=0, concurrency=1, only_failures=F
             rows, load_failure_atk_ids(resolve_evaluation_version()), offset=offset, limit=limit
         )
         if only_failures
-        else select_dataset_rows(rows, offset=offset, limit=limit)
+        else select_dataset_rows(rows, offset=offset, limit=limit, ids=ids)
     )
     if check:
         adapter = load_adapter()
@@ -668,6 +696,7 @@ def _run_v2(*, check=False, limit=None, offset=0, concurrency=1, only_failures=F
             "executions": len(items),
             "output": str(output),
             "adapter_version": 2,
+            **execution_summary(*parse_csv(output)),
         }
     except BaseException as exc:
         run.manifest.update(
@@ -681,11 +710,15 @@ def _run_v2(*, check=False, limit=None, offset=0, concurrency=1, only_failures=F
         raise UserActionRequired("V2 evaluation failed; preserved scene contains available details and gaps.") from None
 
 
-def run_evaluation(*, check=False, limit=None, offset=0, concurrency=1, only_failures=False, no_progress=False):
+def run_evaluation(
+    *, check=False, limit=None, offset=0, concurrency=1, only_failures=False, no_progress=False, ids=None
+):
     from .runtime import adapter_version
 
     if offset < 0 or (limit is not None and limit < 0) or concurrency < 1:
         raise UserActionRequired("limit/offset must be nonnegative and concurrency must be at least 1.")
+    if only_failures and ids is not None:
+        raise UserActionRequired("Select either explicit IDs or only-failures.")
     version = adapter_version()
     operation = _run_v2 if version == 2 else _run_v1
     options = dict(
@@ -695,6 +728,7 @@ def run_evaluation(*, check=False, limit=None, offset=0, concurrency=1, only_fai
         concurrency=concurrency,
         only_failures=only_failures,
         no_progress=no_progress,
+        ids=ids,
     )
     if check:
         return operation(**options)

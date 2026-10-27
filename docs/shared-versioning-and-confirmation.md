@@ -107,6 +107,7 @@ Evaluation and explicit `atk results import-evidence` allocate versions under on
 - Runners support `--limit`, `--offset`, `--concurrency`, `--only-failures` and `--no-progress`.
 - If `atk-init` performs a smoke run, it must record the pre-smoke version state and clean up only the version directory created or reused solely by that smoke run. Never remove pre-existing user data.
 - `--only-failures` fixes the current evaluation target before allocating the next version, then selects canonical dataset rows by valid failed judgments. Legacy targets may use their own failure table. Never search older failure tables or fall back to running all rows.
+- Managed V1/V2 accept explicit `--ids ID...` for unknowns or technical-error reruns, mutually exclusive with `--only-failures`. Validate every ID before allocating a version, filter in canonical row order, then apply offset/limit. Missing IDs never fall back to a full run. Grouped execution retains declared full context. Standalone runners must migrate before using this flag.
 
 V2 records each execution in `executions/<id>/`: `execution.json`, actual input/output, `events.jsonl`,
 derived `app.log`, context snapshots and artifacts. Several scored rows may share one execution.
@@ -158,6 +159,20 @@ headers before opening the output file, preserving any existing output when vali
 This is an evaluation boundary: `atk dataset prepare` may preserve the original business columns. Nonconflicting
 datasets retain their source values and column order. Historical results are not rewritten or automatically repaired;
 old standalone runners bypassing the shared engine need an explicit check or migration.
+
+## Technical execution outcomes
+
+V2 `map_agent_output` entries may add `output_status` (`ok`/`error`), `error_type`, and `error_message` next to
+`output` and `location`. Status defaults to `ok` for compatibility. Error details must be strings and empty for `ok`;
+invalid declarations stop evaluation and preserve the partial scene. The adapter maps its own domain states; the engine
+does not infer a failure from arbitrary JSON fields. Actual outputs and successful siblings remain intact.
+
+An execution with an errored scored sample seals as `technical_failure`; the Run can still seal as `completed` when
+evaluation finished. Neither status proves a business pass/fail. `atk eval` and `atk results inspect` report
+`technical_failures` and `technical_failure_ids` from CSV execution states, independently of judgment coverage.
+Historical CSVs without `output_status` report null for this count, not a certified zero. Existing mappings that omit
+status cannot reveal domain errors automatically; review them before claiming coverage. Do not rewrite sealed results.
+Keep technical-error/unknown reruns explicit through `--ids`; do not redefine `--only-failures`.
 
 ## Canonical version helpers
 

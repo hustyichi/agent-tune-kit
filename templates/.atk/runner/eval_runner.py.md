@@ -9,7 +9,7 @@ Managed V1/V2 reserve `agent_output`, `output_status`, `error_type`, `error_mess
 Evaluation and `--check` reject source-column collisions before Agent calls or version allocation. Confirm explicit
 business-field renames and update adapter/rule references; do not implement automatic renaming in this adapter.
 Direct execution remains supported with `--limit`, `--offset`, `--concurrency`,
-`--only-failures` and `--no-progress`. Replace all TODO_AGENT_TUNING blocks.
+`--ids`, `--only-failures` and `--no-progress`. Replace all TODO_AGENT_TUNING blocks.
 
 ```python
 #!/usr/bin/env python3
@@ -79,6 +79,14 @@ For grouping, implement `plan_executions(selected_rows, all_rows)` returning dic
 `source`, and optional `context_ids`. Implement `map_agent_output(raw_output, item)` returning
 `{atk_id: {"output": complete_sample_output, "location": json_pointer}}` for exactly the selected IDs.
 Extra Case inputs are frozen context, not scored rows. Preserve V1 adapters explicitly; do not silently replace them.
+
+Each V2 mapped entry may also declare `output_status` (`ok` by default, or `error`), `error_type`, and `error_message`.
+Error details must be strings and must be empty for `ok`. Translate domain states such as RETRYABLE_FAILED and
+LLM_TIMEOUT here, preserving the complete actual output and successful sibling samples; never infer business verdicts.
+For example, return `{'output': row, 'location': pointer, 'output_status': 'error', 'error_type': 'LLM_TIMEOUT',
+'error_message': 'request timed out'}` for a confirmed technical timeout. One errored scored sample makes its execution
+`technical_failure`; Run `completed` means evaluation finished, not all samples succeeded. The CLI reports error IDs.
+Old mappings remain valid with default `ok`, so review existing adapters before claiming domain-error coverage.
 
 `optional_roles` may list nonessential artifact roles: rejection leaves an explicit gap. Input/output, scoring
 fields and lifecycle events remain required. `max_bytes` is a shared Run content budget (metadata/index overhead
