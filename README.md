@@ -1,10 +1,5 @@
 # Agent Tune Kit
 
-真值复核、裁判校准和判定追溯见[可信度契约](docs/truth-and-assessment.md)：数据集可按答案字段记录来源和
-有效确认，输入/答案/标准变化会使确认过期；`atk dataset update --review-path dataset_review.csv` 可只导入
-确认而不改答案。`atk results calibrate` 用已复核输出检查裁判，不调用 Agent 或创建评测轮次。
-判定可绑定标准与裁判快照，重判保存历史，比较显式列出可比性差异。旧数据可读，但不自动标为已确认。
-
 简体中文 | [English](README.en.md)
 
 [![PyPI](https://img.shields.io/pypi/v/agent-tune-kit.svg)](https://pypi.org/project/agent-tune-kit/)
@@ -30,7 +25,7 @@ Agent Tune Kit 是一个**本地 Codex 插件**，用于把你已有的本地 Ag
 
 Agent Tune Kit 的价值不只是“跑一次测试”，而是把 Agent 调优拆成两条清晰路径：
 
-- **数据集准备路径**：从业务描述、样例或规则生成数据集，补齐 `ground_truth`，用本地 HTML 质检，再根据人工反馈修正预期结果。数据集会沉淀在 `.atk/datasets/`，不绑定某一轮测试结果。
+- **数据集准备路径**：从业务描述、样例或规则准备数据集，保留已有答案字段，按依据补齐判断标准，用本地 HTML 质检，再根据人工反馈修正预期结果。数据集会沉淀在 `.atk/datasets/`，不绑定某一轮测试结果。
 - **Agent 评测与调优路径**：把已有 Agent 接入 runner，批量运行评测，找出异常样本，生成分析报告，浏览失败样本，然后让 Codex 基于证据调优 Agent。每一轮结果写入 `.atk/results/vN/`，方便跨轮验证是否真的变好。
 
 这意味着你可以把 Agent 调优从一次性的主观试错，变成带有样本、结果、报告和调优记录的工程流程。
@@ -50,6 +45,8 @@ atk install
 pipx install agent-tune-kit
 atk install
 ```
+
+兼容一次性安装命令 `uvx --from agent-tune-kit atk install`；日常使用 Skill 需要 PATH 中持续可用的 `atk` 命令。
 
 如果希望使用本地源码版本，先将所需分支的最新代码更新到本地，再在 **ATK 仓库根目录**执行：
 
@@ -108,8 +105,8 @@ $atk-optimize
 
 | 命令 | 作用 | 关键产物 |
 | --- | --- | --- |
-| `$atk-init` | 接入已有 Agent 和评估数据，生成 runner，并把数据集规范化到 ATK 固定位置 | `.atk/runner/eval_runner.py`、`.atk/datasets/dataset.csv` |
-| `$atk-eval` | 执行批量评测，由 runner 创建或复用当前结果版本 | `.atk/results/vN/eval_results.csv` |
+| `$atk-init` | 接入已有 Agent 和评估数据，生成 V2 适配文件并配置证据保留策略，把数据集规范化到 ATK 固定位置 | `.atk/runner/eval_runner.py`、`.atk/datasets/dataset.csv` |
+| `$atk-eval` | 由共享执行引擎运行批量评测，分配结果版本并保存执行证据 | `.atk/results/vN/eval_results.csv`、`run.json`、`executions/` |
 | `$atk-diagnose` | 统一判断异常并初步定位原因 | `.atk/results/vN/failure_cases.csv`、`judgments.csv` |
 | `$atk-report` | 生成当前轮分析报告，并在有上一轮时做跨版本验证 | `.atk/results/vN/report.md` |
 | `$atk-visualize-failures` | 生成本地离线 HTML，搜索、筛选、复核失败样本 | `.atk/results/vN/failure_cases.html` |
@@ -130,7 +127,9 @@ $atk-diagnose
 $atk-report
 ```
 
-新结果会写入新的 `.atk/results/vN/`。`--only-failures` 会通过 `atk_id` 将上一轮 `failure_cases.csv` 映射回 `.atk/datasets/dataset.csv`，并只重跑这些行。从第二轮开始，`$atk-report` 会对比上一轮 `tuning_plan.md`，说明目标问题是已解决、部分解决、未解决，还是无法判断。
+新结果会写入新的 `.atk/results/vN/`，已有非空版本不会被覆盖，最高版本目录为空时可复用。对于 V2 结果，`--only-failures` 从当前评测目标提取有效失败判定，通过 `atk_id` 映射回 `.atk/datasets/dataset.csv`，排除失效判定与未判定样本；旧版结果继续支持从 `failure_cases.csv` 取失败 ID。纯证据导入版本不会成为评测目标。
+
+从第二轮开始，有上一轮 `tuning_plan.md` 且实验条件可比时，`$atk-report` 会说明目标问题是已解决、部分解决、未解决，还是无法判断。只重跑失败集用于验证目标问题，不能代表全量通过率；必要时再运行 `$atk-eval` 检查全量回归。
 
 ### 本地调优上下文
 
@@ -138,18 +137,36 @@ ATK 可选读取本地私有的 `.atk/context.md`，用于保存用户沟通后�
 
 `$atk-dataset` 在用户确认可复用标准变化时更新相关上下文；`$atk-diagnose`、`$atk-report` 和 `$atk-optimize` 使用这些标准。缺少 `.atk/context.md` 不会阻塞流程。
 
+### 真值复核与裁判校准
+
+数据集可按答案字段记录来源和有效确认；输入、答案或相关标准变化会使确认过期。`atk dataset update --review-path dataset_review.csv` 可只导入确认而不改答案。`atk results calibrate` 用已复核输出检查规则或语义裁判，不调用 Agent 或创建评测轮次。
+
+判定可绑定标准与裁判快照，重判保存历史，比较显式列出可比性差异。旧数据可读，但不自动标为已确认。复核记录、校准输入和判定字段见[可信度契约](docs/truth-and-assessment.md)。
+
 ## 输出结构
 
 ```text
 .atk/
+├── context.md             # 可选的本地调优共识
 ├── datasets/
-│   └── dataset.csv        # ATK 可运行数据集，包含 atk_id
+│   ├── dataset.csv        # ATK 可运行数据集，包含 atk_id
+│   └── dataset.html       # 可选的数据集浏览页
 ├── runner/
-│   ├── eval_runner.py
-│   └── failure_rule.py
+│   ├── eval_runner.py     # 项目适配文件
+│   └── failure_rule.py    # 按需生成的规则
 └── results/
     ├── v1/
     │   ├── eval_results.csv
+    │   ├── run.json       # V2 运行清单
+    │   ├── executions/    # V2 每项独立执行现场
+    │   │   └── <id>/
+    │   │       ├── execution.json
+    │   │       ├── input.json
+    │   │       ├── output.json
+    │   │       ├── context/
+    │   │       ├── events.jsonl
+    │   │       ├── app.log
+    │   │       └── artifacts/
     │   ├── judgments.csv
     │   ├── failure_cases.csv
     │   ├── failure_cases.html
@@ -161,29 +178,26 @@ ATK 可选读取本地私有的 `.atk/context.md`，用于保存用户沟通后�
 
 常用输出文件：
 
-- `eval_results.csv`：每条样本的实际输出。
+- `eval_results.csv`：保留原数据字段，并追加实际输出 `agent_output`、日志路径 `log_path` 等执行字段；`atk_truth` 不传入 Agent，答案列仍需由适配文件排除。
+- `run.json`、`executions/`：V2 的运行清单与独立执行证据；同一业务 Case 可映射多条样本。旧 V1 结果不要求这些文件。
+- `judgments.csv`：逐条通过、失败或未判定的判定、理由与可追溯引用；重判时原记录归档到 `judgment-history/`。
 - `failure_cases.csv`：筛选出的异常样本。
 - `failure_cases.html`：可选的异常样本浏览页面。
 - `report.md`：本轮问题分析和调优建议。
 - `tuning_plan.md`：Codex 本轮改了什么、为什么改。
 
+以上为典型评测流程，各步骤按需生成产物。纯证据导入可没有 `eval_results.csv`；中断或失败时保留已生成的现场，不能据此声称执行完成。
+
 ## 常用 Skill
 
 - `$atk-dataset`：统一准备或修订评测数据，保留原字段和 ID，按需处理反馈。
-- `$atk-visualize-dataset`：将 `.atk/datasets/dataset.csv` 生成本地 HTML 浏览页，便于快速查看数据并确认 ground_truth 是否符合预期。
-- `$atk-init`：生成测试脚本。
+- `$atk-visualize-dataset`：将 `.atk/datasets/dataset.csv` 生成本地 HTML 浏览页，便于查看数据、复核答案及其来源。
+- `$atk-init`：生成项目适配文件，接入 Agent 并配置执行证据保留策略。
 - `$atk-eval`：运行评测并生成新版本结果。
 - `$atk-diagnose`：统一识别失败与未判定样本，按需组合规则与语义判断并初步定位原因。
 - `$atk-report`：生成分析报告和跨轮验证结论。
 - `$atk-visualize-failures`：生成异常样本 HTML 浏览页。
 - `$atk-optimize`：根据报告调优 Agent。
-
-## 能力评估
-
-- [Ground truth 与评分方案支持评估（2026-10-25）](docs/ground-truth-and-grading-assessment-2026-10-25.md)：基于当前源码与 44 项相关测试，梳理数据准备、人工校准和判定支持，区分小规模调优可用性与可信评分体系的缺口；未重新验收业务调优效果。
-- [执行项现场与调用轨迹改造实现方案（2026-10-26）](docs/execution-evidence-and-tracing-plan.md)：明确每项独立现场、V2 托管采集及外部 runner 本地证据导入，结合 Magic 双 Case 实践补齐来源身份、文件变更与验收；首版不做封存后补采，按 P0–P5 实施，详见方案中的验收状态。
-
-兼容一次性安装命令 `uvx --from agent-tune-kit atk install`；日常使用 Skill 需要 PATH 中持续可用的 `atk` 命令。
 
 ## 统一 CLI 能力
 
@@ -191,37 +205,38 @@ ATK 可选读取本地私有的 `.atk/context.md`，用于保存用户沟通后�
 
 ```sh
 atk dataset prepare --source data/eval.csv
-atk dataset inspect --direct --json
+atk dataset inspect --direct --field expected --json
 atk dataset update --direct --field expected --updates-path updates.csv
+atk dataset update --review-path dataset_review.csv --field expected
 atk eval --check --json
 atk eval --limit 5 --concurrency 2
 atk results inspect --json
-atk results run-rule
-atk results apply-judgments --judgments-path judgments.csv --source-results .atk/results/v1/eval_results.csv
-atk results compare --ids 1 2 --json
+atk results run-rule --version v1
+atk results apply-judgments --version v1 --judgments-path judgments.csv --source-results .atk/results/v1/eval_results.csv
+atk results compare --version v1 --ids 1 2 --json
+atk results calibrate --samples-path calibration.csv --rule-path .atk/runner/failure_rule.py --output-path calibration-r1.csv --json
 atk visualize dataset --no-open
-atk visualize failures --no-open
+atk visualize failures --version v1 --no-open
 ```
 
-新生成的项目适配文件使用统一执行引擎，旧完整 runner 与新证据现场共存时需先满足写入保护，否则启动前提示迁移。数据字段、ID、结果目录、未判定状态、日志和离线浏览页遵循原有约定。各命令参数见对应 `--help`。
+先用 `atk results inspect --json` 读取 `evaluation_target.version`，将示例中的 `v1` 及对应路径替换为实际目标版本。`run-rule` 需要已有规则；语义诊断由 `$atk-diagnose` 完成。浏览页已存在时，确认可替换后加 `--overwrite`。
 
+新生成的项目适配文件使用统一执行引擎。旧完整 runner 在结果目录仍为旧格式时可继续运行；存在 V2 或导入证据版本时，需先迁移为托管适配文件。各命令参数见对应 `--help`。
 
-## 本地执行证据 / Local execution evidence
+## 本地执行证据
 
-V2 adapters declare `ATK_ADAPTER_VERSION = 2` and `EVIDENCE.retain(role, value)`.
-Each execution saves independent input/output, context, structured events and artifacts beneath
-`.atk/results/vN/executions/<id>/`; shared Cases map multiple selected samples to one directory.
-Retention runs before persistence. Existing V1 adapters remain explicit; no historical migration is automatic.
+新适配文件声明 `ATK_MANAGED_RUNNER = True`、`ATK_ADAPTER_VERSION = 2` 和 `EVIDENCE["retain"]` 回调。每项执行在 `.atk/results/vN/executions/<id>/` 保存输入、输出、上下文快照、结构化事件和产物；同一业务 Case 的多条样本可共用一项执行。保留策略在证据写入前处理内容，模型、工具等调用轨迹需由项目适配代码显式接入。
+
+现有 V1 适配文件继续支持，不自动迁移历史结果。
 
 ```sh
-atk results inspect --json
 atk results evidence --version v1 --atk-id 1 --json
 atk results evidence --execution-dir ./copied-execution --json
 atk results import-evidence --source ./native-run --adapter ./importer.py --json
 ```
 
-`inspect` separates latest Run from the evaluation target. Evidence-only imports do not displace the latter.
-Diagnosis and reports bind `--version`; changed evidence invalidates dependent judgments. Import adapters are
-trusted Python code, not a sandbox. No Agent call, remote fetch, automatic cleanup or post-seal supplementation
-is performed. Declared capture coverage is distinct from successful persistence and business verdicts.
-See [execution evidence plan](docs/execution-evidence-and-tracing-plan.md) for interfaces, source limitations, recovery and validation.
+`atk results inspect --json` 分别返回最新运行 `latest_run` 和评测目标 `evaluation_target`；纯证据导入不会替换后者，也不能直接评分。诊断、报告和证据查询绑定评测版本，证据变化会使依赖它的判定失效。
+
+导入已有本地运行无需再次调用 Agent；导入适配文件是受信任的 Python 代码，不在沙箱中执行。相同来源与内容可复用已校验的封存包；来源材料变化或封存后补采会被拒绝。导入不负责远程获取或自动清理，采集覆盖范围、保存成功和业务通过分别说明。
+
+接入接口、来源限制、恢复与验证说明见[执行证据文档](docs/execution-evidence-and-tracing-plan.md)；外部导入适配文件参考[导入模板](templates/.atk/runner/import_evidence.py.md)。

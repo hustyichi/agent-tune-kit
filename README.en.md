@@ -1,11 +1,5 @@
 # Agent Tune Kit
 
-Ground-truth reviews, judge calibration and assessment provenance are documented in
-[the trust contract](docs/truth-and-assessment.md). Existing datasets remain readable, not automatically certified.
-`atk dataset inspect/update` supports content-bound confirmations; `atk results calibrate` checks reviewed outputs
-without executing the Agent or allocating an evaluation version. Rejudgments preserve history and comparisons expose
-changes to their criteria and judge.
-
 English | [简体中文](README.md)
 
 [![PyPI](https://img.shields.io/pypi/v/agent-tune-kit.svg)](https://pypi.org/project/agent-tune-kit/)
@@ -31,7 +25,7 @@ For developers with an existing local Agent who want to evaluate and tune it. To
 
 Agent Tune Kit is not just a way to run one test. It separates Agent tuning into two clear paths:
 
-- **Dataset Preparation**: generate a dataset from business context, examples, or rules; enrich `ground_truth`; review the dataset in local HTML; and correct expected results from human feedback. The dataset is stored under `.atk/datasets/` and is not tied to a single evaluation run.
+- **Dataset Preparation**: prepare a dataset from business context, examples, or rules; preserve existing answer fields and fill grounded gaps in judgment criteria; review the dataset in local HTML; and correct expected results from human feedback. The dataset is stored under `.atk/datasets/` and is not tied to a single evaluation run.
 - **Agent Evaluation and Tuning**: connect an existing Agent to a runner, run batch evaluation, find failure cases, generate an analysis report, review failures in local HTML, and let Codex tune the Agent from evidence. Each run writes to `.atk/results/vN/` so you can validate whether later versions actually improve.
 
 This turns Agent tuning from one-off subjective trial and error into an engineering workflow with samples, results, reports, and tuning records.
@@ -51,6 +45,8 @@ Or use `pipx`:
 pipx install agent-tune-kit
 atk install
 ```
+
+Legacy one-shot installation remains available: `uvx --from agent-tune-kit atk install`. Skills require the persistent `atk` command on PATH.
 
 To install from local source, update your checkout to the latest code on your chosen branch, then run from the **ATK repository root**:
 
@@ -109,8 +105,8 @@ $atk-optimize
 
 | Command | Purpose | Key output |
 | --- | --- | --- |
-| `$atk-init` | Connect an existing Agent and evaluation dataset, generate the runner, and normalize the dataset into ATK's fixed location | `.atk/runner/eval_runner.py`, `.atk/datasets/dataset.csv` |
-| `$atk-eval` | Run batch evaluation; the runner creates or reuses the current result version | `.atk/results/vN/eval_results.csv` |
+| `$atk-init` | Connect an existing Agent and dataset, generate a V2 adapter with an evidence retention policy, and normalize the dataset into ATK's fixed location | `.atk/runner/eval_runner.py`, `.atk/datasets/dataset.csv` |
+| `$atk-eval` | Run batch evaluation through the shared engine, allocate a result version, and retain execution evidence | `.atk/results/vN/eval_results.csv`, `run.json`, `executions/` |
 | `$atk-diagnose` | Identify failures and investigate initial causes | `.atk/results/vN/failure_cases.csv`, `judgments.csv` |
 | `$atk-report` | Generate the current-loop analysis report and cross-version validation when a prior loop exists | `.atk/results/vN/report.md` |
 | `$atk-visualize-failures` | Generate local offline HTML for searching, filtering, and reviewing failure cases | `.atk/results/vN/failure_cases.html` |
@@ -131,7 +127,9 @@ $atk-diagnose
 $atk-report
 ```
 
-New results are written to a new `.atk/results/vN/`. `--only-failures` maps the prior `failure_cases.csv` back to `.atk/datasets/dataset.csv` by `atk_id` and reruns only those rows. Starting with the second loop, `$atk-report` compares against the previous `tuning_plan.md` and tells you whether the target issues were resolved, partially resolved, unresolved, or impossible to judge.
+New results are written to a new `.atk/results/vN/`. Nonempty versions are protected; an empty highest version directory can be reused. For V2 results, `--only-failures` selects valid failed judgments from the current evaluation target and maps them back to `.atk/datasets/dataset.csv` by `atk_id`; stale judgments and unknowns are excluded. Legacy results continue to supply failure IDs from `failure_cases.csv`. Evidence-only imports do not become evaluation targets.
+
+Starting with the second loop, when a prior `tuning_plan.md` exists and experimental conditions are comparable, `$atk-report` tells you whether the target issues were resolved, partially resolved, unresolved, or impossible to judge. Rerunning failures checks those targets, not the full-dataset pass rate; run `$atk-eval` again when a full regression check is needed.
 
 ### Local Tuning Context
 
@@ -139,18 +137,36 @@ ATK can optionally read local private `.atk/context.md` to preserve user-confirm
 
 `$atk-dataset` updates reusable standards when confirmed by the user; `$atk-diagnose`, `$atk-report` and `$atk-optimize` use them. Missing `.atk/context.md` does not block the workflow.
 
+### Ground-Truth Review and Judge Calibration
+
+Datasets can record provenance and valid confirmations per answer field. Changes to inputs, answers, or relevant standards make confirmations stale. `atk dataset update --review-path dataset_review.csv` can import confirmations without changing answers. `atk results calibrate` checks a rule or semantic judge against reviewed outputs without running the Agent or allocating an evaluation version.
+
+Judgments can bind standard and judge snapshots. Rejudgments preserve history, and comparisons expose differences affecting comparability. Existing datasets remain readable without being automatically marked confirmed. See [the trust contract](docs/truth-and-assessment.md) for review records, calibration inputs, and judgment fields.
+
 ## Output Structure
 
 ```text
 .atk/
+├── context.md             # Optional local tuning agreements
 ├── datasets/
-│   └── dataset.csv        # ATK runnable dataset with atk_id
+│   ├── dataset.csv        # ATK runnable dataset with atk_id
+│   └── dataset.html       # Optional dataset browser
 ├── runner/
-│   ├── eval_runner.py
-│   └── failure_rule.py
+│   ├── eval_runner.py     # Project adapter
+│   └── failure_rule.py    # Rule generated as needed
 └── results/
     ├── v1/
     │   ├── eval_results.csv
+    │   ├── run.json       # V2 Run manifest
+    │   ├── executions/    # Independent V2 execution evidence
+    │   │   └── <id>/
+    │   │       ├── execution.json
+    │   │       ├── input.json
+    │   │       ├── output.json
+    │   │       ├── context/
+    │   │       ├── events.jsonl
+    │   │       ├── app.log
+    │   │       └── artifacts/
     │   ├── judgments.csv
     │   ├── failure_cases.csv
     │   ├── failure_cases.html
@@ -162,62 +178,65 @@ ATK can optionally read local private `.atk/context.md` to preserve user-confirm
 
 Common output files:
 
-- `eval_results.csv`: actual Agent output for each row.
+- `eval_results.csv`: source fields plus actual `agent_output`, `log_path`, and other execution fields. ATK excludes `atk_truth` from Agent inputs; the adapter must still exclude answer columns.
+- `run.json`, `executions/`: V2 Run manifest and independent execution evidence; one business Case can map to several samples. V1 results do not require these files.
+- `judgments.csv`: passed/failed/unknown verdicts, reasons, and traceable references. Rejudgments archive prior records under `judgment-history/`.
 - `failure_cases.csv`: rows selected as failures.
 - `failure_cases.html`: optional failure review page.
 - `report.md`: analysis and tuning recommendations.
 - `tuning_plan.md`: what Codex changed and why.
 
+This is a typical evaluation layout; steps produce artifacts as needed. Evidence-only imports can omit `eval_results.csv`. Interrupted or failed runs preserve available evidence without proving completion.
+
 ## Common Skills
 
 - `$atk-dataset`: prepare or revise evaluation data while preserving fields and IDs, with feedback applied as needed.
 - `$atk-visualize-dataset`: render `.atk/datasets/dataset.csv` into a local HTML browser for quickly reviewing rows and expected-result fields.
-- `$atk-init`: generate the test runner.
+- `$atk-init`: generate the project adapter, connect the Agent, and configure evidence retention.
 - `$atk-eval`: run evaluation and create a new result version.
 - `$atk-diagnose`: identify failures and unknowns using rules and semantic judgment, with initial cause investigation.
 - `$atk-report`: generate analysis and cross-loop validation.
 - `$atk-visualize-failures`: generate the failure review HTML page.
 - `$atk-optimize`: tune the Agent based on the report.
 
-Legacy one-shot installation remains available: `uvx --from agent-tune-kit atk install`. Skills now require the persistent `atk` command on PATH.
-
 ## Shared CLI capabilities
 
-Install the ATK CLI first, then run `atk install` to install its bundled Skills. Fixed operations are maintained in the Python package; Skills retain semantic diagnosis, reporting and Agent optimization.
+Fixed operations are maintained in the Python package; Skills retain semantic diagnosis, reporting and Agent optimization. Run these commands from the Agent project:
 
 ```sh
 atk dataset prepare --source data/eval.csv
-atk dataset inspect --direct --json
+atk dataset inspect --direct --field expected --json
 atk dataset update --direct --field expected --updates-path updates.csv
+atk dataset update --review-path dataset_review.csv --field expected
 atk eval --check --json
 atk eval --limit 5 --concurrency 2
 atk results inspect --json
-atk results run-rule
-atk results apply-judgments --judgments-path judgments.csv --source-results .atk/results/v1/eval_results.csv
-atk results compare --ids 1 2 --json
+atk results run-rule --version v1
+atk results apply-judgments --version v1 --judgments-path judgments.csv --source-results .atk/results/v1/eval_results.csv
+atk results compare --version v1 --ids 1 2 --json
+atk results calibrate --samples-path calibration.csv --rule-path .atk/runner/failure_rule.py --output-path calibration-r1.csv --json
 atk visualize dataset --no-open
-atk visualize failures --no-open
+atk visualize failures --version v1 --no-open
 ```
 
-These commands run from the Agent project. New project adapters delegate to the shared engine; legacy full runners require migration before writing alongside new evidence Runs. Dataset fields, IDs, result paths, unknown verdicts, logs and offline review pages retain their contracts. Use `--help` on each command for its options.
+Read `evaluation_target.version` with `atk results inspect --json`, then replace `v1` and the corresponding paths with that version. `run-rule` needs an existing rule; `$atk-diagnose` performs semantic diagnosis. Add `--overwrite` for an existing browser page only after confirming replacement is safe.
 
+New project adapters delegate to the shared engine. Legacy full runners can continue while all result versions use the legacy format; migrate to a managed adapter before writing alongside V2 or imported evidence Runs. Use `--help` on each command for its options.
 
-## 本地执行证据 / Local execution evidence
+## Local Execution Evidence
 
-V2 adapters declare `ATK_ADAPTER_VERSION = 2` and `EVIDENCE.retain(role, value)`.
-Each execution saves independent input/output, context, structured events and artifacts beneath
-`.atk/results/vN/executions/<id>/`; shared Cases map multiple selected samples to one directory.
-Retention runs before persistence. Existing V1 adapters remain explicit; no historical migration is automatic.
+New adapters declare `ATK_MANAGED_RUNNER = True`, `ATK_ADAPTER_VERSION = 2`, and an `EVIDENCE["retain"]` callback. Each execution saves input/output, context snapshots, structured events, and artifacts under `.atk/results/vN/executions/<id>/`; multiple samples in one business Case can share an execution. Retention processes evidence before persistence. Model, tool, and other call tracing requires explicit instrumentation in the project adapter.
+
+Existing V1 adapters remain supported; historical results are not migrated automatically.
 
 ```sh
-atk results inspect --json
 atk results evidence --version v1 --atk-id 1 --json
 atk results evidence --execution-dir ./copied-execution --json
 atk results import-evidence --source ./native-run --adapter ./importer.py --json
 ```
 
-`inspect` separates latest Run from the evaluation target. Evidence-only imports do not displace the latter.
-Diagnosis and reports bind `--version`; changed evidence invalidates dependent judgments. Import adapters are
-trusted Python code, not a sandbox. No Agent call, remote fetch, automatic cleanup or post-seal supplementation
-is performed. Declared capture coverage is distinct from successful persistence and business verdicts.
-See [execution evidence plan](docs/execution-evidence-and-tracing-plan.md) for interfaces, source limitations, recovery and validation.
+`atk results inspect --json` separates `latest_run` from `evaluation_target`. Evidence-only imports do not displace the latter and cannot be scored directly. Diagnosis, reports, and evidence queries bind the evaluation version; changed evidence invalidates dependent judgments.
+
+Importing an existing local run does not require another Agent call. Import adapters execute trusted Python without a sandbox. Identical source material reuses a verified sealed package; changed material and post-seal additions are rejected. Import does not fetch remote evidence or clean up automatically. Capture coverage, successful persistence, and business verdicts are reported separately.
+
+See the [execution evidence documentation](docs/execution-evidence-and-tracing-plan.md) for interfaces, source limitations, recovery, and validation, and the [import adapter template](templates/.atk/runner/import_evidence.py.md) for external imports.
