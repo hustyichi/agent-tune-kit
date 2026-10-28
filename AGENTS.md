@@ -37,3 +37,12 @@ Recent history uses short intent-focused subjects, including imperative sentence
 ## Security & Configuration Tips
 
 Do not commit local `.venv/`, `.ruff_cache/`, build artifacts, or private evaluation datasets. Treat files under `.atk/results/` in downstream projects as generated outputs unless a test fixture explicitly needs them.
+
+## README 内容边界
+
+适用范围：本项目的 README.md 和 README.en.md。来源：用户明确要求。生效日期：2026-10-28。
+
+- README 主要面向使用者，只记录从用户视角真正有帮助的内容，例如项目用途、使用前提、安装、使用方法、结果说明、必要限制和常见问题。
+- 技术细节只有在帮助使用者完成操作、理解结果或作出必要决定时才写入 README；内部实现、开发验证记录、测试数量、临时排查、任务进展及辅助性细节不要顺手追加。
+- 确需长期保存的开发与内部资料放在对应的开发文档或专门记录中；仅用于本次交付的验证结果在任务回复中说明，不为留痕写入 README。
+- 更新 README 时保持不同语言版本一致，不把 README 当作开发日志或内部状态汇总。

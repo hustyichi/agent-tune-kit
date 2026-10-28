@@ -183,7 +183,3 @@ This tree lists persistent evaluation outputs and optional files produced by the
 Within each execution, `context/` holds relevant samples, environment details, and snapshots such as the adapter file. `app.log` is a view of captured logs and may be empty. Detailed model and tool traces depend on project instrumentation; calls are not all recorded automatically.
 
 Failed or interrupted executions may leave only partial files; a directory does not prove completion. Evidence-only imports may have no `eval_results.csv` and cannot be scored directly. Execution evidence can contain project data, so confirm retention and redaction needs during setup.
-
-## Development Validation
-
-2026-10-28: output-column collisions, technical outcomes and explicit ID reruns, V2 progress, and outdated contracts have been addressed, along with an access-time false alarm during snapshot reads. All 271 tests and 15 subtests pass. Cross-round condition review and business evidence gaps remain; see the [issue review](docs/surginame-atk-capability-review-2026-10-27.md) for commits and integration limits. These source changes have not been reinstalled globally or released.
