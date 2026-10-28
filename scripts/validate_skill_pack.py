@@ -97,7 +97,7 @@ SKILL_FILES = [
 ]
 
 PER_FILE_PHRASES = {
-    ".codex-plugin/plugin.json": ['"name": "agent-tune-kit"', '"version": "2.2.0"', '"skills": "./skills/"'],
+    ".codex-plugin/plugin.json": ['"name": "agent-tune-kit"', '"version": "2.2.1"', '"skills": "./skills/"'],
     "skills/atk-dataset/SKILL.md": [
         "## Purpose",
         "## Inputs",
