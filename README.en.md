@@ -183,3 +183,5 @@ This tree lists persistent evaluation outputs and optional files produced by the
 Within each execution, `context/` holds relevant samples, environment details, and snapshots such as the adapter file. `app.log` is a view of captured logs and may be empty. Detailed model and tool traces depend on project instrumentation; calls are not all recorded automatically.
 
 Failed or interrupted executions may leave only partial files; a directory does not prove completion. Evidence-only imports may have no `eval_results.csv` and cannot be scored directly. Execution evidence can contain project data, so confirm retention and redaction needs during setup.
+
+Product direction: [ATO and ATK project boundary recommendation](docs/ato-atk-project-boundary-recommendation-2026-11-05.md) (proposal, in Chinese).
