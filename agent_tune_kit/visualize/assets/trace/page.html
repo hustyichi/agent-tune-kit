@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Agent Tune Kit · 会话轨迹</title>
+  <style>__STYLES__</style>
+</head>
+<body>
+  <header class="topbar"><div class="topbar-inner"><div><span class="brand">ATK</span><strong>会话轨迹与定向调优</strong><span class="badge">离线只读</span></div><span id="generated" class="muted"></span></div></header>
+  <main class="app-shell">
+    <section class="hero"><div><p class="eyebrow">SESSION INVESTIGATION</p><h1 id="session-title">会话轨迹</h1><p id="session-source" class="muted"></p></div><div id="summary" class="summary"></div></section>
+    <div id="warnings" role="status"></div>
+    <nav class="tabs" aria-label="会话视图"><button id="tab-overview" class="active" aria-selected="true" role="tab" data-view="overview">会话概览</button><button id="tab-traces" aria-selected="false" role="tab" data-view="traces">轨迹浏览</button><button id="tab-issues" aria-selected="false" role="tab" data-view="issues">异常列表</button></nav>
+    <section id="view-overview" class="view"></section>
+    <section id="view-traces" class="view" hidden>
+      <div class="toolbar"><label>快照 <select id="capture-filter"></select></label><label>Trace <select id="trace-filter"><option value="">全部 Trace</option></select></label><label>类型 <select id="type-filter"><option value="">全部类型</option></select></label><label class="search-label">搜索 <input id="trace-search" type="search" placeholder="搜索节点、模型或工具输入输出"></label></div>
+      <div id="capture-status"></div><div id="trace-list" class="panel"></div>
+      <div class="pagination"><span id="trace-count" aria-live="polite"></span><label>每页 <select id="page-size"><option>25</option><option selected>50</option><option>100</option></select></label><button id="trace-prev">上一页</button><span id="trace-page"></span><button id="trace-next">下一页</button></div>
+    </section>
+    <section id="view-issues" class="view" hidden><div class="toolbar"><label class="search-label">搜索 <input id="issue-search" type="search" placeholder="搜索问题、现象或证据"></label><label>状态 <select id="issue-status"><option value="">全部状态</option></select></label></div><p class="muted">问题列表只反映已记录的检查范围。没有发现问题不等于会话全部正确。</p><div id="issue-list" class="issue-grid"></div><div class="pagination"><span id="issue-count" aria-live="polite"></span><button id="issue-prev">上一页</button><span id="issue-page"></span><button id="issue-next">下一页</button></div></section>
+    <footer>本页包含生成时嵌入的预览；完整证据以本地归档为准。磁盘变化后请重新生成，不据阶段完成推断修复成功。</footer>
+  </main>
+  <div id="drawer-backdrop" class="drawer-backdrop" hidden></div>
+  <aside id="drawer" class="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" hidden tabindex="-1"><div class="drawer-header"><h2 id="drawer-title"></h2><button id="drawer-close" aria-label="关闭详情">关闭 ×</button></div><div id="drawer-content" class="drawer-content"></div></aside>
+  <script id="trace-data" type="application/json">__DATA__</script>
+  <script>__APP__</script>
+</body>
+</html>

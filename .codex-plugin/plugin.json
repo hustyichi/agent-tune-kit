@@ -1,7 +1,7 @@
 {
   "name": "agent-tune-kit",
   "version": "2.2.1",
-  "description": "Local Codex plugin for iterative Agent tuning with guided Skills, reusable runner templates, versioned results, and static validation.",
+  "description": "Local Codex plugin for batch Agent evaluation and session trace tuning with evidence-backed issues, focused changes, verification and offline review.",
   "author": {
     "name": "hustyichi",
     "email": "hustyichi@163.com",
@@ -15,13 +15,14 @@
     "codex-skills",
     "evaluation",
     "reporting",
-    "local-plugin"
+    "local-plugin",
+    "trace-tuning"
   ],
   "skills": "./skills/",
   "interface": {
     "displayName": "Agent Tune Kit",
-    "shortDescription": "Run a guided local Agent tuning loop",
-    "longDescription": "Agent Tune Kit provides Codex Skills for generating local test runners, finding failing cases, reporting regressions and improvements, and applying focused Agent tuning with versioned local artifacts.",
+    "shortDescription": "Evaluate Agents and tune session traces",
+    "longDescription": "Agent Tune Kit provides independent Codex Skills for batch evaluation and session trace tuning: capture traces, detect issues, investigate causes, apply focused changes, verify candidates, and review offline evidence.",
     "developerName": "hustyichi",
     "category": "Coding",
     "capabilities": [
@@ -31,9 +32,9 @@
     ],
     "websiteURL": "https://github.com/hustyichi/agent-tune-kit",
     "defaultPrompt": [
-      "Build an Agent tuning dataset",
+      "Analyze an Agent session trace",
       "Find Agent failure cases",
-      "Generate an Agent tuning report"
+      "Verify a focused Agent repair"
     ],
     "brandColor": "#334155",
     "screenshots": []

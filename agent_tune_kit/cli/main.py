@@ -7,10 +7,10 @@ from agent_tune_kit import installer
 from agent_tune_kit.errors import UserActionRequired
 from agent_tune_kit.execution.runtime import ExecutionFailed
 
-from . import dataset, evaluation, results, visualize
+from . import dataset, evaluation, results, trace, visualize
 from .output import emit
 
-HANDLERS = {"dataset": dataset, "eval": evaluation, "results": results, "visualize": visualize}
+HANDLERS = {"dataset": dataset, "eval": evaluation, "results": results, "visualize": visualize, "trace": trace}
 
 
 def main(argv=None):

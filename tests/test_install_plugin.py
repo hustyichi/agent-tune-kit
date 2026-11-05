@@ -13,6 +13,8 @@ import zipfile
 from pathlib import Path
 from unittest import mock
 
+from tests.test_release_scripts import load_script
+
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "install_plugin.py"
 
@@ -351,6 +353,8 @@ class InstallPluginCliTests(unittest.TestCase):
             with zipfile.ZipFile(wheel) as archive:
                 names = set(archive.namelist())
                 self.assertIn(hidden_manifest, names)
+                gate = load_script("check-release.py")
+                self.assertTrue(gate.WHEEL_REQUIRED_PATHS.issubset(names))
                 self.assertIn("agent_tune_kit/plugin_payload/agent-tune-kit/skills/atk-dataset/SKILL.md", names)
                 self.assertIn(
                     "agent_tune_kit/plugin_payload/agent-tune-kit/skills/atk-dataset/scripts/update_dataset.py",
@@ -367,6 +371,7 @@ class InstallPluginCliTests(unittest.TestCase):
                 names = set(archive.getnames())
                 prefix = sdist.name.removesuffix(".tar.gz")
                 self.assertIn(f"{prefix}/.codex-plugin/plugin.json", names)
+                self.assertTrue({f"{prefix}/{path}" for path in gate.SDIST_REQUIRED_PATHS} <= names)
                 self.assertIn(f"{prefix}/skills/atk-dataset/SKILL.md", names)
                 self.assertIn(f"{prefix}/skills/atk-dataset/scripts/update_dataset.py", names)
                 self.assertIn(f"{prefix}/templates/.atk/runner/eval_runner.py.md", names)
@@ -441,6 +446,10 @@ class InstallPluginCliTests(unittest.TestCase):
         self.assertTrue((target / "skills" / "atk-dataset" / "SKILL.md").exists())
         self.assertTrue((target / "skills" / "atk-diagnose" / "SKILL.md").exists())
         self.assertTrue((target / "skills" / "atk-report" / "SKILL.md").exists())
+        gate = load_script("check-release.py")
+        for name in gate.TRACE_SKILLS:
+            self.assertTrue((target / "skills" / name / "SKILL.md").is_file())
+        gate.smoke_trace_capabilities(atk, run_dir / "trace-project")
         for old_skill in (
             "atk-find-failures",
             "atk-find-failures-by-rule",

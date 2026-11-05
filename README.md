@@ -4,14 +4,15 @@
 
 [![PyPI](https://img.shields.io/pypi/v/agent-tune-kit.svg)](https://pypi.org/project/agent-tune-kit/)
 
-Agent Tune Kit 是一个**本地 Codex 插件**，帮助你评测已有 Agent、找出失败原因，并根据结果调优 prompt、代码、参数或工具配置。
+Agent Tune Kit 是一个**本地 Codex 插件**，支持批量评测已有 Agent，也支持围绕单个会话的执行轨迹发现问题、调查原因、修改并验证 prompt、代码、参数或工具配置。
 
-你可以用它整理评测数据、批量测试 Agent、查看失败样本和分析报告，再通过下一轮评测验证改动是否有效。每轮结果和调优记录都会保留，便于回看与比较。
+有评测数据时，使用批量评测流程比较多轮结果；有问题会话时，通过 Session ID 进入轨迹调优，按 issue 保存诊断、修改和验证。两条流程统一安装，分别保存证据与结果。
 
 ## 开始前准备什么
 
 - 一个 Codex 可以读取和修改的本地 Agent 项目，例如聊天机器人、工具调用 Agent 或 RAG Agent。
-- 一份评测数据，推荐 CSV，5 到 20 条样例就能开始；没有现成数据也可以先提供业务示例。
+- 批量评测需要评测数据，推荐 CSV，5 到 20 条样例就能开始；没有现成数据也可以先提供业务示例。
+- 轨迹调优需要明确的 Session ID、来源，以及可读取的支持格式轨迹或 Langfuse v4 只读配置；无需先准备数据集或 runner。
 - 判断结果好坏的依据，例如期望答案、标签或可验收的行为标准。
 
 ## 安装与启用
@@ -45,6 +46,28 @@ atk install
 </details>
 
 重装前请先结束正在运行的 ATK 任务，安装后新建会话以加载更新。安装有问题时可运行 `atk status` 检查，并参考[安装与缓存说明](docs/skill-template-pack-usage.md#local-plugin-install-and-smoke)；检查通过不代表插件已在当前会话启用。
+
+## 从问题会话开始轨迹调优
+
+在自己的 Agent 项目中使用以下独立入口：
+
+```text
+$atk-trace-init 了解当前项目和本地或 Langfuse 数据源。
+$atk-trace-capture 下载 session_id 为 <session-id> 的会话。
+$atk-trace-detect 分析这个会话，关注任务结果是否正确。
+$atk-trace-diagnose 调查 ISSUE-001，给出修复和验证方案。
+$atk-trace-optimize 实施 ISSUE-001 的选定方案。
+$atk-trace-verify 验证本轮候选，并检查相关正常行为。
+$atk-visualize-trace 为这个会话生成离线 HTML。
+```
+
+已有归属明确的本地轨迹时可直接分析；已知问题可直接调查，不必先检测整个会话。`capture` 只采集，`detect` 默认交付问题清单；明确要求连续“调查、修复并验证”时，可以在授权范围内衔接推进。Trace ID 仅用于会话内定位，不能替代 Session ID。
+
+轨迹及处理记录保存到 `.atk/traces/`：同一会话共享采集快照，每个 issue 独立保存诊断、候选和各次验证。重采不覆盖旧快照，预览可在只有轨迹、零问题或部分处理时生成。执行完成和局部测试不等于修复成功；候选加载或关键条件无法核实时，效果结论为 `inconclusive`。
+
+来源配置只保存凭据的环境变量名；导入或下载前确认正文留存与脱敏。首次写入会保留现有 `.gitignore` 并确保 `.atk/traces/` 被忽略。HTML 为离线预览，可能只嵌入部分正文；分享前核对内容。Langfuse v4 的实际部署兼容性需在目标实例验证，本地导入不能替代远端验收。
+
+具体命令、支持格式和记录说明见[轨迹调优指南](docs/trace-tuning.md)。原有批量评测仍使用下面的流程，结果保持在 `.atk/results/vN/`。
 
 ## 完成第一轮评测与调优
 

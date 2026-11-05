@@ -96,6 +96,32 @@ SKILL_FILES = [
     "skills/atk-optimize/SKILL.md",
 ]
 
+
+TRACE_SKILL_FILES = [
+    "skills/atk-trace-init/SKILL.md",
+    "skills/atk-trace-capture/SKILL.md",
+    "skills/atk-trace-detect/SKILL.md",
+    "skills/atk-trace-diagnose/SKILL.md",
+    "skills/atk-trace-optimize/SKILL.md",
+    "skills/atk-trace-verify/SKILL.md",
+    "skills/atk-visualize-trace/SKILL.md",
+]
+SKILL_FILES += TRACE_SKILL_FILES
+REQUIRED_FILES += TRACE_SKILL_FILES + [
+    "agent_tune_kit/cli/trace.py",
+    "agent_tune_kit/traces/__init__.py",
+    "agent_tune_kit/traces/store.py",
+    "agent_tune_kit/traces/records.py",
+    "agent_tune_kit/traces/capture.py",
+    "agent_tune_kit/traces/langfuse.py",
+    "agent_tune_kit/traces/query.py",
+    "agent_tune_kit/visualize/trace.py",
+    "agent_tune_kit/visualize/assets/trace/page.html",
+    "agent_tune_kit/visualize/assets/trace/styles.css",
+    "agent_tune_kit/visualize/assets/trace/app.js",
+    "docs/trace-tuning.md",
+]
+
 PER_FILE_PHRASES = {
     ".codex-plugin/plugin.json": ['"name": "agent-tune-kit"', '"version": "2.2.1"', '"skills": "./skills/"'],
     "skills/atk-dataset/SKILL.md": [
@@ -212,7 +238,7 @@ NON_GOALS = [
     "no full E2E test suite",
 ]
 
-NON_LIFECYCLE_SKILL_FILES = DATASET_ONLY_PRE_RESULTS_SKILL_FILES
+NON_LIFECYCLE_SKILL_FILES = DATASET_ONLY_PRE_RESULTS_SKILL_FILES | set(TRACE_SKILL_FILES)
 LIFECYCLE_SKILL_FILES = [p for p in SKILL_FILES if p not in NON_LIFECYCLE_SKILL_FILES]
 
 

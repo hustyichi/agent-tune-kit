@@ -75,7 +75,7 @@ class ReleaseScriptTests(unittest.TestCase):
         self.assertTrue(readme_paths.isdisjoint(validate_skill_pack.PER_FILE_PHRASES))
         self.assertNotIn("explicit subcommands only", validate_skill_pack.PLUGIN_DOC_PHRASES)
 
-    def test_skill_pack_is_limited_to_existing_agent_tuning(self) -> None:
+    def test_skill_pack_covers_batch_and_session_trace_tuning(self) -> None:
         validate_skill_pack = load_script("validate_skill_pack.py")
         supported_skills = {
             "atk-dataset",
@@ -86,6 +86,13 @@ class ReleaseScriptTests(unittest.TestCase):
             "atk-report",
             "atk-visualize-failures",
             "atk-optimize",
+            "atk-trace-init",
+            "atk-trace-capture",
+            "atk-trace-detect",
+            "atk-trace-diagnose",
+            "atk-trace-optimize",
+            "atk-trace-verify",
+            "atk-visualize-trace",
         }
 
         self.assertEqual({path.parent.name for path in (ROOT / "skills").glob("*/SKILL.md")}, supported_skills)
@@ -109,6 +116,21 @@ class ReleaseScriptTests(unittest.TestCase):
             "Do not write `failure_cases.csv`",
         ]:
             self.assertIn(phrase, required_phrases)
+
+    def test_trace_payloads_are_required_in_both_distributions(self) -> None:
+        gate = load_script("check-release.py")
+        validator = load_script("validate_skill_pack.py")
+        for path in validator.TRACE_SKILL_FILES:
+            self.assertIn(path, gate.SDIST_REQUIRED_PATHS)
+            self.assertIn(f"agent_tune_kit/plugin_payload/agent-tune-kit/{path}", gate.WHEEL_REQUIRED_PATHS)
+            self.assertNotIn(path, validator.LIFECYCLE_SKILL_FILES)
+        for path in [
+            "agent_tune_kit/traces/store.py",
+            "agent_tune_kit/traces/capture.py",
+            "agent_tune_kit/visualize/assets/trace/page.html",
+        ]:
+            self.assertIn(path, gate.WHEEL_REQUIRED_PATHS)
+            self.assertIn(path, gate.SDIST_REQUIRED_PATHS)
 
     def test_publish_targets_and_commands_are_safe_by_default(self) -> None:
         publish_release = load_script("publish-release.py")

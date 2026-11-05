@@ -4,14 +4,15 @@ English | [简体中文](README.md)
 
 [![PyPI](https://img.shields.io/pypi/v/agent-tune-kit.svg)](https://pypi.org/project/agent-tune-kit/)
 
-Agent Tune Kit is a **local Codex plugin** that helps you evaluate an existing Agent, identify failures, and tune prompts, code, parameters, or tool configuration from the results.
+Agent Tune Kit is a **local Codex plugin** for batch Agent evaluation and session trace tuning: identify issues, investigate causes, change prompts, code, parameters or tools, and verify the candidate.
 
-Use it to prepare evaluation data, test your Agent in batches, review failures and reports, then check whether your changes help in the next evaluation. Each round keeps its results and tuning notes for review and comparison.
+Use batch evaluation to compare results across a dataset, or start from a Session ID to investigate one problematic conversation. Both workflows share one installation while retaining separate evidence and results.
 
 ## Before You Start
 
 - A local Agent project that Codex can read and edit, such as a chatbot, tool-using Agent, or RAG Agent.
-- Evaluation data, preferably CSV; 5 to 20 examples are enough to start. If you have no dataset yet, start with business examples.
+- For batch evaluation: data, preferably CSV; 5 to 20 examples are enough to start. Without a dataset, start with business examples.
+- For trace tuning: an explicit Session ID, source, and supported local traces or read-only Langfuse v4 configuration. A dataset or runner is unnecessary.
 - A basis for judging results, such as expected answers, labels, or acceptance criteria.
 
 ## Install and Enable
@@ -45,6 +46,28 @@ atk install
 </details>
 
 Finish active ATK tasks before reinstalling, and open a new session afterward to load updates. If installation fails, run `atk status` and see the [installation and cache notes](docs/skill-template-pack-usage.md#local-plugin-install-and-smoke). A successful check does not confirm that the plugin is enabled in your current session.
+
+## Tune from a Problematic Session
+
+Use these independent entries from your Agent project:
+
+```text
+$atk-trace-init Understand this project and its local or Langfuse sources.
+$atk-trace-capture Download session_id <session-id>.
+$atk-trace-detect Analyze this session for task correctness.
+$atk-trace-diagnose Investigate ISSUE-001 and propose repair and verification.
+$atk-trace-optimize Implement the selected plan for ISSUE-001.
+$atk-trace-verify Verify this candidate and relevant unaffected behavior.
+$atk-visualize-trace Generate an offline HTML browser for this session.
+```
+
+Analyze supported local material directly when session ownership is verifiable. A known issue can enter diagnosis without a full-session detection pass. Capture only acquires data; detection normally delivers an issue list. An explicit request to investigate, repair and verify can continue across stages within authorization. A Trace ID locates material within a session and cannot replace its Session ID.
+
+Evidence and processing records live under `.atk/traces/`. Captures are shared by the session, while each issue owns diagnoses, candidates and verification attempts. Re-capture preserves older snapshots. The browser supports capture-only, zero-issue and partially processed sessions. Completed execution or local checks do not establish repair success; unproven candidate loading or essential conditions produce an `inconclusive` effect judgment.
+
+Configuration stores credential environment-variable names only. Confirm retention/redaction before importing or downloading bodies. The first write preserves `.gitignore` and ensures `.atk/traces/` is ignored. Offline HTML may embed only part of the evidence; review it before sharing. Verify Langfuse v4 compatibility against the actual deployment; local import does not substitute for remote acceptance.
+
+See the [trace tuning guide](docs/trace-tuning.md) for commands, supported formats and records. The batch workflow below continues to store results in `.atk/results/vN/`.
 
 ## Complete Your First Evaluation and Tuning Round
 

@@ -57,6 +57,38 @@ SDIST_REQUIRED_PATHS = {
     "scripts/publish-release.py",
 }
 
+
+TRACE_SKILLS = (
+    "atk-trace-init",
+    "atk-trace-capture",
+    "atk-trace-detect",
+    "atk-trace-diagnose",
+    "atk-trace-optimize",
+    "atk-trace-verify",
+    "atk-visualize-trace",
+)
+TRACE_RUNTIME_PATHS = {
+    "agent_tune_kit/cli/trace.py",
+    "agent_tune_kit/traces/__init__.py",
+    "agent_tune_kit/traces/store.py",
+    "agent_tune_kit/traces/records.py",
+    "agent_tune_kit/traces/capture.py",
+    "agent_tune_kit/traces/langfuse.py",
+    "agent_tune_kit/traces/query.py",
+    "agent_tune_kit/visualize/trace.py",
+    "agent_tune_kit/visualize/assets/trace/page.html",
+    "agent_tune_kit/visualize/assets/trace/styles.css",
+    "agent_tune_kit/visualize/assets/trace/app.js",
+}
+WHEEL_REQUIRED_PATHS |= (
+    TRACE_RUNTIME_PATHS
+    | {f"agent_tune_kit/plugin_payload/agent-tune-kit/skills/{name}/SKILL.md" for name in TRACE_SKILLS}
+    | {"agent_tune_kit/plugin_payload/agent-tune-kit/docs/trace-tuning.md"}
+)
+SDIST_REQUIRED_PATHS |= (
+    TRACE_RUNTIME_PATHS | {f"skills/{name}/SKILL.md" for name in TRACE_SKILLS} | {"docs/trace-tuning.md"}
+)
+
 PYTHON_FILES = [
     "agent_tune_kit/__init__.py",
     "agent_tune_kit/cli/main.py",
@@ -241,12 +273,43 @@ def smoke_installed_artifact(artifact: Path, work_dir: Path) -> None:
     ]:
         if not required.exists():
             raise ReleaseCheckError(f"installed artifact missing {required}")
+    for name in TRACE_SKILLS:
+        if not (target / "skills" / name / "SKILL.md").is_file():
+            raise ReleaseCheckError(f"installed artifact missing Trace Skill {name}")
     if target.is_symlink():
         raise ReleaseCheckError(f"{artifact.name} install did not copy the packaged payload")
     status = capture([str(atk), "status", *common], cwd=run_dir, extra_env=cache_env)
     if "已本地安装。" not in status:
         raise ReleaseCheckError(f"{artifact.name} status smoke failed")
+    smoke_trace_capabilities(atk, run_dir / "trace-project")
     smoke_shared_capabilities(atk, run_dir, target)
+
+
+def smoke_trace_capabilities(atk: Path, project: Path) -> None:
+    """Exercise packaged Trace CLI and frontend with synthetic data outside the checkout."""
+    project = project.resolve()
+    project.mkdir()
+    source = {"type": "local", "instance": "synthetic", "project": "installed-smoke"}
+    config = project / "config.json"
+    config.write_text(json.dumps({"source": source, "retention": {"allow_body": True}}), encoding="utf-8")
+    raw = project / "trace.json"
+    raw.write_text(
+        json.dumps({"trace": {"id": "trace-one", "sessionId": "session-one", "observations": []}, "export": {}}),
+        encoding="utf-8",
+    )
+
+    def command(*args: str) -> dict:
+        return json.loads(capture([str(atk), *args, "--json"], cwd=project))
+
+    command("trace", "init", "--config", str(config))
+    command("trace", "import", "--session-id", "session-one", "--path", str(raw))
+    command("trace", "overview", "--session-id", "session-one")
+    command("trace", "status", "--session-id", "session-one")
+    command("visualize", "trace", "--session-id", "session-one", "--no-open")
+    if len(list((project / ".atk/traces").glob("*/preview.html"))) != 1:
+        raise ReleaseCheckError("installed Trace preview was not generated")
+    if any((project / ".atk" / name).exists() for name in ["results", "datasets", "runner"]):
+        raise ReleaseCheckError("Trace smoke created batch evaluation artifacts")
 
 
 def smoke_shared_capabilities(atk: Path, project: Path, plugin: Path) -> None:
