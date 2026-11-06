@@ -29,10 +29,10 @@ def _pointer(document, pointer):
 
 
 def _node(row, reference, *, trace_id=None, kind=None):
-    return {
+    node = {
         "id": row.get("id", row.get("event_id", row.get("execution_id"))),
         "observation_id": row.get("id") if kind != "TRACE" else None,
-        "trace_id": row.get("traceId", trace_id),
+        "trace_id": row.get("traceId", row.get("trace_id", trace_id)),
         "parent_id": row.get("parentObservationId", row.get("parent_span_id")),
         "type": kind or row.get("type", row.get("kind", "observation")),
         "name": row.get("name", row.get("kind", "")),
@@ -44,6 +44,16 @@ def _node(row, reference, *, trace_id=None, kind=None):
         "reference": reference,
         "ref": reference,
     }
+    # A dispatch link identifies a real child task. An AGENT span alone does not.
+    metadata = row.get("metadata")
+    branch = row.get("parent_tool_use_id") or row.get("subagent_id")
+    if not branch and isinstance(metadata, dict) and metadata.get("agentRole") == "subagent":
+        branch = metadata.get("agentId")
+    if not branch and str(node["name"]).startswith("sdk.") and isinstance(node["input"], dict):
+        branch = node["input"].get("parent_tool_use_id")
+    if isinstance(branch, str) and branch:
+        node["branch"] = branch
+    return node
 
 
 def nodes(session_dir, capture_id=None):

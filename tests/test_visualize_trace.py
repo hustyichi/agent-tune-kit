@@ -271,3 +271,94 @@ def test_jsonl_issue_location_distinguishes_the_line_from_the_file(tmp_path):
     first, second = data["captures"][0]["nodes"]
     assert first["level"] == "ERROR" and "issue_ids" not in first
     assert len(second["issue_ids"]) == 1
+
+
+def test_session_timeline_interleaves_traces_and_links_only_explicit_child_work(tmp_path):
+    def observation(identity, clock, **extra):
+        return {"id": identity, "name": identity, "type": "EVENT", "startTime": "2026-01-01T" + clock + "Z", **extra}
+
+    traces = {
+        "late": [
+            observation("ordinary-agent", "12:00:03", type="AGENT"),
+            observation("delegated", "12:00:01", parent_tool_use_id="dispatch-A"),
+            observation("child", "12:00:02", parentObservationId="delegated"),
+            observation("backwards", "12:00:04", endTime="2026-01-01T12:00:00Z"),
+        ],
+        "early": [
+            observation(
+                "result",
+                "12:00:02.001",
+                name="frontend.tool_result",
+                output={"type": "tool_result", "tool_use_id": "call"},
+            ),
+            observation(
+                "request", "12:00:00", name="frontend.tool_use", output={"type": "tool_use", "tool_use_id": "call"}
+            ),
+        ],
+        "empty": [],
+    }
+    files = {
+        key + ".json": json.dumps({"trace": {"id": key, "name": "same name", "observations": rows}})
+        for key, rows in traces.items()
+    }
+    store.create_capture(tmp_path, SESSION_ID, SOURCE, files, scope={}, completeness={}, capture_id="CAP-timeline")
+    _, data = trace.build_trace_data(tmp_path, session_id=SESSION_ID)
+    cap = data["captures"][0]
+    nodes, timeline = cap["nodes"], cap["timeline"]
+    tracks = timeline["tracks"]
+    assert [t["trace_id"] for t in tracks] == ["early", "late", "empty"]
+    assert tracks[1]["start"] < tracks[0]["end"]  # The two executions overlap on the same axis.
+    ordered = [nodes[i] for i in timeline["order"]]
+    assert [n["id"] for n in ordered] == [
+        "request",
+        "delegated",
+        "child",
+        "result",
+        "ordinary-agent",
+        "backwards",
+        "empty",
+    ]
+    assert [n["id"] for n in ordered if n.get("branch") == "dispatch-A"] == ["delegated", "child"]
+    assert nodes[ordered[0]["paired"]] is ordered[3]
+    assert nodes[ordered[3]["paired"]] is ordered[0]
+    assert ordered[-2]["at"] is None and ordered[-1]["at"] is None
+
+
+def test_issue_ranges_split_idle_gaps_branches_and_captures_and_keep_every_field(tmp_path):
+    rows = [
+        {"id": "first", "name": "start", "startTime": "2026-01-01T00:00:01Z", "input": 1, "output": 2},
+        {"id": "second", "name": "later", "startTime": "2026-01-01T00:10:00Z"},
+        {"id": "child", "name": "delegated", "startTime": "2026-01-01T00:00:01Z", "subagent_id": "branch"},
+        {"id": "unknown", "name": "no time", "input": 1, "output": 2},
+    ]
+    files = {"trace.json": json.dumps({"trace": {"id": "T", "input": "request", "observations": rows}})}
+    for cid in ("CAP-a", "CAP-b"):
+        cap = store.create_capture(tmp_path, SESSION_ID, SOURCE, files, scope={}, completeness={}, capture_id=cid)
+    session = Path(cap["session_dir"])
+    fields = [
+        (0, "/trace/input"),
+        (0, "/trace/observations/0/input"),
+        (0, "/trace/observations/0/output"),
+        (0, "/trace/observations/1"),
+        (0, "/trace/observations/2"),
+        (0, "/trace/observations/3/input"),
+        (0, "/trace/observations/3/output"),
+        (1, "/trace/observations/0/input"),
+        (0, None),
+    ]
+    evidence = []
+    for capture_index, pointer in fields:
+        cid = ("CAP-a", "CAP-b")[capture_index]
+        path = f"captures/{cid}/raw/trace.json"
+        evidence.append(store.evidence_ref(session, path, pointer) if pointer else store.evidence_ref(session, path))
+    records.save_issue(session, {"title": "Check", "description": "Synthetic", "evidence": evidence})
+    _, data = trace.build_trace_data(tmp_path, session_id=SESSION_ID)
+    parts = data["issues"][0]["fragments"]
+    assert sorted(p for f in parts for p in f["refs"] + f.get("context_refs", [])) == list(range(len(fields)))
+    timed = [f for f in parts if f["kind"] == "actions"]
+    assert len(timed) == 4 and all(f["start"] == f["end"] for f in timed)
+    assert sum(f["branch"] == "branch" for f in timed) == 1
+    assert len([f for f in timed if f["capture_id"] == "CAP-b"]) == 1
+    assert any(f["refs"] == [1, 2] and f["context_refs"] == [0] for f in timed)
+    assert any(f["kind"] == "untimed" and f["refs"] == [5, 6] for f in parts)
+    assert any(f["kind"] == "file" and not f["anchors"] for f in parts)

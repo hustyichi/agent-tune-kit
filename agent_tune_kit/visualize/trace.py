@@ -13,6 +13,7 @@ from agent_tune_kit.errors import UserActionRequired
 from agent_tune_kit.utils.files import read_text_bounded, write_text_atomic
 
 from .render import neutralize_script_close, open_in_browser, safe_json_for_html
+from .timeline import build_timeline, issue_fragments
 
 ASSETS = resources.files("agent_tune_kit.visualize").joinpath("assets", "trace")
 RECORD_LIMIT = 1024 * 1024
@@ -59,9 +60,11 @@ def _locate_evidence(captures, references, issues):
     for key, saved in references.items():
         ref = saved["reference"]
         capture_id = files.get((ref["path"], ref["sha256"]))
-        if not capture_id or "preview" not in saved:
+        if not capture_id:
             continue
         saved["capture_id"] = capture_id
+        if "preview" not in saved:
+            continue
         pointer = ref.get("pointer", "")
         ancestor = pointer
         while True:
@@ -172,6 +175,11 @@ def build_trace_data(project_root, *, session_id, source=None):
             warnings.append(f"Reference {ref['path']}: {exc}")
 
     _locate_evidence(captures, references, issues)
+    captures_by_id = {capture["id"]: capture for capture in captures}
+    windows = {capture["id"]: build_timeline(capture) for capture in captures}
+    for item in issues:
+        evidence = [references[_reference_key(ref)] for ref in item["record"]["evidence"]]
+        item["fragments"] = issue_fragments(captures_by_id, windows, evidence)
 
     project = ""
     project_path = session_dir.parent / "project.md"

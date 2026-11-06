@@ -8,34 +8,55 @@
   <style>__STYLES__</style>
 </head>
 <body>
-  <header class="topbar"><div class="topbar-inner"><div><span class="brand">ATK</span><strong>会话轨迹与定向调优</strong><span class="badge">离线只读</span></div><span id="generated" class="muted"></span></div></header>
-  <main class="app-shell">
-    <section class="hero"><div><p class="eyebrow">SESSION INVESTIGATION</p><h1 id="session-title">会话轨迹</h1><p id="session-source" class="muted"></p></div><div id="summary" class="summary"></div></section>
-    <div id="warnings" role="status"></div>
+  <header class="topbar"><div class="topbar-inner">
+    <div class="brand-line"><span class="brand">ATK</span><strong>会话轨迹</strong><span id="session-title" class="session-id"></span></div>
     <nav class="tabs" role="tablist" aria-label="会话视图">
-      <button id="tab-traces" class="active" aria-selected="true" role="tab" aria-controls="view-traces" data-view="traces">执行流程</button>
-      <button id="tab-issues" aria-selected="false" role="tab" aria-controls="view-issues" data-view="issues">异常列表</button>
-      <button id="tab-overview" aria-selected="false" role="tab" aria-controls="view-overview" data-view="overview">会话概览</button>
+      <button id="tab-traces" role="tab" aria-controls="view-traces" data-view="traces">执行轨迹</button>
+      <button id="tab-issues" role="tab" aria-controls="view-issues" data-view="issues">异常列表</button>
+      <button id="tab-overview" role="tab" aria-controls="view-overview" data-view="overview">会话信息</button>
     </nav>
-    <section id="view-overview" class="view" hidden></section>
-    <section id="view-traces" class="view">
-      <div class="capture-strip"><label>采集快照 <select id="capture-filter"></select></label><div id="capture-status"></div></div>
-      <div class="flow-layout">
-        <section class="panel timeline-panel" aria-labelledby="lane-title">
-          <div class="flow-heading"><div><h2 id="lane-title">会话泳道</h2><div id="lane-scale-title" class="muted"></div><div id="lane-selected" role="status" hidden></div></div><button id="lane-reset" type="button" hidden>← 全会话</button></div>
-          <div id="lane-scroll" class="lane-scroll" tabindex="0" aria-label="执行时间轴"><div id="lane-chart"></div></div>
-          <div class="lane-legend" aria-label="泳道图例"><span><i class="legend-range"></i>持续区间</span><span><i class="legend-point"></i>时间点</span><span><b class="legend-issue">⚑</b>问题证据</span><span><b class="legend-error">!</b>运行时错误</span></div>
-          <div id="lane-members" hidden></div>
-        </section>
-        <aside class="panel lane-sidebar" aria-labelledby="lane-sidebar-title"><div class="flow-heading"><h2 id="lane-sidebar-title">已记录异常</h2><span id="lane-issue-count" class="lane-total"></span></div><div id="lane-issues"></div></aside>
-      </div>
-      <h2 class="node-list-heading">节点列表</h2>
-      <div class="toolbar"><label>Trace <select id="trace-filter"><option value="">全部 Trace</option></select></label><label>类型 <select id="type-filter"><option value="">全部类型</option></select></label><label class="search-label">搜索 <input id="trace-search" type="search" placeholder="搜索节点、模型或工具输入输出"></label><button id="trace-search-clear" type="button" hidden>清除搜索</button></div>
-      <div id="trace-list" class="panel"></div>
-      <div class="pagination"><span id="trace-count" aria-live="polite"></span><label>每页 <select id="page-size"><option>25</option><option selected>50</option><option>100</option></select></label><button id="trace-prev">上一页</button><span id="trace-page"></span><button id="trace-next">下一页</button></div>
+  </div></header>
+  <main class="app-shell">
+    <div id="warnings" role="status"></div>
+    <section id="view-overview" class="view" role="tabpanel" aria-labelledby="tab-overview" hidden>
+      <h1>会话信息</h1><p id="session-source" class="muted"></p><p id="generated" class="muted"></p>
     </section>
-    <section id="view-issues" class="view" hidden><div class="toolbar"><label class="search-label">搜索 <input id="issue-search" type="search" placeholder="搜索问题、现象或证据"></label><label>状态 <select id="issue-status"><option value="">全部状态</option></select></label></div><p class="muted">问题列表只反映已记录的检查范围。没有发现问题不等于会话全部正确。</p><div id="issue-list" class="issue-grid"></div><div class="pagination"><span id="issue-count" aria-live="polite"></span><button id="issue-prev">上一页</button><span id="issue-page"></span><button id="issue-next">下一页</button></div></section>
-    <footer>本页包含生成时嵌入的预览；完整证据以本地归档为准。磁盘变化后请重新生成，不据阶段完成推断修复成功。</footer>
+    <section id="view-traces" class="view" role="tabpanel" aria-labelledby="tab-traces">
+      <div class="view-heading"><div><h1 id="lane-title">完整会话</h1><div id="summary" class="muted"></div></div>
+        <div class="view-actions"><label class="capture-choice">快照 <select id="capture-filter"></select></label>
+          <details id="issue-picker"><summary>定位异常 <span id="lane-issue-count">0</span></summary><div id="lane-issues" class="picker-menu"></div></details>
+        </div>
+      </div>
+      <div id="capture-status" role="status"></div>
+      <section class="panel timeline-panel" aria-labelledby="lane-title">
+        <div id="lane-scroll" class="lane-scroll" tabindex="0" aria-label="执行泳道"><div id="lane-chart"></div></div>
+        <div class="lane-footer"><div class="lane-legend"><span><i class="legend-track"></i>执行范围</span><span><i class="legend-tick"></i>动作</span><span id="legend-fragment" hidden><i class="legend-fragment"></i>异常片段</span></div>
+          <button id="lane-reset" type="button" hidden>← 返回完整会话</button></div>
+        <div id="lane-members" hidden></div>
+      </section>
+      <section id="fragment-bar" aria-label="异常定位" hidden>
+        <div class="fragment-title"><strong id="fragment-issue"></strong><span id="fragment-position"></span></div>
+        <div class="fragment-controls"><button id="fragment-prev" aria-label="上一片段">←</button><button id="fragment-next" aria-label="下一片段">下一片段 →</button>
+          <button id="fragment-fields">片段证据</button><button id="fragment-detail">问题详情</button><button id="fragment-exit">退出定位</button></div>
+      </section>
+      <section class="record-panel" aria-labelledby="records-title">
+        <div class="records-heading"><div class="records-title"><h2 id="records-title">执行记录</h2><span id="trace-count" class="muted" aria-live="polite"></span></div>
+          <div class="toolbar record-filters">
+            <label id="trace-choice"><span class="sr-only">Trace</span><select id="trace-filter"></select></label>
+            <label><span class="sr-only">记录范围</span><select id="record-mode"><option value="">全部记录</option><option value="key">关键动作</option></select></label>
+            <label><span class="sr-only">类型</span><select id="type-filter"></select></label>
+            <label class="search-label"><span class="sr-only">搜索记录</span><input id="trace-search" type="search" placeholder="搜索动作或输入输出"></label>
+          </div>
+        </div>
+        <div class="panel stream"><div class="row-grid stream-header"><span>会话时间</span><span class="trace-col">Trace</span><span>动作</span><span class="result-col">结果 / 耗时</span></div>
+          <div id="trace-scroll" tabindex="0" aria-label="执行记录，按时间顺序"><div id="trace-list"></div></div>
+        </div>
+      </section>
+    </section>
+    <section id="view-issues" class="view" role="tabpanel" aria-labelledby="tab-issues" hidden><h1>异常列表</h1>
+      <div class="toolbar"><label class="search-label">搜索 <input id="issue-search" type="search" placeholder="搜索问题、现象或证据"></label><label>状态 <select id="issue-status"></select></label></div>
+      <div id="issue-list" class="issue-grid"></div><div class="pagination"><span id="issue-count" aria-live="polite"></span><button id="issue-prev">上一页</button><span id="issue-page"></span><button id="issue-next">下一页</button></div>
+    </section>
   </main>
   <div id="drawer-backdrop" class="drawer-backdrop" hidden></div>
   <aside id="drawer" class="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" hidden tabindex="-1"><div class="drawer-header"><h2 id="drawer-title"></h2><button id="drawer-close" aria-label="关闭详情">关闭 ×</button></div><div id="drawer-content" class="drawer-content"></div></aside>

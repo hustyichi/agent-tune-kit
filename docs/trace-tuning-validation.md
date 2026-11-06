@@ -28,13 +28,19 @@ A separate agent received only the user task, the new Skills and the explicitly 
 
 This exercise proves local acquisition, reading, findings/coverage persistence and preview generation. It does not prove remote session completeness, historical environment recovery, final root causes or successful business repairs.
 
-## Session swimlanes and evidence navigation (2026-11-06)
+## Earlier swimlanes and evidence navigation (2026-11-06)
 
-The [swimlane design](trace-swimlane-design.md) was exercised on a separate project archive with one capture, three Traces, 450 observations, and three recorded issues. The installed editable CLI regenerated its single offline HTML. All ten underlying evidence and processing files matched their pre-generation SHA-256 digests.
+The earlier categorized swimlane page was exercised on a separate project archive with one capture, three Traces, 450 observations, and three recorded issues. The installed editable CLI regenerated its single offline HTML. All ten underlying evidence and processing files matched their pre-generation SHA-256 digests.
 
 In offline Chrome, all 22 issue links selected their original Trace and node and displayed the expected field preview from the retained bytes. Return navigation restored the evidence link and any conflicting list filter. Desktop (1440 × 960) and narrow (390 × 844) views were checked, including actual visibility of the highlighted mark above the narrow detail sheet. Browser checks included zero external HTTP requests or script errors. Separate synthetic data covered switching back to an older capture, escaped JSON Pointer tokens and undated evidence.
 
 The local sample produced a 13,482,484-byte page. With the same desktop Chrome setup, the median of five file opens through display of the node list was 183 ms (previous page 184 ms). These are observations for this machine and archive. Source checks passed **347 pytest tests and 15 subtests**, Ruff and Skill-pack validation. Wheel and sdist checks confirmed the page assets are included.
+
+## Full-session timeline and issue ranges (2026-11-06)
+
+The installed editable CLI regenerated and opened the offline page for the same local archive. Its three Trace lanes cover 33, 370 and 47 observations. In offline Chrome at 1440 × 960 and 390 × 844, scrolling alone reached every original observation in chronological order. The cross-Trace retry issue highlighted two separate ranges, with a 6 min 8 s interval between the two executions. All 22 issue fields across three issues opened the correct native node and retained value. Returning from issue navigation restored the Trace scope, filters and scroll position. Sequential ordinary event clicks produced zero displacement of the list, its rows or the page on both viewports. Neither run made external HTTP requests or raised a page error.
+
+The generated page was 13,523,871 bytes. The ten archived source and processing files had identical SHA-256 digests before and after generation. A separate synthetic archive exercised a single Trace, an explicitly identified child task, twenty overlapping Traces, older-snapshot navigation, an escaped JSON Pointer and Trace-level, undated and file-only evidence. A damaged pointer reported its error without highlighting a range, and a zero-issue capture remained browsable. Project checks passed **349 pytest tests and 15 subtests**, Ruff and skill-pack validation. The wheel and sdist contained the timeline module and all four offline page assets. The [design](trace-swimlane-design.md) describes how reading ranges are derived.
 
 ## Outstanding acceptance
 
