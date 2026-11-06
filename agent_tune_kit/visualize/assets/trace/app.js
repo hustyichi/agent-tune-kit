@@ -33,7 +33,7 @@
   };
   const swim = window.createSwimlanes({
     issuesForNode: node => node.issue_ids || [],
-    onNode: node => navigateNode(currentCapture, node),
+    onNode: node => inspectNode(node, document.activeElement),
   });
   const filters = ["trace-filter", "type-filter", "trace-search", "page-size"];
   const rememberView = () => ({
@@ -51,24 +51,28 @@
     swim.restore(state.lanes);
     window.scrollTo(0, state.scroll);
   };
-  const openDrawer = (title, nodeMode = false) => {
+  const openDrawer = (title, nodeMode = false, inspecting = false) => {
     if ($("drawer").hidden) returnFocus = document.activeElement;
     $("drawer-title").textContent = title;
     $("drawer-content").replaceChildren();
     $("drawer").classList.toggle("node-drawer", nodeMode);
+    $("drawer").classList.toggle("inspecting", inspecting);
+    $("drawer").setAttribute("aria-modal", String(!inspecting));
     $("drawer").hidden = false;
-    $("drawer-backdrop").hidden = false;
-    document.body.style.overflow = "hidden";
+    $("drawer-backdrop").hidden = inspecting;
+    document.body.style.overflow = inspecting ? "" : "hidden";
     $("drawer-content").scrollTop = 0;
     $("drawer-close").focus({preventScroll: true});
   };
-  const closeDrawer = () => {
+  const closeDrawer = (restoreFocus = true) => {
+    const inspecting = $("drawer").classList.contains("inspecting");
     const fromNode = $("drawer").classList.contains("node-drawer");
     $("drawer").hidden = $("drawer-backdrop").hidden = true;
     document.body.style.overflow = "";
     activeIssue = null;
     origin = null;
-    if (fromNode && selectedNode) swim.focusSelected();
+    if (!restoreFocus) { issueTrigger = null; return; }
+    if (fromNode && !inspecting && selectedNode) swim.focusSelected();
     else if (returnFocus?.isConnected) returnFocus.focus({preventScroll:true});
     else if (issueTrigger) document.querySelector(`[data-issue-id="${CSS.escape(issueTrigger)}"]`)?.focus({preventScroll:true});
     issueTrigger = null;
@@ -185,11 +189,27 @@
     tracePage = Math.floor(rows.indexOf(node) / Number($("page-size").value));
     renderTraces(rows);
     swim.reveal(node);
-    openDrawer(node.name || node.id || "轨迹节点", true);
+    showNodeDetails(capture, node, targetIndex, ref);
     // The mobile sheet changes the chart viewport. Scroll after its resize without moving dialog focus.
     requestAnimationFrame(() => requestAnimationFrame(() => {
-      if (selectedNode === node && !$("drawer").hidden && $("drawer").classList.contains("node-drawer")) swim.scrollSelected();
+      if (selectedNode === node && $("drawer").matches(".node-drawer:not(.inspecting):not([hidden])")) swim.scrollSelected();
     }));
+  };
+  const inspectNode = (node, trigger) => {
+    const index = currentCapture.nodes.indexOf(node);
+    selectedNode = node;
+    activeIssue = null;
+    origin = null;
+    swim.inspect(node);
+    for (const row of $("trace-list").children) {
+      if (row.dataset.nodeIndex !== undefined) row.setAttribute("aria-current", String(row.dataset.nodeIndex === String(index)));
+    }
+    showNodeDetails(currentCapture, node, index, null, true);
+    returnFocus = trigger;
+  };
+  const showNodeDetails = (capture, node, targetIndex, ref, inspecting = false) => {
+    openDrawer(node.name || node.id || "轨迹节点", true, inspecting);
+    if (inspecting) $("drawer-content").append(button("定位到泳道", () => navigateNode(capture, node)));
     backToIssue();
     const identification = el("p", `${capture.id} · Trace ${node.trace_id || "无归属"} · ${node.type}`, "mono muted");
     identification.dataset.nodeIndex = String(targetIndex);
@@ -277,7 +297,8 @@
     tracePage = Math.max(0, Math.min(tracePage, pages - 1));
     $("trace-list").replaceChildren();
     for (const node of filtered.slice(tracePage * size, (tracePage + 1) * size)) {
-      const row = button("", () => navigateNode(currentCapture, node), "trace-row");
+      const row = button("", () => inspectNode(node, row), "trace-row");
+      row.dataset.nodeIndex = currentCapture.nodes.indexOf(node);
       row.setAttribute("aria-current", String(node === selectedNode));
       const main = el("div", undefined, "node-main");
       main.append(el("div", node.name || node.id || "未命名节点", "node-label"), el("div", `${node.id || "无节点 ID"} · Trace ${node.trace_id || "未提供"} · ${node.start_time || "未提供时间"}`, "node-meta"));
@@ -330,10 +351,14 @@
     $("issue-count").textContent = `${filtered.length} / ${data.issues.length} 个已记录问题`; $("issue-page").textContent = `${issuePage + 1} / ${pages}`; $("issue-prev").disabled = !issuePage; $("issue-next").disabled = issuePage + 1 >= pages;
   };
   options($("issue-status"), [...new Set(data.issues.map(item => item.record.status).filter(Boolean))], "全部状态"); $("issue-search").oninput = () => { issuePage = 0; renderIssues(); }; $("issue-status").onchange = () => { issuePage = 0; renderIssues(); }; $("issue-prev").onclick = () => { issuePage--; renderIssues(); }; $("issue-next").onclick = () => { issuePage++; renderIssues(); };
+  document.addEventListener("click", event => {
+    if (!$("drawer").hidden && $("drawer").classList.contains("inspecting") &&
+        !event.target.closest("#drawer,.trace-row,#lane-chart,#lane-members")) closeDrawer(false);
+  }, true);
   $("drawer-close").onclick = closeDrawer; $("drawer-backdrop").onclick = closeDrawer;
   document.addEventListener("keydown", event => {
     if (event.key === "Escape" && !$("drawer").hidden) { event.preventDefault(); closeDrawer(); }
-    if (event.key === "Tab" && !$("drawer").hidden) { const focusable = [...$("drawer").querySelectorAll("button,input,select,summary,[tabindex='0']")].filter(node => !node.disabled && node.getClientRects().length); const first = focusable[0], last = focusable[focusable.length - 1]; if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); } else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); } }
+    if (event.key === "Tab" && !$("drawer").hidden && $("drawer").getAttribute("aria-modal") === "true") { const focusable = [...$("drawer").querySelectorAll("button,input,select,summary,[tabindex='0']")].filter(node => !node.disabled && node.getClientRects().length); const first = focusable[0], last = focusable[focusable.length - 1]; if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); } else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); } }
     if (["ArrowLeft", "ArrowRight"].includes(event.key) && document.activeElement.matches("[data-view]")) { event.preventDefault(); const tabs = [...document.querySelectorAll("[data-view]")], index = tabs.indexOf(document.activeElement); const tab = tabs[(index + (event.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length]; tab.click(); tab.focus(); }
   });
   setView("traces"); chooseCapture(); renderIssues();

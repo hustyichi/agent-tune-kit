@@ -46,6 +46,7 @@ window.createSwimlanes = function ({issuesForNode, onNode}) {
     groups = [...traces.values()].sort((a,b) => a.lo - b.lo);
   }
 
+  const markedEntries = new WeakMap();
   function issues(entry) { return issuesForNode?.(entry.node) || entry.node.issue_ids || []; }
   function label(entry) {
     const n = entry.node, when = entry.timed ? n.start_time : "无可用时间";
@@ -54,6 +55,7 @@ window.createSwimlanes = function ({issuesForNode, onNode}) {
   }
   function select(entry) { onNode(entry.node); }
   function identify(mark, entry) {
+    markedEntries.set(mark, [entry]);
     mark.dataset.nodeIndex = entry.index;
     if (entry.node === selected) { mark.setAttribute("aria-current", "true"); mark.classList.add("selected-mark"); }
     mark.title = label(entry); mark.setAttribute("aria-label", mark.title);
@@ -137,6 +139,7 @@ window.createSwimlanes = function ({issuesForNode, onNode}) {
       const e = items[0], interval = items.length === 1 && !overview && e.end > e.start;
       const kind = items.length > 1 ? "cluster" : interval ? "interval" : "point";
       const glyph = button("lane-mark " + kind, "", () => items.length === 1 ? select(e) : showMembers(items));
+      markedEntries.set(glyph, items);
       glyph.style.left = pct(e.start) + "%";
       if (interval) glyph.style.width = Math.max(0,pct(e.end)-pct(e.start)) + "%";
       if (items.length === 1) {
@@ -288,7 +291,7 @@ window.createSwimlanes = function ({issuesForNode, onNode}) {
       }
       else if (lane != null) [...chart.querySelectorAll(".lane-toggle")].find(b => b.dataset.lane === lane)?.focus({preventScroll:true});
     }
-    if (selected && !$("drawer").hidden && $("drawer").classList.contains("node-drawer")) scrollSelected();
+    if (selected && !$("drawer").hidden && $("drawer").matches(".node-drawer:not(.inspecting)")) scrollSelected();
   }).observe($("lane-scroll"));
   return {
     render(next, filteredNodes = next?.nodes, selectedNode) {
@@ -297,6 +300,22 @@ window.createSwimlanes = function ({issuesForNode, onNode}) {
       visible = filteredNodes && filteredNodes !== next?.nodes && filteredNodes.length !== next?.nodes?.length ? new Set(filteredNodes) : null;
       $("trace-search-clear").hidden = !$("trace-search").value;
       clustered = null; draw();
+    },
+    // Inspect the existing marks in place. Expanding a group or splitting a cluster moves the list below it.
+    inspect(node) {
+      selected = node;
+      const related = lineage();
+      for (const mark of document.querySelectorAll("#lane-chart button, #lane-members button")) {
+        const batch = markedEntries.get(mark);
+        if (!batch) continue;
+        const active = batch.some(e => e.node === node);
+        mark.classList.toggle("selected-mark", active && batch.length === 1);
+        mark.classList.toggle("selected-cluster", active && batch.length > 1);
+        mark.classList.toggle("related-mark", batch.some(e => related.has(e)));
+        mark.setAttribute("aria-current", String(active));
+      }
+      const caption = $("lane-selected");
+      if (!caption.hidden) caption.textContent = name(node);
     },
     reveal,
     snapshot: () => ({zoom,open:[...open],selected}),
