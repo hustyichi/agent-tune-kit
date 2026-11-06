@@ -1,4 +1,4 @@
-"""Private session archives and immutable, byte-addressed capture evidence."""
+"""Session identity, current field references and legacy capture compatibility."""
 
 import hashlib
 import json
@@ -12,6 +12,8 @@ from urllib.parse import urlsplit
 from agent_tune_kit.errors import UserActionRequired
 from agent_tune_kit.results.evidence import digest_file, json_bytes, now, safe_path, write_manifest
 from agent_tune_kit.utils.files import write_text_atomic
+
+from . import archive
 
 SOURCE_FIELDS = ("type", "instance", "project", "environment")
 STATES = {"running", "completed", "partial", "failed", "blocked", "interrupted"}
@@ -193,6 +195,33 @@ def init_workspace(project_root=".", config=None, project_text=None):
 def load_session(session_dir):
     directory = Path(session_dir)
     value = read_json(safe_path(directory, "session.json"))
+    if value.get("schema_version") == 2:
+        manifest = value.get("archive")
+        if (
+            directory.name != archive.component(value.get("session_id"))
+            or value.get("source") != normalize_source(value.get("source"))
+            or not isinstance(manifest, dict)
+            or not isinstance(manifest.get("files"), list)
+            or manifest.get("status") not in STATES
+            or not isinstance(manifest.get("scope"), dict)
+            or not isinstance(manifest.get("completeness"), dict)
+            or not isinstance(value.get("detections"), list)
+            or not isinstance(value.get("revision"), int)
+        ):
+            raise UserActionRequired("Invalid current session archive.")
+        for entry in manifest["files"]:
+            if (
+                not isinstance(entry, dict)
+                or not isinstance(entry.get("path"), str)
+                or not entry["path"].startswith("raw/")
+                or type(entry.get("bytes")) is not int
+                or not isinstance(entry.get("sha256"), str)
+                or not re.fullmatch("[a-f0-9]{64}", entry["sha256"])
+            ):
+                raise UserActionRequired("Invalid current Trace file entry.")
+        if safe_path(directory, ".pending").exists():
+            raise UserActionRequired("Interrupted archive update. Retry the import to finish it.")
+        return value
     if value.get("schema_version") != 1 or value.get("session_key") != session_key(
         value.get("session_id"), value.get("source")
     ):
@@ -231,6 +260,12 @@ def resolve_session(project_root, session_id, source=None):
     if not isinstance(session_id, str) or not session_id.strip():
         raise UserActionRequired("An explicit Session ID is required.")
     root = trace_root(project_root)
+    current = safe_path(root, archive.component(session_id))
+    if (current / "session.json").is_file():
+        value = load_session(current)
+        if value["session_id"] != session_id or source is not None and value["source"] != normalize_source(source):
+            raise UserActionRequired("Trace session identity conflict.")
+        return current
     if source is not None:
         path = safe_path(root, session_key(session_id, source))
         value = load_session(path)
@@ -462,7 +497,12 @@ def evidence_ref(session_dir, relative_path, pointer=None):
         raise UserActionRequired("Evidence reference does not name a retained file.")
     ref = {"path": relative_path, "sha256": digest_file(path), "bytes": path.stat().st_size}
     if pointer is not None:
-        _resolve_pointer(path, pointer)
+        value = _resolve_pointer(path, pointer)
+        if relative_path.startswith("raw/"):
+            ref["field_sha256"] = hashlib.sha256(json_bytes(value)).hexdigest()
+            observation = re.match(r"(/(?:data|trace/observations)/[0-9]+)(?:/|$)", pointer)
+            if observation:
+                ref["node_id"] = _resolve_pointer(path, observation[1] + "/id")
         ref["pointer"] = pointer
     return ref
 
@@ -488,15 +528,44 @@ def _resolve_pointer(path, pointer):
     return value
 
 
-def validate_ref(session_dir, ref):
+def resolve_ref(session_dir, ref):
     try:
         if not isinstance(ref, dict) or not isinstance(ref.get("path"), str):
             raise ValueError
         path = safe_path(Path(session_dir), ref["path"])
-        if path.stat().st_size != ref["bytes"] or digest_file(path) != ref["sha256"]:
+        digest = digest_file(path)
+        matches = path.stat().st_size == ref["bytes"] and digest == ref["sha256"]
+        pointer = ref.get("pointer")
+        if matches:
+            if pointer is not None:
+                _resolve_pointer(path, pointer)
+            return path, pointer
+        if not (ref.get("field_sha256") and isinstance(pointer, str) and ref["path"].startswith("raw/")):
             raise ValueError
-        if "pointer" in ref:
-            _resolve_pointer(path, ref["pointer"])
-        return path
+        # Only follow a replaced file if it was published by a successful import.
+        entries = load_session(session_dir)["archive"]["files"]
+        if not any(entry["path"] == ref["path"] and entry["sha256"] == digest for entry in entries):
+            raise ValueError
+        if "node_id" in ref:
+            match = re.fullmatch(r"(/(?:data|trace/observations))/[0-9]+(/.*)?", pointer)
+            if not match:
+                raise ValueError
+            rows = _resolve_pointer(path, match[1])
+            indexes = [i for i, row in enumerate(rows) if isinstance(row, dict) and row.get("id") == ref["node_id"]]
+            if len(indexes) != 1:
+                raise UserActionRequired("证据节点已更新，需重新检测。")
+            pointer = f"{match[1]}/{indexes[0]}{match[2] or ''}"
+        try:
+            value = _resolve_pointer(path, pointer)
+        except UserActionRequired:
+            raise UserActionRequired("证据字段已更新，需重新检测。") from None
+        if hashlib.sha256(json_bytes(value)).hexdigest() != ref["field_sha256"]:
+            raise UserActionRequired("证据字段已更新，需重新检测。")
+        return path, pointer
     except (OSError, KeyError, TypeError, ValueError):
         raise UserActionRequired("Evidence reference is missing or its retained bytes changed.") from None
+
+
+def validate_ref(session_dir, ref):
+    path, _ = resolve_ref(session_dir, ref)
+    return path

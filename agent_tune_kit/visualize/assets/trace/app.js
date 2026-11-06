@@ -103,8 +103,8 @@
   const fieldPreview = (ref, saved) => {
     const box = section("命中证据字段");
     box.id = "evidence-field";
-    box.dataset.pointer = ref.pointer || "";
-    const label = ref.pointer || (ref.line ? `第 ${ref.line} 行` : "整个文件");
+    box.dataset.pointer = saved.preview.resolved_pointer || ref.pointer || "";
+    const label = box.dataset.pointer || (ref.line ? `第 ${ref.line} 行` : "整个文件");
     box.append(el("code", label), pre(saved.preview.text));
     if (saved.preview.truncated) box.append(el("p", `仅展示前 ${saved.preview.text.length} / ${saved.preview.characters} 个字符。完整字段可从本地归档读取。`, "muted"));
     return box;
@@ -240,7 +240,7 @@
     openDrawer(node.name || node.id || "轨迹节点", true, inspecting);
     if (inspecting) $("drawer-content").append(button("定位到泳道", () => navigateNode(capture, node)));
     backToIssue();
-    const identification = el("p", `${capture.id} · Trace ${node.trace_id || "无归属"} · ${node.type}`, "mono muted");
+    const identification = el("p", `Trace ${node.trace_id || "无归属"} · ${node.type}`, "mono muted");
     identification.dataset.nodeIndex = String(targetIndex);
     identification.dataset.traceId = node.trace_id || "";
     identification.dataset.nodeId = node.id || "";
@@ -251,7 +251,7 @@
       for (const id of node.issue_ids) { const item = issueById.get(id); if (item) cited.append(button(id, () => startIssue(item))); }
       $("drawer-content").append(cited);
     }
-    const meta = {capture: capture.id, id: node.id, trace_id: node.trace_id, type: node.type, start_time: node.start_time, end_time: node.end_time, reference: node.reference};
+    const meta = {id: node.id, trace_id: node.trace_id, type: node.type, start_time: node.start_time, end_time: node.end_time, reference: node.reference};
     if (node.level) meta.level = node.level;
     const metadata = el("details", undefined, "detail-section");
     metadata.append(el("summary", "节点与原始引用"), pre(meta)); $("drawer-content").append(metadata);
@@ -310,7 +310,7 @@
   const coverage = overviewCard("实际检查覆盖", undefined, true);
   coverage.append(el("p", data.session.detections.length ? "以下为各次检测的输入、检查范围与缺口；不会因重采或零问题而自动扩大覆盖。" : "尚未记录异常识别；当前只提供原始采集材料。", "muted"));
   for (const detection of data.session.detections) { const detail = el("details"); detail.append(el("summary", `${detection.id || "检查记录"} · ${detection.status || "状态未提供"}`), pre(detection)); appendReferences(detail, detection); coverage.append(detail); }
-  for (const capture of data.captures) { const card = overviewCard(`采集 ${capture.id}`, undefined, true); if (capture.error) card.append(el("p", capture.error, "warning")); const detail = el("details"); detail.append(el("summary", "查看获取范围、字段、完整性和摘要"), pre(capture.manifest)); card.append(detail, button("浏览此快照", () => { $("capture-filter").value = capture.id; investigation = null; scopeBefore = null; chooseCapture(); setView("traces"); renderTraces(); })); }
+  for (const capture of data.captures) { const card = overviewCard(capture.current ? "会话轨迹" : `采集 ${capture.id}`, undefined, true); if (capture.error) card.append(el("p", capture.error, "warning")); const detail = el("details"); detail.append(el("summary", "查看获取范围、字段、完整性和摘要"), pre(capture.manifest)); card.append(detail, button("浏览轨迹", () => { $("capture-filter").value = capture.id; investigation = null; scopeBefore = null; chooseCapture(); setView("traces"); renderTraces(); })); }
   const digests = overviewCard("生成时采用的处理记录摘要", undefined, true); const digestDetails = el("details"); digestDetails.append(el("summary", "展开记录与 SHA-256"), pre(data.record_digests)); digests.append(digestDetails); $("view-overview").append(overview);
 
   const rowHeight = parseInt(getComputedStyle(list).getPropertyValue("--row-height"), 10);
@@ -391,7 +391,7 @@
       const result = el("span", summaryOf(n), "result-col"); result.title = result.textContent;
       row.append(time, traceCell, action, result); content.append(row);
     }
-    if (!count) content.append(el("p", timeline().order.length ? "没有符合筛选条件的记录。" : "此快照没有可浏览的记录。", "empty"));
+    if (!count) content.append(el("p", timeline().order.length ? "没有符合筛选条件的记录。" : "此会话没有可浏览的记录。", "empty"));
     list.style.paddingTop = `${first * rowHeight}px`;
     list.style.paddingBottom = `${(count - last) * rowHeight}px`;
     list.replaceChildren(content);
@@ -479,8 +479,8 @@
       menu.append(link);
     }
     if (!linked.length) {
-      const checked = data.session.detections.some(d => d.captures?.includes(currentCapture?.id));
-      menu.append(el("p", checked ? "此快照没有已关联的异常。" : "此快照尚未检查。", "empty"));
+      const checked = data.session.detections.some(d => currentCapture?.current ? d.inputs?.length : d.captures?.includes(currentCapture?.id));
+      menu.append(el("p", checked ? "此会话没有已关联的异常。" : "此会话尚未检查。", "empty"));
     }
   }
   function showFragmentBar() {
@@ -553,6 +553,7 @@
   $("fragment-detail").onclick = () => showIssue(investigation.item);
   $("fragment-exit").onclick = exitIssue;
   $("lane-reset").onclick = () => focusTrace(null);
+  $("capture-filter").closest("label").hidden = Boolean(currentCapture?.current);
   options($("capture-filter"), data.captures.map(c => c.id));
   if (currentCapture) $("capture-filter").value = currentCapture.id;
   $("capture-filter").onchange = () => { investigation = null; scopeBefore = null; chooseCapture(); renderTraces(); };

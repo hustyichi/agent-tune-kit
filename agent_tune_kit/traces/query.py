@@ -58,11 +58,14 @@ def _node(row, reference, *, trace_id=None, kind=None):
 
 def nodes(session_dir, capture_id=None):
     session_dir = Path(session_dir)
-    manifest = store.read_capture(session_dir, capture_id)
-    capture_id = manifest["capture_id"]
+    session = store.load_session(session_dir)
+    current = session["schema_version"] == 2
+    if current and capture_id is not None:
+        raise UserActionRequired("Current archives use the Session ID directly.")
+    manifest = session["archive"] if current else store.read_capture(session_dir, capture_id)
     result = []
     for entry in manifest["files"]:
-        relative = f"captures/{capture_id}/{entry['path']}"
+        relative = entry["path"] if current else f"captures/{manifest['capture_id']}/{entry['path']}"
         path = store.validate_ref(session_dir, {"path": relative, "sha256": entry["sha256"], "bytes": entry["bytes"]})
         reference = {"path": relative, "sha256": entry["sha256"], "bytes": entry["bytes"]}
         suffix = path.suffix.casefold()
@@ -154,11 +157,12 @@ def _summary(node):
 
 def overview(session_dir, capture_id=None, offset=0, limit=100):
     _page(offset, limit)
-    manifest = store.read_capture(session_dir, capture_id)
-    items = nodes(session_dir, manifest["capture_id"])
+    session = store.load_session(session_dir)
+    manifest = session.get("archive") or store.read_capture(session_dir, capture_id)
+    items = nodes(session_dir, capture_id)
     return {
         "session_id": store.load_session(session_dir)["session_id"],
-        "capture_id": manifest["capture_id"],
+        **({"capture_id": manifest["capture_id"]} if "capture_id" in manifest else {}),
         "scope": manifest.get("scope"),
         "completeness": manifest.get("completeness"),
         "status": manifest.get("status"),
@@ -194,7 +198,7 @@ def show(session_dir, reference, offset=0, limit=8000):
         raise UserActionRequired("Use offset >= 0 and a character limit between 1 and 100000.")
     if not isinstance(reference, dict):
         raise UserActionRequired("Provide a saved evidence reference with path and SHA-256.")
-    path = store.validate_ref(session_dir, reference)
+    path, pointer = store.resolve_ref(session_dir, reference)
     try:
         text = path.read_text(encoding="utf-8")
         if "line" in reference:
@@ -202,13 +206,14 @@ def show(session_dir, reference, offset=0, limit=8000):
             if type(line) is not int or line < 1 or "pointer" in reference:
                 raise ValueError
             text = text.splitlines()[line - 1]
-        elif reference.get("pointer") is not None:
-            value = _pointer(json.loads(text), reference["pointer"])
+        elif pointer is not None:
+            value = _pointer(json.loads(text), pointer)
             text = json.dumps(value, ensure_ascii=False, indent=2)
     except (OSError, UnicodeError, ValueError, IndexError):
         raise UserActionRequired("Evidence location is unavailable in the saved material.") from None
     return {
         "reference": reference,
+        **({"resolved_pointer": pointer} if pointer != reference.get("pointer") else {}),
         "text": text[offset : offset + limit],
         "offset": offset,
         "limit": limit,

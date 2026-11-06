@@ -35,6 +35,7 @@ def register(subparsers):
     init.add_argument("--project-file", help="project context Markdown file")
     init.add_argument("--json", action="store_true")
     for action in [
+        "migrate",
         "fetch",
         "import",
         "overview",
@@ -92,6 +93,10 @@ def execute(args):
         text = Path(args.project_file).read_text(encoding="utf-8") if args.project_file else None
         return store.init_workspace(args.project_root, config=read_json(args.config), project_text=text)
     source = read_json(args.source)
+    if args.action == "migrate":
+        from agent_tune_kit.traces.migrate import migrate
+
+        return migrate(args.project_root, args.session_id, source)
     if args.action == "fetch":
         config = read_json(args.config)
         if source is not None:

@@ -46,7 +46,8 @@ def _locate_evidence(captures, references, issues):
     for capture in captures:
         capture_id = capture["id"]
         for entry in capture["manifest"].get("files", []):
-            files[(f"captures/{capture_id}/{entry['path']}", entry["sha256"])] = capture_id
+            relative = entry["path"] if capture.get("current") else f"captures/{capture_id}/{entry['path']}"
+            files[relative] = capture_id
         for index, node in enumerate(capture["nodes"]):
             ref = node["reference"]
             nodes[(ref["path"], ref.get("line"), ref.get("pointer", ""))] = index, node
@@ -59,13 +60,13 @@ def _locate_evidence(captures, references, issues):
 
     for key, saved in references.items():
         ref = saved["reference"]
-        capture_id = files.get((ref["path"], ref["sha256"]))
+        capture_id = files.get(ref["path"])
         if not capture_id:
             continue
         saved["capture_id"] = capture_id
         if "preview" not in saved:
             continue
-        pointer = ref.get("pointer", "")
+        pointer = saved["preview"].get("resolved_pointer", ref.get("pointer", ""))
         ancestor = pointer
         while True:
             match = nodes.get((ref["path"], ref.get("line"), ancestor))
@@ -112,6 +113,14 @@ def build_trace_data(project_root, *, session_id, source=None):
         return {"reference": ref, "text": text} if markdown else json.loads(text)
 
     captures = []
+    if "archive" in session:
+        current = {"id": session_id, "current": True, "manifest": session["archive"], "nodes": []}
+        try:
+            current["nodes"] = query.nodes(session_dir)
+        except (OSError, ValueError, UserActionRequired) as exc:
+            current["error"] = str(exc)
+            warnings.append(str(exc))
+        captures.append(current)
     for capture_id in session.get("captures", []):
         try:
             manifest = store.read_capture(session_dir, capture_id, verify=True)
@@ -164,7 +173,7 @@ def build_trace_data(project_root, *, session_id, source=None):
         except (OSError, ValueError, UserActionRequired) as exc:
             warnings.append(f"Issue {path.parent.name}: {exc}")
 
-    for ref in _references([session, issues]):
+    for ref in _references([session["detections"], issues]):
         key = _reference_key(ref)
         if key in references:
             continue
@@ -239,7 +248,9 @@ def generate_trace(project_root=".", *, session_id, source=None, output_path=Non
     return {
         "output_path": str(output),
         "session_id": session_id,
-        "captures": len(data["captures"]),
+        "traces": len(
+            {node["trace_id"] for view in data["captures"] for node in view["nodes"] if node.get("trace_id")}
+        ),
         "issues": len(data["issues"]),
         "opened": opened,
         "warnings": data["warnings"],

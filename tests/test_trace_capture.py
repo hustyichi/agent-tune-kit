@@ -36,7 +36,7 @@ def test_import_without_init_preserves_original_and_is_partial(tmp_path):
     result = capture.import_session(tmp_path, "session-1", SOURCE, path, retention=POLICY)
     assert path.read_bytes() == original
     assert result["trace_count"] == 1 and result["observation_count"] == 1
-    manifest = store.read_capture(result["session_dir"], result["capture_id"])
+    manifest = store.load_session(result["session_dir"])["archive"]
     assert manifest["completeness"]["status"] == "partial"
     assert not (tmp_path / ".atk/results").exists()
     assert not (Path(result["session_dir"]) / "issues").exists()
@@ -55,7 +55,7 @@ def test_retention_is_checked_before_any_new_copy(tmp_path):
         path,
         retention={"allow_body": True, "redact_keys": ["input"], "max_string_chars": 15},
     )
-    bodies = [p.read_bytes() for p in Path(result["capture_dir"]).rglob("*") if p.is_file()]
+    bodies = [p.read_bytes() for p in Path(result["session_dir"]).rglob("*") if p.is_file()]
     assert all(b"DO-NOT-SAVE" not in value for value in bodies)
     assert any(b"REDACTED" in value for value in bodies)
 
@@ -102,7 +102,7 @@ def test_atk_execution_keeps_native_format_and_requires_session_evidence(tmp_pat
     execution.seal("completed")
     original = {p.name: p.read_bytes() for p in directory.iterdir() if p.is_file()}
     result = capture.import_session(tmp_path, "session-1", SOURCE, directory, retention=POLICY)
-    files = [p for p in Path(result["capture_dir"]).rglob("*") if p.is_file()]
+    files = [p for p in Path(result["session_dir"]).rglob("*") if p.is_file()]
     event_path = next(p for p in files if p.name == "events.jsonl")
     assert json.loads(event_path.read_text())["kind"] == "tool.result"
     provenance = json.loads(next(p for p in files if p.name == "provenance.json").read_text())
@@ -224,7 +224,7 @@ def test_associated_csv_secret_columns_are_redacted(tmp_path):
         "files": [{"path": path.name, "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}],
     }
     result = capture.import_session(tmp_path, "session-1", SOURCE, path, retention=POLICY, association=association)
-    saved = next(Path(result["capture_dir"]).rglob("rows.csv")).read_text()
+    saved = next(Path(result["session_dir"]).rglob("rows.csv")).read_text()
     assert "PRIVATE-PASSWORD" not in saved and "[REDACTED]" in saved
 
 
@@ -261,3 +261,86 @@ def test_source_atime_changes_do_not_look_like_modified_input(tmp_path, monkeypa
 
     monkeypatch.setattr(Path, "stat", changing_atime)
     assert capture.read_local(path) == b'{"safe":true}'
+
+
+def test_reimport_updates_by_native_id_and_keeps_field_evidence(tmp_path):
+    from agent_tune_kit.traces import query, records
+    from agent_tune_kit.visualize.trace import build_trace_data
+
+    path = export_file(tmp_path, input="expected")
+    directory = Path(capture.import_session(tmp_path, "session-1", SOURCE, path, retention=POLICY)["session_dir"])
+    assert directory.name == "session-1"
+    raw = directory / "raw/trace-1.json"
+    assert raw.is_file() and not (directory / "captures").exists()
+    ref = store.evidence_ref(directory, "raw/trace-1.json", "/trace/input")
+    records.save_issue(directory, {"title": "Check input", "description": "Inspect field", "evidence": [ref]})
+    before = raw.stat().st_mtime_ns
+    capture.import_session(tmp_path, "session-1", SOURCE, path, retention=POLICY)
+    assert raw.stat().st_mtime_ns == before
+    export_file(tmp_path, id="second", observations=[])
+    capture.import_session(tmp_path, "session-1", SOURCE, path, retention=POLICY)
+    export_file(tmp_path, input="expected", output="updated")
+    capture.import_session(tmp_path, "session-1", SOURCE, path, retention=POLICY)
+    assert sorted(p.name for p in raw.parent.glob("*.json")) == ["second.json", "trace-1.json"]
+    assert json.loads(raw.read_bytes())["trace"]["output"] == "updated"
+    assert json.loads(query.show(directory, ref)["text"]) == "expected"
+    _, data = build_trace_data(tmp_path, session_id="session-1")
+    assert data["issues"][0]["fragments"][0]["anchors"]
+    export_file(tmp_path, input="modified")
+    capture.import_session(tmp_path, "session-1", SOURCE, path, retention=POLICY)
+    with pytest.raises(UserActionRequired, match="重新检测"):
+        query.show(directory, ref)
+    _, data = build_trace_data(tmp_path, session_id="session-1")
+    assert len(data["issues"]) == 1 and data["warnings"]
+    path.write_text("{broken")
+    with pytest.raises(UserActionRequired):
+        capture.import_session(tmp_path, "session-1", SOURCE, path, retention=POLICY)
+    assert json.loads(raw.read_bytes())["trace"]["input"] == "modified"
+
+
+def test_pages_are_grouped_per_trace_across_pagination(tmp_path):
+    paths = []
+    for index, (trace_id, obs) in enumerate([("a", "1"), ("b", "1"), ("a", "2")]):
+        p = tmp_path / f"page{index}.json"
+        p.write_text(json.dumps({"data": [{"id": obs, "traceId": trace_id, "sessionId": "s"}]}))
+        paths.append(p)
+    d = Path(capture.import_session(tmp_path, "s", SOURCE, paths, retention=POLICY)["session_dir"])
+    assert [row["id"] for row in json.loads((d / "raw/a.json").read_text())["data"]] == ["1", "2"]
+    capture.import_session(tmp_path, "s", SOURCE, [paths[2]], retention=POLICY)
+    assert [row["id"] for row in json.loads((d / "raw/a.json").read_text())["data"]] == ["2"]
+    assert (d / "raw/b.json").is_file()
+
+
+def test_legacy_migration_preserves_issue_fields_and_diagnosis(tmp_path):
+    from agent_tune_kit.traces import migrate, records
+    from agent_tune_kit.visualize.trace import build_trace_data
+
+    raw = export_file(tmp_path)
+    old = store.create_capture(tmp_path, "session-1", SOURCE, {"export.json": raw.read_bytes()})
+    ref = store.evidence_ref(old["session_dir"], f"captures/{old['capture_id']}/raw/export.json", "/trace/id")
+    issue = records.save_issue(old["session_dir"], {"title": "T", "description": "D", "evidence": [ref]})
+    records.save_diagnosis(old["session_dir"], issue["id"], "Review " + ref["path"])
+    moved = migrate.migrate(tmp_path, "session-1")
+    assert Path(moved["session_dir"]).name == "session-1"
+    _, data = build_trace_data(tmp_path, session_id="session-1")
+    assert data["issues"][0]["fragments"][0]["anchors"] and not data["warnings"]
+    assert "raw/trace-1.json" in data["issues"][0]["diagnoses"][0]["text"]
+    assert migrate.migrate(tmp_path, "session-1")["already_current"]
+
+
+def test_reordered_observations_resolve_by_id_and_refresh_preview(tmp_path):
+    from agent_tune_kit.traces import query, records
+    from agent_tune_kit.visualize.trace import generate_trace
+
+    rows = [{"id": "a", "output": "first"}, {"id": "b", "output": "second"}]
+    path = export_file(tmp_path, observations=rows)
+    directory = Path(capture.import_session(tmp_path, "session-1", SOURCE, path, retention=POLICY)["session_dir"])
+    ref = store.evidence_ref(directory, "raw/trace-1.json", "/trace/observations/0/output")
+    records.save_issue(directory, {"title": "Check", "description": "Check A", "evidence": [ref]})
+    generate_trace(tmp_path, session_id="session-1", open_browser=False)
+    export_file(tmp_path, observations=rows[::-1])
+    updated = capture.import_session(tmp_path, "session-1", SOURCE, path, retention=POLICY)
+    assert updated["preview"]["warnings"] == []
+    shown = query.show(directory, ref)
+    assert json.loads(shown["text"]) == "first" and shown["resolved_pointer"] == "/trace/observations/1/output"
+    assert '"resolved_pointer"' in (directory / "preview.html").read_text()

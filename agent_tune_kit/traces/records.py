@@ -16,6 +16,7 @@ from .store import (
     load_session,
     read_capture,
     read_json,
+    resolve_ref,
     session_write_lock,
     validate_ref,
 )
@@ -134,6 +135,13 @@ def save_issue(session_dir, data):
     ):
         raise UserActionRequired("Issue title and description are required.")
     _refs(directory, issue.get("evidence", []))
+    if "evidence" in data:
+        issue["evidence"] = [
+            {**ref, **evidence_ref(directory, ref["path"], resolve_ref(directory, ref)[1])}
+            if ref["path"].startswith("raw/") and "pointer" in ref
+            else ref
+            for ref in issue["evidence"]
+        ]
     if not issue.get("evidence"):
         raise UserActionRequired("An issue needs retained evidence references.")
     if issue["status"] not in ISSUE_STATES or not isinstance(issue["notes"], list):
@@ -167,16 +175,22 @@ def save_detection(session_dir, data):
         record = {**previous, **record}
     if record.get("status") not in STATES:
         raise UserActionRequired("Detection requires an explicit execution status.")
-    captures = record.get("captures")
-    if not isinstance(captures, list) or not captures:
-        raise UserActionRequired("Detection must bind at least one captured input.")
     if not isinstance(record.get("scope"), (dict, str)) or not record["scope"]:
         raise UserActionRequired("Detection must describe its actual coverage scope.")
-    input_refs = []
-    for capture_id in captures:
-        if not read_capture(directory, capture_id)["sealed"]:
-            raise UserActionRequired("Detection needs a stable, sealed capture; finish or interrupt capture first.")
-        input_refs.append(evidence_ref(directory, f"captures/{capture_id}/manifest.json"))
+    if session["schema_version"] == 2:
+        input_refs = session["archive"]["files"]
+        if not input_refs:
+            raise UserActionRequired("Detection requires retained trace material.")
+        _refs(directory, input_refs)
+    else:
+        captures = record.get("captures")
+        if not isinstance(captures, list) or not captures:
+            raise UserActionRequired("Detection must bind at least one captured input.")
+        input_refs = []
+        for capture_id in captures:
+            if not read_capture(directory, capture_id)["sealed"]:
+                raise UserActionRequired("Detection needs a stable, sealed capture; finish or interrupt capture first.")
+            input_refs.append(evidence_ref(directory, f"captures/{capture_id}/manifest.json"))
     if previous and previous["inputs"] != input_refs:
         raise UserActionRequired("Detection input changed; create a new detection record.")
     record.update(
@@ -441,12 +455,17 @@ def status(session_dir):
     result = {
         "session": session,
         "session_dir": str(directory),
-        "captures": [],
+        **({"archive": session["archive"]} if "archive" in session else {"captures": []}),
         "issues": [],
         "changes": [],
         "warnings": [],
     }
-    for capture_id in session["captures"]:
+    for entry in session.get("archive", {}).get("files", []):
+        try:
+            validate_ref(directory, entry)
+        except UserActionRequired as exc:
+            result["warnings"].append({"path": entry["path"], "error": str(exc)})
+    for capture_id in session.get("captures", []):
         try:
             result["captures"].append(read_capture(directory, capture_id))
         except UserActionRequired as exc:

@@ -35,7 +35,7 @@ def test_trace_cli_records_real_session_without_batch_outputs(tmp_path, monkeypa
     )
     captured = invoke(capsys, "trace", "import", "--session-id", "s1", "--path", export)
     session = Path(captured["session_dir"])
-    raw = next((session / "captures" / captured["capture_id"] / "raw").rglob("*.json"))
+    raw = session / "raw" / "t1.json"
     ref = invoke(
         capsys,
         "trace",
@@ -69,7 +69,6 @@ def test_trace_cli_records_real_session_without_batch_outputs(tmp_path, monkeypa
     detection = write_json(
         tmp_path / "detection.json",
         {
-            "captures": [captured["capture_id"]],
             "scope": {"read": "trace input and output", "unread": "other sessions"},
             "status": "completed",
             "gaps": ["No runtime source evidence"],

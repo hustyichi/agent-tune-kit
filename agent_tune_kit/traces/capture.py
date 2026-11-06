@@ -10,7 +10,7 @@ from pathlib import Path
 from agent_tune_kit.errors import UserActionRequired
 from agent_tune_kit.results.evidence import inspect_execution, json_bytes, read_manifest, safe_path, verify_manifest
 
-from . import store
+from . import archive, store
 
 _SECRET_KEYS = {
     "password",
@@ -425,17 +425,22 @@ def import_session(project_root, session_id, source, paths, *, retention=None, a
     summary_bindings = {
         path: _validate_source_summary(document, session_id, source, selected) for path, document in summaries.items()
     }
-    for index, value in enumerate(paths, 1):
+    for value in paths:
         path = Path(value).absolute()
         if any(parent.is_symlink() for parent in [path, *path.parents]):
             raise UserActionRequired("Local trace sources must not contain symbolic links.")
-        prefix = f"sources/{index:04d}/"
+        prefix = "materials/" + hashlib.sha256(str(path).encode()).hexdigest()[:16] + "/"
         if path.is_dir():
             if (path / "manifest.json").exists():
                 files, details, changes = _capture_materials(path, session_id, source, policy)
             else:
                 files, details, changes = _execution_materials(path, session_id, policy, association)
-            materials.update({prefix + key: data for key, data in files.items()})
+            materials.update(
+                {
+                    (prefix if details["format"] == "atk-execution-copy" else "pages/" + prefix) + key: data
+                    for key, data in files.items()
+                }
+            )
             origin = {"path": str(path), "format": details["format"]}
             if details.get("original_manifest_sha256"):
                 origin["original_manifest_sha256"] = details["original_manifest_sha256"]
@@ -479,7 +484,7 @@ def import_session(project_root, session_id, source, paths, *, retention=None, a
                     details = validate_document(document, session_id, associated=linked, source=source)
                 retained, changes = retain(document, policy)
                 body = json_bytes(retained)
-            materials[prefix + path.name] = body
+            materials[("native/" if details["format"].startswith("langfuse-") else "") + prefix + path.name] = body
             origin = {
                 "path": str(path),
                 "sha256": hashlib.sha256(data).hexdigest(),
@@ -507,7 +512,7 @@ def import_session(project_root, session_id, source, paths, *, retention=None, a
         "gaps": ["Local selection does not prove complete session coverage."],
         "transformations": sorted(transformations),
     }
-    result = store.create_capture(
+    result = archive.save(
         project_root,
         session_id,
         source,

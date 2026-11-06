@@ -72,7 +72,7 @@ def test_late_failure_keeps_approved_pages_and_records_partial(tmp_path, monkeyp
 
     monkeypatch.setattr(langfuse, "_get_page", get)
     result = langfuse.fetch_session(tmp_path, "session-1", cfg)
-    manifest = store.read_capture(result["session_dir"], result["capture_id"])
+    manifest = store.load_session(result["session_dir"])["archive"]
     assert manifest["completeness"]["status"] == "partial" and len(manifest["files"]) == 1
     assert manifest["errors"]
 

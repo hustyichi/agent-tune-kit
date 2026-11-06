@@ -14,7 +14,7 @@ from http.client import HTTPException
 from agent_tune_kit.errors import UserActionRequired
 from agent_tune_kit.results.evidence import json_bytes, now
 
-from . import store
+from . import archive, store
 from .capture import load_config, retain, retention_policy, validate_document
 
 FIELDS = "core,basic,io,metadata,trace_context,model,usage,time"
@@ -234,11 +234,11 @@ def fetch_session(project_root, session_id, config=None, *, from_time=None, to_t
         raise UserActionRequired("Configure a Langfuse source before downloading a session.")
     policy = retention_policy(project_root, retention if retention is not None else config.get("retention"))
     source, credentials, params, scope = _prepare(config, session_id, from_time, to_time)
-    pending = store.prepare_capture(project_root, session_id, source, scope=scope)
     downloaded = _download(source, credentials, params, scope, policy)
-    result = store.finish_capture(
-        pending["session_dir"],
-        pending["capture_id"],
+    result = archive.save(
+        project_root,
+        session_id,
+        source,
         downloaded["files"],
         scope=scope,
         completeness=downloaded["completeness"],

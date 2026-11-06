@@ -5,7 +5,7 @@ Validation date: 2026-11-06 (Asia/Shanghai). Implementation follows the user-app
 ## Implemented scope
 
 - Independent `atk trace` commands for project initialization, Session ID capture/import, paginated evidence reading, issue/detection/diagnosis/change/verification records and actual status. Existing batch-evaluation commands retain their contracts.
-- Source-qualified session identities, immutable retained snapshots, original-byte provenance, retained-byte references, explicit partial coverage and append-only finished candidates/results. A session write lock and record revisions prevent concurrent or stale updates from losing feedback.
+- Native Session ID directories, replaceable per-Trace files, original-byte provenance, field-level evidence checks, explicit partial coverage and append-only finished candidates/results. Legacy snapshot archives remain readable. A session write lock and record revisions prevent concurrent or stale updates from losing feedback.
 - Read-only Langfuse Observations API v2 acquisition with explicit Session ID/time bounds, cursor pagination, bounded retries, safe credential references, partial/interrupted results and pre-persistence retention. Supported local inputs include declared trace exports and their checked source manifests, sealed observation captures, selected native ATK executions and hash-associated row/log evidence.
 - Seven independent Skills and the Trace offline HTML browser, included in plugin payloads, wheel/sdist resources and installation checks. No new runtime dependency, ATO code, company gateway, dataset conversion or legacy-result migration was added.
 
