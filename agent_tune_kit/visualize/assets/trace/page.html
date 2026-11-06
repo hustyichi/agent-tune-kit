@@ -12,11 +12,26 @@
   <main class="app-shell">
     <section class="hero"><div><p class="eyebrow">SESSION INVESTIGATION</p><h1 id="session-title">会话轨迹</h1><p id="session-source" class="muted"></p></div><div id="summary" class="summary"></div></section>
     <div id="warnings" role="status"></div>
-    <nav class="tabs" aria-label="会话视图"><button id="tab-overview" class="active" aria-selected="true" role="tab" data-view="overview">会话概览</button><button id="tab-traces" aria-selected="false" role="tab" data-view="traces">轨迹浏览</button><button id="tab-issues" aria-selected="false" role="tab" data-view="issues">异常列表</button></nav>
-    <section id="view-overview" class="view"></section>
-    <section id="view-traces" class="view" hidden>
-      <div class="toolbar"><label>快照 <select id="capture-filter"></select></label><label>Trace <select id="trace-filter"><option value="">全部 Trace</option></select></label><label>类型 <select id="type-filter"><option value="">全部类型</option></select></label><label class="search-label">搜索 <input id="trace-search" type="search" placeholder="搜索节点、模型或工具输入输出"></label></div>
-      <div id="capture-status"></div><div id="trace-list" class="panel"></div>
+    <nav class="tabs" role="tablist" aria-label="会话视图">
+      <button id="tab-traces" class="active" aria-selected="true" role="tab" aria-controls="view-traces" data-view="traces">执行流程</button>
+      <button id="tab-issues" aria-selected="false" role="tab" aria-controls="view-issues" data-view="issues">异常列表</button>
+      <button id="tab-overview" aria-selected="false" role="tab" aria-controls="view-overview" data-view="overview">会话概览</button>
+    </nav>
+    <section id="view-overview" class="view" hidden></section>
+    <section id="view-traces" class="view">
+      <div class="capture-strip"><label>采集快照 <select id="capture-filter"></select></label><div id="capture-status"></div></div>
+      <div class="flow-layout">
+        <section class="panel timeline-panel" aria-labelledby="lane-title">
+          <div class="flow-heading"><div><h2 id="lane-title">会话泳道</h2><div id="lane-scale-title" class="muted"></div><div id="lane-selected" role="status" hidden></div></div><button id="lane-reset" type="button" hidden>← 全会话</button></div>
+          <div id="lane-scroll" class="lane-scroll" tabindex="0" aria-label="执行时间轴"><div id="lane-chart"></div></div>
+          <div class="lane-legend" aria-label="泳道图例"><span><i class="legend-range"></i>持续区间</span><span><i class="legend-point"></i>时间点</span><span><b class="legend-issue">⚑</b>问题证据</span><span><b class="legend-error">!</b>运行时错误</span></div>
+          <div id="lane-members" hidden></div>
+        </section>
+        <aside class="panel lane-sidebar" aria-labelledby="lane-sidebar-title"><div class="flow-heading"><h2 id="lane-sidebar-title">已记录异常</h2><span id="lane-issue-count" class="lane-total"></span></div><div id="lane-issues"></div></aside>
+      </div>
+      <h2 class="node-list-heading">节点列表</h2>
+      <div class="toolbar"><label>Trace <select id="trace-filter"><option value="">全部 Trace</option></select></label><label>类型 <select id="type-filter"><option value="">全部类型</option></select></label><label class="search-label">搜索 <input id="trace-search" type="search" placeholder="搜索节点、模型或工具输入输出"></label><button id="trace-search-clear" type="button" hidden>清除搜索</button></div>
+      <div id="trace-list" class="panel"></div>
       <div class="pagination"><span id="trace-count" aria-live="polite"></span><label>每页 <select id="page-size"><option>25</option><option selected>50</option><option>100</option></select></label><button id="trace-prev">上一页</button><span id="trace-page"></span><button id="trace-next">下一页</button></div>
     </section>
     <section id="view-issues" class="view" hidden><div class="toolbar"><label class="search-label">搜索 <input id="issue-search" type="search" placeholder="搜索问题、现象或证据"></label><label>状态 <select id="issue-status"><option value="">全部状态</option></select></label></div><p class="muted">问题列表只反映已记录的检查范围。没有发现问题不等于会话全部正确。</p><div id="issue-list" class="issue-grid"></div><div class="pagination"><span id="issue-count" aria-live="polite"></span><button id="issue-prev">上一页</button><span id="issue-page"></span><button id="issue-next">下一页</button></div></section>
@@ -25,6 +40,7 @@
   <div id="drawer-backdrop" class="drawer-backdrop" hidden></div>
   <aside id="drawer" class="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" hidden tabindex="-1"><div class="drawer-header"><h2 id="drawer-title"></h2><button id="drawer-close" aria-label="关闭详情">关闭 ×</button></div><div id="drawer-content" class="drawer-content"></div></aside>
   <script id="trace-data" type="application/json">__DATA__</script>
+  <script>__LANES__</script>
   <script>__APP__</script>
 </body>
 </html>

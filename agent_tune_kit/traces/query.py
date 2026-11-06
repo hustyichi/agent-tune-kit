@@ -36,6 +36,7 @@ def _node(row, reference, *, trace_id=None, kind=None):
         "parent_id": row.get("parentObservationId", row.get("parent_span_id")),
         "type": kind or row.get("type", row.get("kind", "observation")),
         "name": row.get("name", row.get("kind", "")),
+        "level": row.get("level") if isinstance(row.get("level"), str) else None,
         "start_time": row.get("startTime", row.get("timestamp", row.get("occurred_at"))),
         "end_time": row.get("endTime"),
         "input": row.get("input"),
@@ -188,7 +189,7 @@ def show(session_dir, reference, offset=0, limit=8000):
         text = path.read_text(encoding="utf-8")
         if "line" in reference:
             line = reference["line"]
-            if not isinstance(line, int) or line < 1:
+            if type(line) is not int or line < 1 or "pointer" in reference:
                 raise ValueError
             text = text.splitlines()[line - 1]
         elif reference.get("pointer") is not None:

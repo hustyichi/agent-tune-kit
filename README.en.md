@@ -58,7 +58,7 @@ $atk-trace-detect Analyze this session for task correctness.
 $atk-trace-diagnose Investigate ISSUE-001 and propose repair and verification.
 $atk-trace-optimize Implement the selected plan for ISSUE-001.
 $atk-trace-verify Verify this candidate and relevant unaffected behavior.
-$atk-visualize-trace Generate an offline HTML browser for this session.
+$atk-visualize-trace Explore this session’s swimlanes and jump from a recorded issue to its node and evidence field.
 ```
 
 Analyze supported local material directly when session ownership is verifiable. A known issue can enter diagnosis without a full-session detection pass. Capture only acquires data; detection normally delivers an issue list. An explicit request to investigate, repair and verify can continue across stages within authorization. A Trace ID locates material within a session and cannot replace its Session ID.

@@ -58,7 +58,7 @@ $atk-trace-detect 分析这个会话，关注任务结果是否正确。
 $atk-trace-diagnose 调查 ISSUE-001，给出修复和验证方案。
 $atk-trace-optimize 实施 ISSUE-001 的选定方案。
 $atk-trace-verify 验证本轮候选，并检查相关正常行为。
-$atk-visualize-trace 为这个会话生成离线 HTML。
+$atk-visualize-trace 生成会话泳道图，从已记录的问题定位到原始节点和证据字段。
 ```
 
 已有归属明确的本地轨迹时可直接分析；已知问题可直接调查，不必先检测整个会话。`capture` 只采集，`detect` 默认交付问题清单；明确要求连续“调查、修复并验证”时，可以在授权范围内衔接推进。Trace ID 仅用于会话内定位，不能替代 Session ID。

@@ -20,7 +20,7 @@ RECORD_LIMIT = 1024 * 1024
 
 def _reference_key(ref):
     return json.dumps(
-        [ref.get("path"), ref.get("sha256"), ref.get("pointer", ""), ref.get("line")],
+        [ref.get("path"), ref.get("sha256"), ref.get("pointer", ""), ref.get("line"), ref.get("bytes")],
         ensure_ascii=False,
         separators=(",", ":"),
     )
@@ -36,6 +36,48 @@ def _references(value):
     elif isinstance(value, list):
         for child in value:
             yield from _references(child)
+
+
+def _locate_evidence(captures, references, issues):
+    """Bind validated field previews to nodes in their original snapshot."""
+    files = {}
+    nodes = {}
+    for capture in captures:
+        capture_id = capture["id"]
+        for entry in capture["manifest"].get("files", []):
+            files[(f"captures/{capture_id}/{entry['path']}", entry["sha256"])] = capture_id
+        for index, node in enumerate(capture["nodes"]):
+            ref = node["reference"]
+            nodes[(ref["path"], ref.get("line"), ref.get("pointer", ""))] = index, node
+
+    issues_by_reference = {}
+    for issue in issues:
+        record = issue["record"]
+        for key in {_reference_key(ref) for ref in record["evidence"]}:
+            issues_by_reference.setdefault(key, []).append(record["id"])
+
+    for key, saved in references.items():
+        ref = saved["reference"]
+        capture_id = files.get((ref["path"], ref["sha256"]))
+        if not capture_id or "preview" not in saved:
+            continue
+        saved["capture_id"] = capture_id
+        pointer = ref.get("pointer", "")
+        ancestor = pointer
+        while True:
+            match = nodes.get((ref["path"], ref.get("line"), ancestor))
+            if match is not None:
+                index, node = match
+                saved["location"] = {"capture_id": capture_id, "node_index": index, "field": pointer[len(ancestor) :]}
+                for issue_id in issues_by_reference.get(key, []):
+                    ids = node.setdefault("issue_ids", [])
+                    if issue_id not in ids:
+                        ids.append(issue_id)
+                break
+            if not ancestor:
+                break
+            # RFC 6901 escapes literal slash in keys as ~1, so trim only at a segment boundary.
+            ancestor = ancestor.rpartition("/")[0]
 
 
 def build_trace_data(project_root, *, session_id, source=None):
@@ -129,6 +171,8 @@ def build_trace_data(project_root, *, session_id, source=None):
             references[key] = {"reference": ref, "error": str(exc)}
             warnings.append(f"Reference {ref['path']}: {exc}")
 
+    _locate_evidence(captures, references, issues)
+
     project = ""
     project_path = session_dir.parent / "project.md"
     if project_path.exists():
@@ -172,6 +216,7 @@ def generate_trace(project_root=".", *, session_id, source=None, output_path=Non
         raise UserActionRequired(f"Trace preview already exists: {output}; use --overwrite to regenerate it.")
     template = ASSETS.joinpath("page.html").read_text(encoding="utf-8")
     page = template.replace("__STYLES__", ASSETS.joinpath("styles.css").read_text(encoding="utf-8"))
+    page = page.replace("__LANES__", neutralize_script_close(ASSETS.joinpath("lanes.js").read_text(encoding="utf-8")))
     page = page.replace("__APP__", neutralize_script_close(ASSETS.joinpath("app.js").read_text(encoding="utf-8")))
     page = page.replace("__DATA__", safe_json_for_html(data))
     write_text_atomic(output, page)

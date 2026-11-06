@@ -214,3 +214,60 @@ def test_jsonl_references_keep_line_identity():
     assert trace._reference_key({"path": "events.jsonl", "sha256": "x", "line": 1}) != trace._reference_key(
         {"path": "events.jsonl", "sha256": "x", "line": 2}
     )
+
+
+def test_issue_fields_locate_the_original_capture_node_and_keep_exact_preview(tmp_path):
+    session_dir = Path(capture(tmp_path, observations=11)["session_dir"])
+    capture(tmp_path, "CAP-002", observations=11)
+    path = "captures/CAP-001/raw/trace.json"
+    field = store.evidence_ref(session_dir, path, "/trace/observations/10/input/messages/0")
+    root_field = store.evidence_ref(session_dir, path, "/trace/output")
+    file_ref = store.evidence_ref(session_dir, path)
+    old = store.evidence_ref(session_dir, path, "/trace/observations/1/output")
+    records.save_issue(session_dir, {"id": "ISSUE-001", "title": "Old", "description": "Old", "evidence": [old]})
+    records.save_issue(session_dir, {"id": "ISSUE-001", "revision": 1, "evidence": [field, root_field, file_ref]})
+    records.save_issue(session_dir, {"id": "ISSUE-002", "title": "Also", "description": "Also", "evidence": [field]})
+
+    _, data = trace.build_trace_data(tmp_path, session_id=SESSION_ID)
+    saved = data["references"]
+    located = saved[trace._reference_key(field)]
+    assert json.loads(located["preview"]["text"]) == "hello"
+    assert located["location"] == {"capture_id": "CAP-001", "node_index": 11, "field": "/input/messages/0"}
+    assert saved[trace._reference_key(root_field)]["location"]["node_index"] == 0
+    assert saved[trace._reference_key(file_ref)]["capture_id"] == "CAP-001"
+    assert "location" not in saved[trace._reference_key(file_ref)]
+    first, second = data["captures"]
+    assert first["nodes"][11]["issue_ids"] == ["ISSUE-001", "ISSUE-002"]
+    assert first["nodes"][0]["issue_ids"] == ["ISSUE-001"]
+    assert "issue_ids" not in first["nodes"][2]  # Superseded issue evidence is still viewable in history.
+    assert all("issue_ids" not in node for node in second["nodes"])
+
+
+def test_jsonl_issue_location_distinguishes_the_line_from_the_file(tmp_path):
+    events = "\n".join(json.dumps({"event_id": i, "level": "ERROR"}) for i in (1, 2))
+    session_dir = Path(
+        store.create_capture(
+            tmp_path,
+            SESSION_ID,
+            SOURCE,
+            {"events.jsonl": events},
+            scope={},
+            completeness={},
+            capture_id="CAP-lines",
+        )["session_dir"]
+    )
+    file_ref = store.evidence_ref(session_dir, "captures/CAP-lines/raw/events.jsonl")
+    line_ref = {**file_ref, "line": 2}
+    records.save_issue(
+        session_dir, {"title": "On line two", "description": "Example", "evidence": [line_ref, file_ref]}
+    )
+    _, data = trace.build_trace_data(tmp_path, session_id=SESSION_ID)
+    assert data["references"][trace._reference_key(line_ref)]["location"] == {
+        "capture_id": "CAP-lines",
+        "node_index": 1,
+        "field": "",
+    }
+    assert "location" not in data["references"][trace._reference_key(file_ref)]
+    first, second = data["captures"][0]["nodes"]
+    assert first["level"] == "ERROR" and "issue_ids" not in first
+    assert len(second["issue_ids"]) == 1

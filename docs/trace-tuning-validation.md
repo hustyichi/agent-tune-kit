@@ -28,10 +28,17 @@ A separate agent received only the user task, the new Skills and the explicitly 
 
 This exercise proves local acquisition, reading, findings/coverage persistence and preview generation. It does not prove remote session completeness, historical environment recovery, final root causes or successful business repairs.
 
+## Session swimlanes and evidence navigation (2026-11-06)
+
+The [swimlane design](trace-swimlane-design.md) was exercised on a separate project archive with one capture, three Traces, 450 observations, and three recorded issues. The installed editable CLI regenerated its single offline HTML. All ten underlying evidence and processing files matched their pre-generation SHA-256 digests.
+
+In offline Chrome, all 22 issue links selected their original Trace and node and displayed the expected field preview from the retained bytes. Return navigation restored the evidence link and any conflicting list filter. Desktop (1440 × 960) and narrow (390 × 844) views were checked, including actual visibility of the highlighted mark above the narrow detail sheet. Browser checks included zero external HTTP requests or script errors. Separate synthetic data covered switching back to an older capture, escaped JSON Pointer tokens and undated evidence.
+
+The local sample produced a 13,482,484-byte page. With the same desktop Chrome setup, the median of five file opens through display of the node list was 183 ms (previous page 184 ms). These are observations for this machine and archive. Source checks passed **347 pytest tests and 15 subtests**, Ruff and Skill-pack validation. Wheel and sdist checks confirmed the page assets are included.
+
 ## Outstanding acceptance
 
 - **Real Langfuse v4 download:** not performed. An actual deployment/project, credential environment references and session time bounds were not supplied. Official API documentation and synthetic HTTP fixtures do not replace deployment acceptance. No v3 downloader is claimed.
-- **Real browser interaction:** not completed. The browser tool rejected the local `file:` URL because its URL policy permits only HTTP/HTTPS. HTML generation, safe embedding, offline resource packaging and JavaScript syntax passed; actual layout, interaction, accessibility and load performance remain unverified.
 - **Business repair and effect:** no production/business implementation was changed or replayed. Record lifecycle, fixed-candidate loading gates and per-issue conclusions passed automated checks; a real executable business issue still needs diagnosis, authorized repair, actual candidate loading and independent effect evidence.
 - **Host activation and release:** no global CLI/plugin reinstall, new-host Skill activation, version bump, publication or deployment was performed. Isolated installed-resource smoke tests do not establish activation in this existing chat.
 - **Platforms:** concurrency locking was exercised on macOS. The conditional Windows locking branch has not been run on Windows.
