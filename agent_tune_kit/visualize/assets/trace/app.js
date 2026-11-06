@@ -289,10 +289,8 @@
     if (relations.childElementCount > 1) $("drawer-content").append(relations);
     for (const key of ["input", "output"]) {
       const detail = el("details", undefined, "detail-section");
-      detail.append(el("summary", key === "input" ? "节点输入" : "节点输出"));
-      detail.addEventListener("toggle", () => {
-        if (detail.open && detail.childElementCount === 1) detail.append(pre(node[key] ?? "原始记录未提供值"));
-      });
+      detail.open = true;
+      detail.append(el("summary", key === "input" ? "节点输入" : "节点输出"), pre(node[key] ?? "原始记录未提供值"));
       $("drawer-content").append(detail);
     }
   };
