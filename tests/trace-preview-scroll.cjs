@@ -24,6 +24,17 @@ async function check(browser, width) {
   assert.equal(await page.locator("#trace-count").textContent(), `${expected.count} 条`);
   assert.equal(await page.locator(".role-row").count(), 0);
 
+  const controls = await page.locator(".record-filters :is(select,input):visible").evaluateAll(items =>
+    items.map(item => ({y:item.getBoundingClientRect().top,
+      width:item.clientWidth, height:item.getBoundingClientRect().height})));
+  assert.equal(new Set(controls.map(item => item.height)).size, 1, "Filter controls must align");
+  if (width < 650) {
+    assert.equal(controls[0].y, controls[1].y);
+    assert.equal(controls[2].y, controls[3].y);
+    assert.ok(controls[2].y >= controls[0].y + controls[0].height);
+    assert.ok(controls[3].width >= 130, "Search must stay readable on narrow screens");
+  }
+
   // Reach every original observation by scrolling alone, across window and Trace boundaries.
   const seen = await page.evaluate(async () => {
     const frame = document.getElementById("trace-scroll");
