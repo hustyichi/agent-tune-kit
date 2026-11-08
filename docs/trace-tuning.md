@@ -110,7 +110,7 @@ A file lacking native session identity needs an association file based on actual
 
 Pass it with `--association <file>`. For an ATK directory, bind the original `execution.json`. Conflicting native identities are rejected despite an association. Unknown/damaged formats or symbolic-link sources are not copied as if valid traces. Original source files remain unchanged; transformations happen before new retained copies. References bind the bytes actually saved.
 
-Import updates raw/<trace_id>.json by native Trace ID. An identical file is skipped, and traces absent from the selection are retained. Issue field references include a digest of the cited value; changed fields require another check. An existing session preview is regenerated on import when archive contents or scope change. Reload the open page to see it. For an existing single-snapshot native export, run `atk trace migrate --session-id SESSION_ID --json`. Verify the new preview before removing the legacy directory. Older multi-snapshot archives remain readable.
+Import updates `raw/<trace_id>.json` by native Trace ID. An identical file is skipped, and traces absent from the selection are retained. Issue field references include a digest of the cited value. Check those references again if the cited fields change. ATK refreshes an existing session preview when an import changes archive contents or scope. Reload the open page to see it. For an existing single-snapshot native export, run `atk trace migrate --session-id SESSION_ID --json`. Verify the new preview before removing the legacy directory. Older multi-snapshot archives remain readable.
 
 ## Inspect long evidence
 
@@ -182,19 +182,22 @@ Use **定位异常** next to the chart, or select a card in the issue list. Each
 ├── config.json
 ├── project.md
 └── <session_id>/
-    ├── session.json
-    ├── raw/<trace_id>.json
+    ├── session.json                      # Source, capture scope, and detection records
+    ├── raw/
+    │   ├── <trace_id>.json               # Current trace by native Trace ID
+    │   ├── materials/                    # Other retained local evidence, when supplied
+    │   └── association.json              # Sourced session association, when supplied
     ├── issues/<issue-id>/
     │   ├── issue.json
-    │   ├── diagnoses/<id>.md
+    │   ├── diagnoses/<diagnosis-id>.md
     │   └── changes/<change-id>/
     │       ├── change.json
     │       └── verifications/<verification-id>/
-    │           ├── result.json
-    │           └── evidence/
+    │           ├── result.json            # Execution, per-issue conclusions, and evidence references
+    │           └── evidence/             # Optional retained verification evidence
     └── preview.html
 ```
 
-Only actual steps create their records. The directory uses the native Session ID with unsafe path characters escaped. Raw traces are shared by issues, and previews are rebuildable views rather than authoritative conclusions. Existing batch scoring, `--ids`, `--only-failures`, evaluation version selection and historical evidence imports retain their prior contracts. Explicit batch verification creates ordinary new batch results and is referenced by the Trace verification.
+Files appear as their corresponding steps run. The archive uses native Session and Trace IDs as path components, with escaping where needed. Read `session.json` for detection coverage, including a completed analysis with zero findings. Issues share the retained traces. Regenerate `preview.html` to review the latest diagnoses, changes, and verification attempts. Explicit batch verification creates ordinary new batch results and links them from the trace verification record.
 
 No private trace, credential, company gateway or business example is bundled. Automated fixture tests establish deterministic behavior; real Langfuse deployment compatibility, fresh host loading and actual business repair require their own evidence. A successful local import is not a remote API or business-effect acceptance result.

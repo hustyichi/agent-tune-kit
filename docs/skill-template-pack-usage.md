@@ -126,6 +126,7 @@ Do not copy a single `skills/*` directory by itself; keep `skills/`, `templates/
 - `skills/atk-report/SKILL.md` — write current `report.md`, including adjacent-version validation when possible.
 - `skills/atk-visualize-failures/SKILL.md` — run the fixed stdlib generator script to write current `failure_cases.html` as an optional, dependency-free browser for current `failure_cases.csv`.
 - `skills/atk-optimize/SKILL.md` — tune the target Agent and write current `tuning_plan.md`.
+- `skills/atk-trace-*/SKILL.md` and `skills/atk-visualize-trace/SKILL.md` — capture, analyze, investigate, fix, verify, and browse one session. See the [session trace workflow and archive layout](trace-tuning.md).
 - `templates/.atk/runner/eval_runner.py.md` — script template preserving original dataset columns and appending `agent_output` plus `log_path`.
 - `templates/.atk/runner/failure_rule.py.md` — project-specific rule adapter for `atk results run-rule`.
 - `docs/shared-versioning-and-confirmation.md` — shared current/new version semantics and confirmation triggers.

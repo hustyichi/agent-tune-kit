@@ -49,27 +49,37 @@ atk install
 
 ## 从问题会话开始轨迹调优
 
-在自己的 Agent 项目中使用以下独立入口：
+在 Codex 中打开自己的 Agent 项目，再发送下面的 Skill 指令。先确定原始 Session ID 和来源，Trace ID 用于在会话内定位证据。
+
+可用 `atk trace --help` 检查当前 CLI 是否支持轨迹调优。如果命令不可用，按上面的本地源码方式安装支持轨迹调优的版本，再新建 Codex 会话。
+
+### 1. 准备会话轨迹
+
+- **Langfuse v4**：首次接入可用 `$atk-trace-init` 记录项目和来源配置。配置只引用凭据的环境变量名。然后发送 `$atk-trace-capture 下载 <session-id> 的会话，时间范围是 <开始时间> 到 <结束时间>`。
+- **本地文件**：发送 `$atk-trace-capture 从 <文件路径> 导入 <session-id> 的轨迹，来源是 <来源>`。也可以在下一步直接提供可验证会话归属的文件，由分析流程导入。已归档的会话可直接分析。
+
+采集只下载或导入。保存前确认哪些正文可以留存、哪些字段需要脱敏。`.atk/traces/` 会加入项目的 `.gitignore`。具体配置和支持格式见[轨迹调优指南](docs/trace-tuning.md)。
+
+### 2. 分析并查看证据
 
 ```text
-$atk-trace-init 了解当前项目和本地或 Langfuse 数据源。
-$atk-trace-capture 下载 session_id 为 <session-id> 的会话。
-$atk-trace-detect 分析这个会话，关注任务结果是否正确。
-$atk-trace-diagnose 调查 ISSUE-001，给出修复和验证方案。
-$atk-trace-optimize 实施 ISSUE-001 的选定方案。
-$atk-trace-verify 验证本轮候选，并检查相关正常行为。
-$atk-visualize-trace 展示完整会话的执行泳道，从异常跳到相关轨迹片段和原始证据字段。
+$atk-trace-detect 分析 <session-id> 的任务结果是否正确，列出问题、证据和未检查的范围。
+$atk-visualize-trace 打开 <session-id> 的执行泳道，从问题跳到相关轨迹片段和证据字段。
 ```
 
-已有归属明确的本地轨迹时可直接分析；已知问题可直接调查，不必先检测整个会话。`capture` 只采集，`detect` 默认交付问题清单；明确要求连续“调查、修复并验证”时，可以在授权范围内衔接推进。Trace ID 仅用于会话内定位，不能替代 Session ID。
+分析默认交付带证据的问题清单和检查范围。预览保存在 `.atk/traces/<session_id>/preview.html`，有轨迹即可生成，包括尚未分析或未发现问题的会话。HTML 可能包含留存的正文，分享前请核对内容。
 
-轨迹及处理记录保存到 `.atk/traces/`：按原始会话 ID 打开目录，`raw/<trace_id>.json` 保存每条轨迹的当前数据。重复导入覆盖同 ID 的 Trace，保留本次未返回的 Trace 和已有问题，预览可在只有轨迹、零问题或部分处理时生成。执行完成和局部测试不等于修复成功；候选加载或关键条件无法核实时，效果结论为 `inconclusive`。
+### 3. 按问题调查、修复和验证（按需）
 
-来源配置只保存凭据的环境变量名；导入或下载前确认正文留存与脱敏。首次写入会保留现有 `.gitignore` 并确保 `.atk/traces/` 被忽略。HTML 为离线预览，可能只嵌入部分正文；分享前核对内容。Langfuse v4 的实际部署兼容性需在目标实例验证，本地导入不能替代远端验收。
+```text
+$atk-trace-diagnose 调查 <session-id> 的 ISSUE-001，给出修复和验证方案。
+$atk-trace-optimize 实施 <session-id> 的 ISSUE-001 已选定的方案。
+$atk-trace-verify 验证 <session-id> 的 ISSUE-001 对应候选，并检查相关正常行为。
+```
 
-具体命令、支持格式和记录说明见[轨迹调优指南](docs/trace-tuning.md)。原有批量评测仍使用下面的流程，结果保持在 `.atk/results/vN/`。
+已有明确问题和会话证据时，可以从调查开始。每次验证按问题保存结论，无法确认实际加载的候选或关键验证条件时，效果记为 `inconclusive`（无法判断）。
 
-## 完成第一轮评测与调优
+## 完成第一轮批量评测与调优
 
 **在 Codex 中打开你自己的 Agent 项目**，再发送下面的 Skill 指令。安装命令在终端运行，`$atk-…` 指令在 Codex 对话中使用。
 
@@ -127,11 +137,11 @@ $atk-optimize
 
 Codex 会根据报告和失败样本修改 Agent 的 prompt、代码、参数或工具配置，并记录改动原因和下一轮需要验证的问题。建议在调优前用 Git 保存当前代码，方便比较和恢复。
 
-### 使用流程
+### 批量评测流程
 
 ![Agent Tune Kit 使用流程：按需准备数据并接入 Agent，再重复评测、诊断、报告和调优。数据与失败样本浏览均为可选。](docs/assets/architecture.svg)
 
-## 查看结果与验证改善
+## 查看批量评测结果与验证改善
 
 每轮结果保存在 Agent 项目的 `.atk/results/vN/` 下。优先查看 `report.md` 了解主要问题，用 `failure_cases.html` 复核具体失败，用 `tuning_plan.md` 查看调优改动及其原因。
 
@@ -151,9 +161,9 @@ $atk-report
 
 要补测 unknown 或指定样本，可用 `$atk-eval --ids 7 9`。共享 V1/V2 按 canonical 数据集顺序筛选 ID，再应用 offset/limit；分组适配器仍保留完整病例上下文。未知 ID 会停止，`--ids` 与 `--only-failures` 不能同时使用；局部补测不代表完整回归。
 
-### 完整输出结构
+## 完整输出结构
 
-下面列出最新版本评测流程中持续保存的正式产物及可选文件。它们随对应步骤和配置生成，不会在安装后一次性出现。
+批量评测按轮次保存到 `.atk/results/vN/`，轨迹调优按会话保存到 `.atk/traces/<session_id>/`。以下是两条流程的主要产物，随所用步骤和配置生成。
 
 ```text
 .atk/
@@ -165,46 +175,34 @@ $atk-report
 ├── runner/
 │   ├── eval_runner.py         # Agent 接入文件
 │   └── failure_rule.py        # 按需生成：项目判定规则
-└── results/
-    ├── v1/
-    │   ├── eval_results.csv    # 每条样本的实际输出与执行状态
-    │   ├── run.json            # 本轮执行状态与证据索引
-    │   ├── run-events.jsonl    # 按需生成：未归属到单次执行的事件
-    │   ├── executions/
-    │   │   └── <execution-id>/ # 一次执行；可能关联多条样本
-    │   │       ├── execution.json
-    │   │       ├── input.json
-    │   │       ├── output.json
-    │   │       ├── context/
-    │   │       │   ├── samples.json
-    │   │       │   ├── environment.json
-    │   │       │   └── snapshot-<N>
-    │   │       ├── events.jsonl
-    │   │       ├── app.log
-    │   │       └── artifacts/  # 按需生成：额外保存的产物
-    │   ├── judgments.csv       # 每条样本的判定及理由
-    │   ├── judgment-history/   # 重判时保留的历史判定
-    │   │   └── <hash>.csv
-    │   ├── failure_cases.csv   # 已确认失败的样本
-    │   ├── failure_cases.html  # 可选：失败样本浏览页
-    │   ├── report.md           # 本轮分析与跨轮验证
-    │   └── tuning_plan.md      # 本轮调优改动及验证目标
-    └── v2/
-        └── ...                # 后续轮次沿用相应结构
+├── results/
+│   └── vN/                    # 每轮一个目录，如 v1、v2
+│       ├── eval_results.csv   # 样本输出与执行状态
+│       ├── judgments.csv      # 逐条判定及理由
+│       ├── judgment-history/  # 重判时保留的旧判定
+│       ├── failure_cases.csv  # 已确认失败的样本
+│       ├── failure_cases.html # 可选的失败样本浏览页
+│       ├── report.md          # 本轮分析与跨轮验证
+│       ├── tuning_plan.md     # 调优改动及验证目标
+│       ├── run.json           # V2 执行状态与证据索引
+│       ├── run-events.jsonl   # 按需保存的运行级事件
+│       └── executions/        # V2 逐次执行的输入、输出、上下文和日志
+└── traces/
+    ├── config.json            # 来源配置与留存规则
+    ├── project.md             # 轨迹调优所需的项目背景
+    └── <session_id>/
+        ├── session.json       # 会话来源、采集范围与检测覆盖记录
+        ├── raw/<trace_id>.json # 按 Trace ID 保存的轨迹
+        ├── preview.html       # 可选的会话泳道与问题浏览页
+        └── issues/<issue-id>/
+            ├── issue.json     # 问题描述、状态与证据引用
+            ├── diagnoses/<diagnosis-id>.md # 原因分析与修复、验证方案
+            └── changes/<change-id>/
+                ├── change.json # 实际改动与候选版本
+                └── verifications/<verification-id>/result.json
 ```
 
-| 文件或目录 | 什么时候看、用来做什么 |
-| --- | --- |
-| `datasets/dataset.csv`、`dataset.html` | 检查测试输入和期望结果；浏览页按需生成，导出的复核 CSV 也可以从下载目录导入 |
-| `context.md` | 可选保存已经确认的目标、行为标准和反馈，供后续调优复用；不需要手工维护运行统计 |
-| `runner/` | 接入或调整 Agent 调用方式时使用，日常评测由 Skills 调用 |
-| `eval_results.csv` | 查看样本原始字段、实际输出 `agent_output`、执行状态 `output_status` 和日志位置 `log_path` |
-| `judgments.csv`、`failure_cases.csv` | 查看逐条判定和确认失败的样本；未判定不进入失败集，重判时旧记录保存在 `judgment-history/` |
-| `report.md`、`failure_cases.html`、`tuning_plan.md` | 阅读分析、复核失败、检查改动，再确定下一轮验证目标 |
-| `run.json`、`executions/`、`run-events.jsonl` | 需要排查某次运行时查看；保存状态、输入输出、上下文、事件和额外产物 |
-
-执行目录中的 `context/` 保存相关样本、运行环境和接入文件等快照；`app.log` 是已采集日志的浏览视图，可能为空。模型和工具调用的详细轨迹取决于项目是否接入采集，并非所有调用都会自动记录。
-
-执行失败或中断时，可能只有部分文件；有目录不等于运行完成。仅导入证据的轮次可能没有 `eval_results.csv`，也不能直接用于评分。执行证据可能包含项目数据，接入时应确认需要保留或脱敏的内容。
+- 排查批量评测时，从 `eval_results.csv` 的 `log_path` 找到样本日志。V2 日志位于 `executions/<execution-id>/app.log`，V1 可能保存在轮次的 `logs/` 或 `app.log`。中断时可能只有部分文件。仅导入证据的轮次可能没有 `eval_results.csv`，评分需要另有样本输出。单次执行的文件说明见[执行证据文档](docs/execution-evidence-and-tracing-plan.md)。
+- 复核会话时，从 `preview.html` 查看泳道，或从 `issues/<issue-id>/` 查看诊断、改动和各次验证。验证的执行状态、按问题得出的结论及证据引用保存在 `result.json`。归档细节见[轨迹调优指南](docs/trace-tuning.md#archive-layout-and-separation)。
 
 产品方向讨论：[ATO 与 ATK 的项目边界选型建议](docs/ato-atk-project-boundary-recommendation-2026-11-05.md)（建议稿）。

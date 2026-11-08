@@ -49,27 +49,37 @@ Finish active ATK tasks before reinstalling, and open a new session afterward to
 
 ## Tune from a Problematic Session
 
-Use these independent entries from your Agent project:
+Open your Agent project in Codex and send the Skill instructions below. Start with the native Session ID and its source. Use Trace IDs to locate evidence within the session.
+
+Run `atk trace --help` to check whether your CLI supports trace tuning. If the command is unavailable, follow the local source installation steps above with a version that supports trace tuning, then open a new Codex session.
+
+### 1. Prepare the Session Trace
+
+- **Langfuse v4**. Use `$atk-trace-init` to record project and source settings on first setup. Configuration references credentials by environment-variable name. Then send `$atk-trace-capture Download session <session-id> from <start time> to <end time>`.
+- **Local files**. Send `$atk-trace-capture Import traces for session <session-id> from <file path>, with source <source>`. You can also provide files that can be verified as belonging to the session in the next step and let detection import them. Analyze an already archived session directly.
+
+Capture only downloads or imports data. Before saving, decide which content to retain and which fields to redact. ATK adds `.atk/traces/` to the project's `.gitignore`. See the [trace tuning guide](docs/trace-tuning.md) for configuration and supported formats.
+
+### 2. Analyze and Review Evidence
 
 ```text
-$atk-trace-init Understand this project and its local or Langfuse sources.
-$atk-trace-capture Download session_id <session-id>.
-$atk-trace-detect Analyze this session for task correctness.
-$atk-trace-diagnose Investigate ISSUE-001 and propose repair and verification.
-$atk-trace-optimize Implement the selected plan for ISSUE-001.
-$atk-trace-verify Verify this candidate and relevant unaffected behavior.
-$atk-visualize-trace Browse the full session and jump from an issue to its execution ranges and original evidence fields.
+$atk-trace-detect Check whether session <session-id> completed its task correctly. List issues, evidence, and what you did not inspect.
+$atk-visualize-trace Open the execution lanes for session <session-id> and jump from issues to the relevant trace segments and evidence fields.
 ```
 
-Analyze supported local material directly when session ownership is verifiable. A known issue can enter diagnosis without a full-session detection pass. Capture only acquires data; detection normally delivers an issue list. An explicit request to investigate, repair and verify can continue across stages within authorization. A Trace ID locates material within a session and cannot replace its Session ID.
+Detection normally delivers a list of issues with evidence and inspection coverage. The preview is saved as `.atk/traces/<session_id>/preview.html`. You can generate it once traces are available, including for sessions with no analysis or no findings. Review the HTML before sharing it because it may contain retained content.
 
-Evidence and processing records live under `.atk/traces/`. Open the directory named for the native Session ID. Each raw/<trace_id>.json contains the current trace. Reimport updates matching Trace IDs and retains other traces and existing issues. The browser supports capture-only, zero-issue and partially processed sessions. Completed execution or local checks do not establish repair success; unproven candidate loading or essential conditions produce an `inconclusive` effect judgment.
+### 3. Investigate, Fix, and Verify an Issue as Needed
 
-Configuration stores credential environment-variable names only. Confirm retention/redaction before importing or downloading bodies. The first write preserves `.gitignore` and ensures `.atk/traces/` is ignored. Offline HTML may embed only part of the evidence; review it before sharing. Verify Langfuse v4 compatibility against the actual deployment; local import does not substitute for remote acceptance.
+```text
+$atk-trace-diagnose Investigate ISSUE-001 in session <session-id> and propose a repair and verification plan.
+$atk-trace-optimize Implement the selected plan for ISSUE-001 in session <session-id>.
+$atk-trace-verify Verify the candidate for ISSUE-001 in session <session-id> and check relevant behavior that should still work.
+```
 
-See the [trace tuning guide](docs/trace-tuning.md) for commands, supported formats and records. The batch workflow below continues to store results in `.atk/results/vN/`.
+Start with diagnosis when you already have a specific issue and session evidence. Each verification records a conclusion per issue. If candidate loading or essential verification conditions cannot be established, the outcome is `inconclusive`.
 
-## Complete Your First Evaluation and Tuning Round
+## Complete Your First Batch Evaluation and Tuning Round
 
 **Open your own Agent project in Codex**, then send the Skill instructions below. Installation commands run in a terminal; `$atk-…` instructions belong in your Codex conversation.
 
@@ -127,11 +137,11 @@ $atk-optimize
 
 Codex uses the report and failures to edit your Agent's prompts, code, parameters, or tool configuration. It records why it made changes and what to verify next. Save your current code with Git before tuning so you can compare and restore it.
 
-### Workflow
+### Batch Evaluation Workflow
 
 ![Agent Tune Kit workflow: prepare data and connect your Agent as needed, then repeat evaluation, diagnosis, reporting, and tuning. Dataset and failure browsers are optional.](docs/assets/architecture.en.svg)
 
-## Review Results and Verify Improvement
+## Review Batch Results and Verify Improvement
 
 Each round saves results under `.atk/results/vN/` in your Agent project. Start with `report.md` for the main findings, use `failure_cases.html` to review individual failures, and read `tuning_plan.md` for the changes and their rationale.
 
@@ -151,9 +161,9 @@ Execution summaries and `atk results inspect` expose `technical_failures` and `t
 
 Use `$atk-eval --ids 7 9` to revisit unknown or selected samples. Managed V1/V2 filter IDs in canonical dataset order before offset/limit; grouped adapters retain full case context. Missing IDs stop execution, and `--ids` is mutually exclusive with `--only-failures`. A selected rerun is not a full regression run.
 
-### Complete Output Structure
+## Complete Output Structure
 
-This tree lists persistent evaluation outputs and optional files produced by the latest version. They appear as the corresponding steps and configuration require, rather than all being created at installation.
+Batch evaluation saves each round under `.atk/results/vN/`. Trace tuning saves each session under `.atk/traces/<session_id>/`. These are the main outputs of both workflows. Which files appear depends on the steps you run and your configuration.
 
 ```text
 .atk/
@@ -165,46 +175,34 @@ This tree lists persistent evaluation outputs and optional files produced by the
 ├── runner/
 │   ├── eval_runner.py         # Agent adapter
 │   └── failure_rule.py        # Project judgment rule, generated as needed
-└── results/
-    ├── v1/
-    │   ├── eval_results.csv    # Actual outputs and execution status per sample
-    │   ├── run.json            # Round status and evidence index
-    │   ├── run-events.jsonl    # As needed: events outside individual executions
-    │   ├── executions/
-    │   │   └── <execution-id>/ # One execution; may serve multiple samples
-    │   │       ├── execution.json
-    │   │       ├── input.json
-    │   │       ├── output.json
-    │   │       ├── context/
-    │   │       │   ├── samples.json
-    │   │       │   ├── environment.json
-    │   │       │   └── snapshot-<N>
-    │   │       ├── events.jsonl
-    │   │       ├── app.log
-    │   │       └── artifacts/  # Additional saved artifacts, as needed
-    │   ├── judgments.csv       # Per-sample judgments and reasons
-    │   ├── judgment-history/   # Previous judgments saved on reassessment
-    │   │   └── <hash>.csv
-    │   ├── failure_cases.csv   # Confirmed failures
-    │   ├── failure_cases.html  # Optional failure browser
-    │   ├── report.md           # Analysis and cross-round validation
-    │   └── tuning_plan.md      # Tuning changes and verification targets
-    └── v2/
-        └── ...                # Later rounds follow the applicable layout
+├── results/
+│   └── vN/                    # One directory per round, such as v1 or v2
+│       ├── eval_results.csv   # Sample outputs and execution status
+│       ├── judgments.csv      # Per-sample judgments and reasons
+│       ├── judgment-history/  # Previous judgments saved on reassessment
+│       ├── failure_cases.csv  # Confirmed failures
+│       ├── failure_cases.html # Optional failure browser
+│       ├── report.md          # Analysis and cross-round validation
+│       ├── tuning_plan.md     # Tuning changes and verification targets
+│       ├── run.json           # V2 execution status and evidence index
+│       ├── run-events.jsonl   # Run-level events, saved as needed
+│       └── executions/        # V2 inputs, outputs, context, and logs per execution
+└── traces/
+    ├── config.json            # Source settings and retention policy
+    ├── project.md             # Project context for trace tuning
+    └── <session_id>/
+        ├── session.json       # Source, capture scope, and detection coverage
+        ├── raw/<trace_id>.json # Retained trace by Trace ID
+        ├── preview.html       # Optional session lanes and issue browser
+        └── issues/<issue-id>/
+            ├── issue.json     # Issue description, status, and evidence references
+            ├── diagnoses/<diagnosis-id>.md # Cause, repair plan, and verification plan
+            └── changes/<change-id>/
+                ├── change.json # Actual changes and candidate identity
+                └── verifications/<verification-id>/result.json
 ```
 
-| File or directory | When and why to use it |
-| --- | --- |
-| `datasets/dataset.csv`, `dataset.html` | Review inputs and expected results. The browser is optional; exported review CSVs can also be imported from Downloads |
-| `context.md` | Optionally keep agreed goals, behavior standards, and feedback for future tuning; no manual run statistics are needed |
-| `runner/` | Connect or adjust Agent invocation; Skills use these files during routine evaluation |
-| `eval_results.csv` | Read source fields, actual `agent_output`, execution status `output_status`, and `log_path` |
-| `judgments.csv`, `failure_cases.csv` | Read individual judgments and confirmed failures. Unknowns stay outside the failure set; reassessments preserve old records in `judgment-history/` |
-| `report.md`, `failure_cases.html`, `tuning_plan.md` | Read analysis, review failures, inspect changes, and choose the next verification targets |
-| `run.json`, `executions/`, `run-events.jsonl` | Investigate a run using saved status, inputs, outputs, context, events, and additional artifacts |
-
-Within each execution, `context/` holds relevant samples, environment details, and snapshots such as the adapter file. `app.log` is a view of captured logs and may be empty. Detailed model and tool traces depend on project instrumentation; calls are not all recorded automatically.
-
-Failed or interrupted executions may leave only partial files; a directory does not prove completion. Evidence-only imports may have no `eval_results.csv` and cannot be scored directly. Execution evidence can contain project data, so confirm retention and redaction needs during setup.
+- To investigate a batch run, follow the sample's `log_path` in `eval_results.csv`. V2 logs are in `executions/<execution-id>/app.log`. V1 may save logs under the round's `logs/` directory or in its `app.log`. Interrupted runs may leave partial files. Evidence-only imports may lack `eval_results.csv`. Scoring requires sample outputs. See the [execution evidence documentation](docs/execution-evidence-and-tracing-plan.md) for the files in each execution.
+- To review a session, open `preview.html` for the execution lanes or browse `issues/<issue-id>/` for diagnoses, changes, and verification attempts. Each `result.json` records execution status, per-issue conclusions, and evidence references. See the [trace tuning guide](docs/trace-tuning.md#archive-layout-and-separation) for the archive layout.
 
 Product direction: [ATO and ATK project boundary recommendation](docs/ato-atk-project-boundary-recommendation-2026-11-05.md) (proposal, in Chinese).
