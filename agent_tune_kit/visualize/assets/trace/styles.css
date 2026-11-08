@@ -96,7 +96,7 @@ body.rail-collapsed #rail-toggle { transform: rotate(180deg) }
 .warning { background: #fff9e8; border: 1px solid #eed79d; padding: 8px 12px; border-radius: 6px; color: #804810; overflow-wrap: anywhere; margin: 8px 0 }
 .panel, .overview-card { border: 1px solid var(--line); border-radius: 9px; background: white }
 .timeline-panel { flex: none; min-width: 0 }
-.lane-scroll { max-height: 33vh; overflow: auto; scrollbar-width: thin; overscroll-behavior: contain; border-radius: 9px 9px 0 0 }
+.lane-scroll { max-height: 33vh; overflow: auto; scrollbar-width: thin; overscroll-behavior-x: contain; border-radius: 9px 9px 0 0 }
 .lane-row { display: grid; grid-template-columns: clamp(168px, 20%, 250px) minmax(0,1fr); column-gap: 12px; padding: 0 16px 0 12px; align-items: center; min-height: 47px; border-bottom: 1px solid #e9eef2 }
 .lane-axis { position: sticky; top: 0; z-index: 3; min-height: 30px; background: #f0f4f6; color: var(--muted); font-size: 11px }
 .axis-ticks, .lane-track { position: relative; margin-inline: 8px }
@@ -184,13 +184,13 @@ select:hover, .toolbar input:hover { border-color: #9baebb }
 @media (forced-colors: active) {
   select { appearance: auto; background-image: none; padding-right: 8px }
 }
-.stream { overflow: hidden }
+.stream { overflow: hidden; max-height: 100vh; max-height: 100dvh }
 .row-grid { display: grid; grid-template-columns: 106px 58px minmax(160px,1.2fr) minmax(100px,.8fr); gap: 10px; padding-inline: 16px; align-items: center }
 .stream.single .row-grid { grid-template-columns: 106px minmax(160px,1.2fr) minmax(100px,.8fr) }
 .stream.single .trace-col { display: none }
 .stream-header { color: var(--muted); font-size: 11px; min-height: 31px; background: #f0f4f6; border-bottom: 1px solid var(--line); font-weight: 600 }
 #trace-scroll {
-  flex: 1; min-height: 0; max-height: 50vh; max-height: 50dvh;
+  flex: 1 1 50vh; flex-basis: 50dvh; min-height: 0;
   overflow: auto; overflow-anchor: none; scrollbar-width: thin; scrollbar-gutter: stable;
 }
 .trace-row, .segment-header, .fold-row { width: 100%; height: var(--row-height); text-align: left; border: 0; border-bottom: 1px solid #edf0f3; border-radius: 0; padding-block: 0 }
