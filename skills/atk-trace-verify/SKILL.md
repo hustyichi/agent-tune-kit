@@ -29,6 +29,8 @@ A new verification under the change, including execution status, loading evidenc
 6. Complete the same verification using `id`, expected `revision`, actual `status`, `candidate_loaded`, `loading_evidence`, `execution`, `conclusions`, `limitations` and `evidence`. Each target issue gets `{outcome: pass|fail|inconclusive, reason: ...}` with conditions/scope. Unknown loading or essential comparability requires `inconclusive` for the modification's effect even when output looks correct. One issue's result does not decide another.
 7. Deliver execution status, loading proof, per-issue results, evidence and limits. Keep every attempt rather than only the latest/best pass. Repeat/control/protected cases follow actual risk/model variability, not a universal invented threshold. Stop unless further repair was requested.
 
+When referring to a recorded location inside the Issue, cite `ISSUE-<id>/S<n>` so the offline preview can link back to that segment.
+
 ## Failure behavior
 
 Missing inputs/runtime/credentials produce honest blocked/inconclusive records. Do not silently edit the candidate, auto-optimize after failure, fabricate execution or infer aggregate success from one passing attempt. Later judgments preserve earlier results.

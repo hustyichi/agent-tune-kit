@@ -1,6 +1,5 @@
 """Derive execution lanes and navigable evidence ranges from one retained capture."""
 
-from bisect import bisect_left, bisect_right
 from collections import defaultdict
 from datetime import datetime
 from math import inf
@@ -62,62 +61,6 @@ def _branch_and_call_links(nodes, rows):
     return parents
 
 
-def _context_ranges(nodes, rows, parents):
-    """Index a local reading window per cited action; long-lived execution shells add no time."""
-    branches = defaultdict(list)
-    for i in rows:
-        if nodes[i]["at"] is not None:
-            branches[nodes[i].get("branch")].append(i)
-    windows = {}
-    for branch, indices in branches.items():
-        actions = [
-            i
-            for i in indices
-            if nodes[i]["type"] in ("GENERATION", "TOOL")
-            or "paired" in nodes[i]
-            or nodes[i].get("level") == "ERROR"
-            or nodes[i]["name"] in ("sdk.user", "sdk.result")
-        ] or indices
-        times = [nodes[i]["at"] for i in actions]
-        for i in indices:
-            node = nodes[i]
-            if not node.get("issue_ids"):
-                continue
-            at = node["at"]
-            pair = nodes[node["paired"]] if "paired" in node else None
-            if pair and pair["at"] is not None:
-                windows[i] = min(at, pair["at"]), max(node["until"], pair["until"])
-                continue
-            unit = node
-            seen = set()
-            while unit is not None and id(unit) not in seen:
-                seen.add(id(unit))
-                if unit.get("branch") != branch:
-                    break
-                is_unit = unit["type"] in ("TOOL", "GENERATION") or (
-                    unit["type"] == "SPAN" and str(unit["name"]).startswith("agent.iteration #")
-                )
-                if (
-                    is_unit
-                    and unit["at"] is not None
-                    and unit["at"] <= at <= unit["until"]
-                    and unit["until"] > unit["at"]
-                ):
-                    windows[i] = unit["at"], unit["until"]
-                    break
-                parent = unit.get("parent_id")
-                parent_index = parents.get(parent) if isinstance(parent, (str, int)) else None
-                unit = nodes[parent_index] if parent_index is not None else None
-            if i not in windows:
-                # Padding is reading context. Do not join sparse actions across an idle gap.
-                left = bisect_left(times, at)
-                right = bisect_right(times, at)
-                nearby = times[max(0, left - 2) : left] + times[right : right + 2]
-                context = [at, *(t for t in nearby if abs(t - at) <= 30_000)]
-                windows[i] = min(context), max(context)
-    return windows
-
-
 def build_timeline(capture):
     nodes = capture["nodes"]
     groups = {}
@@ -146,88 +89,126 @@ def build_timeline(capture):
         track["rows"].sort(key=time_key)
     tracks = sorted(groups.values(), key=lambda t: t["start"] if t["start"] is not None else inf)
     order = []
-    windows = {}
     for number, track in enumerate(tracks):
         for i in track["roots"] + track["rows"]:
             nodes[i]["track"] = number
         rows = track["rows"]
         if track["trace_id"] is not None:
-            parents = _branch_and_call_links(nodes, rows)
-            windows.update(_context_ranges(nodes, rows, parents))
-        else:
-            # A shared file alone does not establish a shared execution context.
-            for i in rows:
-                if nodes[i].get("issue_ids") and nodes[i]["at"] is not None:
-                    windows[i] = nodes[i]["at"], nodes[i]["at"]
+            _branch_and_call_links(nodes, rows)
         order.extend(rows or track["roots"])
     # Stable sort keeps Trace order and native record order for equal timestamps.
     capture["timeline"] = {"tracks": tracks, "order": sorted(order, key=time_key)}
-    return windows
 
 
-def issue_fragments(captures, windows, evidence):
-    """Evidence positions reference the original issue array; never copy field bodies."""
-    ranges = defaultdict(list)
-    roots = defaultdict(list)
-    other = []
-    for pos, saved in enumerate(evidence):
-        loc = saved.get("location")
-        if not loc:
-            other.append({"capture_id": saved.get("capture_id"), "kind": "file", "refs": [pos], "anchors": []})
-            continue
-        cid, i = loc["capture_id"], loc["node_index"]
-        node = captures[cid]["nodes"][i]
-        track = node["track"]
-        fragment = {"capture_id": cid, "track": track, "refs": [pos], "anchors": [i]}
-        if node["type"] == "TRACE":
-            roots[cid, track].append((i, pos))
-        elif i in windows[cid]:
-            lo, hi = windows[cid][i]
-            ranges[cid, track, node.get("branch")].append(
-                {
-                    **fragment,
-                    "kind": "actions",
-                    "start": lo,
-                    "end": hi,
-                    "branch": node.get("branch"),
-                }
-            )
-        else:
-            other.append({**fragment, "kind": "untimed"})
+def _evidence_fragment(captures, saved, pos):
+    loc = saved.get("location")
+    if not loc:
+        return {"capture_id": saved.get("capture_id"), "kind": "file", "refs": [pos], "anchors": [], "derived": False}
+    cid, index = loc["capture_id"], loc["node_index"]
+    node = captures[cid]["nodes"][index]
+    fragment = {
+        "capture_id": cid,
+        "track": node["track"],
+        "refs": [pos],
+        "anchors": [index],
+        "derived": False,
+    }
+    if node["type"] == "TRACE":
+        return {**fragment, "kind": "trace"}
+    if node["at"] is None:
+        return {**fragment, "kind": "untimed"}
+    return {**fragment, "kind": "point", "start": node["at"], "end": node["until"]}
+
+
+def legacy_point_fragments(captures, evidence):
+    """Older Issues without segments: show each located field as a single point."""
     merged = []
-    for group in ranges.values():
-        last = None
-        for item in sorted(group, key=lambda f: f["start"]):
-            if last and item["start"] <= last["end"]:
-                last["end"] = max(last["end"], item["end"])
-                last["refs"].extend(item["refs"])
-                last["anchors"].extend(i for i in item["anchors"] if i not in last["anchors"])
-            else:
-                merged.append(item)
-                last = item
-    # Untimed fields on the same record are one destination too.
-    undated = {}
-    for item in other:
-        key = (item["capture_id"], tuple(item["anchors"]))
-        if item["anchors"] and key in undated:
-            undated[key]["refs"].extend(item["refs"])
+    points = {}
+    for pos, saved in enumerate(evidence):
+        fragment = _evidence_fragment(captures, saved, pos)
+        if fragment["kind"] == "file":
+            merged.append(fragment)
+            continue
+        key = (fragment["capture_id"], tuple(fragment["anchors"]), fragment["kind"])
+        if key in points:
+            points[key]["refs"].extend(fragment["refs"])
         else:
-            undated[key] = item
-            merged.append(item)
-    for (cid, track), fields in roots.items():
-        context = [pos for _, pos in fields]
-        target = next((f for f in merged if f["capture_id"] == cid and f.get("track") == track), None)
-        if target:
-            target["context_refs"] = context
-        else:
-            merged.append(
-                {
-                    "capture_id": cid,
-                    "track": track,
-                    "kind": "trace",
-                    "anchors": list(dict.fromkeys(i for i, _ in fields)),
-                    "refs": context,
-                }
-            )
+            points[key] = fragment
+            merged.append(fragment)
     capture_order = {cid: i for i, cid in enumerate(captures)}
-    return sorted(merged, key=lambda f: (capture_order.get(f["capture_id"], inf), f.get("start", inf), f["refs"][0]))
+    return sorted(
+        merged,
+        key=lambda f: (capture_order.get(f["capture_id"], inf), f.get("start", inf), f["refs"][0]),
+    )
+
+
+def recorded_segments(captures, issue, resolved, evidence, evidence_keys):
+    """Render analyst-authored segments; coverage indexes match the current archive nodes."""
+    current = next((capture for capture in captures.values() if capture.get("current")), None)
+    if current is None and len(captures) == 1:
+        current = next(iter(captures.values()))
+    fragments = []
+    used = set()
+    for item in resolved:
+        coverage = item["coverage"]
+        indexes = coverage["node_indexes"]
+        if current is None:
+            continue
+        nodes = current["nodes"]
+        if any(index >= len(nodes) for index in indexes):
+            continue
+        track_ids = {nodes[index]["track"] for index in indexes}
+        if len(track_ids) != 1:
+            continue
+        track = next(iter(track_ids))
+        timed = [index for index in indexes if nodes[index]["at"] is not None]
+        refs = []
+        for ref in item["evidence"]:
+            key = evidence_keys(ref)
+            for pos, saved in enumerate(evidence):
+                if evidence_keys(saved["reference"]) == key:
+                    refs.append(pos)
+                    used.add(pos)
+                    break
+        fragment = {
+            "id": item["id"],
+            "summary": item["summary"],
+            "kind": "segment",
+            "scope_kind": item["kind"],
+            "capture_id": current["id"],
+            "track": track,
+            "anchors": indexes,
+            "refs": refs,
+            "node_count": coverage["node_count"],
+            "duration_ms": coverage["duration_ms"],
+            "derived": False,
+        }
+        if timed:
+            fragment["start"] = min(nodes[index]["at"] for index in timed)
+            fragment["end"] = max(nodes[index]["until"] for index in timed)
+        else:
+            fragment["kind"] = "untimed"
+        fragments.append(fragment)
+    # Top-level evidence that never entered a segment stays as points/files.
+    leftovers = [pos for pos, _ in enumerate(evidence) if pos not in used]
+    if leftovers:
+        leftover_evidence = []
+        remap = {}
+        for new_pos, old_pos in enumerate(leftovers):
+            leftover_evidence.append(evidence[old_pos])
+            remap[new_pos] = old_pos
+        for fragment in legacy_point_fragments(captures, leftover_evidence):
+            fragment["refs"] = [remap[pos] for pos in fragment["refs"]]
+            if "context_refs" in fragment:
+                fragment["context_refs"] = [remap[pos] for pos in fragment["context_refs"]]
+            fragments.append(fragment)
+    capture_order = {cid: i for i, cid in enumerate(captures)}
+    return sorted(
+        fragments,
+        key=lambda f: (capture_order.get(f["capture_id"], inf), f.get("start", inf), f.get("refs", [0])[0]),
+    )
+
+
+def issue_fragments(captures, evidence):
+    """Compatibility wrapper for callers that only have flat evidence."""
+    return legacy_point_fragments(captures, evidence)

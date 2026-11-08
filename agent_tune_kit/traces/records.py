@@ -9,6 +9,7 @@ from agent_tune_kit.errors import UserActionRequired
 from agent_tune_kit.results.evidence import json_bytes, now, safe_path, write_manifest
 from agent_tune_kit.utils.files import write_text_atomic
 
+from .segments import resolve_segments, segments_for_storage
 from .store import (
     STATES,
     evidence_ref,
@@ -41,6 +42,15 @@ def _issue_path(session_dir, issue_id):
     return safe_path(Path(session_dir), f"issues/{identifier(issue_id, 'issue')}/issue.json")
 
 
+def _reference_shape(ref):
+    return (
+        isinstance(ref, dict)
+        and isinstance(ref.get("path"), str)
+        and isinstance(ref.get("sha256"), str)
+        and isinstance(ref.get("bytes"), int)
+    )
+
+
 def load_issue(session_dir, issue_id):
     load_session(session_dir)
     issue = read_json(_issue_path(session_dir, issue_id))
@@ -56,13 +66,35 @@ def load_issue(session_dir, issue_id):
         or issue.get("status") not in ISSUE_STATES
     ):
         raise UserActionRequired("Invalid issue identity or record structure.")
-    for ref in issue["evidence"] + issue["diagnoses"]:
+    segments = issue.get("segments", [])
+    if "segments" in issue and not isinstance(segments, list):
+        raise UserActionRequired("Invalid issue segment structure.")
+    for segment in segments:
         if (
-            not isinstance(ref, dict)
-            or not isinstance(ref.get("path"), str)
-            or not isinstance(ref.get("sha256"), str)
-            or not isinstance(ref.get("bytes"), int)
+            not isinstance(segment, dict)
+            or not isinstance(segment.get("id"), str)
+            or not segment["id"].strip()
+            or not isinstance(segment.get("summary"), str)
+            or not segment["summary"].strip()
+            or not isinstance(segment.get("scope"), dict)
+            or not isinstance(segment.get("evidence"), list)
+            or not segment["evidence"]
         ):
+            raise UserActionRequired("Invalid issue segment structure.")
+        for ref in segment["evidence"]:
+            if not _reference_shape(ref):
+                raise UserActionRequired("Invalid issue evidence reference structure.")
+        scope = segment["scope"]
+        if "node" in scope:
+            if set(scope) != {"node"} or not _reference_shape(scope["node"]):
+                raise UserActionRequired("Invalid issue segment scope.")
+        elif set(scope) == {"from", "to"}:
+            if not _reference_shape(scope["from"]) or not _reference_shape(scope["to"]):
+                raise UserActionRequired("Invalid issue segment scope.")
+        else:
+            raise UserActionRequired("Invalid issue segment scope.")
+    for ref in issue["evidence"] + issue["diagnoses"]:
+        if not _reference_shape(ref):
             raise UserActionRequired("Invalid issue evidence reference structure.")
     for link in issue["changes"]:
         if not isinstance(link, dict) or any(
@@ -90,8 +122,17 @@ def _record_result(session_dir, path, record):
     return {**record, "path": str(path), "ref": evidence_ref(session_dir, path.relative_to(session_dir).as_posix())}
 
 
-@_locked_write
-def save_issue(session_dir, data):
+def _enrich_refs(directory, references):
+    return [
+        {**ref, **evidence_ref(directory, ref["path"], resolve_ref(directory, ref)[1])}
+        if ref["path"].startswith("raw/") and "pointer" in ref
+        else ref
+        for ref in references
+    ]
+
+
+def prepare_issue(session_dir, data, *, dry_run=False):
+    """Validate issue fields and segments; optionally skip writing."""
     directory = Path(session_dir)
     load_session(directory)
     data = copy.deepcopy(data)
@@ -116,17 +157,21 @@ def save_issue(session_dir, data):
         else {
             "schema_version": 1,
             "id": issue_id,
+            "evidence": [],
             "diagnoses": [],
             "changes": [],
             "notes": [],
             "history": [],
             "created_at": now(),
             "status": "open",
+            "segments": [],
         }
     )
-    for field in ("title", "description", "evidence", "status", "notes", "selection_reason"):
+    for field in ("title", "description", "evidence", "status", "notes", "selection_reason", "segments"):
         if field in data:
             issue[field] = data[field]
+    if not previous:
+        issue.setdefault("segments", [])
     if (
         not isinstance(issue.get("title"), str)
         or not issue["title"].strip()
@@ -134,29 +179,87 @@ def save_issue(session_dir, data):
         or not issue["description"].strip()
     ):
         raise UserActionRequired("Issue title and description are required.")
+    if not isinstance(issue.get("evidence", []), list):
+        raise UserActionRequired("Issue evidence must be a list of retained file references.")
     _refs(directory, issue.get("evidence", []))
     if "evidence" in data:
-        issue["evidence"] = [
-            {**ref, **evidence_ref(directory, ref["path"], resolve_ref(directory, ref)[1])}
-            if ref["path"].startswith("raw/") and "pointer" in ref
-            else ref
-            for ref in issue["evidence"]
-        ]
-    if not issue.get("evidence"):
-        raise UserActionRequired("An issue needs retained evidence references.")
+        issue["evidence"] = _enrich_refs(directory, issue["evidence"])
+    resolved_segments = []
+    if "segments" in issue:
+        if not isinstance(issue["segments"], list):
+            raise UserActionRequired("Issue segments must be a list.")
+        source_segments = issue["segments"]
+        # Validate current segments whenever the field is present, including empty replacements.
+        resolved_segments = resolve_segments(directory, source_segments)
+        stored = segments_for_storage(resolved_segments)
+        for segment in stored:
+            segment["evidence"] = _enrich_refs(directory, segment["evidence"])
+            scope = segment["scope"]
+            if "node" in scope:
+                scope["node"] = _enrich_refs(directory, [scope["node"]])[0]
+            else:
+                scope["from"] = _enrich_refs(directory, [scope["from"]])[0]
+                scope["to"] = _enrich_refs(directory, [scope["to"]])[0]
+        issue["segments"] = stored
+        resolved_segments = resolve_segments(directory, stored)
+    if not issue.get("evidence") and not issue.get("segments"):
+        raise UserActionRequired("An issue needs retained evidence references or segments.")
     if issue["status"] not in ISSUE_STATES or not isinstance(issue["notes"], list):
         raise UserActionRequired("Invalid issue status or notes.")
-    if previous:
+    if previous and not dry_run:
         issue["history"].append(
             {
                 key: previous.get(key)
-                for key in ("revision", "updated_at", "title", "description", "evidence", "status", "notes")
+                for key in (
+                    "revision",
+                    "updated_at",
+                    "title",
+                    "description",
+                    "evidence",
+                    "segments",
+                    "status",
+                    "notes",
+                )
             }
         )
     issue["revision"] = previous["revision"] + 1 if previous else 1
     issue["updated_at"] = now()
+    return path, issue, resolved_segments, previous
+
+
+def _segment_coverage(resolved_segments):
+    return [
+        {
+            "id": item["id"],
+            "summary": item["summary"],
+            "kind": item["kind"],
+            "trace_id": item["coverage"]["trace_id"],
+            "node_count": item["coverage"]["node_count"],
+            "duration_ms": item["coverage"]["duration_ms"],
+            "start_time": item["coverage"]["start_time"],
+            "end_time": item["coverage"]["end_time"],
+            "node_indexes": item["coverage"]["node_indexes"],
+        }
+        for item in resolved_segments
+    ]
+
+
+@_locked_write
+def save_issue(session_dir, data, *, dry_run=False):
+    path, issue, resolved_segments, previous = prepare_issue(session_dir, data, dry_run=dry_run)
+    directory = Path(session_dir)
+    coverage = _segment_coverage(resolved_segments)
+    if dry_run:
+        return {
+            **issue,
+            "path": str(path),
+            "ref": None,
+            "segment_coverage": coverage,
+            "dry_run": True,
+            "would_revise": previous["revision"] + 1 if previous else 1,
+        }
     write_manifest(path, issue)
-    return _record_result(directory, path, issue)
+    return {**_record_result(directory, path, issue), "segment_coverage": coverage, "dry_run": False}
 
 
 @_locked_write
@@ -225,9 +328,14 @@ def save_diagnosis(session_dir, issue_id, text, diagnosis_id=None):
         "title": issue["title"],
         "description": issue["description"],
         "evidence": issue["evidence"],
+        "segments": issue.get("segments", []),
         "created_at": now(),
     }
     _refs(directory, issue["evidence"])
+    for segment in snapshot["segments"]:
+        _refs(directory, segment["evidence"])
+        scope = segment["scope"]
+        _refs(directory, [scope["node"]] if "node" in scope else [scope["from"], scope["to"]])
     # Keep adopted problem descriptions recoverable after the live issue changes.
     content = "<!-- atk-issue-snapshot " + json_bytes(snapshot).decode().replace("-->", "--\\u003e") + " -->\n\n" + text
     write_text_atomic(path, content)

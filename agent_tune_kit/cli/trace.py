@@ -67,6 +67,8 @@ def register(subparsers):
             parser.add_argument("--limit", type=int, default=8000 if action == "show" else 50)
             if action != "show":
                 parser.add_argument("--capture-id")
+            if action == "overview":
+                parser.add_argument("--trace-id", help="limit overview rows to one native Trace ID")
             if action == "search":
                 parser.add_argument("--text", required=True)
             elif action == "show":
@@ -78,6 +80,12 @@ def register(subparsers):
             parser.add_argument("--pointer", help="JSON Pointer inside the retained evidence")
         elif action in {"issue", "detect", "change", "verify"}:
             parser.add_argument("--data", required=True, help="record JSON; updates require the current revision")
+            if action == "issue":
+                parser.add_argument(
+                    "--dry-run",
+                    action="store_true",
+                    help="validate issue segments and report coverage without writing",
+                )
             if action in {"change", "verify"}:
                 parser.add_argument("--issue-id", required=True)
             if action == "verify":
@@ -131,6 +139,8 @@ def execute(args):
         options["capture_id"] = args.capture_id
         if args.action == "search":
             return search(session_dir, args.text, **options)
+        if getattr(args, "trace_id", None):
+            options["trace_id"] = args.trace_id
         return overview(session_dir, **options)
     if args.action == "status":
         return records.status(session_dir)
@@ -145,7 +155,7 @@ def execute(args):
         )
     data = read_json(args.data)
     if args.action == "issue":
-        return records.save_issue(session_dir, data)
+        return records.save_issue(session_dir, data, dry_run=bool(getattr(args, "dry_run", False)))
     if args.action == "detect":
         return records.save_detection(session_dir, data)
     if args.action == "change":

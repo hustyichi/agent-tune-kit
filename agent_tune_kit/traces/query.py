@@ -1,11 +1,24 @@
 """Read native saved formats with byte-bound references, never refetching or judging."""
 
 import json
+from datetime import datetime
+from math import inf
 from pathlib import Path
 
 from agent_tune_kit.errors import UserActionRequired
 
 from . import store
+
+
+def _milliseconds(value):
+    if isinstance(value, str):
+        try:
+            moment = datetime.fromisoformat(value)
+            if moment.utcoffset() is not None:
+                return round(moment.timestamp() * 1_000_000) / 1000
+        except (ValueError, OSError, OverflowError):
+            pass
+    return None
 
 
 def _page(offset, limit):
@@ -155,22 +168,46 @@ def _summary(node):
     return result
 
 
-def overview(session_dir, capture_id=None, offset=0, limit=100):
+def overview(session_dir, capture_id=None, offset=0, limit=100, trace_id=None):
     _page(offset, limit)
     session = store.load_session(session_dir)
     manifest = session.get("archive") or store.read_capture(session_dir, capture_id)
     items = nodes(session_dir, capture_id)
+    if trace_id is not None:
+        if not isinstance(trace_id, (str, int)) or (isinstance(trace_id, str) and not trace_id):
+            raise UserActionRequired("Provide a nonempty Trace ID.")
+        items = [item for item in items if item.get("trace_id") == trace_id]
+    ordered = sorted(
+        items,
+        key=lambda item: (
+            _milliseconds(item.get("start_time")) is None,
+            _milliseconds(item.get("start_time")) if _milliseconds(item.get("start_time")) is not None else inf,
+            str(item.get("trace_id") or ""),
+            str(item.get("id") or ""),
+        ),
+    )
+    session_start = next((_milliseconds(item.get("start_time")) for item in ordered if _milliseconds(item.get("start_time")) is not None), None)
+
+    def row(item):
+        summary = _summary(item)
+        at = _milliseconds(item.get("start_time"))
+        summary["node_id"] = item.get("id")
+        summary["parent_id"] = item.get("parent_id")
+        summary["session_offset_ms"] = None if session_start is None or at is None else at - session_start
+        return summary
+
     return {
-        "session_id": store.load_session(session_dir)["session_id"],
+        "session_id": session["session_id"],
         **({"capture_id": manifest["capture_id"]} if "capture_id" in manifest else {}),
         "scope": manifest.get("scope"),
         "completeness": manifest.get("completeness"),
         "status": manifest.get("status"),
-        "total": len(items),
+        "trace_id": trace_id,
+        "total": len(ordered),
         "offset": offset,
         "limit": limit,
-        "rows": [_summary(item) for item in items[offset : offset + limit]],
-        "unread_nodes": max(0, len(items) - min(len(items), offset + limit)),
+        "rows": [row(item) for item in ordered[offset : offset + limit]],
+        "unread_nodes": max(0, len(ordered) - min(len(ordered), offset + limit)),
     }
 
 

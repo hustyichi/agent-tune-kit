@@ -10,10 +10,11 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from agent_tune_kit.errors import UserActionRequired
+from agent_tune_kit.traces.segments import resolve_segments
 from agent_tune_kit.utils.files import read_text_bounded, write_text_atomic
 
 from .render import neutralize_script_close, open_in_browser, safe_json_for_html
-from .timeline import build_timeline, issue_fragments
+from .timeline import build_timeline, legacy_point_fragments, recorded_segments
 
 ASSETS = resources.files("agent_tune_kit.visualize").joinpath("assets", "trace")
 RECORD_LIMIT = 1024 * 1024
@@ -173,7 +174,19 @@ def build_trace_data(project_root, *, session_id, source=None):
         except (OSError, ValueError, UserActionRequired) as exc:
             warnings.append(f"Issue {path.parent.name}: {exc}")
 
-    for ref in _references([session["detections"], issues]):
+    def all_issue_refs(item):
+        record = item["record"]
+        refs = list(record.get("evidence", []))
+        for segment in record.get("segments", []):
+            refs.extend(segment.get("evidence", []))
+            scope = segment.get("scope", {})
+            if "node" in scope:
+                refs.append(scope["node"])
+            else:
+                refs.extend([scope.get("from"), scope.get("to")])
+        return [ref for ref in refs if isinstance(ref, dict)]
+
+    for ref in _references([session["detections"], [all_issue_refs(item) for item in issues]]):
         key = _reference_key(ref)
         if key in references:
             continue
@@ -183,12 +196,45 @@ def build_trace_data(project_root, *, session_id, source=None):
             references[key] = {"reference": ref, "error": str(exc)}
             warnings.append(f"Reference {ref['path']}: {exc}")
 
-    _locate_evidence(captures, references, issues)
-    captures_by_id = {capture["id"]: capture for capture in captures}
-    windows = {capture["id"]: build_timeline(capture) for capture in captures}
+    # Attach issue ids to nodes from both top-level and segment evidence.
     for item in issues:
-        evidence = [references[_reference_key(ref)] for ref in item["record"]["evidence"]]
-        item["fragments"] = issue_fragments(captures_by_id, windows, evidence)
+        record = item["record"]
+        record_evidence = list(record.get("evidence", []))
+        for segment in record.get("segments", []):
+            record_evidence.extend(segment.get("evidence", []))
+        item["_evidence_for_locate"] = record_evidence
+    located_issues = [{"record": {**item["record"], "evidence": item["_evidence_for_locate"]}} for item in issues]
+    _locate_evidence(captures, references, located_issues)
+    for item in issues:
+        item.pop("_evidence_for_locate", None)
+    captures_by_id = {capture["id"]: capture for capture in captures}
+    for capture in captures:
+        build_timeline(capture)
+    for item in issues:
+        record = item["record"]
+        display_refs = list(record.get("evidence", []))
+        for segment in record.get("segments", []):
+            display_refs.extend(segment.get("evidence", []))
+        evidence = [
+            references[_reference_key(ref)] for ref in display_refs if _reference_key(ref) in references
+        ]
+        segments = record.get("segments") or []
+        if segments:
+            try:
+                resolved = resolve_segments(session_dir, segments)
+                item["fragments"] = recorded_segments(
+                    captures_by_id, record, resolved, evidence, _reference_key
+                )
+            except (OSError, ValueError, UserActionRequired) as exc:
+                warnings.append(f"Issue {record['id']} segments: {exc}")
+                item["fragments"] = legacy_point_fragments(captures_by_id, evidence)
+                for fragment in item["fragments"]:
+                    fragment["unscoped"] = fragment.get("kind") in {"point", "untimed", "trace"}
+        else:
+            item["fragments"] = legacy_point_fragments(captures_by_id, evidence)
+            for fragment in item["fragments"]:
+                if fragment.get("kind") in {"point", "untimed", "trace"}:
+                    fragment["unscoped"] = True
 
     project = ""
     project_path = session_dir.parent / "project.md"
