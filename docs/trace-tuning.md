@@ -117,9 +117,12 @@ Import updates `raw/<trace_id>.json` by native Trace ID. An identical file is sk
 ```sh
 atk trace status --session-id SESSION_ID --json
 atk trace overview --session-id SESSION_ID --offset 0 --limit 50 --json
+atk trace overview --session-id SESSION_ID --trace-id TRACE_ID --offset 0 --limit 100 --json
 atk trace search --session-id SESSION_ID --text "tool-name" --offset 0 --limit 20 --json
 atk trace show --session-id SESSION_ID --ref /path/to/reference.json --offset 0 --limit 8000 --json
 ```
+
+`overview` returns rows in session time order. Optional `--trace-id` limits the page to one Trace. Each row includes `node_id`, parent identity, Trace ID and session-relative time so an analyst can choose segment endpoints without reading the raw export order.
 
 Use returned stable references rather than mutable external filenames. To create a reference explicitly:
 
@@ -136,15 +139,60 @@ The following are host-produced records, not automatic CLI diagnoses. Each `--da
 
 | Command | Required or relevant data |
 | --- | --- |
-| `atk trace issue --session-id ID --data FILE --json` | `title`, `description`, `evidence: [reference]`; optional stable `id`, `status`, `notes`; updates include `revision` |
+| `atk trace issue --session-id ID --data FILE --json` | `title`, `description`; optional `segments`, top-level `evidence`, stable `id`, `status`, `notes`; updates include `revision`. `--dry-run` validates and reports covered nodes without writing |
 | `atk trace detect --session-id ID --data FILE --json` | nonempty `scope` describing inspected and unread material, actual `status`, `gaps: []`; inputs bind current file digests; updates include `id`/`revision` |
-| `atk trace diagnose --session-id ID --issue-id ISSUE --file MD --json` | Markdown combining observed issue/evidence, facts/hypotheses, cause, repair/verification plan and gaps; optional `--diagnosis-id` |
+| `atk trace diagnose --session-id ID --issue-id ISSUE --file MD --json` | Markdown combining observed issue/evidence, facts/hypotheses, cause, repair/verification plan and gaps; optional `--diagnosis-id`. Markdown may cite `ISSUE-001/S2` |
 | `atk trace change --session-id ID --issue-id ISSUE --data FILE --json` | Begin with `status: "running"`, nonempty `before` identifying actual baseline and adopted `diagnoses`; finish with same `id`/`revision`, actual `candidate`, `diff`, `checks: []` and `status: "completed"` |
 | `atk trace verify --session-id ID --issue-id OWNER --change-id CHANGE --data FILE --json` | Begin with actual intended `execution` and `status: "running"`; finish same `id`/`revision`, actual status, `candidate_loaded`, `loading_evidence`, `execution`, `conclusions`, `limitations`, `evidence` |
 
+### Issue segments
+
+An Issue associates to precise ranges on the retained traces through `segments`. Segments are not a separate store: they live in `issue.json` and are created or revised with the Issue. The preview page only renders them; it does not invent ranges.
+
+```json
+{
+  "title": "H5 加菜排查回合以无关数学题回答结束",
+  "description": "…",
+  "segments": [
+    {
+      "summary": "最后一次模型迭代：输入仍含原任务，输出却是数学题",
+      "scope": {"node": {"path": "raw/TRACE.json", "sha256": "…", "bytes": 1, "pointer": "/trace/observations/23"}},
+      "evidence": [
+        {"path": "raw/TRACE.json", "sha256": "…", "bytes": 1, "pointer": "/trace/observations/22/input"},
+        {"path": "raw/TRACE.json", "sha256": "…", "bytes": 1, "pointer": "/trace/observations/22/output"}
+      ]
+    },
+    {
+      "summary": "结束：SDK result 与前端消息原样保留这段无关答复",
+      "scope": {
+        "from": {"path": "raw/TRACE.json", "sha256": "…", "bytes": 1, "pointer": "/trace/observations/15"},
+        "to": {"path": "raw/TRACE.json", "sha256": "…", "bytes": 1, "pointer": "/trace/observations/13"}
+      },
+      "evidence": [
+        {"path": "raw/TRACE.json", "sha256": "…", "bytes": 1, "pointer": "/trace/observations/15/input"},
+        {"path": "raw/TRACE.json", "sha256": "…", "bytes": 1, "pointer": "/trace/observations/13/output"}
+      ]
+    }
+  ],
+  "evidence": []
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `summary` | Free-text note of what this range shows. No fixed role vocabulary |
+| `scope.node` | One execution unit and its descendants in the same Trace |
+| `scope.from` / `scope.to` | Inclusive continuous range on one Trace in session time; concurrent events from other Traces are not included |
+| `evidence` | Field references that belong to the segment. Must resolve inside the scope, or to an ancestor of a scoped node / that Trace root (parent-chain or Trace-level context without widening the painted range) |
+| top-level `evidence` | Materials that cannot be placed on a segment (for example a local file). An Issue needs at least one segment or one top-level evidence reference |
+
+CLI validation assigns stable `S1`, `S2`, … identifiers within the Issue, rejects cross-Trace endpoints, requires `from` not later than `to`, and returns each segment's covered node count and duration. `--dry-run` performs the same checks without writing. Fixed role labels are not part of the contract. When two Issues cover the same range, each keeps its own segment; the page shows the overlap. Older Issues without `segments` remain readable: the page marks their evidence as single points labeled “未圈定范围” and does not derive ranges heuristically.
+
+Detection should write one segment per distinct location, using the smallest scope that still explains the problem, and must split across Traces. Diagnosis, change and verification records stay under the Issue; their Markdown may cite `ISSUE-001/S2` so the preview can link back to that segment.
+
 Issue IDs are stable within the session. Omitting an old issue during new detection does not resolve it. Exclusion/correction needs a reason while preserving history. Detection coverage includes zero findings, checked/unread nodes, partial work and interruptions; an empty issue list does not prove correctness. Re-capture creates new unanalyzed material rather than rewriting previous coverage.
 
-Diagnoses are immutable Markdown and include an issue snapshot. Adopted diagnoses bind path and digest. Change `target_issues` may list several issues and `diagnoses` maps each target issue to its adopted reference. Save a shared modification once under its owner issue; the other issues explicitly reference that owner-relative change path. Completed candidates are frozen; a new diagnosis/candidate is a new record.
+Diagnoses are immutable Markdown and include an issue snapshot (including segments when present). Adopted diagnoses bind path and digest. Change `target_issues` may list several issues and `diagnoses` maps each target issue to its adopted reference. Save a shared modification once under its owner issue; the other issues explicitly reference that owner-relative change path. Completed candidates are frozen; a new diagnosis/candidate is a new record.
 
 A verification conclusion has this shape:
 
@@ -169,11 +217,11 @@ atk visualize trace --session-id SESSION_ID --json
 
 The default is `.atk/traces/<session_id>/preview.html`, opened in the browser. Options include `--source`, `--project-root`, `--output-path`, authorized `--overwrite` and `--no-open`. Open failure still delivers the file; failed generation preserves previous output.
 
-The page opens on the complete session. Each Trace has one lane on the session clock. Scroll the execution list to read all observations in chronological order, including concurrent Traces. Select a lane heading or a time mark to find its records. Use **放大** to focus one Trace and **返回完整会话** to restore your position. A single Trace opens at full scale. Child lanes require an explicit subtask identity. Undated records remain accessible. **关键动作** and the search and type filters are optional.
+The page opens on the complete session. Layout: a collapsible issue rail on the left, a compact swimlane chart above the Event list in the center, and an overlay drawer on the right for Event or Issue detail. Each Trace has one lane on the session clock with no permanent issue tracks. Scroll the Event list to read all observations in chronological order, including concurrent Traces. Select a lane heading or a time mark to find its records. Use **放大** to focus one Trace and **返回完整会话** to restore your position. A single Trace opens at full scale. Child lanes require an explicit subtask identity. Undated records remain accessible. Search and type filters are optional; **仅看片段** collapses records between selected segments.
 
-Use **定位异常** next to the chart, or select a card in the issue list. Each evidence range is highlighted on its own Trace. The list moves to the cited action with surrounding records. Use **下一片段** to follow separated actions or a retry in another Trace. **片段证据** opens the recorded fields, including any Trace-level context. Select a field to inspect its exact JSON Pointer or line in the current archive. File-only and unavailable references have their own destinations. **退出定位** restores the original Trace, filters and scroll position. Ordinary row clicks open details in place.
+Select an Issue in the left rail (or a segment under it). Recorded segments overlay as bands on their own Trace rows; the Event list inserts segment headers and can fold the gaps between them. Cross-Trace retries stay as separate segments with the idle gap preserved. Issues without `segments` show evidence as single points labeled “未圈定范围”; the page does not invent ranges. Row badges mark Events cited by any Issue.
 
-**问题详情** retains diagnoses, changes and verification records. **会话信息** shows source, capture scope and detection coverage. The page stays offline and read-only. Regenerate it to see subsequent changes to the archive. Field previews can be truncated and are labeled accordingly.
+Open an Event to inspect it in the overlay drawer (structured messages, paired tool calls, JSON tree, cited fields, copyable reference). Arrow keys move to the previous or next Event while the drawer stays open. Open Issue detail from the rail for diagnoses, changes and verifications; Markdown cites such as `ISSUE-001/S2` jump to that segment. **会话信息** in the top bar covers source, capture scope and detection coverage. Hash deep links (`#issue=…&seg=…`, `#event=…`) restore position. The page stays offline and read-only. Regenerate it to see subsequent archive changes. Field previews can be truncated and are labeled accordingly. Layout details are in [trace-swimlane-design.md](trace-swimlane-design.md).
 
 ## Archive layout and separation
 
