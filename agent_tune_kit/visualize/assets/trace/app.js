@@ -10,10 +10,11 @@
   const section = (title, value) => { const node = el("section", undefined, "detail-section"); node.append(el("h3", title)); if (value !== undefined) node.append(pre(value)); return node; };
   const options = (select, values, all) => { select.replaceChildren(); if (all !== undefined) { const item = el("option", all); item.value = ""; select.append(item); } for (const value of values) { const item = el("option", value); item.value = value; select.append(item); } };
   const references = value => { const result = []; const seen = new Set(); const walk = item => { if (Array.isArray(item)) item.forEach(walk); else if (item && typeof item === "object") { if (typeof item.path === "string" && typeof item.sha256 === "string") { const key = refKey(item); if (!seen.has(key)) { seen.add(key); result.push(item); } } else Object.values(item).forEach(walk); } }; walk(value); return result; };
+  const RAIL_KEY = "atk-trace-rail-collapsed";
   let currentCapture = data.captures.at(-1) || null;
-  let issuePage = 0, returnFocus = null, activeIssue = null, issueStage = "issue";
-  let currentView = "traces", selectedNode = null, origin = null, issueTrigger = null;
-  let investigation = null, scopeBefore = null;
+  let returnFocus = null, activeIssue = null, issueStage = "issue", drawerMode = null;
+  let selectedNode = null, origin = null, issueTrigger = null;
+  let investigation = null, scopeBefore = null, previewIssue = null, expandedFolds = new Set();
   const captureById = new Map(data.captures.map(c => [c.id, c]));
   const issueById = new Map(data.issues.map(item => [item.record.id, item]));
   const filters = ["trace-filter", "type-filter", "trace-search", "record-mode"];
@@ -30,57 +31,79 @@
   const trackLabel = i => timeline().tracks[i]?.trace_id != null ? `T${i+1}` : "文件";
   const startTime = () => timeline().tracks.find(t => t.start !== null)?.start ?? 0;
   const partNow = () => investigation?.item.fragments[investigation.index];
+  const issueEvidence = item => item.evidence || [];
+  const evidenceRefAt = (item, pos) => issueEvidence(item)[pos]?.reference;
   const indexedRef = ref => {
     const saved = data.references[refKey(ref)];
     const capture = captureById.get(saved?.location?.capture_id);
     return {saved, capture, node:capture?.nodes[saved.location.node_index]};
   };
+  const progressOf = item => {
+    const verified = item.changes.some(change => (change.verifications || []).length);
+    if (verified) return {label: "已验证", klass: "verified"};
+    if (item.changes.length) return {label: "已修改", klass: "changed"};
+    if (item.diagnoses.length) return {label: "已诊断", klass: "diagnosed"};
+    return {label: item.record.status || "待处理", klass: ""};
+  };
+  const shortIssue = id => String(id || "").replace(/^ISSUE-/, "") || id;
+  const issueCounts = () => {
+    const counts = new Map();
+    for (const item of data.issues) {
+      const tracks = new Set();
+      for (const part of item.fragments) if (part.capture_id === currentCapture?.id && part.track != null) tracks.add(part.track);
+      for (const track of tracks) counts.set(track, (counts.get(track) || 0) + 1);
+    }
+    return counts;
+  };
   const swim = window.createSwimlanes({
     el, button, elapsed, onPick: pickFromLane, onZoom: focusTrace, onFragment: goFragment,
-    onRoot: index => inspectNode(currentCapture.nodes[index], document.activeElement)
+    onRoot: index => openEventDrawer(currentCapture.nodes[index], document.activeElement),
+    onIssueBadge: track => {
+      $("issue-search").value = "";
+      $("issue-status").value = "";
+      const ids = data.issues.filter(item => item.fragments.some(part => part.capture_id === currentCapture?.id && part.track === track)).map(item => item.record.id);
+      renderIssueRail(ids);
+    },
   });
   function rememberView() {
-    return {view:currentView, capture:currentCapture?.id, filters:filters.map(id => $(id).value),
-      selected:selectedNode, top:scroller.scrollTop, lanes:swim.snapshot(), scroll:window.scrollY,
-      picker:$("issue-picker").open, focus:document.activeElement};
+    return {
+      capture: currentCapture?.id,
+      filters: filters.map(id => $(id).value),
+      segmentsOnly: $("segments-only").checked,
+      selected: selectedNode,
+      top: scroller.scrollTop,
+      lanes: swim.snapshot(),
+      scroll: window.scrollY,
+      focus: document.activeElement,
+    };
   }
   function restoreView(state) {
-    setView(state.view);
     $("capture-filter").value = state.capture || "";
     chooseCapture();
     filters.forEach((id, i) => { $(id).value = state.filters[i]; });
+    $("segments-only").checked = Boolean(state.segmentsOnly);
     selectedNode = state.selected;
     renderTraces(state.top);
     swim.restore(state.lanes);
-    $("issue-picker").open = state.picker;
     window.scrollTo(0, state.scroll);
     if (state.focus?.isConnected) state.focus.focus({preventScroll:true});
-    else {
-      const track = state.focus?.closest(".trace-overview")?.dataset.track;
-      const selector = state.focus?.dataset.nodeIndex !== undefined ? `[data-node-index="${state.focus.dataset.nodeIndex}"]` :
-        state.focus?.dataset.issueId ? `[data-issue-id="${CSS.escape(state.focus.dataset.issueId)}"]` :
-        track != null ? `.trace-overview[data-track="${track}"] .${state.focus.classList.contains("lane-zoom") ? "lane-zoom" : "lane-toggle"}` :
-        state.picker ? "#issue-picker summary" : null;
-      if (selector) $(state.view === "issues" ? "view-issues" : "view-traces").querySelector(selector)?.focus({preventScroll:true});
-    }
   }
-  const openDrawer = (title, nodeMode = false, inspecting = false) => {
+  const setDrawerWidth = width => {
+    const clamped = Math.max(320, Math.min(window.innerWidth * 0.92, width));
+    document.documentElement.style.setProperty("--drawer-width", `${clamped}px`);
+  };
+  const openDrawer = (title, mode = "detail") => {
     if ($("drawer").hidden) returnFocus = document.activeElement;
+    drawerMode = mode;
     $("drawer-title").textContent = title;
     $("drawer-content").replaceChildren();
-    $("drawer").classList.toggle("node-drawer", nodeMode);
-    $("drawer").classList.toggle("inspecting", inspecting);
-    if (!inspecting) $("drawer").classList.remove("above-record");
-    $("drawer").setAttribute("aria-modal", String(!inspecting));
     $("drawer").hidden = false;
-    $("drawer-backdrop").hidden = inspecting;
-    document.body.style.overflow = inspecting ? "" : "hidden";
     $("drawer-content").scrollTop = 0;
     $("drawer-close").focus({preventScroll: true});
   };
   const closeDrawer = (restoreFocus = true) => {
-    $("drawer").hidden = $("drawer-backdrop").hidden = true;
-    document.body.style.overflow = "";
+    $("drawer").hidden = true;
+    drawerMode = null;
     activeIssue = null; origin = null;
     if (restoreFocus && returnFocus?.isConnected) returnFocus.focus({preventScroll:true});
     else if (restoreFocus && investigation) $("fragment-fields").focus({preventScroll:true});
@@ -114,7 +137,7 @@
     if (activeIssue && !origin) origin = {state:rememberView(), key:refKey(ref), investigation:investigation && {...investigation}};
     if (investigation && node) {
       const item = investigation.item;
-      const pos = item.record.evidence.findIndex(evidence => refKey(evidence) === refKey(ref));
+      const pos = issueEvidence(item).findIndex(saved => refKey(saved.reference) === refKey(ref));
       const index = item.fragments.findIndex(part => part.refs.includes(pos) || part.context_refs?.includes(pos));
       if (index >= 0 && index !== investigation.index) {
         investigation.index = index;
@@ -145,8 +168,12 @@
     if (record.error) card.append(el("p", record.error, "warning"));
     const content = record.record || record.text;
     if (content !== undefined) {
-      if (typeof content === "string") card.append(pre(content));
-      else {
+      if (typeof content === "string") {
+        const body = el("div");
+        body.append(pre(content));
+        linkSegmentCites(body, content);
+        card.append(body);
+      } else {
         const summary = [];
         for (const key of ["status", "target_issues", "candidate_loaded"]) if (content[key] !== undefined) summary.push(`${key}: ${pretty(content[key])}`);
         card.append(el("p", summary.join(" · "), "record-meta"));
@@ -160,6 +187,21 @@
     appendReferences(card, record);
     return card;
   };
+  function linkSegmentCites(container, text) {
+    const matches = String(text || "").match(/ISSUE-\d+\/S\d+/g) || [];
+    if (!matches.length) return;
+    const box = el("p", undefined, "breadcrumb");
+    box.append(el("span", "片段引用：", "muted"));
+    for (const cite of [...new Set(matches)]) {
+      box.append(button(cite, () => {
+        const [issueId, seg] = cite.split("/");
+        const item = issueById.get(issueId);
+        if (!item) return;
+        startIssue(item, item.fragments.findIndex(part => part.id === seg));
+      }));
+    }
+    container.prepend(box);
+  }
   const showIssue = (item, stage = "issue") => {
     if (!activeIssue || activeIssue.record.id !== item.record.id) {
       origin = null;
@@ -167,16 +209,35 @@
     }
     activeIssue = item; issueStage = stage;
     const issue = item.record;
-    openDrawer(`${issue.id} · ${issue.title || "问题详情"}`);
+    openDrawer(`${issue.id} · ${issue.title || "问题详情"}`, "issue");
     const tabs = el("nav", undefined, "stage-tabs"); tabs.setAttribute("aria-label", "问题处理阶段");
-    for (const [key, label] of [["issue", "问题与证据"], ["diagnoses", "诊断与方案"], ["changes", "修改候选"], ["verifications", "实际验证"]]) { const tab = button(label, () => showIssue(item, key), key === stage ? "active" : ""); tab.setAttribute("aria-pressed", String(key === stage)); tabs.append(tab); }
+    for (const [key, label] of [["issue", "问题与片段"], ["diagnoses", "诊断与方案"], ["changes", "修改候选"], ["verifications", "实际验证"]]) {
+      const tab = button(label, () => showIssue(item, key), key === stage ? "active" : "");
+      tab.setAttribute("aria-pressed", String(key === stage)); tabs.append(tab);
+    }
     $("drawer-content").append(tabs);
     if (stage === "issue") {
       const description = section("问题描述");
       description.append(el("p", issue.description || issue.title));
-      const evidence = section("关联证据");
-      appendReferences(evidence, issue.evidence);
-      $("drawer-content").append(description, evidence);
+      $("drawer-content").append(description);
+      const segments = issue.segments || [];
+      if (segments.length) {
+        const box = section("关联片段");
+        segments.forEach((segment, index) => {
+          const row = el("div", undefined, "detail-section");
+          const title = `${segment.id || `S${index + 1}`} · ${segment.summary || "未命名片段"}`;
+          row.append(button(title, () => startIssue(item, item.fragments.findIndex(part => part.id === segment.id || (!part.id && index === item.fragments.indexOf(part))))));
+          appendReferences(row, segment.evidence || []);
+          box.append(row);
+        });
+        $("drawer-content").append(box);
+      }
+      if ((issue.evidence || []).length) {
+        const evidence = section(segments.length ? "额外证据" : "关联证据");
+        appendReferences(evidence, issue.evidence);
+        $("drawer-content").append(evidence);
+      }
+      if (!segments.length && !(issue.evidence || []).length) $("drawer-content").append(el("p", "尚未记录片段或证据。", "empty"));
       const details = el("details", undefined, "detail-section");
       details.append(el("summary", "完整问题记录"), pre(issue)); $("drawer-content").append(details);
       return;
@@ -189,7 +250,13 @@
       for (const change of item.changes) $("drawer-content").append(recordCard(change.reference.path, change));
     } else {
       const seen = new Set(); let count = 0;
-      for (const change of item.changes) for (const verification of change.verifications || []) { const key = refKey(verification.reference); if (!seen.has(key)) { seen.add(key); count++; $("drawer-content").append(recordCard(verification.reference.path, verification)); } }
+      for (const change of item.changes) for (const verification of change.verifications || []) {
+        const key = refKey(verification.reference);
+        if (!seen.has(key)) {
+          seen.add(key); count++;
+          $("drawer-content").append(recordCard(verification.reference.path, verification));
+        }
+      }
       if (!count) $("drawer-content").append(el("p", "尚未记录实际验证；不能据修改完成判断问题已经解决。", "empty"));
     }
   };
@@ -199,11 +266,11 @@
       clearRecordFilters(); renderTraces();
     }
     selectAndScroll(index);
+    openEventDrawer(node, document.activeElement);
   }
   function navigateNode(capture, node, ref = null) {
     const index = capture.nodes.indexOf(node);
     if (index < 0) return;
-    setView("traces");
     if (currentCapture !== capture) {
       $("capture-filter").value = capture.id; chooseCapture(); renderTraces();
     }
@@ -222,33 +289,66 @@
       else if (mark.bottom > bottom) window.scrollBy(0, mark.bottom-bottom);
     });
   }
-  function inspectNode(node, trigger) {
+  function openEventDrawer(node, trigger) {
     const index = currentCapture.nodes.indexOf(node);
-    const newInspector = $("drawer").hidden || !$("drawer").classList.contains("inspecting");
-    selectedNode = node; activeIssue = null; origin = null;
+    selectedNode = node;
     swim.select(index);
     markVisibleRows();
-    showNodeDetails(currentCapture, node, index, null, true);
-    // Dock away from the tap on phones, then keep that edge while browsing adjacent rows.
-    if (newInspector && innerWidth <= 800) {
-      const sheet = $("drawer"), bottom = trigger.getBoundingClientRect().bottom;
-      sheet.classList.toggle("above-record", bottom + rowHeight > innerHeight - sheet.offsetHeight);
-    }
+    showNodeDetails(currentCapture, node, index, null);
     returnFocus = trigger;
+    syncHash();
   }
-  const showNodeDetails = (capture, node, targetIndex, ref, inspecting = false) => {
-    openDrawer(node.name || node.id || "轨迹节点", true, inspecting);
-    if (inspecting) $("drawer-content").append(button("定位到泳道", () => navigateNode(capture, node)));
+  const copyReference = ref => {
+    const payload = JSON.stringify({path: ref.path, sha256: ref.sha256, pointer: ref.pointer || undefined, line: ref.line || undefined}, null, 2);
+    const done = () => {};
+    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(payload).then(done, done);
+  };
+  const showNodeDetails = (capture, node, targetIndex, ref) => {
+    openDrawer(node.name || node.id || "轨迹节点", "event");
     backToIssue();
-    const identification = el("p", `Trace ${node.trace_id || "无归属"} · ${node.type}`, "mono muted");
+    const crumbs = el("div", undefined, "breadcrumb");
+    const siblings = node.trace_id ? capture.nodes.filter(item => item.trace_id === node.trace_id) : [];
+    const byId = new Map();
+    for (const item of siblings) if (item.type !== "TRACE" && item.id) {
+      if (byId.has(item.id)) byId.set(item.id, null); else byId.set(item.id, item);
+    }
+    const chain = [];
+    let cursor = node;
+    const seen = new Set();
+    while (cursor && !seen.has(cursor)) {
+      seen.add(cursor);
+      chain.unshift(cursor);
+      cursor = cursor.parent_id ? byId.get(cursor.parent_id) : null;
+    }
+    for (const item of chain) {
+      crumbs.append(button(item.name || item.id || item.type, () => navigateNode(capture, item)));
+    }
+    $("drawer-content").append(crumbs);
+    const identification = el("p", `Trace ${node.trace_id || "无归属"} · ${node.type} · ${elapsed(node.at == null ? null : node.at - startTime(), true)}`, "mono muted");
     identification.dataset.nodeIndex = String(targetIndex);
     identification.dataset.traceId = node.trace_id || "";
     identification.dataset.nodeId = node.id || "";
     $("drawer-content").append(identification);
+    if (node.reference) {
+      $("drawer-content").append(button("复制引用", () => copyReference(node.reference), "copy-ref"));
+    }
     if (ref) $("drawer-content").append(fieldPreview(ref, data.references[refKey(ref)]));
     if (node.issue_ids?.length) {
       const cited = section("引用此节点的问题");
-      for (const id of node.issue_ids) { const item = issueById.get(id); if (item) cited.append(button(id, () => startIssue(item))); }
+      for (const id of node.issue_ids) {
+        const item = issueById.get(id);
+        if (!item) continue;
+        const bits = [];
+        for (const part of item.fragments) {
+          if (part.capture_id !== capture.id || !part.anchors.includes(targetIndex)) continue;
+          const fields = part.refs.map(pos => {
+            const saved = issueEvidence(item)[pos];
+            return saved?.location?.node_index === targetIndex ? (saved.location.field || saved.reference.pointer || "") : "";
+          }).filter(Boolean);
+          bits.push(`${part.id || "片段"}${fields.length ? " · " + fields.join(", ") : ""}`);
+        }
+        cited.append(button(`${id}${bits.length ? " · " + bits.join("；") : ""}`, () => startIssue(item)));
+      }
       $("drawer-content").append(cited);
     }
     const meta = {id: node.id, trace_id: node.trace_id, type: node.type, start_time: node.start_time, end_time: node.end_time, reference: node.reference};
@@ -260,60 +360,69 @@
       const partner = capture.nodes[node.paired];
       relations.append(button(`配对动作 · ${partner.name || partner.type}`, () => navigateNode(capture, partner)));
     }
-    const siblings = node.trace_id ? capture.nodes.filter(item => item.trace_id === node.trace_id) : [];
     const wrapper = siblings.find(item => item.type === "TRACE");
     if (wrapper && wrapper !== node) relations.append(button("所属 Trace", () => navigateNode(capture, wrapper)));
-    const byId = new Map();
-    for (const item of siblings) if (item.type !== "TRACE" && item.id) {
-      if (byId.has(item.id)) byId.set(item.id, null); else byId.set(item.id, item);
-    }
-    const seen = new Set([node]);
-    let cursor = node;
     if (!node.trace_id && node.parent_id) relations.append(el("p", "缺少 Trace 归属，无法确认父子关系。", "muted"));
-    while (node.trace_id && cursor.parent_id) {
-      const next = byId.get(cursor.parent_id);
-      if (!next || seen.has(next)) {
-        const why = next ? "父子关系成环" : byId.has(cursor.parent_id) ? "同一 Trace 内有重复的父 ID" : "父节点未归档";
-        relations.append(el("p", why, "warning")); break;
-      }
-      if (cursor === node) relations.append(button(`父节点 · ${next.name || next.id}`, () => navigateNode(capture, next)));
-      seen.add(next); cursor = next;
-    }
     if (node.type !== "TRACE" && node.id && byId.get(node.id) === node) {
       const links = el("div", undefined, "parent-links");
-      for (const child of siblings.filter(item => item.parent_id === node.id && !seen.has(item))) {
+      for (const child of siblings.filter(item => item.parent_id === node.id && item !== node)) {
         links.append(button(`子节点 · ${child.name || child.id}`, () => navigateNode(capture, child)));
       }
       if (links.childElementCount) relations.append(links);
-    } else if (node.trace_id && node.type !== "TRACE" && node.id) relations.append(el("p", "节点 ID 重复，子节点归属不确定。", "warning"));
+    }
     if (relations.childElementCount > 1) $("drawer-content").append(relations);
+    const search = el("input", undefined, "drawer-search");
+    search.type = "search"; search.placeholder = "在详情中搜索";
+    $("drawer-content").append(search);
+    const bodies = [];
     for (const key of ["input", "output"]) {
       const detail = el("details", undefined, "detail-section");
       detail.open = true;
-      detail.append(el("summary", key === "input" ? "节点输入" : "节点输出"), pre(node[key] ?? "原始记录未提供值"));
+      const content = pre(node[key] ?? "原始记录未提供值");
+      if (ref && data.references[refKey(ref)]?.location?.field?.includes(`/${key}`)) detail.classList.add("highlight-field");
+      detail.append(el("summary", key === "input" ? "节点输入" : "节点输出"), content);
+      bodies.push(detail);
       $("drawer-content").append(detail);
     }
+    const raw = el("details", undefined, "detail-section");
+    raw.append(el("summary", "原始 JSON"), pre(node));
+    bodies.push(raw);
+    $("drawer-content").append(raw);
+    search.oninput = () => {
+      const q = search.value.trim().toLocaleLowerCase();
+      for (const box of bodies) box.hidden = Boolean(q) && !pretty(box.textContent).toLocaleLowerCase().includes(q);
+    };
   };
-  const setView = view => { currentView = view; for (const item of ["overview", "traces", "issues"]) { $(`view-${item}`).hidden = item !== view; $(`tab-${item}`).classList.toggle("active", item === view); $(`tab-${item}`).setAttribute("aria-selected", String(item === view)); } };
-  for (const tab of document.querySelectorAll("[data-view]")) tab.onclick = () => setView(tab.dataset.view);
+  function showSessionInfo() {
+    openDrawer("会话信息", "session");
+    const overview = el("div", undefined, "overview-grid");
+    const overviewCard = (title, value) => { const card = section(title, value); card.className = "overview-card"; overview.append(card); return card; };
+    overviewCard("来源与会话身份", {session_id: data.session.session_id, session_key: data.session.session_key, source: data.source});
+    overviewCard("项目与运行线索", data.project || "未初始化项目上下文；这不阻塞已有轨迹分析。");
+    const coverage = overviewCard("实际检查覆盖");
+    coverage.append(el("p", data.session.detections.length ? "以下为各次检测的输入、检查范围与缺口；不会因重采或零问题而自动扩大覆盖。" : "尚未记录异常识别；当前只提供原始采集材料。", "muted"));
+    for (const detection of data.session.detections) {
+      const detail = el("details"); detail.append(el("summary", `${detection.id || "检查记录"} · ${detection.status || "状态未提供"}`), pre(detection)); appendReferences(detail, detection); coverage.append(detail);
+    }
+    for (const capture of data.captures) {
+      const card = overviewCard(capture.current ? "会话轨迹" : `采集 ${capture.id}`);
+      if (capture.error) card.append(el("p", capture.error, "warning"));
+      const detail = el("details"); detail.append(el("summary", "查看获取范围、字段、完整性和摘要"), pre(capture.manifest));
+      card.append(detail, button("浏览此快照", () => {
+        $("capture-filter").value = capture.id; investigation = null; scopeBefore = null; chooseCapture(); renderTraces(); closeDrawer(false);
+      }));
+    }
+    const digests = overviewCard("生成时采用的处理记录摘要");
+    const digestDetails = el("details"); digestDetails.append(el("summary", "展开记录与 SHA-256"), pre(data.record_digests)); digests.append(digestDetails);
+    $("drawer-content").append(overview);
+  }
+
   $("session-title").textContent = data.session.session_id;
-  $("session-source").textContent = Object.entries(data.source).filter(([, value]) => value).map(([key, value]) => `${key}: ${value}`).join(" · ");
-  $("generated").textContent = `生成于 ${data.generated_at}`;
-
   for (const warning of data.warnings) $("warnings").append(el("p", warning, "warning"));
-  const overview = el("div", undefined, "overview-grid");
-  const overviewCard = (title, value, wide = false) => { const card = section(title, value); card.className = `overview-card${wide ? " wide" : ""}`; overview.append(card); return card; };
-  overviewCard("来源与会话身份", {session_id: data.session.session_id, session_key: data.session.session_key, source: data.source});
-  overviewCard("项目与运行线索", data.project || "未初始化项目上下文；这不阻塞已有轨迹分析。");
-  const coverage = overviewCard("实际检查覆盖", undefined, true);
-  coverage.append(el("p", data.session.detections.length ? "以下为各次检测的输入、检查范围与缺口；不会因重采或零问题而自动扩大覆盖。" : "尚未记录异常识别；当前只提供原始采集材料。", "muted"));
-  for (const detection of data.session.detections) { const detail = el("details"); detail.append(el("summary", `${detection.id || "检查记录"} · ${detection.status || "状态未提供"}`), pre(detection)); appendReferences(detail, detection); coverage.append(detail); }
-  for (const capture of data.captures) { const card = overviewCard(capture.current ? "会话轨迹" : `采集 ${capture.id}`, undefined, true); if (capture.error) card.append(el("p", capture.error, "warning")); const detail = el("details"); detail.append(el("summary", "查看获取范围、字段、完整性和摘要"), pre(capture.manifest)); card.append(detail, button("浏览轨迹", () => { $("capture-filter").value = capture.id; investigation = null; scopeBefore = null; chooseCapture(); setView("traces"); renderTraces(); })); }
-  const digests = overviewCard("生成时采用的处理记录摘要", undefined, true); const digestDetails = el("details"); digestDetails.append(el("summary", "展开记录与 SHA-256"), pre(data.record_digests)); digests.append(digestDetails); $("view-overview").append(overview);
 
-  const rowHeight = parseInt(getComputedStyle(list).getPropertyValue("--row-height"), 10);
+  const rowHeight = parseInt(getComputedStyle(list).getPropertyValue("--row-height"), 10) || 40;
   const searchable = new WeakMap();
-  let streamRows = [], windowStart = -1, windowEnd = -1, displayedScope = null;
+  let streamRows = [], displayRows = [], windowStart = -1, windowEnd = -1, displayedScope = null;
   const selectedIndex = () => selectedNode ? currentCapture.nodes.indexOf(selectedNode) : -1;
 
   function clearRecordFilters() {
@@ -324,7 +433,6 @@
     const type = $("type-filter").value, keyOnly = $("record-mode").value === "key", track = scope();
     const {order, tracks} = timeline();
     let candidates = order;
-    // Trace envelopes live in the row headers, but their saved fields are searchable too.
     if (query || type === "TRACE") {
       const roots = tracks.flatMap(t => t.rows.length ? t.roots : []);
       candidates = order.concat(roots).sort((a,b) => {
@@ -355,22 +463,152 @@
     if (n.until > n.at) return `${((n.until-n.at)/1000).toLocaleString(undefined, {maximumFractionDigits:3})} s`;
     return "—";
   }
+  function segmentMembership(index) {
+    if (!investigation) return null;
+    const item = investigation.item;
+    for (let i = 0; i < item.fragments.length; i++) {
+      const part = item.fragments[i];
+      if (part.capture_id !== currentCapture?.id) continue;
+      if (part.anchors.includes(index)) return {index: i, part, anchor: true};
+      if (part.start != null) {
+        const n = currentCapture.nodes[index];
+        if (n.at != null && n.track === part.track && n.at >= part.start && n.at <= part.end && (n.branch || null) === (part.branch || null)) {
+          return {index: i, part, anchor: false};
+        }
+      }
+    }
+    return null;
+  }
+  function fieldNotes(index, part) {
+    if (!investigation || !part) return [];
+    const notes = [];
+    for (const pos of part.refs || []) {
+      const saved = issueEvidence(investigation.item)[pos];
+      if (saved?.location?.node_index === index) {
+        const field = saved.location.field || saved.reference.pointer || "";
+        const name = field.split("/").filter(Boolean).pop() || field || "证据";
+        notes.push(name);
+      }
+    }
+    return notes;
+  }
+  function buildDisplayRows(rows) {
+    if (!investigation || !rows.length) return rows.map(index => ({kind: "row", index}));
+    const only = $("segments-only").checked;
+    const item = investigation.item;
+    const local = item.fragments
+      .map((part, fragIndex) => ({part, fragIndex}))
+      .filter(({part}) => part.capture_id === currentCapture?.id);
+    if (!local.length) return rows.map(index => ({kind: "row", index}));
+    const ordered = [...rows];
+    const rowPos = new Map(ordered.map((index, pos) => [index, pos]));
+    const result = [];
+    const covered = new Set();
+    const headers = [];
+    for (const {part, fragIndex} of local) {
+      const members = ordered.filter(i => {
+        if (part.anchors.includes(i)) return true;
+        if (only) return false;
+        const n = currentCapture.nodes[i];
+        return part.start != null && n.at != null && n.track === part.track && n.at >= part.start && n.at <= part.end;
+      });
+      if (!members.length && !(part.unscoped && part.anchors.some(i => rowPos.has(i)))) continue;
+      const first = members[0] ?? part.anchors.find(i => rowPos.has(i));
+      if (first == null) continue;
+      headers.push({fragIndex, part, at: rowPos.get(first), members});
+    }
+    headers.sort((a, b) => a.at - b.at || a.fragIndex - b.fragIndex);
+    let cursor = 0;
+    function emitFold(between) {
+      if (!between.length) return;
+      if (!only) {
+        for (const index of between) result.push({kind: "row", index, membership: segmentMembership(index)});
+        return;
+      }
+      const key = `${between[0]}:${between[between.length - 1]}`;
+      if (expandedFolds.has(key)) {
+        for (const index of between) result.push({kind: "row", index, membership: segmentMembership(index)});
+        result.push({kind: "fold", key, indices: between, expanded: true});
+        return;
+      }
+      const first = currentCapture.nodes[between[0]], last = currentCapture.nodes[between[between.length - 1]];
+      const gap = first?.at != null && last?.until != null ? last.until - first.at : null;
+      result.push({kind: "fold", key, indices: between, count: between.length, gap});
+    }
+    for (const header of headers) {
+      const firstPos = Math.min(...header.members.map(i => rowPos.get(i)));
+      if (firstPos > cursor) emitFold(ordered.slice(cursor, firstPos).filter(i => !covered.has(i)));
+      result.push({kind: "header", fragIndex: header.fragIndex, part: header.part});
+      for (const index of header.members) {
+        if (covered.has(index)) continue;
+        result.push({kind: "row", index, fragIndex: header.fragIndex, part: header.part});
+        covered.add(index);
+      }
+      cursor = Math.max(cursor, Math.max(...header.members.map(i => rowPos.get(i))) + 1);
+    }
+    if (cursor < ordered.length) emitFold(ordered.slice(cursor).filter(i => !covered.has(i)));
+    if (!only) {
+      // Keep every filtered row exactly once, in time order, with headers before their first member.
+      const byIndex = new Map();
+      for (const entry of result) if (entry.kind === "row") byIndex.set(entry.index, entry);
+      const headersByFirst = new Map();
+      for (const header of headers) {
+        const first = header.members.find(i => byIndex.has(i));
+        if (first != null) headersByFirst.set(first, header);
+      }
+      const merged = [];
+      for (const index of ordered) {
+        const header = headersByFirst.get(index);
+        if (header) merged.push({kind: "header", fragIndex: header.fragIndex, part: header.part});
+        merged.push(byIndex.get(index) || {kind: "row", index, membership: segmentMembership(index)});
+      }
+      return merged;
+    }
+    return result;
+  }
+
   function markVisibleRows() {
     const chosen = selectedIndex();
     for (const row of list.querySelectorAll(".trace-row")) row.setAttribute("aria-current", String(Number(row.dataset.nodeIndex) === chosen));
   }
   function paintWindow(force = false) {
-    const count = streamRows.length;
+    const count = displayRows.length;
     const first = Math.max(0, Math.min(count, Math.floor(scroller.scrollTop / rowHeight)) - 8);
     const last = Math.min(count, first + Math.ceil(scroller.clientHeight / rowHeight) + 17);
     if (!force && first === windowStart && last === windowEnd) return;
     windowStart = first; windowEnd = last;
     const focus = list.contains(document.activeElement) ? document.activeElement.dataset.nodeIndex : null;
     const content = document.createDocumentFragment();
-    const part = partNow(), chosen = selectedIndex(), start = startTime();
+    const chosen = selectedIndex(), start = startTime();
     for (let pos = first; pos < last; pos++) {
-      const i = streamRows[pos], n = currentCapture.nodes[i];
-      const row = button("", () => inspectNode(n, row), "row-grid trace-row");
+      const item = displayRows[pos];
+      if (item.kind === "header") {
+        const part = item.part;
+        const row = el("div", undefined, "segment-header");
+        const issueId = investigation.item.record.id;
+        const label = `${shortIssue(issueId)}/${part.id || `S${item.fragIndex + 1}`}  ${part.summary || (part.unscoped ? "未圈定范围" : "片段")}`;
+        row.append(el("span", label));
+        const meta = el("span", undefined, "seg-meta");
+        meta.append(el("span", `${part.node_count || part.anchors.length || 0} 节点`));
+        if (part.duration_ms != null) meta.append(el("span", elapsed(part.duration_ms)));
+        row.append(meta);
+        content.append(row);
+        continue;
+      }
+      if (item.kind === "fold") {
+        const row = button("", () => {
+          if (item.expanded) expandedFolds.delete(item.key); else expandedFolds.add(item.key);
+          renderTraces(scroller.scrollTop);
+        }, "row-grid fold-row");
+        const label = item.expanded
+          ? `⋯ 收起已展开的 ${item.indices.length} 条 ⋯`
+          : `⋯ 折叠 ${item.count} 条${item.gap != null ? ` · 空档 ${elapsed(item.gap)}` : ""} ⋯`;
+        row.append(el("span", label));
+        content.append(row);
+        continue;
+      }
+      const i = item.index, n = currentCapture.nodes[i];
+      const row = button("", () => openEventDrawer(n, row), "row-grid trace-row");
       row.dataset.nodeIndex = i; row.dataset.position = pos;
       row.setAttribute("aria-current", String(i === chosen));
       const time = el("span", elapsed(n.at === null ? null : n.at - start, true), "time-col");
@@ -380,11 +618,15 @@
       const action = el("span", undefined, "node-main"), name = n.name || String(n.id || "未命名记录");
       const label = el("span", name, "node-label"); label.title = name;
       action.append(label, el("span", n.type, "node-branch"));
-      if (part?.capture_id === currentCapture.id && part.track === n.track) {
-        if (part.anchors.includes(i)) action.append(el("span", "证据", "evidence-note"));
-        if (part.anchors.includes(i) || (part.start != null && n.at != null && n.at >= part.start && n.at <= part.end && (n.branch || null) === part.branch)) {
-          row.classList.add("in-fragment");
-        }
+      const membership = item.part
+        ? {part: item.part, index: item.fragIndex, anchor: item.part.anchors.includes(i)}
+        : (item.membership || segmentMembership(i));
+      if (membership?.part) {
+        row.classList.add("in-fragment");
+        for (const note of fieldNotes(i, membership.part)) action.append(el("span", `★ ${note}`, "evidence-note"));
+      }
+      if (n.issue_ids?.length) {
+        for (const id of n.issue_ids.slice(0, 3)) action.append(el("span", shortIssue(id), "issue-pill"));
       }
       const result = el("span", summaryOf(n), "result-col"); result.title = result.textContent;
       row.append(time, traceCell, action, result); content.append(row);
@@ -399,18 +641,28 @@
     const n = currentCapture.nodes[index];
     selectedNode = n;
     swim.select(index); swim.scrollSelected();
-    let pos = streamRows.indexOf(index);
-    if (pos < 0 && timeline().tracks[n.track].roots.includes(index)) pos = streamRows.findIndex(i => currentCapture.nodes[i].track === n.track);
+    let pos = displayRows.findIndex(item => item.kind === "row" && item.index === index);
+    if (pos < 0 && timeline().tracks[n.track].roots.includes(index)) {
+      pos = displayRows.findIndex(item => item.kind === "row" && currentCapture.nodes[item.index].track === n.track);
+    }
     if (pos >= 0) scroller.scrollTop = Math.max(0, (pos - 2) * rowHeight);
     paintWindow(true);
   }
   scroller.addEventListener("scroll", () => paintWindow(), {passive:true});
   new ResizeObserver(() => paintWindow()).observe(scroller);
   scroller.addEventListener("keydown", event => {
-    if (!["ArrowDown","ArrowUp","Home","End"].includes(event.key) || !streamRows.length) return;
+    if (!["ArrowDown","ArrowUp","Home","End"].includes(event.key) || !displayRows.length) return;
     const current = Number(document.activeElement.dataset.position ?? Math.floor(scroller.scrollTop / rowHeight));
-    const pos = event.key === "Home" ? 0 : event.key === "End" ? streamRows.length-1 :
-      Math.max(0, Math.min(streamRows.length-1, current + (event.key === "ArrowUp" ? -1 : 1)));
+    let pos = current;
+    const step = dir => {
+      let next = pos;
+      do { next += dir; } while (next >= 0 && next < displayRows.length && displayRows[next].kind !== "row");
+      return next;
+    };
+    pos = event.key === "Home" ? displayRows.findIndex(item => item.kind === "row")
+      : event.key === "End" ? (() => { for (let i = displayRows.length - 1; i >= 0; i--) if (displayRows[i].kind === "row") return i; return -1; })()
+      : step(event.key === "ArrowUp" ? -1 : 1);
+    if (pos < 0 || pos >= displayRows.length || displayRows[pos].kind !== "row") return;
     event.preventDefault();
     if (pos*rowHeight < scroller.scrollTop) scroller.scrollTop = pos*rowHeight;
     if ((pos+1)*rowHeight > scroller.scrollTop + scroller.clientHeight) scroller.scrollTop = (pos+1)*rowHeight - scroller.clientHeight;
@@ -422,7 +674,10 @@
     displayedScope = scope();
     const track = tracks[displayedScope];
     const parts = (investigation?.item.fragments || []).map((p,i) => [i,p]).filter(([,p]) => p.capture_id === currentCapture?.id);
-    swim.render(currentCapture, displayedScope, selectedIndex(), parts, investigation?.index);
+    const previewParts = (!investigation && previewIssue)
+      ? previewIssue.fragments.map((p,i) => [i,p]).filter(([,p]) => p.capture_id === currentCapture?.id)
+      : [];
+    swim.render(currentCapture, displayedScope, selectedIndex(), parts, investigation?.index, issueCounts(), previewParts);
     showFragmentBar();
     $("lane-title").textContent = track ? `只看 ${trackLabel(displayedScope)} · ${track.trace_id || "归档材料"}` : "完整会话";
     const coverage = currentCapture?.manifest.completeness || {};
@@ -435,14 +690,17 @@
     if (Number.isFinite(duration) && (!track || track.start !== null)) notes.push(`观测跨度 ${elapsed(duration)}`);
     if (coverage.status === "partial") notes.push("部分采集");
     $("summary").textContent = notes.join(" · ");
+    $("session-stats").textContent = `${native.length} Trace · ${order.length} 观测 · ${data.issues.length} 问题`;
     scroller.parentElement.classList.toggle("single", tracks.length === 1 || displayedScope !== null);
     streamRows = filteredRows();
+    displayRows = buildDisplayRows(streamRows);
     $("trace-count").textContent = `${streamRows.length} 条`;
-    // Give the scroll container its final extent before restoring a distant row.
     list.style.paddingTop = "0px";
-    list.style.paddingBottom = `${streamRows.length * rowHeight}px`;
+    list.style.paddingBottom = `${displayRows.length * rowHeight}px`;
     scroller.scrollTop = top;
     paintWindow(true);
+    renderIssueRail();
+    syncHash();
   }
   function focusTrace(number) {
     if (number === null && scopeBefore) {
@@ -458,8 +716,8 @@
   }
   function chooseCapture() {
     currentCapture = captureById.get($("capture-filter").value) || null;
-    selectedNode = null; clearRecordFilters();
-    const {tracks,order} = timeline();
+    selectedNode = null; clearRecordFilters(); expandedFolds = new Set();
+    const {tracks} = timeline();
     const select = $("trace-filter");
     select.replaceChildren(new Option("全部 Trace",""));
     tracks.forEach((t,i) => select.add(new Option(`${trackLabel(i)} · ${t.trace_id || t.file.split("/").pop()}`, String(i))));
@@ -467,19 +725,6 @@
     options($("type-filter"), [...new Set((currentCapture?.nodes || []).map(n => n.type).filter(Boolean))], "全部类型");
     $("capture-status").replaceChildren();
     if (currentCapture?.error) $("capture-status").append(el("p",currentCapture.error,"warning"));
-    const linked = data.issues.filter(item => item.fragments.some(f => f.capture_id === currentCapture?.id));
-    $("lane-issue-count").textContent = linked.length;
-    const menu = $("lane-issues"); menu.replaceChildren();
-    for (const item of linked) {
-      const link = button("", () => startIssue(item), "lane-issue");
-      link.dataset.issueId = item.record.id;
-      link.append(el("strong", item.record.id, "issue-id"), el("span", item.record.title));
-      menu.append(link);
-    }
-    if (!linked.length) {
-      const checked = data.session.detections.some(d => currentCapture?.current ? d.inputs?.length : d.captures?.includes(currentCapture?.id));
-      menu.append(el("p", checked ? "此会话没有已关联的异常。" : "此会话尚未检查。", "empty"));
-    }
   }
   function showFragmentBar() {
     const part = partNow();
@@ -488,30 +733,30 @@
     const {item,index} = investigation;
     $("fragment-issue").textContent = `${item.record.id} · ${item.record.title}`;
     $("fragment-issue").title = $("fragment-issue").textContent;
-    const labels = {trace:"执行级证据", file:"归档引用", untimed:"时间未知"};
-    const range = part.start == null ? labels[part.kind] : `${elapsed(part.start-startTime(),true)} – ${elapsed(part.end-startTime(),true)}`;
-    $("fragment-position").textContent = [`片段 ${index+1} / ${item.fragments.length}`, part.track == null ? null : trackLabel(part.track), range].filter(Boolean).join(" · ");
+    const labels = {trace:"执行级证据", file:"归档引用", untimed:"时间未知", point:"未圈定范围", segment:"片段"};
+    const range = part.start == null ? (part.unscoped ? "未圈定范围" : labels[part.kind] || part.kind) : `${elapsed(part.start-startTime(),true)} – ${elapsed(part.end-startTime(),true)}`;
+    const title = part.id ? `${part.id}${part.summary ? " · " + part.summary : ""}` : `片段 ${index+1}`;
+    $("fragment-position").textContent = [`${title} · ${index+1} / ${item.fragments.length}`, part.track == null ? null : trackLabel(part.track), range].filter(Boolean).join(" · ");
     $("fragment-prev").disabled = index === 0;
     $("fragment-next").disabled = index+1 === item.fragments.length;
     $("fragment-fields").textContent = `片段证据 (${part.refs.length+(part.context_refs?.length || 0)})`;
   }
-  function startIssue(item) {
-    if (!item.fragments.length) { showIssue(item); return; }
+  function startIssue(item, fragmentIndex = null) {
+    if (!item.fragments.length) { showIssue(item); renderIssueRail(); return; }
     const before = investigation?.before || rememberView();
     const priorScope = investigation ? investigation.priorScope : scopeBefore;
-    if (!$("drawer").hidden) closeDrawer(false);
-    $("issue-picker").open = false;
     investigation = {item, before, priorScope, index:0};
-    const local = item.fragments.findIndex(f => f.capture_id === currentCapture?.id && f.anchors.length);
-    goFragment(local < 0 ? 0 : local);
+    previewIssue = null;
+    const preferred = fragmentIndex != null && fragmentIndex >= 0 ? fragmentIndex
+      : item.fragments.findIndex(f => f.capture_id === currentCapture?.id && f.anchors.length);
+    goFragment(preferred < 0 ? 0 : preferred);
+    renderIssueRail();
     if ($("drawer").hidden) $("fragment-fields").focus({preventScroll:true});
   }
   function goFragment(index) {
     const part = investigation?.item.fragments[index];
     if (!part) return;
-    if (!$("drawer").hidden) closeDrawer(false);
     investigation.index = index;
-    setView("traces");
     if (part.capture_id && currentCapture?.id !== part.capture_id) {
       $("capture-filter").value = part.capture_id; chooseCapture();
     }
@@ -520,19 +765,23 @@
     if (part.anchors.length) {
       selectAndScroll(part.anchors[0]); $("fragment-bar").scrollIntoView({block:"nearest"});
     } else {
+      const ref = evidenceRefAt(investigation.item, part.refs[0]);
       activeIssue = investigation.item; issueStage = "fragment";
-      openReference(investigation.item.record.evidence[part.refs[0]]);
+      if (ref) openReference(ref);
+      else showIssue(investigation.item);
     }
+    syncHash();
   }
   function showFragmentEvidence() {
     const {item,index} = investigation;
     const part = item.fragments[index];
     activeIssue = item; issueStage = "fragment"; issueTrigger = item.record.id;
-    openDrawer(`${item.record.id} · 片段 ${index+1} 的证据`);
+    openDrawer(`${item.record.id} · ${part.id || `片段 ${index+1}`} 的证据`, "issue");
+    if (part.summary) $("drawer-content").append(el("p", part.summary, "muted"));
     function add(title, positions) {
       if (!positions?.length) return;
       const box = section(title);
-      appendReferences(box, positions.map(i => item.record.evidence[i]));
+      appendReferences(box, positions.map(i => evidenceRefAt(item, i)).filter(Boolean));
       $("drawer-content").append(box);
     }
     add(part.kind === "trace" ? "执行级证据" : "本段证据", part.refs);
@@ -541,43 +790,165 @@
   function exitIssue() {
     if (!investigation) return;
     const {before,priorScope} = investigation;
-    investigation = null; scopeBefore = priorScope;
-    if (!$("drawer").hidden) closeDrawer(false);
+    investigation = null; scopeBefore = priorScope; expandedFolds = new Set();
     restoreView(before);
+    renderIssueRail();
+    syncHash();
   }
+  function renderIssueRail(highlightIds = null) {
+    const text = $("issue-search").value.toLocaleLowerCase();
+    const status = $("issue-status").value;
+    const filtered = data.issues.filter(item => {
+      if (highlightIds && !highlightIds.includes(item.record.id)) return false;
+      const progress = progressOf(item).label;
+      if (status && item.record.status !== status && progress !== status) return false;
+      if (!text) return true;
+      return pretty(item.record).toLocaleLowerCase().includes(text) || progress.toLocaleLowerCase().includes(text);
+    });
+    $("rail-count").textContent = `${filtered.length}/${data.issues.length}`;
+    const box = $("issue-rail-list"); box.replaceChildren();
+    if (!filtered.length) {
+      box.append(el("p", data.issues.length ? "没有符合筛选条件的问题。" : data.session.detections.length ? "已保存检测记录，尚无已记录问题。" : "尚未进行异常识别。", "empty"));
+      return;
+    }
+    for (const item of filtered) {
+      const issue = item.record;
+      const progress = progressOf(item);
+      const card = el("article", undefined, "issue-card");
+      card.dataset.issueId = issue.id;
+      card.setAttribute("aria-current", String(investigation?.item.record.id === issue.id));
+      const head = el("div", undefined, "issue-card-head");
+      head.append(el("span", issue.id, "issue-id-text"), el("span", undefined, `progress-dot ${progress.klass}`));
+      const body = el("div", undefined, "issue-card-body");
+      body.append(el("h3", issue.title || "问题"), el("div", progress.label, "issue-progress"));
+      const segs = el("div", undefined, "seg-list");
+      const parts = item.fragments.length ? item.fragments : [{summary: "未圈定范围", unscoped: true}];
+      parts.forEach((part, index) => {
+        const label = part.id
+          ? `${part.id} ${part.track != null ? trackLabel(part.track) + " " : ""}${part.summary || ""}`
+          : part.unscoped ? "未圈定范围" : `片段 ${index + 1}`;
+        const chip = button(label.trim(), () => startIssue(item, index), `seg-chip${part.unscoped ? " unscoped" : ""}`);
+        chip.title = label.trim();
+        chip.setAttribute("aria-current", String(investigation?.item.record.id === issue.id && investigation.index === index));
+        segs.append(chip);
+      });
+      const actions = el("div", undefined, "card-actions");
+      actions.append(
+        button("定位", () => startIssue(item)),
+        button("详情", () => { if (investigation?.item.record.id !== issue.id) startIssue(item); showIssue(item); })
+      );
+      card.append(head, body, segs, actions);
+      card.onmouseenter = () => {
+        if (investigation) return;
+        previewIssue = item;
+        renderTraces(scroller.scrollTop);
+      };
+      card.onmouseleave = () => {
+        if (previewIssue !== item) return;
+        previewIssue = null;
+        renderTraces(scroller.scrollTop);
+      };
+      box.append(card);
+    }
+  }
+  function syncHash() {
+    const parts = [];
+    if (investigation) {
+      parts.push(`issue=${encodeURIComponent(investigation.item.record.id)}`);
+      const part = partNow();
+      if (part?.id) parts.push(`seg=${encodeURIComponent(part.id)}`);
+      else parts.push(`seg=${investigation.index + 1}`);
+    } else if (selectedNode?.trace_id && selectedNode?.id != null) {
+      parts.push(`event=${encodeURIComponent(`${selectedNode.trace_id}/${selectedNode.id}`)}`);
+    }
+    const next = parts.length ? `#${parts.join("&")}` : "";
+    if (location.hash !== next) history.replaceState(null, "", next || location.pathname + location.search);
+  }
+  function applyHash() {
+    const raw = location.hash.replace(/^#/, "");
+    if (!raw) return;
+    const params = new URLSearchParams(raw.includes("=") ? raw : `issue=${raw}`);
+    const issueId = params.get("issue");
+    const seg = params.get("seg");
+    const event = params.get("event");
+    if (issueId) {
+      const item = issueById.get(issueId);
+      if (!item) return;
+      let index = 0;
+      if (seg) {
+        const byId = item.fragments.findIndex(part => part.id === seg);
+        index = byId >= 0 ? byId : Math.max(0, Number(seg) - 1);
+      }
+      startIssue(item, index);
+      return;
+    }
+    if (event) {
+      const [traceId, nodeId] = event.split("/");
+      for (const capture of data.captures) {
+        const node = capture.nodes.find(item => String(item.trace_id) === traceId && String(item.id) === nodeId);
+        if (node) { navigateNode(capture, node); return; }
+      }
+    }
+  }
+
   $("fragment-prev").onclick = () => goFragment(investigation.index-1);
   $("fragment-next").onclick = () => goFragment(investigation.index+1);
   $("fragment-fields").onclick = showFragmentEvidence;
   $("fragment-detail").onclick = () => showIssue(investigation.item);
   $("fragment-exit").onclick = exitIssue;
   $("lane-reset").onclick = () => focusTrace(null);
+  $("session-info").onclick = showSessionInfo;
   $("capture-filter").closest("label").hidden = Boolean(currentCapture?.current);
   options($("capture-filter"), data.captures.map(c => c.id));
   if (currentCapture) $("capture-filter").value = currentCapture.id;
   $("capture-filter").onchange = () => { investigation = null; scopeBefore = null; chooseCapture(); renderTraces(); };
   $("trace-filter").onchange = () => focusTrace(scope());
   for (const id of ["trace-search","type-filter","record-mode"]) $(id).addEventListener(id === "trace-search" ? "input" : "change", () => renderTraces());
-  const renderIssues = () => {
-    const text = $("issue-search").value.toLocaleLowerCase(), status = $("issue-status").value;
-    const filtered = data.issues.filter(item => (!status || item.record.status === status) && (!text || pretty(item.record).toLocaleLowerCase().includes(text)));
-    const pages = Math.max(1, Math.ceil(filtered.length / 20)); issuePage = Math.min(issuePage, pages - 1); $("issue-list").replaceChildren();
-    for (const item of filtered.slice(issuePage * 20, (issuePage + 1) * 20)) { const issue = item.record; const card = button("", () => startIssue(item), "issue-card"); card.dataset.issueId = issue.id; const heading = el("div", issue.id, "issue-id"); heading.append(el("span", issue.status || "未提供状态", "badge")); card.append(heading, el("h3", issue.title || "问题"), el("p", String(issue.description || "").slice(0, 260))); $("issue-list").append(card); }
-    if (!filtered.length) $("issue-list").append(el("p", data.issues.length ? "没有符合筛选条件的问题。" : data.session.detections.length ? "已保存检测记录，尚无已记录问题；请核对实际检查范围和未读材料。" : "尚未进行异常识别。", "empty"));
-    $("issue-count").textContent = `${filtered.length} / ${data.issues.length} 个已记录问题`; $("issue-page").textContent = `${issuePage + 1} / ${pages}`; $("issue-prev").disabled = !issuePage; $("issue-next").disabled = issuePage + 1 >= pages;
+  $("segments-only").onchange = () => renderTraces(scroller.scrollTop);
+  const statusValues = [...new Set(data.issues.flatMap(item => [item.record.status, progressOf(item).label]).filter(Boolean))];
+  options($("issue-status"), statusValues, "全部状态");
+  $("issue-search").oninput = () => renderIssueRail();
+  $("issue-status").onchange = () => renderIssueRail();
+  const collapsed = localStorage.getItem(RAIL_KEY) === "1";
+  document.body.classList.toggle("rail-collapsed", collapsed);
+  $("rail-toggle").setAttribute("aria-expanded", String(!collapsed));
+  $("rail-toggle").onclick = () => {
+    const next = !document.body.classList.contains("rail-collapsed");
+    document.body.classList.toggle("rail-collapsed", next);
+    $("rail-toggle").setAttribute("aria-expanded", String(!next));
+    $("rail-toggle").title = next ? "展开问题栏" : "收起问题栏";
+    localStorage.setItem(RAIL_KEY, next ? "1" : "0");
   };
-  options($("issue-status"), [...new Set(data.issues.map(item => item.record.status).filter(Boolean))], "全部状态"); $("issue-search").oninput = () => { issuePage = 0; renderIssues(); }; $("issue-status").onchange = () => { issuePage = 0; renderIssues(); }; $("issue-prev").onclick = () => { issuePage--; renderIssues(); }; $("issue-next").onclick = () => { issuePage++; renderIssues(); };
-  document.addEventListener("click", event => {
-    if ($("issue-picker").open && !event.target.closest("#issue-picker")) $("issue-picker").open = false;
-    if (!$('drawer').hidden && $('drawer').classList.contains("inspecting") &&
-        !event.target.closest("#drawer,.trace-row,#lane-chart,#lane-members")) closeDrawer(false);
-  }, true);
-  $("drawer-close").onclick = closeDrawer; $("drawer-backdrop").onclick = closeDrawer;
-  document.addEventListener("keydown", event => {
-    if (event.key === "Escape" && !$("drawer").hidden) { event.preventDefault(); closeDrawer(); }
-    else if (event.key === "Escape" && $("issue-picker").open) { $("issue-picker").open = false; $("issue-picker").querySelector("summary").focus(); }
-    else if (event.key === "Escape" && investigation) { event.preventDefault(); exitIssue(); }
-    if (event.key === "Tab" && !$("drawer").hidden && $("drawer").getAttribute("aria-modal") === "true") { const focusable = [...$("drawer").querySelectorAll("button,input,select,summary,[tabindex='0']")].filter(node => !node.disabled && node.getClientRects().length); const first = focusable[0], last = focusable[focusable.length - 1]; if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); } else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); } }
-    if (["ArrowLeft", "ArrowRight"].includes(event.key) && document.activeElement.matches("[data-view]")) { event.preventDefault(); const tabs = [...document.querySelectorAll("[data-view]")], index = tabs.indexOf(document.activeElement); const tab = tabs[(index + (event.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length]; tab.click(); tab.focus(); }
+  let resizing = false;
+  $("drawer-resizer").addEventListener("pointerdown", event => {
+    resizing = true;
+    $("drawer-resizer").setPointerCapture(event.pointerId);
+    event.preventDefault();
   });
-  setView("traces"); chooseCapture(); renderTraces(); renderIssues();
+  window.addEventListener("pointermove", event => {
+    if (!resizing) return;
+    setDrawerWidth(window.innerWidth - event.clientX);
+  });
+  window.addEventListener("pointerup", () => { resizing = false; });
+  $("drawer-close").onclick = () => closeDrawer();
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape") {
+      if (!$("drawer").hidden) { event.preventDefault(); closeDrawer(); return; }
+      if (investigation) { event.preventDefault(); exitIssue(); return; }
+    }
+    if (!$("drawer").hidden && drawerMode === "event" && ["ArrowDown", "ArrowUp"].includes(event.key)) {
+      if (!displayRows.length) return;
+      const current = selectedIndex();
+      const positions = displayRows.map((item, pos) => item.kind === "row" ? pos : -1).filter(pos => pos >= 0);
+      const here = positions.findIndex(pos => displayRows[pos].index === current);
+      const next = positions[Math.max(0, Math.min(positions.length - 1, (here < 0 ? 0 : here) + (event.key === "ArrowDown" ? 1 : -1)))];
+      if (next == null) return;
+      event.preventDefault();
+      const index = displayRows[next].index;
+      selectAndScroll(index);
+      openEventDrawer(currentCapture.nodes[index], document.activeElement);
+    }
+  });
+  window.addEventListener("hashchange", applyHash);
+  chooseCapture(); renderTraces(); applyHash();
 })();

@@ -362,3 +362,78 @@ def test_issue_ranges_split_idle_gaps_branches_and_captures_and_keep_every_field
     assert any(f["kind"] == "untimed" and set(f["refs"]) >= {5, 6} for f in parts)
     assert any(f["kind"] == "file" and not f["anchors"] for f in parts)
     assert any(f["capture_id"] == "CAP-b" for f in timed)
+
+
+def test_recorded_segments_render_as_fragments(tmp_path):
+    document = {
+        "trace": {
+            "id": "TRACE-1",
+            "sessionId": SESSION_ID,
+            "input": "Return the user's greeting",
+            "output": "ok",
+            "observations": [
+                {
+                    "id": "OBS-0",
+                    "type": "AGENT",
+                    "name": "agent",
+                    "startTime": "2026-01-01T00:00:00Z",
+                    "endTime": "2026-01-01T00:01:00Z",
+                },
+                {
+                    "id": "OBS-1",
+                    "type": "SPAN",
+                    "name": "iter",
+                    "parentObservationId": "OBS-0",
+                    "startTime": "2026-01-01T00:00:10Z",
+                    "endTime": "2026-01-01T00:00:40Z",
+                    "output": "42",
+                },
+                {
+                    "id": "OBS-2",
+                    "type": "GENERATION",
+                    "name": "llm.call",
+                    "parentObservationId": "OBS-1",
+                    "startTime": "2026-01-01T00:00:12Z",
+                    "endTime": "2026-01-01T00:00:30Z",
+                    "input": {"messages": ["hello"]},
+                    "output": "42",
+                },
+            ],
+        },
+        "export": {"scope": "selected trace only"},
+    }
+    result = store.create_capture(
+        tmp_path,
+        SESSION_ID,
+        SOURCE,
+        {"trace.json": json.dumps(document)},
+        scope={"format": "langfuse-export", "selected_traces": ["TRACE-1"]},
+        completeness={"status": "partial", "gaps": ["Session completeness is unknown."]},
+        capture_id="CAP-001",
+    )
+    session_dir = Path(result["session_dir"])
+    path = "captures/CAP-001/raw/trace.json"
+    node = store.evidence_ref(session_dir, path, "/trace/observations/1")
+    field = store.evidence_ref(session_dir, path, "/trace/observations/2/output")
+    records.save_issue(
+        session_dir,
+        {
+            "id": "ISSUE-SEG",
+            "title": "Segmented",
+            "description": "Has an authored range",
+            "segments": [
+                {
+                    "summary": "Model iteration",
+                    "scope": {"node": node},
+                    "evidence": [field],
+                }
+            ],
+        },
+    )
+    _, data = trace.build_trace_data(tmp_path, session_id=SESSION_ID)
+    parts = data["issues"][0]["fragments"]
+    assert parts and parts[0]["id"] == "S1"
+    assert parts[0]["kind"] == "segment"
+    assert parts[0]["start"] is not None and parts[0]["end"] is not None
+    assert parts[0]["summary"].startswith("Model")
+    assert data["issues"][0]["evidence"]

@@ -215,16 +215,14 @@ def build_trace_data(project_root, *, session_id, source=None):
         display_refs = list(record.get("evidence", []))
         for segment in record.get("segments", []):
             display_refs.extend(segment.get("evidence", []))
-        evidence = [
-            references[_reference_key(ref)] for ref in display_refs if _reference_key(ref) in references
-        ]
+        evidence = [references[_reference_key(ref)] for ref in display_refs if _reference_key(ref) in references]
+        # Fragment refs index into this combined list (top-level + segment evidence).
+        item["evidence"] = evidence
         segments = record.get("segments") or []
         if segments:
             try:
                 resolved = resolve_segments(session_dir, segments)
-                item["fragments"] = recorded_segments(
-                    captures_by_id, record, resolved, evidence, _reference_key
-                )
+                item["fragments"] = recorded_segments(captures_by_id, record, resolved, evidence, _reference_key)
             except (OSError, ValueError, UserActionRequired) as exc:
                 warnings.append(f"Issue {record['id']} segments: {exc}")
                 item["fragments"] = legacy_point_fragments(captures_by_id, evidence)

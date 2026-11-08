@@ -1,10 +1,10 @@
 "use strict";
 
-window.createSwimlanes = function createSwimlanes({el, button, elapsed, onPick, onZoom, onRoot, onFragment}) {
+window.createSwimlanes = function createSwimlanes({el, button, elapsed, onPick, onZoom, onRoot, onFragment, onIssueBadge}) {
   const chart = document.getElementById("lane-chart");
   const frame = document.getElementById("lane-scroll");
   const members = document.getElementById("lane-members");
-  let capture, scope, selected, fragments = [], current, expanded = new Set();
+  let capture, scope, selected, fragments = [], preview = [], current, issueCounts = new Map(), expanded = new Set();
   let marks = new Map(), cursors = [];
 
   function setSelected(index) {
@@ -61,6 +61,29 @@ window.createSwimlanes = function createSwimlanes({el, button, elapsed, onPick, 
     append();
     close.focus({preventScroll:true});
   }
+  function paintBands(track, number, branch, pct, start) {
+    const bands = [];
+    for (const [index, part] of fragments) {
+      if (part.track !== number || (branch !== null && part.branch !== branch) || part.start == null) continue;
+      bands.push({index, part, preview: false});
+    }
+    if (!fragments.length) {
+      for (const [index, part] of preview) {
+        if (part.track !== number || (branch !== null && part.branch !== branch) || part.start == null) continue;
+        bands.push({index, part, preview: true});
+      }
+    }
+    for (const {index, part, preview: isPreview} of bands) {
+      const mark = button("", () => onFragment(index), `lane-fragment${isPreview ? " preview" : ""}`);
+      mark.dataset.fragment = index;
+      const label = part.id ? `${part.id}${part.summary ? " · " + part.summary : ""}` : `片段 ${index + 1}`;
+      mark.title = `${label} · ${elapsed(part.start-start)} 至 ${elapsed(part.end-start)}`;
+      mark.setAttribute("aria-label", mark.title);
+      mark.setAttribute("aria-current", String(!isPreview && current === index));
+      mark.style.left = `${pct(part.start)}%`; mark.style.width = `${Math.max(0.4, pct(part.end)-pct(part.start))}%`;
+      track.append(mark);
+    }
+  }
   function draw() {
     const top = frame.scrollTop;
     const tracks = capture?.timeline.tracks || [];
@@ -72,7 +95,7 @@ window.createSwimlanes = function createSwimlanes({el, button, elapsed, onPick, 
     const pct = t => Math.max(0, Math.min(100, (t - lo) * 100 / Math.max(1, hi - lo)));
     chart.replaceChildren();
     marks = new Map(); cursors = [];
-    document.getElementById("legend-fragment").hidden = !fragments.length;
+    document.getElementById("legend-fragment").hidden = !(fragments.length || preview.length);
     document.getElementById("lane-reset").hidden = scope === null;
     if (!scoped.length) { chart.append(el("p", "此快照没有可浏览的执行轨迹。", "empty")); return; }
     const axis = el("div", undefined, "lane-row lane-axis");
@@ -94,16 +117,7 @@ window.createSwimlanes = function createSwimlanes({el, button, elapsed, onPick, 
         bar.style.left = `${pct(bounds.start)}%`; bar.style.width = `${pct(bounds.end)-pct(bounds.start)}%`;
         track.append(bar);
       }
-      for (const [index, part] of fragments) {
-        if (part.track !== number || (branch !== null && part.branch !== branch) || part.start == null) continue;
-        const mark = button("", () => onFragment(index), "lane-fragment");
-        mark.dataset.fragment = index;
-        mark.title = `片段 ${index + 1} · ${elapsed(part.start-start)} 至 ${elapsed(part.end-start)}`;
-        mark.setAttribute("aria-label", mark.title);
-        mark.setAttribute("aria-current", String(current === index));
-        mark.style.left = `${pct(part.start)}%`; mark.style.width = `${pct(part.end)-pct(part.start)}%`;
-        track.append(mark);
-      }
+      paintBands(track, number, branch, pct, start);
       const timed = indices.filter(i => nodes[i].at !== null);
       let batch, previous = -Infinity;
       function tick() {
@@ -120,7 +134,6 @@ window.createSwimlanes = function createSwimlanes({el, button, elapsed, onPick, 
         batch.push(i);
       }
       if (batch) tick();
-      // A cluster can begin well before its selected member. Place the cursor at the exact native time.
       const cursor = button("", () => onPick(selected), "lane-mark current-tick");
       cursors.push({mark:cursor, number, branch, pct}); track.append(cursor);
       if (timed.length < indices.length) {
@@ -147,6 +160,12 @@ window.createSwimlanes = function createSwimlanes({el, button, elapsed, onPick, 
       note.append(el("span", track.rows.length + " 条", "lane-count"));
       text.append(el("span", title, "lane-name"), note);
       pick.append(el("span", label, "lane-id"), text); left.append(pick);
+      const linked = issueCounts.get(number) || 0;
+      if (linked) {
+        const badge = button(String(linked), () => onIssueBadge?.(number), "issue-badge");
+        badge.title = `${linked} 个关联问题`; badge.setAttribute("aria-label", badge.title);
+        left.append(badge);
+      }
       if (root) {
         const info = button("ⓘ", () => onRoot(track.roots[0]), "root-info");
         info.title = `${label} · Trace 原始记录`; info.setAttribute("aria-label", info.title);
@@ -156,10 +175,11 @@ window.createSwimlanes = function createSwimlanes({el, button, elapsed, onPick, 
         const zoom = button("放大", () => onZoom(number), "lane-zoom");
         zoom.title = `只看此 Trace · ${label}`; zoom.setAttribute("aria-label", zoom.title); left.append(zoom);
       }
-      for (const [index, part] of fragments) {
+      const activeParts = fragments.length ? fragments : preview;
+      for (const [index, part] of activeParts) {
         if (part.track === number && part.start == null) {
-          const label = part.kind === "trace" ? "执行级证据" : "未定时证据";
-          const link = button(label, () => onFragment(index), "lane-evidence");
+          const kind = part.unscoped ? "未圈定范围" : part.kind === "trace" ? "执行级证据" : "未定时证据";
+          const link = button(part.id ? `${part.id} · ${kind}` : kind, () => onFragment(index), "lane-evidence");
           link.dataset.fragment = index; link.setAttribute("aria-pressed", String(current === index)); left.append(link);
         }
       }
@@ -198,9 +218,10 @@ window.createSwimlanes = function createSwimlanes({el, button, elapsed, onPick, 
     }
   }).observe(frame);
   return {
-    render(next, filter, index, parts, active) {
+    render(next, filter, index, parts, active, counts = new Map(), previewParts = []) {
       if (capture !== next) { expanded.clear(); frame.scrollTop = 0; }
       capture = next; scope = filter; selected = index; fragments = parts; current = active;
+      issueCounts = counts; preview = previewParts;
       members.hidden = true; draw();
     },
     select: setSelected,

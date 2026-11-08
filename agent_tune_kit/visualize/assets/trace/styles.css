@@ -9,55 +9,93 @@
   --accent: #a9420c;
   --tint: #fff4e9;
   --track: #537b8e;
+  --rail-width: 260px;
+  --rail-collapsed: 44px;
+  --drawer-width: 480px;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --row-height: 40px;
 }
 * { box-sizing: border-box }
-body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Inter", "PingFang SC", sans-serif }
-button, input, select, #issue-picker>summary { font: inherit; color: inherit; background: white; border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Inter", "PingFang SC", sans-serif; min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column }
+button, input, select { font: inherit; color: inherit; background: white; border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px }
 button, summary, select { cursor: pointer }
-button:hover, #issue-picker>summary:hover { background: var(--tint); border-color: #eabda0 }
+button:hover { background: var(--tint); border-color: #eabda0 }
 button:disabled { opacity: .45; cursor: default }
 :focus-visible { outline: 2px solid #bd5919; outline-offset: -2px }
 [hidden] { display: none !important }
 h1, h2, h3, p { margin: 0 }
-h1 { font-size: 24px; letter-spacing: -.03em }
-h2 { font-size: 17px }
+h1 { font-size: 22px; letter-spacing: -.03em }
+h2 { font-size: 16px }
 h3 { font-size: 14px }
 .muted, .record-meta { color: var(--muted) }
 .mono, code, pre, .session-id, .time-col, .trace-tag, .axis-ticks, .lane-id { font-family: var(--mono) }
 .sr-only { position: absolute; width: 1px; height: 1px; clip-path: inset(50%); overflow: hidden }
-.topbar { background: white; border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5 }
-.topbar-inner, .app-shell { max-width: 1440px; margin: auto; padding-inline: clamp(16px, 3vw, 46px) }
-.topbar-inner, .brand-line, .tabs, .view-heading, .view-actions, .records-heading, .records-title, .lane-footer, .lane-legend, .toolbar, .fragment-controls, .capture-choice { display: flex; align-items: center; gap: 10px }
-.topbar-inner, .view-heading, .records-heading, .lane-footer { justify-content: space-between }
-.topbar-inner { min-height: 54px; gap: 16px }
+
+.topbar { background: white; border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; flex-shrink: 0 }
+.topbar-inner { max-width: none; margin: 0; padding-inline: clamp(12px, 2vw, 24px); min-height: 52px; display: flex; align-items: center; justify-content: space-between; gap: 16px }
+.brand-line, .topbar-meta, .view-heading, .view-actions, .records-heading, .records-title, .lane-footer, .lane-legend, .toolbar, .fragment-controls, .capture-choice, .rail-header, .rail-title, .rail-filters, .issue-card-head, .seg-meta { display: flex; align-items: center; gap: 10px }
 .brand-line { min-width: 0 }
 .brand { background: var(--brand); color: #fff; border-radius: 6px; padding: 2px 6px; font-weight: 850; letter-spacing: -.04em }
 .brand-line strong { white-space: nowrap }
 .session-id { border-left: 1px solid var(--line); padding-left: 12px; color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
-.tabs { align-self: stretch; gap: 16px; flex-shrink: 0 }
-.tabs button { height: 100%; border: 0; border-radius: 0; color: var(--muted); background: transparent; padding-inline: 6px; font-weight: 600 }
-.tabs button.active { color: var(--accent); box-shadow: inset 0 -2px var(--brand) }
-.app-shell { padding-block: 21px 16px }
-#view-traces { height: calc(100vh - 93px); height: calc(100dvh - 93px); min-height: 530px; display: flex; flex-direction: column; gap: 14px }
-#summary, .capture-choice, .lane-footer, #trace-count { font-size: 12px; color: var(--muted) }
+.topbar-meta { flex-shrink: 0 }
+#session-stats { font-size: 12px; white-space: nowrap }
+.page-warnings { padding: 0 clamp(12px, 2vw, 24px) }
+.page-warnings:empty { display: none }
+
+.workspace { flex: 1; min-height: 0; display: grid; grid-template-columns: var(--rail-width) minmax(0, 1fr); gap: 0 }
+body.rail-collapsed { --rail-width: var(--rail-collapsed) }
+body.rail-collapsed .rail-filters,
+body.rail-collapsed .rail-title strong,
+body.rail-collapsed #rail-count,
+body.rail-collapsed .issue-card-body,
+body.rail-collapsed .issue-card .seg-list,
+body.rail-collapsed .issue-card .card-actions { display: none }
+body.rail-collapsed .issue-card { padding: 8px 6px; align-items: center }
+body.rail-collapsed .issue-card-head { flex-direction: column; gap: 4px }
+body.rail-collapsed .issue-id-text { writing-mode: vertical-rl; font-size: 10px; letter-spacing: .04em }
+body.rail-collapsed #rail-toggle { transform: rotate(180deg) }
+
+.issue-rail { border-right: 1px solid var(--line); background: #fbfcfd; display: flex; flex-direction: column; min-width: 0; min-height: 0 }
+.rail-header { justify-content: space-between; padding: 10px 10px 6px; border-bottom: 1px solid var(--line); background: white; min-height: 44px }
+.rail-title { min-width: 0; gap: 6px }
+#rail-toggle { width: 28px; height: 28px; padding: 0; flex-shrink: 0 }
+.rail-filters { padding: 8px 10px; gap: 6px; border-bottom: 1px solid var(--line); background: white; flex-wrap: wrap }
+.rail-filters .search-label { flex: 1; min-width: 0 }
+.rail-filters input, .rail-filters select { width: 100%; height: 32px; font-size: 12px; padding: 0 8px }
+.rail-filters select { width: auto; min-width: 88px }
+.rail-list { flex: 1; min-height: 0; overflow: auto; padding: 8px; display: flex; flex-direction: column; gap: 8px }
+.issue-card { display: flex; flex-direction: column; gap: 6px; width: 100%; text-align: left; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: white }
+.issue-card:hover, .issue-card[aria-current=true] { border-color: #e4b89b; background: var(--tint) }
+.issue-card[aria-current=true] { box-shadow: inset 3px 0 var(--brand) }
+.issue-card-head { justify-content: space-between; gap: 6px; width: 100% }
+.issue-id-text { color: var(--accent); font-size: 12px; font-weight: 700 }
+.progress-dot { width: 8px; height: 8px; border-radius: 50%; background: #b7c4ce; flex-shrink: 0 }
+.progress-dot.diagnosed { background: #d8892f }
+.progress-dot.changed { background: #3f7cac }
+.progress-dot.verified { background: #2f8f5b }
+.issue-card-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; width: 100% }
+.issue-card-body h3 { font-size: 13px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden }
+.issue-progress { font-size: 11px; color: var(--muted) }
+.seg-list { display: flex; flex-direction: column; gap: 3px; width: 100% }
+.seg-chip { display: block; width: 100%; text-align: left; border: 0; background: #fff8f1; color: var(--accent); font-size: 11px; padding: 4px 6px; border-radius: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.seg-chip[aria-current=true] { background: #ffd9b4; font-weight: 650 }
+.seg-chip.unscoped { color: #8a5a28; background: #f5efe6 }
+.card-actions { gap: 6px }
+.card-actions button { font-size: 11px; padding: 3px 7px }
+
+.main-pane { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 10px; padding: 12px clamp(12px, 2vw, 22px) 14px; overflow: hidden }
+.view-heading, .records-heading, .lane-footer { justify-content: space-between }
+.view-heading { flex-wrap: wrap; gap: 8px }
+#summary, .capture-choice, .lane-footer, #trace-count, #rail-count { font-size: 12px; color: var(--muted) }
 .capture-choice { gap: 6px }
 .capture-choice select { max-width: 190px; font-size: 12px }
-#issue-picker { position: relative }
-#issue-picker>summary { font-size: 13px; font-weight: 600; color: var(--accent); border-color: #e4b89b; list-style: none }
-#issue-picker>summary::-webkit-details-marker { display: none }
-#issue-picker>summary::after { content: " ▾"; font-size: 11px }
-#lane-issue-count { margin-left: 4px }
-.picker-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 6; width: min(400px, 87vw); max-height: 45vh; overflow: auto; padding: 4px; background: white; border: 1px solid var(--line); box-shadow: 0 8px 24px #1936481a; border-radius: 8px }
-.picker-menu button { display: block; width: 100%; border: 0; text-align: left; padding: 9px }
-.picker-menu strong { display: block }
 #capture-status:empty, #warnings:empty { display: none }
-.warning { background: #fff9e8; border: 1px solid #eed79d; padding: 8px 12px; border-radius: 6px; color: #804810; overflow-wrap: anywhere }
-.panel, .overview-card, .issue-card { border: 1px solid var(--line); border-radius: 9px; background: white }
+.warning { background: #fff9e8; border: 1px solid #eed79d; padding: 8px 12px; border-radius: 6px; color: #804810; overflow-wrap: anywhere; margin: 8px 0 }
+.panel, .overview-card { border: 1px solid var(--line); border-radius: 9px; background: white }
 .timeline-panel { flex: none; min-width: 0 }
 .lane-scroll { max-height: 33vh; overflow: auto; scrollbar-width: thin; overscroll-behavior: contain; border-radius: 9px 9px 0 0 }
-.lane-row { display: grid; grid-template-columns: clamp(180px, 21%, 270px) minmax(0,1fr); column-gap: 12px; padding: 0 20px 0 16px; align-items: center; min-height: 47px; border-bottom: 1px solid #e9eef2 }
+.lane-row { display: grid; grid-template-columns: clamp(168px, 20%, 250px) minmax(0,1fr); column-gap: 12px; padding: 0 16px 0 12px; align-items: center; min-height: 47px; border-bottom: 1px solid #e9eef2 }
 .lane-axis { position: sticky; top: 0; z-index: 3; min-height: 30px; background: #f0f4f6; color: var(--muted); font-size: 11px }
 .axis-ticks, .lane-track { position: relative; margin-inline: 8px }
 .axis-ticks { height: 18px }
@@ -65,7 +103,7 @@ h3 { font-size: 14px }
 .axis-ticks span:first-child { transform: none }
 .axis-ticks span:last-child:not(:first-child) { transform: translateX(-100%) }
 .lane-heading { display: flex; min-width: 0; align-items: center; gap: 7px }
-.lane-toggle, .lane-zoom, .lane-branch-toggle, .root-info { border: 0; background: transparent; padding: 3px; min-width: 0 }
+.lane-toggle, .lane-zoom, .lane-branch-toggle, .root-info, .issue-badge { border: 0; background: transparent; padding: 3px; min-width: 0 }
 .lane-toggle { display: flex; align-items: center; gap: 7px; text-align: left; flex: 1 }
 .lane-id { color: #365465; font-size: 11px; font-weight: 650 }
 .lane-text { min-width: 0; display: block; line-height: 1.25 }
@@ -74,14 +112,16 @@ h3 { font-size: 14px }
 .lane-note { font: 10px/1.6 var(--mono); color: var(--muted) }
 .lane-zoom, .root-info, .lane-branch-toggle { font-size: 12px; color: var(--muted); white-space: nowrap }
 .lane-zoom { color: #3e6478 }
+.issue-badge { min-width: 18px; height: 18px; border-radius: 999px; background: #ffe0c2; color: var(--accent); font-size: 10px; font-weight: 700; padding: 0 5px; display: inline-flex; align-items: center; justify-content: center }
+.issue-badge:hover { background: #ffd09a }
 .lane-track { height: 37px; background: repeating-linear-gradient(90deg,#e6ebef 0 1px,transparent 1px 25%) }
 .trace-envelope { position: absolute; top: 50%; height: 10px; min-width: 2px; transform: translateY(-50%); border-radius: 3px; background: #c2d6de }
 .lane-mark { position: absolute; top: 50%; transform: translate(-50%,-50%); height: 12px; width: 3px; padding: 0; border: 0; background: var(--track); border-radius: 2px }
 .lane-mark.cluster { width: 5px; background: #3f687b }
 .lane-mark::before { content: ""; position: absolute; inset: -5px -3px }
 .lane-mark:hover, .lane-mark[aria-current=true] { z-index: 2; background: var(--accent); outline: 2px solid #eea16a; outline-offset: 2px }
-.root-info[aria-current=true], .untimed[aria-current=true] { color: var(--accent); outline: 1px solid var(--brand) }
 .lane-fragment { position: absolute; top: 3px; bottom: 3px; min-width: 6px; padding: 0; border-radius: 2px; border: 1px solid #d68b48; background: #ffd39c80 }
+.lane-fragment.preview { border-style: dashed; background: #ffd39c55; pointer-events: none }
 .lane-fragment[aria-current=true] { background: #ffc27d99; border-color: #ae4b0d; box-shadow: 0 2px var(--accent) }
 .trace-overview[data-active=true] .lane-id { color: var(--accent) }
 .child-lane { background: #f9fbfc; min-height: 34px; font-size: 12px }
@@ -98,21 +138,29 @@ h3 { font-size: 14px }
 #lane-members { padding: 6px 14px; max-height: 16vh; overflow: auto; border-top: 1px solid var(--line) }
 .member-list { display: flex; align-items: center; gap: 4px; flex-wrap: wrap }
 .member-list button { font-size: 12px; padding: 3px 6px }
-#fragment-bar { border-left: 3px solid var(--brand); background: var(--tint); padding: 9px 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px }
+.root-info[aria-current=true], .untimed[aria-current=true] { color: var(--accent); outline: 1px solid var(--brand) }
+.short-id + .lane-count::before { content: " · " }
+.lane-mark.current-tick { z-index: 2 }
+.lane-evidence { padding: 2px 4px; color: var(--accent); font-size: 10px; background: var(--tint) }
+
+#fragment-bar { border-left: 3px solid var(--brand); background: var(--tint); padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px; border-radius: 8px }
 .fragment-title { min-width: 0; font-size: 13px }
 .fragment-title strong, .fragment-title span { display: block }
 #fragment-issue { overflow: hidden; white-space: nowrap; text-overflow: ellipsis }
 #fragment-position { color: var(--accent); font-size: 12px }
 .fragment-controls { flex-shrink: 0; gap: 5px }
 .fragment-controls button { font-size: 12px; padding: 4px 8px }
+
 .record-panel, .stream { display: flex; flex-direction: column; flex: 1; min-height: 0 }
 .record-panel { container-type: inline-size }
-.records-heading { flex-wrap: wrap; gap: 8px 16px; padding: 1px 0 10px }
+.records-heading { flex-wrap: wrap; gap: 8px 16px; padding: 1px 0 8px }
 .toolbar { flex-wrap: wrap; gap: 8px }
 .record-filters { gap: 8px; max-width: 100% }
 .record-filters label { display: block; min-width: 0 }
+.segments-only { display: inline-flex !important; align-items: center; gap: 6px; white-space: nowrap; color: var(--muted); font-size: 12px }
+.segments-only input { width: auto; height: auto; accent-color: var(--brand) }
 select, .toolbar input {
-  display: block; height: 36px; max-width: 100%; padding: 0 11px;
+  display: block; height: 34px; max-width: 100%; padding: 0 11px;
   font-size: 13px; line-height: normal; border-color: #cdd8e1;
 }
 select {
@@ -129,6 +177,7 @@ select:hover, .toolbar input:hover { border-color: #9baebb }
   .record-filters { display: grid; width: 100%; grid-template-columns: repeat(2,minmax(0,1fr)) }
   .record-filters :is(#trace-filter,#record-mode,#type-filter,#trace-search) { width: 100% }
   .record-filters:has(#trace-choice[hidden]) .search-label { grid-column: 1/-1 }
+  .segments-only { grid-column: 1/-1 }
 }
 @media (forced-colors: active) {
   select { appearance: auto; background-image: none; padding-right: 8px }
@@ -139,35 +188,31 @@ select:hover, .toolbar input:hover { border-color: #9baebb }
 .stream.single .trace-col { display: none }
 .stream-header { color: var(--muted); font-size: 11px; min-height: 31px; background: #f0f4f6; border-bottom: 1px solid var(--line); font-weight: 600 }
 #trace-scroll { flex: 1; min-height: 0; overflow: auto; overflow-anchor: none; scrollbar-width: thin; scrollbar-gutter: stable; overscroll-behavior: contain }
-.trace-row { width: 100%; height: var(--row-height); text-align: left; border: 0; border-bottom: 1px solid #edf0f3; border-radius: 0; padding-block: 0 }
+.trace-row, .segment-header, .fold-row { width: 100%; height: var(--row-height); text-align: left; border: 0; border-bottom: 1px solid #edf0f3; border-radius: 0; padding-block: 0 }
 .trace-row:hover { background: #f5f9fa }
-.trace-row.in-fragment { background: #fffaf4 }
+.trace-row.in-fragment { background: #fffaf4; box-shadow: inset 3px 0 #f0b27a }
 .trace-row[aria-current=true] { background: var(--tint); box-shadow: inset 3px 0 var(--brand) }
+.segment-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-inline: 16px; background: #fff3e6; color: var(--accent); font-size: 12px; font-weight: 650 }
+.segment-header .seg-meta { color: var(--muted); font-weight: 500 }
+.fold-row { color: var(--muted); font-size: 12px; background: #f7f9fa; justify-content: center }
 .time-col { font-size: 12px; color: #485c6a }
 .trace-tag { display: inline-block; min-width: 26px; text-align: center; font-size: 11px; background: #edf3f5; color: #355363; border-radius: 4px; padding: 1px 5px }
-.node-main { display: flex; gap: 8px; min-width: 0; align-items: baseline }
+.node-main { display: flex; gap: 8px; min-width: 0; align-items: baseline; flex-wrap: wrap }
 .node-label, .result-col { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
 .node-label { font-weight: 600; font-size: 13px }
 .node-branch { font: 10px var(--mono); color: #647784 }
 .result-col { color: var(--muted); font-size: 12px }
-.evidence-note { color: var(--accent); font-size: 10px; white-space: nowrap }
+.evidence-note, .issue-pill { color: var(--accent); font-size: 10px; white-space: nowrap }
+.issue-pill { background: #ffe8d2; border-radius: 999px; padding: 0 6px }
 .empty { padding: 18px; text-align: center; color: var(--muted) }
-.issue-grid, .overview-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; margin-block: 14px }
-.issue-card, .overview-card { text-align: left; padding: 16px; min-width: 0; overflow-wrap: anywhere }
-.issue-card h3, .overview-card h3 { margin-block: 5px 8px }
-.issue-id { color: var(--accent); font-size: 12px }
-.badge { margin-left: 9px; color: var(--muted) }
-.overview-card.wide { grid-column: 1/-1 }
-.pagination, .parent-links, .stage-tabs { display: flex; gap: 8px; flex-wrap: wrap; align-items: center }
-.pagination { font-size: 12px; color: var(--muted) }
-#view-issues>.toolbar { margin-block: 12px; gap: 8px 14px }
-#view-issues>.toolbar label { display: flex; align-items: center; gap: 8px; white-space: nowrap; color: var(--muted) }
-#view-issues .search-label { flex: 0 1 270px; min-width: 0 }
-#issue-search { width: 100%; min-width: 0 }
-#issue-status { min-width: 124px }
-.drawer-backdrop { position: fixed; inset: 0; z-index: 10; background: #21304435 }
-.drawer { position: fixed; right: 0; top: 0; bottom: 0; z-index: 11; width: min(580px,95vw); display: flex; flex-direction: column; background: var(--bg); box-shadow: -6px 0 26px #243b4b24; border-left: 1px solid var(--line) }
-.drawer.node-drawer { width: min(410px,38vw) }
+
+.overview-grid { display: grid; grid-template-columns: 1fr; gap: 12px }
+.overview-card { text-align: left; padding: 16px; min-width: 0; overflow-wrap: anywhere }
+.overview-card h3 { margin-block: 5px 8px }
+.parent-links, .stage-tabs, .breadcrumb { display: flex; gap: 8px; flex-wrap: wrap; align-items: center }
+
+.drawer { position: fixed; right: 0; top: 0; bottom: 0; z-index: 12; width: var(--drawer-width); max-width: 95vw; display: flex; flex-direction: column; background: var(--bg); box-shadow: -6px 0 26px #243b4b24; border-left: 1px solid var(--line); pointer-events: auto }
+.drawer-resizer { position: absolute; left: -3px; top: 0; bottom: 0; width: 8px; cursor: col-resize }
 .drawer-header { display: flex; gap: 14px; align-items: center; justify-content: space-between; padding: 16px; border-bottom: 1px solid var(--line); background: white }
 .drawer-header h2, .drawer-content { overflow-wrap: anywhere }
 .drawer-header button { flex-shrink: 0 }
@@ -179,21 +224,28 @@ select:hover, .toolbar input:hover { border-color: #9baebb }
 .evidence-link { display: block; width: 100%; text-align: left; white-space: normal; overflow-wrap: anywhere }
 .evidence-link strong, .evidence-link code { display: block }
 .evidence-link code, #evidence-field>code { font-size: 12px; color: var(--muted) }
-#evidence-field { border-left: 3px solid var(--brand) }
+#evidence-field, .highlight-field { border-left: 3px solid var(--brand) }
+.highlight-field { background: #fff7ee }
 pre { background: var(--bg); border-radius: 6px; padding: 8px 12px; font-size: 12px; overflow: auto; max-height: 480px; white-space: pre-wrap; overflow-wrap: anywhere }
 .stage-tabs .active { color: var(--accent); border-color: var(--brand); background: var(--tint) }
 .outcome { border-left: 2px solid var(--brand); padding-left: 8px }
 .outcome strong { display: block }
+.drawer-search { width: 100%; margin-bottom: 8px }
+.copy-ref { font-size: 12px }
+
+@media(max-width:960px) {
+  .workspace { grid-template-columns: 1fr; grid-template-rows: auto minmax(0,1fr) }
+  .issue-rail { border-right: 0; border-bottom: 1px solid var(--line); max-height: 28vh }
+  body.rail-collapsed .issue-rail { max-height: 44px }
+  body.rail-collapsed .rail-list { display: none }
+}
 @media(max-width:800px) {
-  .topbar-inner { align-items: flex-start; flex-direction: column; gap: 1px; padding-top: 7px }
-  .tabs { height: 30px }
-  .app-shell { padding: 12px 10px }
-  #view-traces { height: calc(100dvh - 91px); min-height: 620px; gap: 9px }
+  .topbar-inner { align-items: flex-start; flex-direction: column; gap: 4px; padding-top: 8px; padding-bottom: 8px }
+  .main-pane { padding: 10px }
   .view-heading { align-items: flex-start; flex-wrap: wrap; gap: 5px }
-  h1 { font-size: 20px }
-  .view-actions { margin-left: auto }
+  h1 { font-size: 18px }
   .capture-choice select { max-width: 112px }
-  .lane-row { grid-template-columns: 116px minmax(0,1fr); padding-inline: 8px; gap: 4px }
+  .lane-row { grid-template-columns: 126px minmax(0,1fr); padding-inline: 8px; gap: 4px }
   .lane-heading { gap: 1px; flex-wrap: wrap }
   .lane-toggle { gap: 3px }
   .lane-name { max-width: 66px }
@@ -207,22 +259,10 @@ pre { background: var(--bg); border-radius: 6px; padding: 8px 12px; font-size: 1
   #fragment-bar { flex-wrap: wrap; padding: 5px 8px }
   .fragment-controls { flex-wrap: wrap }
   .fragment-controls button { padding: 3px 5px }
-  .overview-grid, .issue-grid { grid-template-columns: 1fr }
-  .drawer.node-drawer { inset: auto 0 0; width: 100%; height: 45vh; height: 45dvh; border-radius: 12px 12px 0 0 }
-}
-.short-id + .lane-count::before { content: " · " }
-.lane-mark.current-tick { z-index: 2 }
-.lane-evidence { padding: 2px 4px; color: var(--accent); font-size: 10px; background: var(--tint) }
-body:has(.node-drawer:not(.inspecting):not([hidden])) .drawer-backdrop { background: transparent }
-@media(min-width:801px) {
-  body:has(.node-drawer:not(.inspecting):not([hidden])) .app-shell { margin-right: min(410px,38vw); padding-right: 12px }
-}
-@media(max-width:800px) {
-  .lane-row { grid-template-columns: 136px minmax(0,1fr) }
+  .drawer { inset: auto 0 0; width: 100% !important; height: 48vh; height: 48dvh; border-radius: 12px 12px 0 0; border-left: 0; border-top: 1px solid var(--line) }
+  .drawer-resizer { display: none }
   .lane-name { display: none }
   .child-lane .lane-heading, .lane-heading:has(.root-info) .lane-note { font-size: 10px }
   .lane-count { display: block }
   .short-id + .lane-count::before { content: "" }
-  .drawer.node-drawer.inspecting { height: min(32vh,220px); height: min(32dvh,220px) }
-  .drawer.node-drawer.inspecting.above-record { inset: 0 0 auto; border-radius: 0 0 12px 12px }
 }

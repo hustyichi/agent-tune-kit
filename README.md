@@ -166,7 +166,7 @@ $atk-trace-verify 验证 <session-id> 的 ISSUE-001 对应候选，并检查相�
 | 文件或目录 | 用途 |
 | --- | --- |
 | `session.json`、`raw/` | 查看来源、采集范围、分析覆盖和保留的轨迹 |
-| `preview.html` | 离线浏览执行泳道，从问题跳到对应的证据 |
+| `preview.html` | 离线浏览：左侧问题栏、上方泳道、下方 Event；按 Issue 片段定位证据 |
 | `issues/<issue-id>/` | 查看问题证据、诊断和改动。各次验证的 `result.json` 记录验证状态、结论和证据引用 |
 
 [轨迹调优指南，包含来源配置、支持格式和归档结构](docs/trace-tuning.md)

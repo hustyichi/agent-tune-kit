@@ -166,7 +166,7 @@ Each session archive is stored under `.atk/traces/<session_id>/` in your Agent p
 | File or directory | What it shows |
 | --- | --- |
 | `session.json`, `raw/` | Session source, capture scope, inspection coverage, and retained traces |
-| `preview.html` | Offline execution lanes with links from issues to the evidence |
+| `preview.html` | Offline browse: issue rail, swimlanes, Event list; jump by Issue segments |
 | `issues/<issue-id>/` | Issue evidence, diagnoses, and changes. Each verification's `result.json` records its status, conclusion, and evidence references |
 
 [Trace tuning guide for source configuration, supported formats, and archive layout](docs/trace-tuning.md)
