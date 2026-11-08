@@ -187,7 +187,10 @@ select:hover, .toolbar input:hover { border-color: #9baebb }
 .stream.single .row-grid { grid-template-columns: 106px minmax(160px,1.2fr) minmax(100px,.8fr) }
 .stream.single .trace-col { display: none }
 .stream-header { color: var(--muted); font-size: 11px; min-height: 31px; background: #f0f4f6; border-bottom: 1px solid var(--line); font-weight: 600 }
-#trace-scroll { flex: 1; min-height: 0; overflow: auto; overflow-anchor: none; scrollbar-width: thin; scrollbar-gutter: stable; overscroll-behavior: contain }
+#trace-scroll {
+  flex: 1; min-height: 0; max-height: 50vh; max-height: 50dvh;
+  overflow: auto; overflow-anchor: none; scrollbar-width: thin; scrollbar-gutter: stable;
+}
 .trace-row, .segment-header, .fold-row { width: 100%; height: var(--row-height); text-align: left; border: 0; border-bottom: 1px solid #edf0f3; border-radius: 0; padding-block: 0 }
 .trace-row:hover { background: #f5f9fa }
 .trace-row.in-fragment { background: #fffaf4; box-shadow: inset 3px 0 #f0b27a }
@@ -260,6 +263,7 @@ pre { background: var(--bg); border-radius: 6px; padding: 8px 12px; font-size: 1
   .fragment-controls { flex-wrap: wrap }
   .fragment-controls button { padding: 3px 5px }
   .drawer { inset: auto 0 0; width: 100% !important; height: 48vh; height: 48dvh; border-radius: 12px 12px 0 0; border-left: 0; border-top: 1px solid var(--line) }
+  .drawer.above-record { inset: 0 0 auto; border-radius: 0 0 12px 12px; border-top: 0; border-bottom: 1px solid var(--line) }
   .drawer-resizer { display: none }
   .lane-name { display: none }
   .child-lane .lane-heading, .lane-heading:has(.root-info) .lane-note { font-size: 10px }

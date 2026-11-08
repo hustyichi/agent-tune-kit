@@ -93,11 +93,13 @@
     document.documentElement.style.setProperty("--drawer-width", `${clamped}px`);
   };
   const openDrawer = (title, mode = "detail") => {
-    if ($("drawer").hidden) returnFocus = document.activeElement;
+    const drawer = $("drawer");
+    if (drawer.hidden) returnFocus = document.activeElement;
     drawerMode = mode;
     $("drawer-title").textContent = title;
     $("drawer-content").replaceChildren();
-    $("drawer").hidden = false;
+    drawer.classList.remove("above-record");
+    drawer.hidden = false;
     $("drawer-content").scrollTop = 0;
     $("drawer-close").focus({preventScroll: true});
   };
@@ -290,11 +292,16 @@
     });
   }
   function openEventDrawer(node, trigger) {
+    const drawer = $("drawer");
+    const keepAbove = drawer.contains(trigger) && drawer.classList.contains("above-record");
     const index = currentCapture.nodes.indexOf(node);
     selectedNode = node;
     swim.select(index);
     markVisibleRows();
     showNodeDetails(currentCapture, node, index, null);
+    const coversRow = innerWidth <= 800 && scroller.contains(trigger) &&
+      trigger.getBoundingClientRect().bottom > drawer.getBoundingClientRect().top;
+    if (keepAbove || coversRow) drawer.classList.add("above-record");
     returnFocus = trigger;
     syncHash();
   }
