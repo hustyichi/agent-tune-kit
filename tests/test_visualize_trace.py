@@ -437,3 +437,25 @@ def test_recorded_segments_render_as_fragments(tmp_path):
     assert parts[0]["start"] is not None and parts[0]["end"] is not None
     assert parts[0]["summary"].startswith("Model")
     assert data["issues"][0]["evidence"]
+
+
+def test_issue_rail_hover_does_not_rebuild_rail_or_event_list():
+    # Rebuilding the rail under the pointer replaced the buttons between mousedown and mouseup,
+    # so clicks on 定位 / segment chips never fired. Hover may redraw the swimlanes only.
+    js = (Path(trace.__file__).parent / "assets/trace/app.js").read_text()
+
+    def body(start):
+        index = js.index(start)
+        depth = 0
+        for pos in range(js.index("{", index), len(js)):
+            depth += {"{": 1, "}": -1}.get(js[pos], 0)
+            if depth == 0:
+                return js[index : pos + 1]
+        raise AssertionError(start)
+
+    for handler in ("card.onmouseenter = () =>", "card.onmouseleave = () =>"):
+        code = body(handler)
+        assert "drawLanes()" in code
+        assert "renderTraces" not in code and "renderIssueRail" not in code
+    assert "renderIssueRail" not in body("function renderTraces(")
+    assert "renderIssueRail" not in body("function startIssue(")

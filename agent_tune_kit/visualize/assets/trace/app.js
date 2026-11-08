@@ -14,7 +14,7 @@
   let currentCapture = data.captures.at(-1) || null;
   let returnFocus = null, activeIssue = null, issueStage = "issue", drawerMode = null;
   let selectedNode = null, origin = null, issueTrigger = null;
-  let investigation = null, scopeBefore = null, previewIssue = null, expandedFolds = new Set();
+  let investigation = null, scopeBefore = null, previewIssue = null, expandedFolds = new Set(), railFilter = null;
   const captureById = new Map(data.captures.map(c => [c.id, c]));
   const issueById = new Map(data.issues.map(item => [item.record.id, item]));
   const filters = ["trace-filter", "type-filter", "trace-search", "record-mode"];
@@ -61,8 +61,8 @@
     onIssueBadge: track => {
       $("issue-search").value = "";
       $("issue-status").value = "";
-      const ids = data.issues.filter(item => item.fragments.some(part => part.capture_id === currentCapture?.id && part.track === track)).map(item => item.record.id);
-      renderIssueRail(ids);
+      railFilter = {track, ids: data.issues.filter(item => item.fragments.some(part => part.capture_id === currentCapture?.id && part.track === track)).map(item => item.record.id)};
+      renderIssueRail();
     },
   });
   function rememberView() {
@@ -669,15 +669,18 @@
     paintWindow();
     list.querySelector(`[data-position="${pos}"]`)?.focus({preventScroll:true});
   });
+  // Redraw only the swimlanes. Hover previews use this so the issue rail and Event list stay
+  // in place; rebuilding them under the pointer swallowed the click on rail buttons.
+  function drawLanes() {
+    const local = item => (item?.fragments || []).map((p,i) => [i,p]).filter(([,p]) => p.capture_id === currentCapture?.id);
+    const previewParts = !investigation && previewIssue ? local(previewIssue) : [];
+    swim.render(currentCapture, displayedScope, selectedIndex(), local(investigation?.item), investigation?.index, issueCounts(), previewParts);
+  }
   function renderTraces(top = 0) {
     const {tracks, order} = timeline();
     displayedScope = scope();
     const track = tracks[displayedScope];
-    const parts = (investigation?.item.fragments || []).map((p,i) => [i,p]).filter(([,p]) => p.capture_id === currentCapture?.id);
-    const previewParts = (!investigation && previewIssue)
-      ? previewIssue.fragments.map((p,i) => [i,p]).filter(([,p]) => p.capture_id === currentCapture?.id)
-      : [];
-    swim.render(currentCapture, displayedScope, selectedIndex(), parts, investigation?.index, issueCounts(), previewParts);
+    drawLanes();
     showFragmentBar();
     $("lane-title").textContent = track ? `只看 ${trackLabel(displayedScope)} · ${track.trace_id || "归档材料"}` : "完整会话";
     const coverage = currentCapture?.manifest.completeness || {};
@@ -699,7 +702,7 @@
     list.style.paddingBottom = `${displayRows.length * rowHeight}px`;
     scroller.scrollTop = top;
     paintWindow(true);
-    renderIssueRail();
+    syncRailSelection();
     syncHash();
   }
   function focusTrace(number) {
@@ -742,7 +745,7 @@
     $("fragment-fields").textContent = `片段证据 (${part.refs.length+(part.context_refs?.length || 0)})`;
   }
   function startIssue(item, fragmentIndex = null) {
-    if (!item.fragments.length) { showIssue(item); renderIssueRail(); return; }
+    if (!item.fragments.length) { showIssue(item); syncRailSelection(); return; }
     const before = investigation?.before || rememberView();
     const priorScope = investigation ? investigation.priorScope : scopeBefore;
     investigation = {item, before, priorScope, index:0};
@@ -750,7 +753,6 @@
     const preferred = fragmentIndex != null && fragmentIndex >= 0 ? fragmentIndex
       : item.fragments.findIndex(f => f.capture_id === currentCapture?.id && f.anchors.length);
     goFragment(preferred < 0 ? 0 : preferred);
-    renderIssueRail();
     if ($("drawer").hidden) $("fragment-fields").focus({preventScroll:true});
   }
   function goFragment(index) {
@@ -792,14 +794,22 @@
     const {before,priorScope} = investigation;
     investigation = null; scopeBefore = priorScope; expandedFolds = new Set();
     restoreView(before);
-    renderIssueRail();
+    syncRailSelection();
     syncHash();
   }
-  function renderIssueRail(highlightIds = null) {
+  function syncRailSelection() {
+    const activeId = investigation?.item.record.id;
+    for (const card of $("issue-rail-list").querySelectorAll(".issue-card")) {
+      const mine = card.dataset.issueId === activeId;
+      card.setAttribute("aria-current", String(mine));
+      card.querySelectorAll(".seg-chip").forEach((chip, index) => chip.setAttribute("aria-current", String(mine && investigation.index === index)));
+    }
+  }
+  function renderIssueRail() {
     const text = $("issue-search").value.toLocaleLowerCase();
     const status = $("issue-status").value;
     const filtered = data.issues.filter(item => {
-      if (highlightIds && !highlightIds.includes(item.record.id)) return false;
+      if (railFilter && !railFilter.ids.includes(item.record.id)) return false;
       const progress = progressOf(item).label;
       if (status && item.record.status !== status && progress !== status) return false;
       if (!text) return true;
@@ -807,6 +817,11 @@
     });
     $("rail-count").textContent = `${filtered.length}/${data.issues.length}`;
     const box = $("issue-rail-list"); box.replaceChildren();
+    if (railFilter) {
+      const note = el("p", `仅显示 ${trackLabel(railFilter.track)} 关联的问题 `, "muted rail-filter");
+      note.append(button("显示全部", () => { railFilter = null; renderIssueRail(); }));
+      box.append(note);
+    }
     if (!filtered.length) {
       box.append(el("p", data.issues.length ? "没有符合筛选条件的问题。" : data.session.detections.length ? "已保存检测记录，尚无已记录问题。" : "尚未进行异常识别。", "empty"));
       return;
@@ -816,7 +831,6 @@
       const progress = progressOf(item);
       const card = el("article", undefined, "issue-card");
       card.dataset.issueId = issue.id;
-      card.setAttribute("aria-current", String(investigation?.item.record.id === issue.id));
       const head = el("div", undefined, "issue-card-head");
       head.append(el("span", issue.id, "issue-id-text"), el("span", undefined, `progress-dot ${progress.klass}`));
       const body = el("div", undefined, "issue-card-body");
@@ -829,7 +843,6 @@
           : part.unscoped ? "未圈定范围" : `片段 ${index + 1}`;
         const chip = button(label.trim(), () => startIssue(item, index), `seg-chip${part.unscoped ? " unscoped" : ""}`);
         chip.title = label.trim();
-        chip.setAttribute("aria-current", String(investigation?.item.record.id === issue.id && investigation.index === index));
         segs.append(chip);
       });
       const actions = el("div", undefined, "card-actions");
@@ -839,17 +852,18 @@
       );
       card.append(head, body, segs, actions);
       card.onmouseenter = () => {
-        if (investigation) return;
+        if (investigation || previewIssue === item) return;
         previewIssue = item;
-        renderTraces(scroller.scrollTop);
+        drawLanes();
       };
       card.onmouseleave = () => {
         if (previewIssue !== item) return;
         previewIssue = null;
-        renderTraces(scroller.scrollTop);
+        drawLanes();
       };
       box.append(card);
     }
+    syncRailSelection();
   }
   function syncHash() {
     const parts = [];
@@ -901,14 +915,14 @@
   $("capture-filter").closest("label").hidden = Boolean(currentCapture?.current);
   options($("capture-filter"), data.captures.map(c => c.id));
   if (currentCapture) $("capture-filter").value = currentCapture.id;
-  $("capture-filter").onchange = () => { investigation = null; scopeBefore = null; chooseCapture(); renderTraces(); };
+  $("capture-filter").onchange = () => { investigation = null; scopeBefore = null; railFilter = null; chooseCapture(); renderIssueRail(); renderTraces(); };
   $("trace-filter").onchange = () => focusTrace(scope());
   for (const id of ["trace-search","type-filter","record-mode"]) $(id).addEventListener(id === "trace-search" ? "input" : "change", () => renderTraces());
   $("segments-only").onchange = () => renderTraces(scroller.scrollTop);
   const statusValues = [...new Set(data.issues.flatMap(item => [item.record.status, progressOf(item).label]).filter(Boolean))];
   options($("issue-status"), statusValues, "全部状态");
-  $("issue-search").oninput = () => renderIssueRail();
-  $("issue-status").onchange = () => renderIssueRail();
+  $("issue-search").oninput = () => { railFilter = null; renderIssueRail(); };
+  $("issue-status").onchange = () => { railFilter = null; renderIssueRail(); };
   const collapsed = localStorage.getItem(RAIL_KEY) === "1";
   document.body.classList.toggle("rail-collapsed", collapsed);
   $("rail-toggle").setAttribute("aria-expanded", String(!collapsed));
@@ -950,5 +964,5 @@
     }
   });
   window.addEventListener("hashchange", applyHash);
-  chooseCapture(); renderTraces(); applyHash();
+  chooseCapture(); renderIssueRail(); renderTraces(); applyHash();
 })();
