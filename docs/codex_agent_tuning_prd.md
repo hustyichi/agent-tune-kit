@@ -299,7 +299,8 @@
 
 ## 6. 输出文件结构
 
-当前正式文件树、按需产物及阅读用途统一见 [README 的完整输出结构](../README.md#完整输出结构)。
+[README 中的评测产物及用途](../README.md#查看评测产物)
+
 V2 使用独立 execution 现场；V1 旧结果和日志继续可读。仅导入证据的 Run 不要求评分 CSV，
 有目录或封存文件不等于业务通过；字段、版本及错误语义以[共享契约](shared-versioning-and-confirmation.md)为准。
 
