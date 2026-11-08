@@ -108,35 +108,30 @@ h3 { font-size: 14px }
 .record-panel, .stream { display: flex; flex-direction: column; flex: 1; min-height: 0 }
 .record-panel { container-type: inline-size }
 .records-heading { flex-wrap: wrap; gap: 8px 16px; padding: 1px 0 10px }
-.toolbar { flex-wrap: wrap; gap: 7px }
-.toolbar input, .toolbar select { font-size: 12px; max-width: 230px }
-.search-label input { width: 188px }
+.toolbar { flex-wrap: wrap; gap: 8px }
 .record-filters { gap: 8px; max-width: 100% }
-.record-filters label { position: relative; display: block; min-width: 0 }
-.record-filters select, .record-filters input {
+.record-filters label { display: block; min-width: 0 }
+select, .toolbar input {
   display: block; height: 36px; max-width: 100%; padding: 0 11px;
   font-size: 13px; line-height: normal; border-color: #cdd8e1;
 }
-.record-filters select { appearance: none; padding-right: 32px; text-overflow: ellipsis }
-.record-filters label:has(select)::after {
-  content: ""; position: absolute; top: 50%; right: 13px; width: 6px; height: 6px;
-  border: solid var(--muted); border-width: 0 1.5px 1.5px 0;
-  transform: translateY(-70%) rotate(45deg); pointer-events: none;
+select {
+  appearance: none; padding-right: 32px; text-overflow: ellipsis;
+  background: white url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e") no-repeat right 11px center / 14px;
 }
 #trace-filter { width: 152px }
 #record-mode { width: 104px }
 #type-filter { width: 142px }
 #trace-search { width: 208px }
-.record-filters select:hover, .record-filters input:hover { border-color: #9baebb }
-.record-filters select:has(option:checked:not([value=""])) { border-color: #deb493; color: var(--accent) }
+select:hover, .toolbar input:hover { border-color: #9baebb }
+.toolbar select:has(option:checked:not([value=""])) { border-color: #deb493; color: var(--accent) }
 @container (max-width: 650px) {
   .record-filters { display: grid; width: 100%; grid-template-columns: repeat(2,minmax(0,1fr)) }
   .record-filters :is(#trace-filter,#record-mode,#type-filter,#trace-search) { width: 100% }
   .record-filters:has(#trace-choice[hidden]) .search-label { grid-column: 1/-1 }
 }
 @media (forced-colors: active) {
-  .record-filters select { appearance: auto; padding-right: 8px }
-  .record-filters label:has(select)::after { display: none }
+  select { appearance: auto; background-image: none; padding-right: 8px }
 }
 .stream { overflow: hidden }
 .row-grid { display: grid; grid-template-columns: 106px 58px minmax(160px,1.2fr) minmax(100px,.8fr); gap: 10px; padding-inline: 16px; align-items: center }
@@ -165,7 +160,11 @@ h3 { font-size: 14px }
 .overview-card.wide { grid-column: 1/-1 }
 .pagination, .parent-links, .stage-tabs { display: flex; gap: 8px; flex-wrap: wrap; align-items: center }
 .pagination { font-size: 12px; color: var(--muted) }
-#view-issues>.toolbar { margin-block: 12px }
+#view-issues>.toolbar { margin-block: 12px; gap: 8px 14px }
+#view-issues>.toolbar label { display: flex; align-items: center; gap: 8px; white-space: nowrap; color: var(--muted) }
+#view-issues .search-label { flex: 0 1 270px; min-width: 0 }
+#issue-search { width: 100%; min-width: 0 }
+#issue-status { min-width: 124px }
 .drawer-backdrop { position: fixed; inset: 0; z-index: 10; background: #21304435 }
 .drawer { position: fixed; right: 0; top: 0; bottom: 0; z-index: 11; width: min(580px,95vw); display: flex; flex-direction: column; background: var(--bg); box-shadow: -6px 0 26px #243b4b24; border-left: 1px solid var(--line) }
 .drawer.node-drawer { width: min(410px,38vw) }
@@ -201,8 +200,6 @@ pre { background: var(--bg); border-radius: 6px; padding: 8px 12px; font-size: 1
   .lane-note { font-size: 9px }
   .lane-zoom, .root-info { font-size: 11px; padding: 2px }
   .lane-footer { padding-inline: 8px }
-  #view-issues .search-label { flex: 1; min-width: 65px }
-  #view-issues .search-label input { width: 100%; padding: 4px }
   .row-grid { grid-template-columns: 80px 34px minmax(0,1fr); gap: 8px; padding-inline: 7px }
   .stream.single .row-grid { grid-template-columns: 80px minmax(0,1fr) }
   .result-col { display: none }

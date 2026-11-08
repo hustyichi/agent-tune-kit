@@ -380,24 +380,32 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, 
 .pager-select-label {
   font-weight: 600;
 }
-.pager-select-wrap select {
+select {
   border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 7px 32px 7px 10px;
+  color: var(--text-strong);
+  cursor: pointer;
+  appearance: none;
+  background: white url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e") no-repeat right 11px center / 14px;
+  text-overflow: ellipsis;
+}
+select:focus {
+  border-color: var(--brand);
+}
+.pager-select-wrap select {
   border-radius: 6px;
-  background: white;
   padding: 4px 24px 4px 8px;
   font-size: 12px;
   font-weight: 600;
-  color: var(--text-strong);
-  cursor: pointer;
-  outline: none;
-  appearance: none;
-  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
-  background-repeat: no-repeat;
   background-position: right 8px center;
   background-size: 12px;
 }
-.pager-select-wrap select:focus {
-  border-color: var(--brand);
+@media (forced-colors: active) {
+  select { appearance: auto; background-image: none; padding-right: 8px; }
+  .pager-select-wrap select { padding-right: 8px; }
 }
 .pager-nav {
   display: flex;
@@ -655,7 +663,7 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, 
 .review-box label { display: block; margin: 10px 0 4px; font-weight: 600; }
 .review-box pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 .review-box textarea[aria-label] { min-height: 48px; }
-.review-box select, #truth-filter { padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: white; color: var(--text); }
+#truth-filter { padding-block: 9px; }
 
 .drawer-backdrop {
   position: fixed;
@@ -697,7 +705,6 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, 
 .drawer-section h3 { margin: 0 0 12px; color: var(--text-strong); font-size: 13px; }
 .role-row { display: grid; grid-template-columns: 70px minmax(0, 1fr) 94px; gap: 8px; align-items: center; margin-bottom: 8px; }
 .role-row .name { font-size: 12px; font-weight: 900; color: var(--text); }
-.role-row select { border: 1px solid var(--line); border-radius: 8px; padding: 7px 8px; background: white; }
 .role-row .source { color: var(--muted); font-size: 11px; text-align: right; }
 .warning {
   border: 1px solid #fde68a;
