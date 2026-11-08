@@ -20,7 +20,7 @@
   const filters = ["trace-filter", "type-filter", "trace-search", "record-mode"];
   const list = $("trace-list"), scroller = $("trace-scroll");
   const scope = () => $("trace-filter").value === "" ? null : Number($("trace-filter").value);
-  const timeline = () => currentCapture?.timeline || {tracks:[], order:[]};
+  const timeline = (capture = currentCapture) => capture?.timeline || {tracks:[], order:[]};
   const elapsed = (ms, precise = false) => {
     if (ms == null) return "时间未知";
     ms = Math.round(ms);
@@ -28,8 +28,8 @@
     const time = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
     return precise ? `${time}.${String(Math.round(ms) % 1000).padStart(3, "0")}` : time;
   };
-  const trackLabel = i => timeline().tracks[i]?.trace_id != null ? `T${i+1}` : "文件";
-  const startTime = () => timeline().tracks.find(t => t.start !== null)?.start ?? 0;
+  const trackLabel = (i, capture) => timeline(capture).tracks[i]?.trace_id != null ? `T${i+1}` : "文件";
+  const startTime = capture => timeline(capture).tracks.find(t => t.start !== null)?.start ?? 0;
   const partNow = () => investigation?.item.fragments[investigation.index];
   const issueEvidence = item => item.evidence || [];
   const evidenceRefAt = (item, pos) => issueEvidence(item)[pos]?.reference;
@@ -56,7 +56,7 @@
     return counts;
   };
   const swim = window.createSwimlanes({
-    el, button, elapsed, onPick: pickFromLane, onZoom: focusTrace, onFragment: goFragment,
+    el, button, elapsed, startTime, onPick: pickFromLane, onZoom: focusTrace, onFragment: goFragment,
     onRoot: index => openEventDrawer(currentCapture.nodes[index], document.activeElement),
     onIssueBadge: track => {
       $("issue-search").value = "";
@@ -592,9 +592,7 @@
       if (item.kind === "header") {
         const part = item.part;
         const row = el("div", undefined, "segment-header");
-        const issueId = investigation.item.record.id;
-        const label = `${shortIssue(issueId)}/${part.id || `S${item.fragIndex + 1}`}  ${part.summary || (part.unscoped ? "未圈定范围" : "片段")}`;
-        row.append(el("span", label));
+        row.append(el("span", part.summary || (part.unscoped ? "未圈定范围" : "片段")));
         const meta = el("span", undefined, "seg-meta");
         meta.append(el("span", `${part.node_count || part.anchors.length || 0} 节点`));
         if (part.duration_ms != null) meta.append(el("span", elapsed(part.duration_ms)));
@@ -745,7 +743,7 @@
     $("fragment-issue").title = $("fragment-issue").textContent;
     const labels = {trace:"执行级证据", file:"归档引用", untimed:"时间未知", point:"未圈定范围", segment:"片段"};
     const range = part.start == null ? (part.unscoped ? "未圈定范围" : labels[part.kind] || part.kind) : `${elapsed(part.start-startTime(),true)} – ${elapsed(part.end-startTime(),true)}`;
-    const title = part.id ? `${part.id}${part.summary ? " · " + part.summary : ""}` : `片段 ${index+1}`;
+    const title = part.summary || `片段 ${index+1}`;
     $("fragment-position").textContent = [`${title} · ${index+1} / ${item.fragments.length}`, part.track == null ? null : trackLabel(part.track), range].filter(Boolean).join(" · ");
     $("fragment-prev").disabled = index === 0;
     $("fragment-next").disabled = index+1 === item.fragments.length;
@@ -845,11 +843,17 @@
       const segs = el("div", undefined, "seg-list");
       const parts = item.fragments.length ? item.fragments : [{summary: "未圈定范围", unscoped: true}];
       parts.forEach((part, index) => {
-        const label = part.id
-          ? `${part.id} ${part.track != null ? trackLabel(part.track) + " " : ""}${part.summary || ""}`
-          : part.unscoped ? "未圈定范围" : `片段 ${index + 1}`;
-        const chip = button(label.trim(), () => startIssue(item, index), `seg-chip${part.unscoped ? " unscoped" : ""}`);
-        chip.title = label.trim();
+        const summary = part.summary || (part.unscoped ? "未圈定范围" : `片段 ${index + 1}`);
+        const chip = button("", () => startIssue(item, index), `seg-chip${part.unscoped ? " unscoped" : ""}`);
+        chip.append(el("span", summary, "seg-chip-summary"));
+        chip.title = summary;
+        if (part.track != null) {
+          const capture = captureById.get(part.capture_id);
+          const time = elapsed(part.start == null ? null : part.start - startTime(capture), true);
+          const meta = `${trackLabel(part.track, capture)} · ${time}`;
+          chip.append(el("span", meta, "seg-chip-meta mono"));
+          chip.title += ` · ${meta}`;
+        }
         segs.append(chip);
       });
       const actions = el("div", undefined, "card-actions");
@@ -885,8 +889,8 @@
     const next = parts.length ? `#${parts.join("&")}` : "";
     if (location.hash !== next) history.replaceState(null, "", next || location.pathname + location.search);
   }
-  function applyHash() {
-    const raw = location.hash.replace(/^#/, "");
+  function applyHash(hash = location.hash) {
+    const raw = hash.slice(1);
     if (!raw) return;
     const params = new URLSearchParams(raw.includes("=") ? raw : `issue=${raw}`);
     const issueId = params.get("issue");
@@ -970,6 +974,7 @@
       openEventDrawer(currentCapture.nodes[index], document.activeElement);
     }
   });
-  window.addEventListener("hashchange", applyHash);
-  chooseCapture(); renderIssueRail(); renderTraces(); applyHash();
+  window.addEventListener("hashchange", () => applyHash());
+  const initialHash = location.hash;
+  chooseCapture(); renderIssueRail(); renderTraces(); applyHash(initialHash);
 })();

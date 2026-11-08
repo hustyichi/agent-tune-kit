@@ -1,6 +1,6 @@
 "use strict";
 
-window.createSwimlanes = function createSwimlanes({el, button, elapsed, onPick, onZoom, onRoot, onFragment, onIssueBadge}) {
+window.createSwimlanes = function createSwimlanes({el, button, elapsed, startTime, onPick, onZoom, onRoot, onFragment, onIssueBadge}) {
   const chart = document.getElementById("lane-chart");
   const frame = document.getElementById("lane-scroll");
   const members = document.getElementById("lane-members");
@@ -76,8 +76,8 @@ window.createSwimlanes = function createSwimlanes({el, button, elapsed, onPick, 
     for (const {index, part, preview: isPreview} of bands) {
       const mark = button("", () => onFragment(index), `lane-fragment${isPreview ? " preview" : ""}`);
       mark.dataset.fragment = index;
-      const label = part.id ? `${part.id}${part.summary ? " · " + part.summary : ""}` : `片段 ${index + 1}`;
-      mark.title = `${label} · ${elapsed(part.start-start)} 至 ${elapsed(part.end-start)}`;
+      const label = part.summary || `片段 ${index + 1}`;
+      mark.title = `${label} · ${elapsed(part.start-start, true)} 至 ${elapsed(part.end-start, true)}`;
       mark.setAttribute("aria-label", mark.title);
       mark.setAttribute("aria-current", String(!isPreview && current === index));
       mark.style.left = `${pct(part.start)}%`; mark.style.width = `${Math.max(0.4, pct(part.end)-pct(part.start))}%`;
@@ -89,7 +89,7 @@ window.createSwimlanes = function createSwimlanes({el, button, elapsed, onPick, 
     const tracks = capture?.timeline.tracks || [];
     const nodes = capture?.nodes || [];
     const scoped = scope === null ? tracks : tracks.slice(scope, scope + 1);
-    const start = tracks.find(track => track.start !== null)?.start ?? 0;
+    const start = startTime(capture);
     const lo = scoped.find(track => track.start !== null)?.start;
     const hi = scoped.reduce((last, track) => Math.max(last, track.end ?? -Infinity), -Infinity);
     const pct = t => Math.max(0, Math.min(100, (t - lo) * 100 / Math.max(1, hi - lo)));

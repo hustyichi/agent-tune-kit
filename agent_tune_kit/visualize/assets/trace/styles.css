@@ -78,7 +78,9 @@ body.rail-collapsed #rail-toggle { transform: rotate(180deg) }
 .issue-card-body h3 { font-size: 13px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden }
 .issue-progress { font-size: 11px; color: var(--muted) }
 .seg-list { display: flex; flex-direction: column; gap: 3px; width: 100% }
-.seg-chip { display: block; width: 100%; text-align: left; border: 0; background: #fff8f1; color: var(--accent); font-size: 11px; padding: 4px 6px; border-radius: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.seg-chip { display: block; width: 100%; text-align: left; border: 0; background: #fff8f1; color: var(--accent); font-size: 11px; padding: 4px 6px; border-radius: 4px }
+.seg-chip-summary { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere }
+.seg-chip-meta { display: block; color: var(--muted); font-size: 10px; font-weight: 400 }
 .seg-chip[aria-current=true] { background: #ffd9b4; font-weight: 650 }
 .seg-chip.unscoped { color: #8a5a28; background: #f5efe6 }
 .card-actions { gap: 6px }
