@@ -1,19 +1,9 @@
 """Derive execution lanes and navigable evidence ranges from one retained capture."""
 
 from collections import defaultdict
-from datetime import datetime
 from math import inf
 
-
-def _milliseconds(value):
-    if isinstance(value, str):
-        try:
-            moment = datetime.fromisoformat(value)
-            if moment.utcoffset() is not None:
-                return round(moment.timestamp() * 1_000_000) / 1000
-        except (ValueError, OSError, OverflowError):
-            pass
-    return None
+from agent_tune_kit.traces.query import timestamp_ms
 
 
 def _branch_and_call_links(nodes, rows):
@@ -71,7 +61,7 @@ def build_timeline(capture):
         file = node["reference"]["path"]
         key = ("trace", trace_id) if trace_id is not None else ("file", file)
         track = groups.setdefault(key, {"trace_id": trace_id, "file": file, "roots": [], "rows": []})
-        start, end = _milliseconds(node.get("start_time")), _milliseconds(node.get("end_time"))
+        start, end = timestamp_ms(node.get("start_time")), timestamp_ms(node.get("end_time"))
         if node.get("end_time") and (end is None or start is None or end < start):
             start = None
         node["at"] = start

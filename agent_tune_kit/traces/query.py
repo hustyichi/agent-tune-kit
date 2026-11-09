@@ -10,12 +10,12 @@ from agent_tune_kit.errors import UserActionRequired
 from . import store
 
 
-def _milliseconds(value):
+def timestamp_ms(value):
+    """Parse epoch milliseconds, interpreting unzoned timestamps as machine-local time."""
     if isinstance(value, str):
         try:
             moment = datetime.fromisoformat(value)
-            if moment.utcoffset() is not None:
-                return round(moment.timestamp() * 1_000_000) / 1000
+            return round(moment.timestamp() * 1_000_000) / 1000
         except (ValueError, OSError, OverflowError):
             pass
     return None
@@ -180,17 +180,20 @@ def overview(session_dir, capture_id=None, offset=0, limit=100, trace_id=None):
     ordered = sorted(
         items,
         key=lambda item: (
-            _milliseconds(item.get("start_time")) is None,
-            _milliseconds(item.get("start_time")) if _milliseconds(item.get("start_time")) is not None else inf,
+            timestamp_ms(item.get("start_time")) is None,
+            timestamp_ms(item.get("start_time")) if timestamp_ms(item.get("start_time")) is not None else inf,
             str(item.get("trace_id") or ""),
             str(item.get("id") or ""),
         ),
     )
-    session_start = next((_milliseconds(item.get("start_time")) for item in ordered if _milliseconds(item.get("start_time")) is not None), None)
+    session_start = next(
+        (timestamp_ms(item.get("start_time")) for item in ordered if timestamp_ms(item.get("start_time")) is not None),
+        None,
+    )
 
     def row(item):
         summary = _summary(item)
-        at = _milliseconds(item.get("start_time"))
+        at = timestamp_ms(item.get("start_time"))
         summary["node_id"] = item.get("id")
         summary["parent_id"] = item.get("parent_id")
         summary["session_offset_ms"] = None if session_start is None or at is None else at - session_start

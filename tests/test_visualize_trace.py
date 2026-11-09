@@ -1,6 +1,7 @@
 import hashlib
 import json
 import re
+from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import quote
 
@@ -8,7 +9,8 @@ import pytest
 
 from agent_tune_kit.errors import UserActionRequired
 from agent_tune_kit.results.evidence import write_manifest
-from agent_tune_kit.traces import records, store
+from agent_tune_kit.traces import capture as trace_capture
+from agent_tune_kit.traces import query, records, store
 from agent_tune_kit.visualize import trace
 
 SOURCE = {"type": "local", "instance": "synthetic", "project": "demo", "environment": "test"}
@@ -409,6 +411,58 @@ def test_session_timeline_interleaves_traces_and_links_only_explicit_child_work(
     assert nodes[ordered[0]["paired"]] is ordered[3]
     assert nodes[ordered[3]["paired"]] is ordered[0]
     assert ordered[-2]["at"] is None and ordered[-1]["at"] is None
+
+
+def test_local_timestamps_keep_order_segments_and_preview(tmp_path):
+    start = datetime(2026, 11, 6, 5, 37, 39, 580000)
+    middle = datetime(2026, 11, 6, 5, 37, 40, 580000).astimezone(UTC).isoformat()
+    rows = [
+        {"id": "a-end", "startTime": "2026-11-06T05:37:41.580000", "endTime": "2026-11-06 05:37:41.709000"},
+        {"id": "middle", "startTime": middle},
+        {"id": "z-start", "startTime": "2026-11-06 05:37:39.580000"},
+        {"id": "invalid", "startTime": "not-a-time"},
+        {"id": "missing"},
+    ]
+    document = {"data": [{**row, "traceId": "TRACE-1", "sessionId": SESSION_ID} for row in rows]}
+    source = tmp_path / "observations.json"
+    source.write_text(json.dumps(document))
+    saved = trace_capture.import_session(tmp_path, SESSION_ID, SOURCE, source, retention={"allow_body": True})
+    session_dir = Path(saved["session_dir"])
+    overview = query.overview(session_dir)
+    assert [row["id"] for row in overview["rows"][:3]] == ["z-start", "middle", "a-end"]
+    assert [row["session_offset_ms"] for row in overview["rows"]] == [0, 1000, 2000, None, None]
+
+    refs = {node["id"]: node["reference"] for node in query.nodes(session_dir)}
+    issue = records.save_issue(
+        session_dir,
+        {
+            "title": "Local time range",
+            "description": "Mix local and explicitly zoned observations.",
+            "segments": [
+                {
+                    "summary": "Start through end",
+                    "scope": {"from": refs["z-start"], "to": refs["a-end"]},
+                    "evidence": [refs["middle"]],
+                }
+            ],
+        },
+    )
+    assert issue["segment_coverage"][0]["node_count"] == 3
+    assert issue["segment_coverage"][0]["duration_ms"] == 2129
+    before = digests(session_dir)
+    generated = trace.generate_trace(tmp_path, session_id=SESSION_ID, open_browser=False)
+    data = payload(Path(generated["output_path"]).read_text())
+    cap = data["captures"][0]
+    nodes = {node["id"]: node for node in cap["nodes"]}
+    assert nodes["z-start"]["at"] == round(start.timestamp() * 1_000_000) / 1000
+    assert nodes["invalid"]["at"] is None and nodes["missing"]["at"] is None
+    track = cap["timeline"]["tracks"][0]
+    assert track["end"] - track["start"] == 2129
+    part = data["issues"][0]["fragments"][0]
+    assert part["kind"] == "segment" and part["duration_ms"] == 2129
+    assert {cap["nodes"][i]["id"] for i in part["anchors"]} == {"z-start", "middle", "a-end"}
+    assert data["warnings"] == []
+    assert digests(session_dir) == before
 
 
 def test_issue_ranges_split_idle_gaps_branches_and_captures_and_keep_every_field(tmp_path):

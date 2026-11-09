@@ -3,24 +3,12 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime
 from math import inf
 
 from agent_tune_kit.errors import UserActionRequired
 
 from . import query
 from .store import validate_ref
-
-
-def _milliseconds(value):
-    if isinstance(value, str):
-        try:
-            moment = datetime.fromisoformat(value)
-            if moment.utcoffset() is not None:
-                return round(moment.timestamp() * 1_000_000) / 1000
-        except (ValueError, OSError, OverflowError):
-            pass
-    return None
 
 
 def _node_pointer(pointer):
@@ -74,8 +62,8 @@ def _index_nodes(session_dir):
         if isinstance(identity, (str, int)):
             slot = (node.get("trace_id"), identity)
             by_identity[slot] = index if slot not in by_identity else None
-        at = _milliseconds(node.get("start_time"))
-        until = _milliseconds(node.get("end_time"))
+        at = query.timestamp_ms(node.get("start_time"))
+        until = query.timestamp_ms(node.get("end_time"))
         if until is None or at is None or until < at:
             until = at
         node["at"] = at
@@ -218,9 +206,7 @@ def resolve_segments(session_dir, segments, *, assign_ids=True):
                     raise UserActionRequired(f"Segment {offset} from is later than to.")
                 low, high = rank[start_i], rank[end_i]
                 covered = {
-                    i
-                    for i in order[low : high + 1]
-                    if nodes[i].get("trace_id") == nodes[start_i].get("trace_id")
+                    i for i in order[low : high + 1] if nodes[i].get("trace_id") == nodes[start_i].get("trace_id")
                 }
             else:
                 lo, hi = start_at, end_at

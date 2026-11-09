@@ -126,6 +126,8 @@ atk trace show --session-id SESSION_ID --ref /path/to/reference.json --offset 0 
 
 `overview` returns rows in session time order. Optional `--trace-id` limits the page to one Trace. Each row includes `node_id`, parent identity, Trace ID and session-relative time so an analyst can choose segment endpoints without reading the raw export order.
 
+Observation timestamps may include a timezone offset or omit it. Values without an offset use the local timezone of the machine running ATK; explicit offsets are respected. This interpretation is shared by record ordering, Issue segments and the offline timeline. Missing or invalid timestamps remain unknown. Original evidence timestamps are preserved.
+
 Use returned stable references rather than mutable external filenames. To create a reference explicitly:
 
 ```sh
