@@ -125,7 +125,7 @@ REQUIRED_FILES += TRACE_SKILL_FILES + [
 ]
 
 PER_FILE_PHRASES = {
-    ".codex-plugin/plugin.json": ['"name": "agent-tune-kit"', '"version": "2.3.0"', '"skills": "./skills/"'],
+    ".codex-plugin/plugin.json": ['"name": "agent-tune-kit"', '"version": "2.3.1"', '"skills": "./skills/"'],
     "skills/atk-dataset/SKILL.md": [
         "## Purpose",
         "## Inputs",
