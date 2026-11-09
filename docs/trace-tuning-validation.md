@@ -46,10 +46,24 @@ The generated page was 13,523,871 bytes. The ten archived source and processing 
 
 - **Real Langfuse v4 download:** not performed. An actual deployment/project, credential environment references and session time bounds were not supplied. Official API documentation and synthetic HTTP fixtures do not replace deployment acceptance. No v3 downloader is claimed.
 - **Business repair and effect:** no production/business implementation was changed or replayed. Record lifecycle, fixed-candidate loading gates and per-issue conclusions passed automated checks; a real executable business issue still needs diagnosis, authorized repair, actual candidate loading and independent effect evidence.
-- **Host activation and release:** no global CLI/plugin reinstall, new-host Skill activation, version bump, publication or deployment was performed. Isolated installed-resource smoke tests do not establish activation in this existing chat.
+- **Host activation and release:** the local plugin payload was refreshed on 2026-11-09 as recorded below; new-host Skill activation, version bump, publication and deployment remain unverified or unperformed. On-disk installation checks do not establish activation in an existing chat.
 - **Platforms:** concurrency locking was exercised on macOS. The conditional Windows locking branch has not been run on Windows.
 
 Implementation support is available locally; the design's complete real-service/business acceptance definition remains open on the items above.
+
+## Problem descriptions and causal alignment (2026-11-09)
+
+The detection Skill now requires a concrete object and observable mismatch before supporting chronology, with enough expected/actual context to recognize the problem independently. The diagnosis Skill reconciles that description with the live issue, requires each cause and fix to explain the same problem, separates independent defects without proven causal links, and saves any clearer final synthesis into the archive. Missing verification, correct rejection, recovery and uncertain attribution remain distinct. These are host judgment instructions; no schema, runtime, UI or dependency change was added.
+
+An independent agent applied the revised Skills to five existing issues in a user-selected private archive, then the primary agent reviewed the drafts against the references. The independent agent was not given the proposed rewritten answers or chat summary, but could read the existing diagnoses and experiments as required for revision. This is an existing-case revision exercise, not blind first-pass detection or a new-host activation test.
+
+- All five descriptions now state the concrete mismatch before attribution. Corresponding diagnoses retain unresolved causes instead of substituting nearby implementation defects. One independently evidenced defect was split into a sixth linked issue while preserving the original workflow issue.
+- Reference review corrected an inaccurate historical recovery statement and an evidence pointer to an empty field. The new partial detection record retains the checked scope, source Skill hashes, reviewed checkouts, semantic assessments and limitations. No Agent replay or historical experiment rerun was claimed.
+- Five original diagnosis files remain byte-identical. All 22 baseline files outside the explicitly updated issue records, session metadata and preview retain their hashes; this includes the raw capture, prior detection, experiments and three unrelated issue records. The archive now has nine issues and eleven diagnoses, with prior descriptions retained in revision history.
+- The regenerated preview returned no warnings. Its issue records and all eleven diagnosis bodies match the archive. All 32 segment citations and 19 source links in the latest diagnoses resolve. This validates content and reference fidelity; this revision was not exercised in a browser.
+- The source passed **377 pytest tests**, skill-pack validation (90 files and 15 templates), frontmatter validation for both changed Skills, and `git diff --check`. The local plugin installation and personal cache were refreshed through the supported installer and checked against the source payload; this does not refresh instructions already loaded into a chat.
+
+Private archive records remain in the downstream project's ignored `.atk` directory. This exercise establishes clearer descriptions and aligned attribution for the selected cases, not general detection quality, business repair effects or production causality.
 
 ## External protocol sources
 
