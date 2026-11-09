@@ -30,12 +30,13 @@ One immutable issue diagnosis Markdown combining facts, hypotheses, causal expla
 
 ## Diagnosis structure
 
-Use a short title and four sections in the user's language:
+Start with these three level-two Markdown headings in order. Use the Chinese headings for Chinese records and the English headings otherwise. Write the body in the user's language.
 
-1. **Conclusion and next step.** Summarize the symptom, observed impact, strongest finding and immediate action in a few sentences.
-2. **Attribution and evidence.** For each attribution, state the finding, cite the trace evidence next to it (for example, `ISSUE-001/S2`), explain what the inspected implementation contributes, and mark the conclusion's limits. Where code is relevant, verify the repository, revision, symbol and repository-relative `path:line` before citing them. Explain whether the code supports the cause, explains propagation, or accounts for an evidence gap. Cite input and result directly when they establish the cause. State the missing evidence when attribution remains uncertain.
-3. **Repair and verification.** Tie each proposed change or evidence-gathering step to a finding and give observable pass criteria. Separate the local mechanism check from the effect in a comparable replay.
-4. **Evidence appendix.** Keep exact pointers, digests, experiment conditions and results, and reviewed revisions here. Record each repository's commit once and note relevant working-tree changes. Distinguish a historical deployment revision from the checkout used to explain it.
+1. **异常描述 / Issue description.** Use one or two sentences for the failed step, observed impact and recovery.
+2. **异常根因 / Root cause.** Use one short paragraph or bullet per independent cause. Connect the triggering input, actual behavior and outcome. Put the supporting trace citation (for example, `ISSUE-001/S2`) and a short source link beside the claim. Verify the checkout, symbol and line before citing code. Use inline Markdown with a project-root-relative destination, for example `[Project setup](src/project.py#L42)`. Percent-encode spaces and reserved characters in paths. Distinguish the inspected checkout from the historical runtime and state any missing evidence that limits the finding.
+3. **最小修复方案 / Minimal fix.** Match each proposed change to a cause. Name the call site or behavior to change and give an observable pass criterion. When attribution is uncertain, give the smallest check that would resolve it. Distinguish local mechanism checks from comparable replays.
+
+Keep exact pointers, node IDs, SHA-256 digests, experiment details and reviewed revisions in the archived references or experiment records. Refer to them by short labels in the diagnosis body.
 
 ## Failure behavior
 

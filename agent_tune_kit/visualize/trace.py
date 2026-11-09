@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import re
 from datetime import datetime
 from importlib import resources
 from pathlib import Path
+from urllib.parse import quote, unquote, urlsplit
 from zoneinfo import ZoneInfo
 
 from agent_tune_kit.errors import UserActionRequired
@@ -18,6 +21,8 @@ from .timeline import build_timeline, legacy_point_fragments, recorded_segments
 
 ASSETS = resources.files("agent_tune_kit.visualize").joinpath("assets", "trace")
 RECORD_LIMIT = 1024 * 1024
+# shortcut: collect plain inline destinations, use a shared parser if reference-style links are needed.
+INLINE_LINK = re.compile(r"\]\((?:<([^<>\n]+)>|([^\s)]+))\)")
 
 
 def _reference_key(ref):
@@ -262,6 +267,44 @@ def build_trace_data(project_root, *, session_id, source=None):
     }
 
 
+def _diagnosis_source_links(issues, project_root, output):
+    root = Path(project_root).resolve()
+    links = {}
+    for item in issues:
+        for diagnosis in item["diagnoses"]:
+            # The renderer uses markdown-it to decide which destinations actually become links.
+            for match in INLINE_LINK.finditer(diagnosis.get("text", "")):
+                destination = match[1] or match[2]
+                try:
+                    url = urlsplit(destination)
+                    if url.scheme or url.netloc or url.query or not url.path:
+                        continue
+                    path = unquote(url.path)
+                    line = url.fragment
+                    if path.startswith("/") and not line:
+                        legacy = re.fullmatch(r"(.+):([1-9][0-9]*)", path)
+                        if legacy:
+                            path, line = legacy[1], f"L{legacy[2]}"
+                    if line and not re.fullmatch(r"L[1-9][0-9]*", line):
+                        continue
+                    candidate = root / path
+                    original = candidate.relative_to(root)
+                    resolved = candidate.resolve(strict=True)
+                    relative = resolved.relative_to(root)
+                    if any(part.startswith(".") for part in (*original.parts, *relative.parts)):
+                        continue
+                    if not resolved.is_file():
+                        continue
+                except (OSError, RuntimeError, ValueError):
+                    continue
+                try:
+                    target = quote(Path(os.path.relpath(resolved, output.parent.resolve())).as_posix(), safe="/")
+                except ValueError:
+                    target = resolved.as_uri()
+                links[destination] = target + (f"#{line}" if line else "")
+    return links
+
+
 def generate_trace(project_root=".", *, session_id, source=None, output_path=None, overwrite=False, open_browser=True):
     session_dir, data = build_trace_data(project_root, session_id=session_id, source=source)
     output = Path(output_path).expanduser().absolute() if output_path else session_dir / "preview.html"
@@ -278,6 +321,7 @@ def generate_trace(project_root=".", *, session_id, source=None, output_path=Non
         )
     if output.exists() and not overwrite:
         raise UserActionRequired(f"Trace preview already exists: {output}; use --overwrite to regenerate it.")
+    data["diagnosis_source_links"] = _diagnosis_source_links(data["issues"], project_root, output)
     template = ASSETS.joinpath("page.html").read_text(encoding="utf-8")
     page = template.replace("__STYLES__", ASSETS.joinpath("styles.css").read_text(encoding="utf-8"))
     page = page.replace("__LANES__", neutralize_script_close(ASSETS.joinpath("lanes.js").read_text(encoding="utf-8")))

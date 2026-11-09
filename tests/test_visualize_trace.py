@@ -2,6 +2,7 @@ import hashlib
 import json
 import re
 from pathlib import Path
+from urllib.parse import quote
 
 import pytest
 
@@ -105,6 +106,44 @@ def test_diagnosis_preview_removes_only_the_generated_snapshot(tmp_path):
     ]
     assert data["record_digests"][saved["ref"]["path"]] == saved["ref"]["sha256"]
     assert digests(session_dir) == before
+
+
+def test_diagnosis_source_links_stay_within_project(tmp_path):
+    project = tmp_path / "project"
+    project.mkdir()
+    session_dir = Path(capture(project)["session_dir"])
+    evidence = store.evidence_ref(session_dir, "captures/CAP-001/raw/trace.json", "/trace/output")
+    records.save_issue(
+        session_dir, {"id": "ISSUE-001", "title": "Greeting", "description": "Mismatch", "evidence": [evidence]}
+    )
+    source = project / "src" / "file (trace) #1.py"
+    source.parent.mkdir()
+    source.write_text("# source", encoding="utf-8")
+    outside = tmp_path / "private.py"
+    outside.write_text("# private", encoding="utf-8")
+    (project / "escape.py").symlink_to(outside)
+    (project / ".private.py").write_text("# private", encoding="utf-8")
+    relative = quote(source.relative_to(project).as_posix(), safe="/") + "#L2"
+    legacy = quote(source.as_posix(), safe="/") + ":2"
+    body = f"""## Issue description
+
+Mismatch.
+
+## Root cause
+
+[Current]({relative}) [Legacy]({legacy})
+[Escaped](escape.py#L2) [Hidden](.private.py#L2) [Missing](missing.py#L2)
+[Outside](../private.py#L2) [Remote](//example.com/a.py#L2) [Scheme](file:///private.py)
+
+## Minimal fix
+
+Preserve punctuation.
+"""
+    records.save_diagnosis(session_dir, "ISSUE-001", body)
+    output = project / "review" / "preview.html"
+    trace.generate_trace(project, session_id=SESSION_ID, output_path=output, open_browser=False)
+    links = payload(output.read_text())["diagnosis_source_links"]
+    assert links == {relative: f"../{relative}", legacy: f"../{relative}"}
 
 
 def test_all_issue_stages_and_shared_change_show_each_verification(tmp_path):

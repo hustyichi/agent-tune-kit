@@ -10,6 +10,7 @@
   const section = (title, value) => { const node = el("section", undefined, "detail-section"); node.append(el("h3", title)); if (value !== undefined) node.append(pre(value)); return node; };
   const markdown = window.markdownit({html:false});
   markdown.renderer.rules.image = (tokens, index) => markdown.utils.escapeHtml(tokens[index].content);
+  const sourceLinks = new Map(Object.entries(data.diagnosis_source_links).map(([href, target]) => [markdown.normalizeLink(href), target]));
   const options = (select, values, all) => { select.replaceChildren(); if (all !== undefined) { const item = el("option", all); item.value = ""; select.append(item); } for (const value of values) { const item = el("option", value); item.value = value; select.append(item); } };
   const references = value => { const result = []; const seen = new Set(); const walk = item => { if (Array.isArray(item)) item.forEach(walk); else if (item && typeof item === "object") { if (typeof item.path === "string" && typeof item.sha256 === "string") { const key = refKey(item); if (!seen.has(key)) { seen.add(key); result.push(item); } } else Object.values(item).forEach(walk); } }; walk(value); return result; };
   const RAIL_KEY = "atk-trace-rail-collapsed";
@@ -191,17 +192,57 @@
     appendReferences(card, record);
     return card;
   };
+  function appendDiagnoses(item) {
+    const container = $("drawer-content");
+    if (!item.diagnoses.length) {
+      container.append(el("p", "尚未记录诊断与修复／验证方案。", "empty"));
+      return;
+    }
+    for (const [index, diagnosis] of item.diagnoses.slice().reverse().entries()) {
+      const body = diagnosis.error ? el("p", diagnosis.error, "warning") : renderDiagnosis(diagnosis.text);
+      const headings = [...body.children].filter(node => node.tagName === "H2").map(node => node.textContent);
+      const structured = headings.join("|") === "异常描述|异常根因|最小修复方案"
+        || headings.join("|") === "Issue description|Root cause|Minimal fix";
+      if (index === 0 && structured) {
+        container.append(body);
+        continue;
+      }
+      if (index === 0) {
+        const description = section("异常描述");
+        description.append(el("p", item.record.description || item.record.title));
+        for (const [position, part] of item.fragments.entries()) {
+          const cite = button(part.id || `片段 ${position + 1}`, () => openDiagnosisSegment(item, position, cite), "diagnosis-cite");
+          description.append(cite);
+        }
+        container.append(description);
+      }
+      const details = el("details", undefined, "detail-section");
+      const name = diagnosis.reference.path.split("/").pop();
+      details.append(el("summary", `展开原诊断 · ${name}`), body);
+      container.append(details);
+    }
+  }
   function renderDiagnosis(text) {
     const body = el("div", undefined, "diagnosis-markdown");
     const template = document.createElement("template");
     template.innerHTML = markdown.render(text);
     for (const link of template.content.querySelectorAll("a[href]")) {
       const href = link.getAttribute("href");
-      if (/^https?:\/\//i.test(href)) {
+      const source = location.protocol === "file:" && sourceLinks.get(href);
+      if (source || /^https?:\/\//i.test(href)) {
+        if (source) link.setAttribute("href", source);
         link.target = "_blank";
         link.rel = "noopener noreferrer";
       } else {
-        link.replaceWith(...link.childNodes, " ", el("code", href));
+        let path = href;
+        try { path = decodeURI(href); } catch { /* Keep malformed escape sequences as text. */ }
+        const locationText = el("code", path);
+        locationText.hidden = true;
+        const copy = button("复制路径", async () => {
+          try { await navigator.clipboard.writeText(path); copy.textContent = "已复制"; }
+          catch { locationText.hidden = false; }
+        });
+        link.replaceWith(...link.childNodes, " ", el("code", path.split("/").pop() || path), copy, locationText);
       }
     }
     for (const table of template.content.querySelectorAll("table")) {
@@ -247,8 +288,11 @@
       scopeBefore = priorScope;
       restoreView(view);
       showIssue(sourceIssue, "diagnoses");
+      const restored = drawerContent.querySelectorAll(".diagnosis-cite")[citeIndex];
+      const details = restored?.closest("details");
+      if (details) details.open = true;
       drawerContent.scrollTop = top;
-      drawerContent.querySelectorAll(".diagnosis-cite")[citeIndex]?.focus({preventScroll:true});
+      restored?.focus({preventScroll:true});
     };
     startIssue(item, index);
     origin = null;
@@ -296,8 +340,7 @@
       return;
     }
     if (stage === "diagnoses") {
-      if (!item.diagnoses.length) $("drawer-content").append(el("p", "尚未记录诊断与修复／验证方案。", "empty"));
-      for (const diagnosis of item.diagnoses.slice().reverse()) $("drawer-content").append(recordCard(diagnosis.reference.path, diagnosis));
+      appendDiagnoses(item);
     } else if (stage === "changes") {
       if (!item.changes.length) $("drawer-content").append(el("p", "尚未记录实际修改。局部检查不代表 Agent 效果验证。", "empty"));
       for (const change of item.changes) $("drawer-content").append(recordCard(change.reference.path, change));
