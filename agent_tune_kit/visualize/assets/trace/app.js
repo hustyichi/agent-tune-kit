@@ -8,12 +8,15 @@
   const button = (text, action, className) => { const node = el("button", text, className); node.type = "button"; node.onclick = action; return node; };
   const pre = value => el("pre", pretty(value));
   const section = (title, value) => { const node = el("section", undefined, "detail-section"); node.append(el("h3", title)); if (value !== undefined) node.append(pre(value)); return node; };
+  const markdown = window.markdownit({html:false});
+  markdown.renderer.rules.image = (tokens, index) => markdown.utils.escapeHtml(tokens[index].content);
   const options = (select, values, all) => { select.replaceChildren(); if (all !== undefined) { const item = el("option", all); item.value = ""; select.append(item); } for (const value of values) { const item = el("option", value); item.value = value; select.append(item); } };
   const references = value => { const result = []; const seen = new Set(); const walk = item => { if (Array.isArray(item)) item.forEach(walk); else if (item && typeof item === "object") { if (typeof item.path === "string" && typeof item.sha256 === "string") { const key = refKey(item); if (!seen.has(key)) { seen.add(key); result.push(item); } } else Object.values(item).forEach(walk); } }; walk(value); return result; };
   const RAIL_KEY = "atk-trace-rail-collapsed";
   let currentCapture = data.captures.at(-1) || null;
   let returnFocus = null, activeIssue = null, issueStage = "issue", drawerMode = null;
   let selectedNode = null, origin = null, issueTrigger = null;
+  let returnToDiagnosis = null;
   let investigation = null, scopeBefore = null, previewIssue = null, expandedFolds = new Set(), railFilter = null;
   const captureById = new Map(data.captures.map(c => [c.id, c]));
   const issueById = new Map(data.issues.map(item => [item.record.id, item]));
@@ -107,6 +110,7 @@
     $("drawer").hidden = true;
     drawerMode = null;
     activeIssue = null; origin = null;
+    returnToDiagnosis = null;
     if (restoreFocus && returnFocus?.isConnected) returnFocus.focus({preventScroll:true});
     else if (restoreFocus && investigation) $("fragment-fields").focus({preventScroll:true});
     else if (restoreFocus && issueTrigger) document.querySelector(`[data-issue-id="${CSS.escape(issueTrigger)}"]`)?.focus({preventScroll:true});
@@ -171,10 +175,8 @@
     const content = record.record || record.text;
     if (content !== undefined) {
       if (typeof content === "string") {
-        const body = el("div");
-        body.append(pre(content));
-        linkSegmentCites(body, content);
-        card.append(body);
+        card.firstElementChild.classList.add("diagnosis-path");
+        card.append(renderDiagnosis(content));
       } else {
         const summary = [];
         for (const key of ["status", "target_issues", "candidate_loaded"]) if (content[key] !== undefined) summary.push(`${key}: ${pretty(content[key])}`);
@@ -189,22 +191,71 @@
     appendReferences(card, record);
     return card;
   };
-  function linkSegmentCites(container, text) {
-    const matches = String(text || "").match(/ISSUE-\d+\/S\d+/g) || [];
-    if (!matches.length) return;
-    const box = el("p", undefined, "breadcrumb");
-    box.append(el("span", "片段引用：", "muted"));
-    for (const cite of [...new Set(matches)]) {
-      box.append(button(cite, () => {
-        const [issueId, seg] = cite.split("/");
-        const item = issueById.get(issueId);
-        if (!item) return;
-        startIssue(item, item.fragments.findIndex(part => part.id === seg));
-      }));
+  function renderDiagnosis(text) {
+    const body = el("div", undefined, "diagnosis-markdown");
+    const template = document.createElement("template");
+    template.innerHTML = markdown.render(text);
+    for (const link of template.content.querySelectorAll("a[href]")) {
+      const href = link.getAttribute("href");
+      if (/^https?:\/\//i.test(href)) {
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+      } else {
+        link.replaceWith(...link.childNodes, " ", el("code", href));
+      }
     }
-    container.prepend(box);
+    for (const table of template.content.querySelectorAll("table")) {
+      const scroll = el("div", undefined, "diagnosis-table");
+      scroll.tabIndex = 0;
+      scroll.setAttribute("aria-label", "诊断表格");
+      table.before(scroll);
+      scroll.append(table);
+    }
+    body.append(template.content);
+    const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    while (walker.nextNode()) {
+      const node = walker.currentNode;
+      if (node.data.includes("ISSUE-") && !node.parentElement.closest("pre, a")) nodes.push(node);
+    }
+    for (const node of nodes) {
+      const parts = document.createDocumentFragment();
+      let offset = 0;
+      for (const match of node.data.matchAll(/\b(ISSUE-\d+)\/(S\d+)\b/g)) {
+        const item = issueById.get(match[1]);
+        const index = item?.fragments.findIndex(part => part.id === match[2]);
+        if (index === undefined || index < 0) continue;
+        const cite = button(match[0], () => openDiagnosisSegment(item, index, cite), "diagnosis-cite");
+        parts.append(node.data.slice(offset, match.index), cite);
+        offset = match.index + match[0].length;
+      }
+      if (offset) {
+        parts.append(node.data.slice(offset));
+        node.replaceWith(parts);
+      }
+    }
+    return body;
+  }
+  function openDiagnosisSegment(item, index, trigger) {
+    const drawerContent = $("drawer-content");
+    const sourceIssue = activeIssue, view = rememberView(), priorScope = scopeBefore;
+    const previous = investigation && {...investigation};
+    const top = drawerContent.scrollTop;
+    const citeIndex = [...drawerContent.querySelectorAll(".diagnosis-cite")].indexOf(trigger);
+    returnToDiagnosis = () => {
+      investigation = previous;
+      scopeBefore = priorScope;
+      restoreView(view);
+      showIssue(sourceIssue, "diagnoses");
+      drawerContent.scrollTop = top;
+      drawerContent.querySelectorAll(".diagnosis-cite")[citeIndex]?.focus({preventScroll:true});
+    };
+    startIssue(item, index);
+    origin = null;
+    showFragmentEvidence();
   }
   const showIssue = (item, stage = "issue") => {
+    returnToDiagnosis = null;
     if (!activeIssue || activeIssue.record.id !== item.record.id) {
       origin = null;
       issueTrigger = item.record.id;
@@ -246,7 +297,7 @@
     }
     if (stage === "diagnoses") {
       if (!item.diagnoses.length) $("drawer-content").append(el("p", "尚未记录诊断与修复／验证方案。", "empty"));
-      for (const diagnosis of item.diagnoses) $("drawer-content").append(recordCard(diagnosis.reference.path, diagnosis));
+      for (const diagnosis of item.diagnoses.slice().reverse()) $("drawer-content").append(recordCard(diagnosis.reference.path, diagnosis));
     } else if (stage === "changes") {
       if (!item.changes.length) $("drawer-content").append(el("p", "尚未记录实际修改。局部检查不代表 Agent 效果验证。", "empty"));
       for (const change of item.changes) $("drawer-content").append(recordCard(change.reference.path, change));
@@ -784,6 +835,7 @@
     const part = item.fragments[index];
     activeIssue = item; issueStage = "fragment"; issueTrigger = item.record.id;
     openDrawer(`${item.record.id} · ${part.id || `片段 ${index+1}`} 的证据`, "issue");
+    if (returnToDiagnosis) $("drawer-content").append(button("← 返回诊断", returnToDiagnosis));
     if (part.summary) $("drawer-content").append(el("p", part.summary, "muted"));
     function add(title, positions) {
       if (!positions?.length) return;

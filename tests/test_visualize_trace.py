@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from agent_tune_kit.errors import UserActionRequired
+from agent_tune_kit.results.evidence import write_manifest
 from agent_tune_kit.traces import records, store
 from agent_tune_kit.visualize import trace
 
@@ -76,6 +77,34 @@ def test_capture_only_preview_is_safe_offline_and_read_only(tmp_path):
     assert "fetch(" not in html and "XMLHttpRequest" not in html
     assert digests(session_dir) == before
     assert not (tmp_path / ".atk/results").exists()
+
+
+def test_diagnosis_preview_removes_only_the_generated_snapshot(tmp_path):
+    session_dir = Path(capture(tmp_path)["session_dir"])
+    evidence = store.evidence_ref(session_dir, "captures/CAP-001/raw/trace.json", "/trace/output")
+    records.save_issue(
+        session_dir, {"id": "ISSUE-001", "title": "Greeting", "description": "Mismatch", "evidence": [evidence]}
+    )
+    body = "# Finding\n\n<!-- atk-issue-snapshot {} -->\n\n**Repair:** Preserve punctuation."
+    saved = records.save_diagnosis(session_dir, "ISSUE-001", body)
+    issue_path = session_dir / "issues/ISSUE-001/issue.json"
+    issue = records.load_issue(session_dir, "ISSUE-001")
+    legacy_path = "issues/ISSUE-001/diagnoses/DIA-legacy.md"
+    legacy = "# Legacy finding\n\nPlain Markdown without a snapshot."
+    (session_dir / legacy_path).write_text(legacy, encoding="utf-8")
+    legacy_ref = store.evidence_ref(session_dir, legacy_path)
+    issue["diagnoses"].append(legacy_ref)
+    write_manifest(issue_path, issue)
+
+    before = digests(session_dir)
+    output = trace.generate_trace(tmp_path, session_id=SESSION_ID, open_browser=False)
+    data = payload(Path(output["output_path"]).read_text())
+    assert data["issues"][0]["diagnoses"] == [
+        {"reference": saved["ref"], "text": body},
+        {"reference": legacy_ref, "text": legacy},
+    ]
+    assert data["record_digests"][saved["ref"]["path"]] == saved["ref"]["sha256"]
+    assert digests(session_dir) == before
 
 
 def test_all_issue_stages_and_shared_change_show_each_verification(tmp_path):

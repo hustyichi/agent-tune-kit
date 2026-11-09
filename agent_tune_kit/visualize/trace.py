@@ -105,13 +105,16 @@ def build_trace_data(project_root, *, session_id, source=None):
         summaries[relative] = hashlib.sha256(path.read_bytes()).hexdigest()
         return json.loads(text)
 
-    def read_ref(ref, *, markdown=False):
+    def read_diagnosis(ref):
         path = store.validate_ref(session_dir, ref)
         text, truncated = read_text_bounded(path, RECORD_LIMIT)
         if truncated:
             raise ValueError(f"Record exceeds preview limit: {ref['path']}")
         summaries[ref["path"]] = ref["sha256"]
-        return {"reference": ref, "text": text} if markdown else json.loads(text)
+        first, _, body = text.partition("\n")
+        if first.startswith("<!-- atk-issue-snapshot {") and first.rstrip("\r").endswith("} -->"):
+            text = body.lstrip("\r\n")
+        return {"reference": ref, "text": text}
 
     captures = []
     if "archive" in session:
@@ -140,7 +143,7 @@ def build_trace_data(project_root, *, session_id, source=None):
             item = {"record": issue, "diagnoses": [], "changes": []}
             for ref in issue.get("diagnoses", []):
                 try:
-                    item["diagnoses"].append(read_ref(ref, markdown=True))
+                    item["diagnoses"].append(read_diagnosis(ref))
                 except (OSError, ValueError, UserActionRequired) as exc:
                     item["diagnoses"].append({"reference": ref, "error": str(exc)})
             for ref in issue.get("changes", []):
@@ -278,6 +281,10 @@ def generate_trace(project_root=".", *, session_id, source=None, output_path=Non
     template = ASSETS.joinpath("page.html").read_text(encoding="utf-8")
     page = template.replace("__STYLES__", ASSETS.joinpath("styles.css").read_text(encoding="utf-8"))
     page = page.replace("__LANES__", neutralize_script_close(ASSETS.joinpath("lanes.js").read_text(encoding="utf-8")))
+    vendor = ASSETS.joinpath("vendor")
+    notice = vendor.joinpath("markdown-it.LICENSE").read_text(encoding="utf-8")
+    markdown = vendor.joinpath("markdown-it.min.js").read_text(encoding="utf-8")
+    page = page.replace("__MARKDOWN__", neutralize_script_close(f"/*\n{notice}\n*/\n{markdown}"))
     page = page.replace("__APP__", neutralize_script_close(ASSETS.joinpath("app.js").read_text(encoding="utf-8")))
     page = page.replace("__DATA__", safe_json_for_html(data))
     write_text_atomic(output, page)

@@ -119,6 +119,8 @@ REQUIRED_FILES += TRACE_SKILL_FILES + [
     "agent_tune_kit/visualize/assets/trace/page.html",
     "agent_tune_kit/visualize/assets/trace/styles.css",
     "agent_tune_kit/visualize/assets/trace/app.js",
+    "agent_tune_kit/visualize/assets/trace/vendor/markdown-it.min.js",
+    "agent_tune_kit/visualize/assets/trace/vendor/markdown-it.LICENSE",
     "docs/trace-tuning.md",
 ]
 

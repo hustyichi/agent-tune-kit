@@ -24,9 +24,18 @@ One immutable issue diagnosis Markdown combining facts, hypotheses, causal expla
 1. Read session status, target issue and existing diagnoses/changes/verifications. From a known symptom, locate/import the identified session and bind an issue with evidence; do not require full-session detect or fabricate identity.
 2. Inspect original references and relevant code/Prompt/tool settings and runtime provenance. Current checkout does not prove historical runtime. Separate a symptom's origin from propagation through native links, not timing alone.
 3. Investigate competing explanations as needed for the goal. Run useful authorized experiments, recording running state before execution, actual output and limits. On resumption inspect logs, process/run IDs and artifacts before repeating a possibly completed operation.
-4. Write one diagnosis with issue-description snapshot, inspected evidence, facts, hypotheses/alternatives, gaps, concrete repair or evidence-gathering plan, affected code and verification criteria. Cite recorded segments as `ISSUE-001/S2` when explaining where a cause appears. Explain what distinguishes competing causes. Insufficient evidence may legitimately yield a supplement-evidence plan.
+4. Write the diagnosis in the structure below. The save command adds the issue snapshot.
 5. Save with `atk trace diagnose --session-id <id> --issue-id <issue> --file <markdown-file> --json`, optionally `--diagnosis-id`. Revisions create new files. Do not overwrite an adopted diagnosis or silently alter an earlier change's rationale.
 6. Deliver cause/uncertainty, record path and next action. Continue to optimize only when repair is requested and in scope. Ask only for a concrete necessary ambiguity or changed authorization.
+
+## Diagnosis structure
+
+Use a short title and four sections in the user's language:
+
+1. **Conclusion and next step.** Summarize the symptom, observed impact, strongest finding and immediate action in a few sentences.
+2. **Attribution and evidence.** For each attribution, state the finding, cite the trace evidence next to it (for example, `ISSUE-001/S2`), explain what the inspected implementation contributes, and mark the conclusion's limits. Where code is relevant, verify the repository, revision, symbol and repository-relative `path:line` before citing them. Explain whether the code supports the cause, explains propagation, or accounts for an evidence gap. Cite input and result directly when they establish the cause. State the missing evidence when attribution remains uncertain.
+3. **Repair and verification.** Tie each proposed change or evidence-gathering step to a finding and give observable pass criteria. Separate the local mechanism check from the effect in a comparable replay.
+4. **Evidence appendix.** Keep exact pointers, digests, experiment conditions and results, and reviewed revisions here. Record each repository's commit once and note relevant working-tree changes. Distinguish a historical deployment revision from the checkout used to explain it.
 
 ## Failure behavior
 

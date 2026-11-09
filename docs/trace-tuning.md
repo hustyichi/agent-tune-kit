@@ -225,6 +225,8 @@ Select an Issue in the left rail (or a segment under it). Recorded segments over
 
 Open an Event to inspect it in the overlay drawer (structured messages, paired tool calls, JSON tree, cited fields, copyable reference). Arrow keys move to the previous or next Event while the drawer stays open. Open Issue detail from the rail for diagnoses, changes and verifications; Markdown cites such as `ISSUE-001/S2` jump to that segment. **会话信息** in the top bar covers source, capture scope and detection coverage. Hash deep links (`#issue=…&seg=…`, `#event=…`) restore position. The page stays offline and read-only. Regenerate it to see subsequent archive changes. Field previews can be truncated and are labeled accordingly. Layout details are in [trace-swimlane-design.md](trace-swimlane-design.md).
 
+The diagnosis tab renders the Markdown body and shows the newest diagnosis first. Select an inline segment citation to inspect its evidence, then choose **返回诊断** to continue reading. The issue snapshot stays in the original file and is omitted from the preview. Local code locations remain selectable text. HTTP and HTTPS links open when clicked.
+
 ## Archive layout and separation
 
 ```text
