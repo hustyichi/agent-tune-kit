@@ -317,6 +317,11 @@
       const description = section("问题描述");
       description.append(el("p", issue.description || issue.title));
       $("drawer-content").append(description);
+      if (typeof issue.selection_reason === "string" && issue.selection_reason.trim()) {
+        const reason = section("保留理由");
+        reason.append(el("p", issue.selection_reason));
+        $("drawer-content").append(reason);
+      }
       const segments = issue.segments || [];
       if (segments.length) {
         const box = section("关联片段");
@@ -923,7 +928,7 @@
       box.append(note);
     }
     if (!filtered.length) {
-      box.append(el("p", data.issues.length ? "没有符合筛选条件的问题。" : data.session.detections.length ? "已保存检测记录，尚无已记录问题。" : "尚未进行异常识别。", "empty"));
+      box.append(el("p", data.issues.length ? "没有符合筛选条件的问题。" : data.session.detections.length ? "已保存检测记录，尚无保留问题；请查看检查范围与缺口。" : "尚未进行异常识别。", "empty"));
       return;
     }
     for (const item of filtered) {

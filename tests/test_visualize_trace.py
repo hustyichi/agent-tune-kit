@@ -108,6 +108,25 @@ def test_diagnosis_preview_removes_only_the_generated_snapshot(tmp_path):
     assert digests(session_dir) == before
 
 
+def test_preview_keeps_selection_reason_as_data_and_supports_legacy_issue(tmp_path):
+    session_dir = Path(capture(tmp_path)["session_dir"])
+    evidence = store.evidence_ref(session_dir, "captures/CAP-001/raw/trace.json", "/trace/output")
+    reason = 'Repeated failure; </script><img src=x onerror="alert(1)">'
+    records.save_issue(
+        session_dir,
+        {"title": "Selected", "description": "Observed failure", "selection_reason": reason, "evidence": [evidence]},
+    )
+    records.save_issue(session_dir, {"title": "Legacy", "description": "Older issue", "evidence": [evidence]})
+    before = digests(session_dir)
+    result = trace.generate_trace(tmp_path, session_id=SESSION_ID, open_browser=False)
+    html = Path(result["output_path"]).read_text()
+    issues = payload(html)["issues"]
+    assert issues[0]["record"]["selection_reason"] == reason
+    assert "selection_reason" not in issues[1]["record"]
+    assert reason not in html
+    assert digests(session_dir) == before
+
+
 def test_diagnosis_source_links_stay_within_project(tmp_path):
     project = tmp_path / "project"
     project.mkdir()

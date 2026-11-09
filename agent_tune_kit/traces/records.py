@@ -138,6 +138,10 @@ def prepare_issue(session_dir, data, *, dry_run=False):
     data = copy.deepcopy(data)
     if not isinstance(data, dict):
         raise UserActionRequired("Issue data must be an object.")
+    if "selection_reason" in data and (
+        not isinstance(data["selection_reason"], str) or not data["selection_reason"].strip()
+    ):
+        raise UserActionRequired("Issue selection_reason must be a non-empty string when supplied.")
     issue_id = data.get("id", data.get("issue_id"))
     if issue_id is None:
         number = 1
@@ -215,6 +219,7 @@ def prepare_issue(session_dir, data, *, dry_run=False):
                     "updated_at",
                     "title",
                     "description",
+                    "selection_reason",
                     "evidence",
                     "segments",
                     "status",
@@ -331,6 +336,8 @@ def save_diagnosis(session_dir, issue_id, text, diagnosis_id=None):
         "segments": issue.get("segments", []),
         "created_at": now(),
     }
+    if "selection_reason" in issue:
+        snapshot["selection_reason"] = issue["selection_reason"]
     _refs(directory, issue["evidence"])
     for segment in snapshot["segments"]:
         _refs(directory, segment["evidence"])

@@ -55,10 +55,12 @@ def test_trace_cli_records_real_session_without_batch_outputs(tmp_path, monkeypa
         {
             "title": "Result differs from the request",
             "description": "The final output is unrelated to the requested order.",
+            "selection_reason": "The requested task failed; cause is still unknown.",
             "evidence": [ref],
         },
     )
     issue = invoke(capsys, "trace", "issue", "--session-id", "s1", "--data", issue_data)
+    assert issue["selection_reason"] == "The requested task failed; cause is still unknown."
     issue_id = issue["id"]
     diagnosis_path = tmp_path / "diagnosis.md"
     diagnosis_path.write_text(

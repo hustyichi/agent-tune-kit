@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -119,6 +120,46 @@ def test_diagnosis_and_adopted_basis_are_fixed(archive):
         save_change(
             directory, issue["id"], {"id": change["id"], "revision": change["revision"], "candidate": {"new": True}}
         )
+
+
+def test_selection_reason_survives_updates_and_is_frozen_in_diagnosis(archive):
+    directory, _, _ = archive
+    issue = new_issue(archive)
+    assert "selection_reason" not in issue  # Older records remain usable.
+    issue = save_issue(
+        directory, {"id": issue["id"], "revision": issue["revision"], "selection_reason": "Repeated task failure."}
+    )
+    dry = save_issue(
+        directory,
+        {"id": issue["id"], "revision": issue["revision"], "selection_reason": "Explicit user focus."},
+        dry_run=True,
+    )
+    assert dry["selection_reason"] == "Explicit user focus."
+    assert load_issue(directory, issue["id"])["selection_reason"] == "Repeated task failure."
+    saved = save_diagnosis(directory, issue["id"], "Cause unconfirmed; check the loaded Skill.")
+    diagnosis = Path(saved["path"]).read_bytes()
+    snapshot = json.loads(diagnosis.decode().split(" -->", 1)[0].removeprefix("<!-- atk-issue-snapshot "))
+    assert snapshot["selection_reason"] == "Repeated task failure."
+    current = load_issue(directory, issue["id"])
+    revised = save_issue(
+        directory,
+        {"id": issue["id"], "revision": current["revision"], "selection_reason": "User focus; recurrence disproven."},
+    )
+    assert revised["history"][-1]["selection_reason"] == "Repeated task failure."
+    revised = save_issue(directory, {"id": issue["id"], "revision": revised["revision"], "status": "investigating"})
+    assert revised["selection_reason"] == "User focus; recurrence disproven."
+    assert Path(saved["path"]).read_bytes() == diagnosis
+
+
+@pytest.mark.parametrize("reason", [None, "", "  ", 1, [], {}])
+def test_invalid_selection_reason_does_not_revise_issue(archive, reason):
+    directory, _, _ = archive
+    issue = new_issue(archive)
+    path = directory / "issues" / issue["id"] / "issue.json"
+    before = path.read_bytes()
+    with pytest.raises(UserActionRequired, match="selection_reason"):
+        save_issue(directory, {"id": issue["id"], "revision": issue["revision"], "selection_reason": reason})
+    assert path.read_bytes() == before
 
 
 def test_shared_change_saved_once_and_links_all_target_issues(archive):

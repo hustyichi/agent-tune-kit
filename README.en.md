@@ -149,7 +149,9 @@ $atk-trace-detect Check whether session <session-id> completed its task correctl
 $atk-visualize-trace Open the execution lanes for session <session-id> and jump from issues to the relevant trace segments and evidence fields.
 ```
 
-Detection lists issues, evidence, and what it inspected. Use Trace IDs to locate evidence within the session. You can generate a preview once traces are archived. Review any retained content in the HTML before sharing it.
+Detection retains issues with serious impact, recurrence, direct relevance to your stated focus, or a concrete implementation improvement lead, and explains the retention reason, evidence and inspection scope. Implementation leads include code, configuration, tool contracts, Prompt and Skill; an unresolved cause can proceed to diagnosis. Minor observations with none of these reasons are not saved separately. No retained issues does not prove the session was correct.
+
+Use Trace IDs to locate evidence within the session and open issue details to read the retention reason. You can generate a preview once traces are archived. Review any retained content in the HTML before sharing it.
 
 ### 3. Investigate, Fix, and Verify an Issue as Needed
 

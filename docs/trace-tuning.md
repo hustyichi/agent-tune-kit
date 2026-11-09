@@ -141,11 +141,15 @@ The following are host-produced records, not automatic CLI diagnoses. Each `--da
 
 | Command | Required or relevant data |
 | --- | --- |
-| `atk trace issue --session-id ID --data FILE --json` | `title`, `description`; optional `segments`, top-level `evidence`, stable `id`, `status`, `notes`; updates include `revision`. `--dry-run` validates and reports covered nodes without writing |
+| `atk trace issue --session-id ID --data FILE --json` | `title`, `description`; optional `selection_reason` (nonempty string), `segments`, top-level `evidence`, stable `id`, `status`, `notes`; updates include `revision`. `--dry-run` validates and reports covered nodes without writing |
 | `atk trace detect --session-id ID --data FILE --json` | nonempty `scope` describing inspected and unread material, actual `status`, `gaps: []`; inputs bind current file digests; updates include `id`/`revision` |
 | `atk trace diagnose --session-id ID --issue-id ISSUE --file MD --json` | Markdown combining observed issue/evidence, facts/hypotheses, cause, repair/verification plan and gaps; optional `--diagnosis-id`. Markdown may cite `ISSUE-001/S2` |
 | `atk trace change --session-id ID --issue-id ISSUE --data FILE --json` | Begin with `status: "running"`, nonempty `before` identifying actual baseline and adopted `diagnoses`; finish with same `id`/`revision`, actual `candidate`, `diff`, `checks: []` and `status: "completed"` |
 | `atk trace verify --session-id ID --issue-id OWNER --change-id CHANGE --data FILE --json` | Begin with actual intended `execution` and `status: "running"`; finish same `id`/`revision`, actual status, `candidate_loaded`, `loading_evidence`, `execution`, `conclusions`, `limitations`, `evidence` |
+
+Detection selects findings before creating Issues. The selection policy lives in [atk-trace-detect](../skills/atk-trace-detect/SKILL.md#which-findings-to-retain). Detection writes `selection_reason` to explain why an issue warrants investigation, and uses `description` for impact/recovery, recurrence scope, implementation leads and unresolved questions. The CLI validates the supplied reason's shape, not its semantic judgment. The field remains optional for compatibility with existing records and callers; omission during an update preserves it. Revisions retain the previous reason in history, and new diagnoses snapshot the reason when present.
+
+[Diagnosis](../skills/atk-trace-diagnose/SKILL.md) continues from those questions without treating selection as proof of a cause. Rejected leads and any revised scope or retention reason must be explained; an unresolved implementation cause alone does not invalidate a serious, recurring or user-focused issue. Filtered minor observations do not get a separate issue list; coverage still records the focus, selection scope and gaps. Zero retained issues is not a correctness verdict.
 
 ### Issue segments
 

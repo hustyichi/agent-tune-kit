@@ -1,6 +1,6 @@
 ---
 name: atk-trace-detect
-description: Identify correctness issues in one archived session and save evidence plus inspection coverage; use for session analysis, normally stopping at an issue list.
+description: Select consequential, recurring, user-focused or implementation-actionable issues in one archived session and save reasons, evidence and coverage; normally stop before root-cause diagnosis.
 metadata:
   compatibility: Requires the installed ATK CLI on PATH with trace and visualize trace commands.
 ---
@@ -17,16 +17,29 @@ An identified session, archived captures, optional focus and confirmed project s
 
 ## Outputs
 
-Stable per-issue records and a detection entry binding inspected traces, scope, unread material and gaps. Zero findings still requires coverage. No duplicate issue table or extra report.
+Selected per-issue records with a retention reason and a detection entry binding inspected traces, scope, unread material and gaps. Zero retained issues still requires coverage. Do not create an auxiliary observation list or a duplicate report.
+
+## Which findings to retain
+
+Create an Issue only when the observed mismatch has traceable evidence and at least one of these conditions holds:
+
+- **Serious impact:** failure of a key task, a materially incorrect deliverable, significant wasted work or a data/security consequence. Retain even a single occurrence with unknown cause or suspected base-model reasoning limitations.
+- **Recurrence:** the same failure pattern repeats in the inspected material, including small failures with cumulative cost. State the count and scope; distinguish retries of one incident from independent recurrences, and deduplicate repeated log representations. One observed occurrence does not establish a low production rate. Cross-session claims need supplied or inspected historical evidence; do not expand into a history crawl by default.
+- **User focus:** directly addresses a specific concern in the current detect request, even if minor or isolated. A generic request to find problems does not make every detail an explicit focus.
+- **Useful implementation lead:** a concrete connection to code, configuration, tool contracts, Prompt or Skill suggests an observable service improvement. Name the relevant location/rule and the smallest check that would test the connection. A conflicting or missing instruction can qualify; a generic suggestion to make the model more careful does not. Decisive causal proof belongs in diagnose.
+
+Inspect relevant implementation material as needed to select otherwise minor findings. Serious, recurring and explicitly requested findings do not require an implementation lead. Keep observed impact, recovery, hypotheses and missing evidence distinct; recovery can reduce impact without erasing repeated cost. Prioritize serious and recurring problems without a numeric score, fixed issue quota or root-cause confidence threshold.
+
+Filter minor observations with no other retention reason, including isolated reasoning slips with no useful implementation lead. Do not label unknown causes as proven model limitations merely to exclude them. Filter before creating new Issues; raw traces remain available, but do not persist rejected observations as separate records.
 
 ## Workflow
 
 1. Read `atk trace status --session-id <id> --json`, existing issues and optional project/context standards. Inspect current traces with `atk trace overview --session-id <id> --json`.
 2. Establish intent and outcome, then inspect the critical path through `atk trace overview --session-id <id> --trace-id <trace> --offset <n> --limit <n> --json` (session-time order with `node_id` / parent), `atk trace search --session-id <id> --text <text> --offset <n> --limit <n> --json` and `atk trace show --session-id <id> --ref <reference-json-file> --json`. Read decisive model/tool inputs, outputs, parent links and artifacts. Time order alone is not causality; missing parents/multiple roots remain explicit.
-3. Identify supported mismatches, omissions, incorrect tool behavior, recovery failures or unsupported completion claims. Separate observations, criterion-based judgments, cause hypotheses and gaps. Do not force a closed category list or confidence threshold. A wrong outcome can have an unknown cause.
-4. Review existing issue identities before adding/updating; CLI does no semantic deduplication. For each distinct problem location, write one `segments[]` entry with a free-text `summary` and the smallest `scope` that still explains it (`node` for an execution unit and its descendants, or `from`/`to` for a continuous range on one Trace). Split across Traces. Put field references under that segment; keep only non-locatable materials in top-level `evidence`. Optional `atk trace issue --dry-run --data <json-file> --json` reports covered node counts and durations before writing. Save with `atk trace issue --session-id <id> --data <json-file> --json`. Issue fields are `title`, `description`, optional `segments` / top-level `evidence`; updates include existing `id` and `revision`. Obtain hashed references using `atk trace ref --session-id <id> --path <session-relative-file> --pointer <json-pointer> --json`. Check cited fields after reimport. Omission never resolves an issue; exclusion retains reasons/history.
-5. Save coverage with `atk trace detect --session-id <id> --data <json-file> --json`: `scope`, actual `status` and `gaps`; updates bind `id` and `revision`. Include checked nodes/rounds and unread ranges, including zero issues, partial and interrupted analysis. New capture does not change old coverage facts.
-6. Deliver stable IDs, impact, evidence, coverage and gaps. Default depth ends at the issue list: explain obvious causes, but do not investigate every issue deeply or execute the Agent by default. For an explicit continuous investigation/repair request, select issues by goal/impact/evidence and continue within authorization without fixed per-stage approvals.
+3. Identify supported mismatches, omissions, incorrect tool behavior, recovery failures or unsupported completion claims, then apply “Which findings to retain”. For each selected issue, write a concise `selection_reason` stating which condition applies and why. In `description`, explain observed impact/recovery, recurrence scope when relevant, implementation leads and the unresolved question for diagnose. A retained issue is worth investigating, not necessarily a confirmed implementation defect.
+4. Review existing issue identities before adding/updating; CLI does no semantic deduplication. For each distinct problem location, write one `segments[]` entry with a free-text `summary` and the smallest `scope` that still explains it (`node` for an execution unit and its descendants, or `from`/`to` for a continuous range on one Trace). Split across Traces. Put field references under that segment; keep only non-locatable materials in top-level `evidence`. Optional `atk trace issue --dry-run --data <json-file> --json` reports covered node counts and durations before writing. Save with `atk trace issue --session-id <id> --data <json-file> --json`. Issue fields are `title`, `description`, `selection_reason`, optional `segments` / top-level `evidence`; updates include existing `id` and `revision`. Obtain hashed references using `atk trace ref --session-id <id> --path <session-relative-file> --pointer <json-pointer> --json`. Check cited fields after reimport. Omission never resolves an issue; exclusion retains reasons/history.
+5. Save coverage with `atk trace detect --session-id <id> --data <json-file> --json`: `scope`, actual `status` and `gaps`; updates bind `id` and `revision`. Include the user's focus, applied selection scope, checked nodes/rounds and unread ranges, including zero retained issues, partial and interrupted analysis. New capture does not change old coverage facts. Reassessing existing issues requires an explicit reason and revision history; omission never deletes or resolves them.
+6. Deliver stable IDs, retention reasons, impact, evidence, coverage and gaps. If none qualify, say “No issues met this detection's selection criteria”, not that the session was correct. Default depth ends at the selected issue list: explain obvious causes, but leave decisive causal experiments to diagnose and do not execute the Agent by default. For an explicit continuous investigation/repair request, continue within authorization without fixed per-stage approvals.
 
 ## Starting from local files
 
