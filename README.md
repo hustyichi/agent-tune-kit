@@ -43,6 +43,8 @@ atk install
 
 ## 评测调优
 
+![评测调优架构图，展示准备与接入、批量评测、判定与归因、报告与跨轮复核、定向优化及复测。](docs/assets/agent_tune_kit_evaluation.png)
+
 用一组评测样本找出 Agent 的问题，并用后续评测验证改动。准备 Agent 的入口和一组样本，推荐用 CSV，5 到 20 条即可开始。每条样本可附上期望答案、标签或可验收的行为标准。
 
 在 Codex 中打开 Agent 项目，在对话中发送下面的 `$atk-…` 指令。
@@ -125,9 +127,9 @@ $atk-report
 
 [更多批量评测运行选项和产物](docs/skill-template-pack-usage.md#manual-22--26-loop)
 
-![评测调优流程，从准备数据和接入 Agent 到评测、诊断、报告、调优和复测。](docs/assets/architecture.svg)
-
 ## 轨迹持续调优
+
+![轨迹调优架构图，展示会话采集、问题识别、根因诊断、定向修复和执行验证。](docs/assets/agent_tune_kit_trace.png)
 
 从一个已有会话出发，结合实际执行轨迹判断任务是否完成，再按问题保存诊断、修复和验证记录。准备原始 Session ID、来源和可读取的轨迹，直接在 Codex 中打开 Agent 项目开始。无需评测数据集或 runner。
 

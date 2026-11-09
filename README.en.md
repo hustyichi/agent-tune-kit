@@ -43,6 +43,8 @@ Finish active ATK tasks before reinstalling, and open a new session afterward to
 
 ## Evaluation-based tuning
 
+![Evaluation-based tuning architecture showing data preparation and Agent setup, batch evaluation, diagnosis, cross-round reporting, targeted tuning, and reruns.](docs/assets/agent_tune_kit_evaluation.png)
+
 Use a set of evaluation samples to find Agent failures and verify changes in later rounds. Prepare your Agent's entry point and a set of samples, preferably in CSV format. Five to twenty samples are enough to get started. Add expected answers, labels, or acceptance criteria where available.
 
 Open your Agent project in Codex and send the following `$atk-…` instructions in the conversation.
@@ -125,9 +127,9 @@ Each round saves results under `.atk/results/vN/` in your Agent project. Files a
 
 [More batch evaluation options and outputs](docs/skill-template-pack-usage.md#manual-22--26-loop)
 
-![Evaluation-based tuning workflow, from preparing data and connecting an Agent through evaluation, diagnosis, reporting, tuning, and rerunning the evaluation.](docs/assets/architecture.en.svg)
-
 ## Continuous tuning from session traces
+
+![Trace tuning architecture showing session capture, issue detection, root-cause diagnosis, targeted fixes, and verification.](docs/assets/agent_tune_kit_trace.png)
 
 Start with an existing session and use its execution trace to check whether the Agent completed the task. Save diagnoses, fixes, and verification results by issue. Get the native Session ID, its source, and access to the trace, then open the Agent project in Codex. You can start without an evaluation dataset or runner.
 
