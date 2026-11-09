@@ -67,7 +67,7 @@ class InstallPluginCliTests(unittest.TestCase):
                 [
                     f"将为 Codex 安装 Agent Tune Kit {version}。",
                     f"位置：{base / 'plugins' / 'agent-tune-kit'}",
-                    f"安装校验成功后将清理 ATK 缓存：{Path(os.environ['CODEX_PERSONAL_PLUGIN_CACHE_ROOT']) / 'agent-tune-kit'}",
+                    f"安装校验成功后将更新 ATK 缓存：{Path(os.environ['CODEX_PERSONAL_PLUGIN_CACHE_ROOT']) / 'agent-tune-kit'}",
                     "未修改文件。运行 atk install 进行安装。",
                 ],
             )
@@ -128,8 +128,8 @@ class InstallPluginCliTests(unittest.TestCase):
                 result.stdout.splitlines(),
                 [
                     f"已为 Codex 本地安装 Agent Tune Kit {version}。",
-                    "ATK 缓存已清理或尚未生成；等待 Codex 重新加载。",
-                    "下一步：刷新 Codex /plugins，确认启用 Agent Tune Kit；重启 Codex 并新建会话。",
+                    "ATK 缓存已更新并校验，后续文件读取使用最新内容。",
+                    "下一步：确认 Codex /plugins 已启用 Agent Tune Kit；已读入的旧指令需新建会话，技能列表未刷新时重启 Codex。",
                 ],
             )
             data = json.loads((base / "marketplace.json").read_text())
@@ -137,6 +137,10 @@ class InstallPluginCliTests(unittest.TestCase):
             self.assertEqual(entry["source"]["path"], "./plugins/agent-tune-kit")
             self.assertEqual(entry["policy"]["installation"], "AVAILABLE")
             self.assertTrue((base / "plugins" / "agent-tune-kit" / ".codex-plugin" / "plugin.json").exists())
+            cache = Path(os.environ["CODEX_PERSONAL_PLUGIN_CACHE_ROOT"]) / "agent-tune-kit" / "local"
+            self.assertTrue((cache / "skills" / "atk-diagnose" / "SKILL.md").is_file())
+            for private in (".atk", ".git", ".venv"):
+                self.assertFalse((cache / private).exists())
 
     def test_status_semantics_are_local_and_conservative(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -156,7 +160,7 @@ class InstallPluginCliTests(unittest.TestCase):
                 [
                     f"Agent Tune Kit {version} 已本地安装。",
                     f"位置：{base / 'plugins' / 'agent-tune-kit'}",
-                    "缓存尚未生成，等待 Codex 加载；尚未确认会话生效。",
+                    f"缓存与安装内容一致：{Path(os.environ['CODEX_PERSONAL_PLUGIN_CACHE_ROOT']).resolve() / 'agent-tune-kit' / 'local'}",
                     "在 Codex 打开 /plugins，检查 Agent Tune Kit 是否已启用。",
                 ],
             )
@@ -198,7 +202,7 @@ class InstallPluginCliTests(unittest.TestCase):
             self.assertEqual(status.returncode, 1, status.stderr)
             self.assertIn("Agent Tune Kit 0.0.1 已本地安装。", status.stdout)
             self.assertIn("运行 atk install 更新 Skill。", status.stdout)
-            self.assertEqual(len(status.stdout.splitlines()), 5)
+            self.assertIn("缓存不一致", status.stdout)
 
     def test_preview_preserves_conflict_warning_without_writing(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -463,7 +467,7 @@ class InstallPluginCliTests(unittest.TestCase):
         self.assertTrue((target / "templates" / ".atk" / "runner" / "eval_runner.py.md").exists())
         self.assertTrue((target / "templates" / ".atk" / "runner" / "failure_rule.py.md").exists())
         cache = Path(env["CODEX_PERSONAL_PLUGIN_CACHE_ROOT"]) / "agent-tune-kit" / "local"
-        shutil.copytree(target, cache)
+        self.assertTrue((cache / "skills" / "atk-diagnose" / "SKILL.md").is_file())
         (cache / "README.md").write_text("stale same-version payload", encoding="utf-8")
         stale = subprocess.run(
             [str(atk), "status", *common], cwd=run_dir, env=env, text=True, capture_output=True, timeout=20
@@ -482,8 +486,7 @@ class InstallPluginCliTests(unittest.TestCase):
         )
         self.assertEqual(reinstall.returncode, 0, reinstall.stderr)
         self.assertEqual(reinstall.stdout, install_cli.stdout)
-        self.assertFalse(cache.exists())
-        shutil.copytree(target, cache)
+        self.assertEqual((cache / "README.md").read_bytes(), (target / "README.md").read_bytes())
         self.assertFalse((run_dir / ".agents").exists())
         status = subprocess.run(
             [str(atk), "status", *common],

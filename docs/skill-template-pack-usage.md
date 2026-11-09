@@ -46,8 +46,9 @@ Conflict behavior:
 - `--yes` alone does not replace conflicts;
 - `--no-input` never waits for prompts;
 - after confirmation, replacement overwrites the existing plugin-store target and updates the marketplace entry;
-- after installation validation succeeds, `atk install` clears only the personal marketplace ATK cache, including version-number and `local` directories; installation or validation failure leaves the cache untouched; cleanup failure returns an error;
-- cache cleanup rejects paths overlapping the installation, source or marketplace file, rejects symlink cache roots, and does not follow nested symlinks. Finish active ATK tasks before reinstalling.
+- after installation validation succeeds, `atk install` prepares a complete cache in a sibling temporary directory and verifies its payload hashes before replacing the personal marketplace ATK cache. It always creates `local` and updates existing version-directory paths to the same latest payload so previously advertised Skill paths remain usable; obsolete files are removed;
+- preparation or validation failure leaves the previous cache untouched. A failed replacement attempts to restore it; if restoration also fails, the error reports the preserved previous-cache location. The command reports success only after replacement completes;
+- cache replacement rejects paths overlapping the installation, source or marketplace file, rejects symlink cache roots and version directories, and does not follow nested cache symlinks. Finish active ATK tasks before reinstalling.
 
 For isolated smoke tests, use temp paths:
 
@@ -63,12 +64,14 @@ CODEX_PERSONAL_PLUGIN_CACHE_ROOT=/tmp/agent-tune-cache atk status \
 
 The installer writes marketplace JSON atomically where practical and reports smoke status. It does not create a public marketplace package and does not mutate hidden Codex UI enablement state.
 
-After install, refresh `/plugins`, select `Agent Tune Kit`, and enable it if needed. Restart Codex and open a new session. Existing sessions do not automatically replace instructions already read.
+After install, the on-disk cache contains the latest payload without waiting for Codex to rebuild it. In `/plugins`, select `Agent Tune Kit` and enable it if needed. Open a new session to replace instructions already read; restart Codex if the skill list has not refreshed. The installer does not invalidate Codex's in-memory skill catalog or rewrite existing conversation context.
 
-`atk status` compares relative paths and SHA-256 hashes for `.codex-plugin/`, `skills/`, `templates/`, `docs/`, `README.md` and `README.en.md`. It detects modified, missing and extra files in those assets, while ignoring repository-only files outside them and generated cache directories. It checks all cached ATK versions, accepting the installed version directory and `local`; older version directories are reported as stale. It never writes files.
+Replacement uses two directory renames with a brief gap between them, not a cross-platform atomic directory exchange. Concurrent reads during installation or abrupt process termination can still interrupt loading; rerun `atk install` to repair after an interruption. Avoid running installation concurrently with another installer or Codex marketplace refresh.
 
-- Exit `0`: cached assets match, or no cache has been generated yet. An absent cache is explicitly pending Codex loading, not proof of activation.
-- Exit `1`: incomplete installation, CLI/installed version mismatch, stale cache, unreadable files or unsafe paths.
+`atk status` compares relative paths and SHA-256 hashes for `.codex-plugin/`, `skills/`, `templates/`, `docs/`, `README.md` and `README.en.md`. It detects modified, missing and extra files in those assets, while ignoring repository-only files outside them and generated cache directories. It checks every cached ATK directory against the installed payload, including its manifest version. Existing version-directory names are retained as compatibility paths and do not identify the version of their updated contents. It never writes files.
+
+- Exit `0`: cached assets match the installation; this does not confirm session activation.
+- Exit `1`: incomplete installation, CLI/installed version mismatch, missing or stale cache, unreadable files or unsafe paths.
 - CLI checks do not observe Codex UI enablement or in-memory session state; verify the actual Skill path and contents in a new session.
 
 Cache location precedence: `CODEX_PERSONAL_PLUGIN_CACHE_ROOT` (the marketplace cache root, with `agent-tune-kit/` appended), otherwise `$CODEX_HOME/plugins/cache/personal`, otherwise `~/.codex/plugins/cache/personal`. Always set an isolated cache root when using temporary marketplace/plugin-store paths; those overrides alone do not isolate the cache.
@@ -85,7 +88,7 @@ CODEX_PERSONAL_PLUGIN_CACHE_ROOT=/tmp/agent-tune-cache uv run atk install --copy
 python3 scripts/install_plugin.py install  # contributor wrapper only
 ```
 
-Same-version updates are handled by `atk install` automatically. The dev refresh helper now only delegates to `atk install --copy --yes --force` and `atk status`; it does not delete caches before installation:
+Same-version updates are handled by `atk install` automatically. The dev refresh helper delegates to `atk install --copy --yes --force` and `atk status`; cache preparation, validation and replacement are owned by the installer:
 
 ```sh
 scripts/dev-refresh-install.sh

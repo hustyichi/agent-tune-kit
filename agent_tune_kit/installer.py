@@ -406,9 +406,8 @@ def cache_status(target: Path, cache: Path) -> tuple[bool, list[str]]:
     entries = sorted(cache.iterdir()) if cache.exists() else []
     entries = [entry for entry in entries if entry.name not in COPY_IGNORE_NAMES]
     if not entries:
-        return True, ["缓存尚未生成，等待 Codex 加载；尚未确认会话生效。"]
+        return False, ["ATK 缓存缺失；运行 atk install 修复。"]
     expected = payload_hashes(target)
-    version = current_manifest_version(target)
     ok = True
     lines: list[str] = []
     for entry in entries:
@@ -418,20 +417,55 @@ def cache_status(target: Path, cache: Path) -> tuple[bool, list[str]]:
         missing = sorted(expected.keys() - actual.keys())
         extra = sorted(actual.keys() - expected.keys())
         changed = sorted(key for key in expected.keys() & actual.keys() if expected[key] != actual[key])
-        version_ok = entry.name in (version, "local")
-        if not (missing or extra or changed) and version_ok:
+        if not (missing or extra or changed):
             lines.append(f"缓存与安装内容一致：{entry}")
             continue
         ok = False
         lines.append(f"缓存不一致：{entry}（修改 {len(changed)}，缺失 {len(missing)}，多余 {len(extra)}）")
-        if not version_ok:
-            lines.append(f"  缓存目录版本 {entry.name} 与安装版本 {version} 不同。")
         differences = [("修改", changed), ("缺失", missing), ("多余", extra)]
         details = [f"  {label}：{name}" for label, names in differences for name in names]
         lines.extend(details[:5])
     if not ok:
-        lines.append("运行 atk install 刷新缓存，然后重启 Codex 并新建会话。")
+        lines.append("运行 atk install 更新缓存；已读入的旧指令需新建会话，技能列表未刷新时重启 Codex。")
     return ok, lines
+
+
+def refresh_plugin_cache(target: Path, cache: Path, payload_source: PayloadSource) -> None:
+    entries = [entry for entry in cache.iterdir() if entry.name not in COPY_IGNORE_NAMES] if cache.exists() else []
+    for entry in entries:
+        if entry.is_symlink() or not entry.is_dir():
+            raise InstallError(f"unsafe plugin cache entry: {entry}")
+
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    work = Path(tempfile.mkdtemp(prefix=f".{PLUGIN_NAME}-", dir=cache.parent))
+    staged, previous = work / "new", work / "previous"
+    try:
+        copy_payload_tree(payload_source, staged / "local")
+        # Keep paths already advertised to sessions readable with the new payload.
+        for entry in entries:
+            if entry.name != "local":
+                shutil.copytree(staged / "local", staged / entry.name)
+        valid, details = cache_status(target, staged)
+        if not valid:
+            raise InstallError("staged cache validation failed: " + "; ".join(details))
+
+        # shortcut: two renames leave a brief gap; use a platform directory exchange if live-read continuity is required.
+        if cache.exists():
+            os.replace(cache, previous)
+        try:
+            os.replace(staged, cache)
+        except BaseException:
+            if previous.exists():
+                try:
+                    os.replace(previous, cache)
+                except OSError as exc:
+                    raise InstallError(f"cache restore failed; previous cache preserved at {previous}: {exc}") from exc
+            raise
+        remove_path(previous)
+    finally:
+        # A failed restore must not delete the only surviving previous cache.
+        if not previous.exists():
+            remove_path(work)
 
 
 def collect_status(
@@ -561,7 +595,7 @@ def run_preview(args: argparse.Namespace) -> int:
         print("已有文件或注册与本次安装冲突；替换需要确认。")
     if args.smoke:
         smoke_check(marketplace_path, plugin_store, dry_run=True, payload_source=payload_source)
-    print(f"安装校验成功后将清理 ATK 缓存：{cache}")
+    print(f"安装校验成功后将更新 ATK 缓存：{cache}")
     print("未修改文件。运行 atk install 进行安装。")
     return 0
 
@@ -595,16 +629,16 @@ def run_install(args: argparse.Namespace) -> int:
         smoke_check(marketplace_path, plugin_store, dry_run=False, payload_source=payload_source)
 
     validate_manifest(target / ".codex-plugin" / "plugin.json")
-    # Invalidate only after a usable installation exists, including with --no-smoke.
+    # Publish only after a usable installation exists, including with --no-smoke.
     try:
         cache = plugin_cache_path(target, marketplace_path, payload_source)
-        remove_path(cache)
+        refresh_plugin_cache(target, cache, payload_source)
     except (InstallError, OSError) as exc:
         raise InstallError(f"plugin installed, but cache refresh failed: {cache}: {exc}") from exc
 
     print(f"已为 Codex 本地安装 Agent Tune Kit {payload_source.package_version}。")
-    print("ATK 缓存已清理或尚未生成；等待 Codex 重新加载。")
-    print("下一步：刷新 Codex /plugins，确认启用 Agent Tune Kit；重启 Codex 并新建会话。")
+    print("ATK 缓存已更新并校验，后续文件读取使用最新内容。")
+    print("下一步：确认 Codex /plugins 已启用 Agent Tune Kit；已读入的旧指令需新建会话，技能列表未刷新时重启 Codex。")
     return 0
 
 
@@ -691,7 +725,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     subparsers.add_parser(
         "preview", parents=[common], help="preview planned marketplace/plugin-store changes without writing"
     )
-    subparsers.add_parser("install", parents=[common], help="install, validate, then clear personal ATK caches")
+    subparsers.add_parser("install", parents=[common], help="install, validate, then replace personal ATK caches")
     subparsers.add_parser(
         "status", parents=[common], help="check local installation and compare cached plugin contents (read-only)"
     )

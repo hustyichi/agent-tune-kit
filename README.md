@@ -39,7 +39,7 @@ atk install
 
 </details>
 
-重装前先结束正在运行的 ATK 任务，安装后新建会话以加载更新。遇到安装问题时，运行 `atk status` 检查安装，并在 Codex 中确认插件已启用。[安装与缓存说明](docs/skill-template-pack-usage.md#local-plugin-install-and-smoke)
+重装前先结束正在运行的 ATK 任务。`atk install` 会直接更新并校验 Codex 的 ATK 缓存，完成后无需等待缓存重建。已读入对话的旧指令仍需新建会话加载；技能列表未刷新时重启 Codex。遇到安装问题时，运行 `atk status` 检查安装，并在 Codex 中确认插件已启用。[安装与缓存说明](docs/skill-template-pack-usage.md#local-plugin-install-and-smoke)
 
 ## 评测调优
 

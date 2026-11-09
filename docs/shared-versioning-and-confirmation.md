@@ -38,8 +38,8 @@ Non-goals for this pass:
 - Persistent install command: `uv tool install agent-tune-kit` then `atk install`; `pipx install agent-tune-kit` is also supported.
 - Personal marketplace developer wrapper: `scripts/install_plugin.py` for source checkouts only.
 - Default marketplace `source.path`: `./plugins/agent-tune-kit`.
-- Main install command: `atk install`; successful installation validation invalidates personal ATK caches, including same-version copies. Restart Codex and open a new session after enabling the plugin.
-- Status command: `atk status`; read-only payload/cache content comparison. Exit `0` means matching cache or pending cache generation, not confirmed session activation. Exit `1` means incomplete installation, version/content mismatch or inspection error.
+- Main install command: `atk install`; stages and validates the latest personal ATK cache, then replaces it, including same-version copies and existing version-directory paths. No Codex cache rebuild is needed after success. Enable the plugin in Codex, open a new session for instructions already read, and restart Codex if the skill list has not refreshed.
+- Status command: `atk status`; read-only payload/cache content comparison. Exit `0` means matching cache, not confirmed session activation. Exit `1` means incomplete installation, missing cache, version/content mismatch or inspection error.
 - Contributor fallback: `python3 scripts/install_plugin.py install` and `python3 scripts/install_plugin.py status` remain wrappers around the packaged CLI.
 
 ## Canonical paths

@@ -279,7 +279,7 @@ def smoke_installed_artifact(artifact: Path, work_dir: Path) -> None:
     if target.is_symlink():
         raise ReleaseCheckError(f"{artifact.name} install did not copy the packaged payload")
     status = capture([str(atk), "status", *common], cwd=run_dir, extra_env=cache_env)
-    if "已本地安装。" not in status:
+    if "已本地安装。" not in status or "缓存与安装内容一致" not in status:
         raise ReleaseCheckError(f"{artifact.name} status smoke failed")
     smoke_trace_capabilities(atk, run_dir / "trace-project")
     smoke_shared_capabilities(atk, run_dir, target)

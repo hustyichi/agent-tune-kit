@@ -39,7 +39,7 @@ atk install
 
 </details>
 
-Finish active ATK tasks before reinstalling, and open a new session afterward to load updates. If you have installation problems, run `atk status` and confirm the plugin is enabled in Codex. [Installation and cache notes](docs/skill-template-pack-usage.md#local-plugin-install-and-smoke)
+Finish active ATK tasks before reinstalling. `atk install` directly updates and verifies the Codex ATK cache, so no cache rebuild is needed afterward. Start a new session to replace instructions already read into a conversation; restart Codex if the skill list has not refreshed. If you have installation problems, run `atk status` and confirm the plugin is enabled in Codex. [Installation and cache notes](docs/skill-template-pack-usage.md#local-plugin-install-and-smoke)
 
 ## Evaluation-based tuning
 
