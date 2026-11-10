@@ -181,3 +181,5 @@ $atk-trace-verify 验证 <session-id> 的 ISSUE-001 对应候选，并检查相�
 | `issues/<issue-id>/` | 查看问题证据、诊断和改动。各次验证的 `result.json` 记录验证状态、结论和证据引用 |
 
 [轨迹调优指南，包含来源配置、支持格式和归档结构](docs/trace-tuning.md)
+
+[多工程关联与项目筛选方案（待实现）](docs/trace-project-attribution-design.md)
