@@ -221,14 +221,16 @@
 
   // --- drawer ---------------------------------------------------------------------------------------------------
   function issueRow(s, issue, withCategory) {
-    const row = el("div", undefined, withCategory ? "issue-row" : "issue-row no-category");
+    const row = el("div", undefined, "issue-row");
     const dot = el("span", undefined, `progress-dot ${issue.progress}`); dot.title = LABEL.get(issue.progress);
     const href = `${s.href}#issue=${encodeURIComponent(issue.id)}`;
     const title = el("a", issue.title || issue.id, "row-title"); title.href = href; title.title = `${issue.id} ${issue.title}`;
-    row.append(dot, el("span", shortIssue(issue.id), "issue-id-text"), title);
-    if (withCategory) row.append(categoryChip(issue.category));
     const jump = el("a", "↗", "row-jump"); jump.href = href; jump.setAttribute("aria-label", `在会话页打开 ${issue.id}`);
-    row.append(el("span", LABEL.get(issue.progress), "row-progress"), jump);
+    // Title gets the full first line and may wrap; category and progress sit on their own line beneath it.
+    const meta = el("div", undefined, "row-meta");
+    if (withCategory) meta.append(categoryChip(issue.category));
+    meta.append(el("span", LABEL.get(issue.progress), "row-progress"));
+    row.append(dot, el("span", shortIssue(issue.id), "issue-id-text"), title, jump, meta);
     return row;
   }
   function issueList(box, s, issues, withCategory) {

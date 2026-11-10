@@ -1,4 +1,6 @@
 /* Dashboard-only rules; tokens, controls, the top bar and the drawer come from shared/base.css. */
+/* The dashboard drawer is mostly issue titles, so it opens wider than the session page's default. */
+:root { --drawer-width: min(640px, 92vw) }
 .dash { flex: 1; min-width: 0; padding: 14px clamp(12px, 2vw, 24px) 28px; display: flex; flex-direction: column; gap: 12px }
 .dash-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px }
 .dash-controls .search-label { flex: 1 1 260px; max-width: 440px; min-width: 0 }
@@ -67,21 +69,22 @@ button.category-tag:hover { background: #ffe8d2 }
 .list-heading { display: flex; align-items: center; justify-content: space-between; margin: 14px 0 6px; font-size: 13px; font-weight: 600 }
 .group-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 14px 0 4px; font-size: 12px; font-weight: 600; color: var(--accent) }
 .issue-list { background: white; border: 1px solid var(--line); border-radius: 8px; overflow: hidden }
-.issue-row { display: grid; grid-template-columns: 8px 40px minmax(0, 1fr) auto auto 18px; gap: 8px; align-items: center; min-height: var(--row-height); padding: 0 10px; border-bottom: 1px solid #edf0f3; font-size: 13px; position: relative }
+/* Two-line rows: the title owns the first line (wrapping when long), category and progress sit underneath. */
+.issue-row { display: grid; grid-template-columns: 8px auto minmax(0, 1fr) 18px; column-gap: 8px; row-gap: 4px; align-items: baseline; padding: 9px 10px; border-bottom: 1px solid #edf0f3; font-size: 13px; line-height: 1.45; position: relative }
 .issue-row:last-child { border-bottom: 0 }
 .issue-row:hover { background: #f5f9fa }
-.issue-row .issue-id-text { font-family: var(--mono) }
-.issue-row a.row-title { color: inherit; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0 }
+.issue-row .progress-dot { align-self: start; margin-top: 6px }
+.issue-row .issue-id-text { font-family: var(--mono); font-size: 12px; color: var(--muted) }
+.issue-row a.row-title { color: inherit; text-decoration: none; min-width: 0; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden }
+.issue-row a.row-title:hover { color: var(--accent) }
 .issue-row a.row-title::after { content: ""; position: absolute; inset: 0 }
 .issue-row .category-tag, .issue-row .row-jump { position: relative; z-index: 1 }
-.issue-row.no-category { grid-template-columns: 8px 40px minmax(0, 1fr) auto 18px }
-.issue-row .category-tag { max-width: 160px }
+.row-meta { grid-column: 3 / 5; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; min-width: 0 }
+.issue-row .category-tag { max-width: 100% }
 .row-progress { font-size: 12px; color: var(--muted); white-space: nowrap }
 .row-jump { color: var(--accent); text-decoration: none; text-align: center }
 .row-pending { color: var(--muted) }
 
 @media (max-width: 800px) {
   .dash-grid { grid-template-columns: 1fr }
-  .issue-row { grid-template-columns: 8px 34px minmax(0, 1fr) auto 18px }
-  .issue-row .category-tag { display: none }
 }
