@@ -624,7 +624,7 @@
   $("session-title").textContent = data.session.session_id;
   if (data.dashboard.available) {
     const back = $("dashboard-link");
-    back.href = dashboardHash(`view=session&session=${encodeURIComponent(data.dashboard.session)}`);
+    back.href = dashboardHash("view=session");
     back.hidden = false;
   }
   for (const warning of data.warnings) $("warnings").append(el("p", warning, "warning"));

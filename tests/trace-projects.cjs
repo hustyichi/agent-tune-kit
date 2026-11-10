@@ -130,3 +130,10 @@ test("standalone previews keep project names readable without broken dashboard l
   assert.match(text(app.cards()[0]), /关联项目：magic-code-server（待确认）/);
   assert.equal(nodes(app.cards()[0]).filter(node => node.tag === "a").length, 0);
 });
+
+test("back to dashboard opens the session view without a drawer", () => {
+  const app = boot();
+  vm.runInContext(slice("\n  if (data.dashboard.available) {", "  for (const warning of data.warnings)"), app.context);
+  assert.equal(app.$("dashboard-link").href, "../index.html#view=session");
+  assert.equal(app.$("dashboard-link").hidden, false);
+});
