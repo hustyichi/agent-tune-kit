@@ -21,13 +21,13 @@
 .dash-controls select { max-width: 240px }
 #dash-stats { font-size: 12px; white-space: nowrap }
 
-.dash-progress { display: flex; flex-direction: column; gap: 8px }
-.progress-bar { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: #e6ebef }
-.progress-bar i { display: block; height: 100%; min-width: 3px; background: var(--tone) }
-.progress-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px }
-.legend-item { display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 4px; background: transparent; color: var(--muted); padding: 2px 6px }
+.session-attention { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; color: #805b16 }
+.attention-note::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--p-inconclusive); margin-right: 7px; vertical-align: middle }
+.progress-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px }
+.filter-caption { color: var(--muted); margin-right: 5px }
+.legend-item { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 6px; background: white; color: var(--muted); padding: 3px 9px }
 .legend-item:hover { background: var(--tint) }
-.legend-item[aria-pressed=true] { background: var(--tint); color: var(--accent); outline: 1px solid var(--brand) }
+.legend-item[aria-pressed=true] { background: var(--tint); color: var(--accent); border-color: #eabda0 }
 .swatch { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--tone) }
 .tone-pending { --tone: var(--p-pending) }
 .tone-diagnosed { --tone: var(--p-diagnosed) }

@@ -24,10 +24,8 @@
       <label class="search-label"><span class="sr-only">搜索</span><input id="dash-search" type="search" placeholder="搜索 Session ID、问题编号、标题、分类"></label>
     </div>
     <div id="dash-panel" class="dash-panel" role="tabpanel" aria-labelledby="tab-session">
-      <section class="dash-progress" aria-label="实际进度分布">
-        <div id="progress-bar" class="progress-bar" role="img"></div>
-        <div id="progress-legend" class="progress-legend"></div>
-      </section>
+      <div id="session-attention" class="session-attention" role="status" hidden></div>
+      <div id="progress-legend" class="progress-legend" role="group" aria-label="处理状态" hidden></div>
       <div id="filter-note" class="filter-note" role="status" hidden></div>
       <div id="dash-grid" class="dash-grid"></div>
       <div id="dash-strip"></div>

@@ -63,9 +63,9 @@
   }
   const scoped = () => data.sessions.filter(s => !state.source || s._source === state.source);
   const matchIssue = (s, issue) =>
-    projectMatches(issue) && (!state.progress || issue.progress === state.progress) && (!state.q || s._text.includes(state.q) || issue._text.includes(state.q));
+    projectMatches(issue) && (state.view === "session" || !state.progress || issue.progress === state.progress) && (!state.q || s._text.includes(state.q) || issue._text.includes(state.q));
   const matchSession = s => s.issues.some(issue => matchIssue(s, issue)) ||
-    (!s.issues.length && (state.view === "session" || !projectSelection.size) && !state.progress && (!state.q || s._text.includes(state.q)));
+    (state.view === "session" && !s.issues.length && (!state.q || s._text.includes(state.q)));
   const byProgress = (a, b) => ORDER.get(a.progress) - ORDER.get(b.progress) || a.id.localeCompare(b.id, undefined, {numeric: true});
 
   // --- small building blocks ------------------------------------------------------------------------------------
@@ -73,6 +73,8 @@
   const topProgress = counts => [...counts].sort((a, b) => b[1] - a[1] || ORDER.get(a[0]) - ORDER.get(b[0])).slice(0, 2).map(([key, n]) => `${LABEL.get(key)} ${n}`).join(" · ");
   const miniBar = counts => {
     const bar = el("div", undefined, "mini-bar");
+    bar.setAttribute("role", "img");
+    bar.setAttribute("aria-label", `问题处理分布：${[...counts].map(([key, n]) => `${LABEL.get(key)} ${n}`).join("，")}`);
     for (const [key, n] of [...counts].sort((a, b) => ORDER.get(a[0]) - ORDER.get(b[0]))) {
       const segment = el("i"); segment.className = `tone-${key}`; segment.style.flex = String(n); segment.title = `${LABEL.get(key)} ${n}`;
       bar.append(segment);
@@ -146,33 +148,55 @@
     if (view !== state.view) setView(view);
     $(id).focus();
   }
+  function renderSessionAttention() {
+    const attention = $("session-attention");
+    attention.replaceChildren();
+    if (state.view === "session") {
+      const sessions = scoped().filter(matchSession);
+      const uncertain = sessions.filter(s => s.issues.some(issue => issue.progress === "inconclusive")).length;
+      const failed = sessions.filter(s => s.issues.some(issue => issue.progress === "fail")).length;
+      const broken = sessions.filter(s => s.error || s.problem_count).length;
+      if (uncertain) attention.append(el("span", `${uncertain} 个会话存在“无法判断”的验证结论`, "attention-note"));
+      if (failed) attention.append(el("span", `${failed} 个会话存在验证失败的问题`, "attention-note"));
+      if (broken) attention.append(el("span", `${broken} 个会话有记录不可读取，问题统计可能不全`, "attention-note"));
+    }
+    attention.hidden = !attention.children.length;
+  }
   function renderProgress() {
+    const legend = $("progress-legend");
+    legend.replaceChildren();
+    legend.hidden = state.view !== "category";
+    if (legend.hidden) return;
     const counts = countBy(scoped().flatMap(s => s.issues.filter(issue => projectMatches(issue) && (!state.q || s._text.includes(state.q) || issue._text.includes(state.q)))));
     const total = [...counts.values()].reduce((sum, n) => sum + n, 0);
-    const bar = $("progress-bar"), legend = $("progress-legend");
-    bar.replaceChildren(); legend.replaceChildren();
-    bar.setAttribute("aria-label", total ? data.progress_legend.filter(e => counts.get(e.key)).map(e => `${e.label} ${counts.get(e.key)}`).join("，") : "暂无问题");
-    bar.hidden = !total;
-    for (const {key, label} of data.progress_legend) {
-      const n = counts.get(key);
-      if (!n) continue;
-      const segment = el("i"); segment.className = `tone-${key}`; segment.style.flex = String(n); segment.title = `${label} ${n}`;
-      bar.append(segment);
+    legend.append(el("span", "处理状态", "filter-caption"));
+    for (const {key, label} of [{key: "", label: "全部"}, ...data.progress_legend]) {
+      const n = key ? counts.get(key) : total;
+      if (key && !n) continue;
       const item = button("", () => { state.progress = state.progress === key ? "" : key; render(); }, "legend-item");
       item.setAttribute("aria-pressed", String(state.progress === key));
-      item.append(el("span", undefined, `swatch tone-${key}`), document.createTextNode(`${label} ${n}`));
+      if (key) item.append(el("span", undefined, `swatch tone-${key}`));
+      item.append(document.createTextNode(`${label} ${n}`));
       legend.append(item);
     }
-    if (!total) legend.append(el("span", "尚无保留问题（不代表会话正确）", "muted"));
   }
   function renderNote() {
     const note = $("filter-note");
     note.replaceChildren();
+    const progress = state.view === "category" && state.progress;
+    note.hidden = !(state.q || state.source || progress || (state.view === "category" && projectSelection.size));
+    if (note.hidden) return;
     const matched = scoped().flatMap(s => s.issues.filter(issue => matchIssue(s, issue)));
     note.append(el("span", `当前筛选：${scoped().filter(matchSession).length} 个会话 · ${matched.length} 个问题 `));
-    note.hidden = false;
-    if (!state.progress) return;
-    note.append(document.createTextNode(`仅显示实际进度为“${LABEL.get(state.progress)}”的问题`), button("清除筛选", () => { state.progress = ""; render(); }));
+    if (progress) note.append(document.createTextNode(`处理状态：${LABEL.get(state.progress)}`));
+    note.append(button("清除筛选", () => {
+      state.q = ""; state.source = ""; $("dash-search").value = ""; $("source-filter").value = "";
+      if (state.view === "category") {
+        state.progress = ""; projectSelection.clear();
+        projectInputs.forEach(input => { input.checked = false; }); updateProjectSummary();
+      }
+      syncHash(); render();
+    }));
   }
 
   // --- session cards --------------------------------------------------------------------------------------------
@@ -200,7 +224,7 @@
       card.append(row, miniBar(counts));
     } else card.append(el("div", "无保留问题（不代表会话正确）", "card-count muted"));
     const perCategory = new Map(); let none = 0;
-    for (const issue of s.issues) issue.category ? perCategory.set(issue.category, (perCategory.get(issue.category) || 0) + 1) : none++;
+    for (const issue of matched) issue.category ? perCategory.set(issue.category, (perCategory.get(issue.category) || 0) + 1) : none++;
     const entries = [...perCategory].sort((a, b) => b[1] - a[1] || categoryName(a[0]).localeCompare(categoryName(b[0])));
     if (none) entries.push([NONE, none]);
     if (entries.length) {
@@ -228,7 +252,6 @@
 
   // --- category cards -------------------------------------------------------------------------------------------
   function categoryCard(key, items) {
-    items = items.filter(({s, issue}) => matchIssue(s, issue));
     const info = data.categories[key];
     const card = el("article", undefined, "dash-card category-card");
     card.dataset.key = key;
@@ -249,7 +272,7 @@
     return card;
   }
   function renderCategories(grid, strip) {
-    const visible = [...categoryGroups()].filter(([, items]) => items.some(({s, issue}) => matchIssue(s, issue)));
+    const visible = [...categoryGroups()].map(([key, items]) => [key, items.filter(({s, issue}) => matchIssue(s, issue))]).filter(([, items]) => items.length);
     const real = visible.filter(([key]) => key !== NONE).sort((a, b) => {
       const sessions = items => new Set(items.map(item => item.s.dir)).size;
       return Number(Boolean(data.categories[a[0]]?.deprecated)) - Number(Boolean(data.categories[b[0]]?.deprecated)) ||
@@ -260,7 +283,7 @@
     if (!real.length) grid.append(empty(state.progress || state.q ? "没有符合筛选条件的分类。" : "还没有问题分类。检测时会为问题选择分类，同类问题会在这里汇总。"));
     const none = visible.find(([key]) => key === NONE);
     if (!none) return;
-    const all = categoryGroups().get(NONE);
+    const all = none[1];
     const node = previewButton("category", NONE, null, "dash-card dash-strip");
     node.dataset.key = NONE;
     if (isOpen("category", NONE)) node.setAttribute("aria-current", "true");
@@ -335,7 +358,8 @@
     const meta = el("div", undefined, "drawer-meta");
     if (key !== NONE) meta.append(el("span", key, "mono"));
     if (info?.deprecated) meta.append(flag("已弃用"));
-    meta.append(el("span", `${new Set(items.map(item => item.s.dir)).size} 个会话 · ${items.length} 个问题`));
+    const matching = items.filter(({s, issue}) => matchIssue(s, issue));
+    meta.append(el("span", `${new Set(matching.map(item => item.s.dir)).size} 个会话 · ${matching.length} 个问题`));
     box.append(meta);
     box.append(el("p", key === NONE ? "这些问题还没有分类。相关会话下次运行检测时会补充；分类只用于展示和导航，不影响诊断、修复和验证。" : info ? info.definition : "分类词表中没有这条分类，按分类 ID 显示。"));
     if (!items.length) { box.append(el("p", "这个分类下暂无问题。", "muted")); return; }
@@ -404,7 +428,7 @@
 
   function render() {
     $("project-choice").hidden = state.view === "session";
-    renderTabs(); renderProgress(); renderNote();
+    renderTabs(); renderSessionAttention(); renderProgress(); renderNote();
     const grid = $("dash-grid"), strip = $("dash-strip");
     grid.replaceChildren(); strip.replaceChildren();
     if (state.view === "session") renderSessions(grid); else renderCategories(grid, strip);

@@ -540,6 +540,8 @@ def test_dashboard_script_renders_both_views_filters_and_deep_links(project, tmp
     ):
         save_issue(directory, {"id": issue_id, "revision": revision(directory, issue_id), **extra})
     page = Path(dashboard.generate_traces(project, open_browser=False)["output_path"]).read_text(encoding="utf-8")
+    assert 'id="session-attention"' in page and 'aria-label="处理状态"' in page
+    assert 'id="progress-bar"' not in page and 'id="view-overview"' not in page
     data = tmp_path / "dashboard-data.json"
     data.write_text(json.dumps(payload(page)), encoding="utf-8")
     subprocess.run([node, str(Path(__file__).with_name("trace-dashboard.cjs")), str(data)], check=True)

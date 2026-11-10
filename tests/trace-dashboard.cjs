@@ -54,12 +54,13 @@ const text = node => [node.textContent, ...node.children.map(text)].join(" ").re
 
 function boot(data) {
   const ids = new Map();
-  for (const id of ["project-choice", "project-summary", "project-clear", "project-filter", "project-name", "dash-stats", "warnings", "source-choice", "source-filter", "tab-session", "tab-category", "dash-panel", "dash-search", "progress-bar", "progress-legend", "filter-note", "dash-grid", "dash-strip", "drawer", "drawer-title", "drawer-title-tools", "drawer-tools", "drawer-content", "drawer-close", "drawer-resizer"]) {
+  for (const id of ["project-choice", "project-summary", "project-clear", "project-filter", "project-name", "dash-stats", "warnings", "source-choice", "source-filter", "tab-session", "tab-category", "dash-panel", "dash-search", "session-attention", "progress-legend", "filter-note", "dash-grid", "dash-strip", "drawer", "drawer-title", "drawer-title-tools", "drawer-tools", "drawer-content", "drawer-close", "drawer-resizer"]) {
     ids.set(id, Object.assign(new Node("div"), {id}));
   }
   for (const id of ["drawer-title", "drawer-title-tools", "drawer-tools", "drawer-content", "drawer-close", "drawer-resizer"]) ids.get(id).parentElement = ids.get("drawer");
   for (const id of ["project-summary", "project-clear", "project-filter"]) ids.get(id).parentElement = ids.get("project-choice");
-  for (const id of ["dash-grid", "dash-strip", "progress-bar", "progress-legend", "filter-note"]) ids.get(id).parentElement = ids.get("dash-panel");
+  for (const id of ["dash-grid", "dash-strip", "session-attention", "progress-legend", "filter-note"]) ids.get(id).parentElement = ids.get("dash-panel");
+  ids.get("dash-search").tag = "input";
   ids.get("source-choice").hidden = true;
   ids.get("drawer").hidden = true;
   const store = new Node("script"); store.textContent = JSON.stringify(data); ids.set("dashboard-data", store);
@@ -125,19 +126,33 @@ const sessionText = card => text(card);
 assert.ok(app.cards().some(card => sessionText(card).includes("3 个问题")));
 assert.ok(app.cards().some(card => sessionText(card).includes("1 个问题")));
 assert.ok(app.cards().every(card => sessionText(card).includes("local · test")), "source type and environment");
+assert.equal(app.$("progress-legend").hidden, true);
+assert.equal(app.$("filter-note").hidden, true, "no redundant summary before filtering");
+assert.match(text(app.$("session-attention")), /1 个会话存在验证失败的问题/);
+
+// --- issue filters stay in their own view and counts follow the visible rows -----------------------------
+app.$("tab-category").onclick();
+assert.equal(app.$("session-attention").hidden, true);
+assert.equal(app.$("progress-legend").hidden, false);
+assert.match(text(app.$("progress-legend")), /处理状态 全部 4/);
 assert.match(text(app.$("progress-legend")), /待诊断 1[\s\S]*已诊断 \d[\s\S]*验证失败 1[\s\S]*验证通过 1/);
 assert.doesNotMatch(text(app.$("progress-legend")), /修复中|已排除|无法判断/, "empty progress levels are not listed");
-assert.equal(app.$("progress-bar").children.length, all(app.$("progress-legend")).filter(n => n.className.includes("swatch")).length);
-
-// --- progress legend filters both the grid and the stats --------------------------------------------------
 app.legend("待诊断").onclick();
-assert.equal(app.cards().length, 1);
-assert.match(text(app.cards()[0]), new RegExp(a.session_id.slice(0, 8)));
+assert.match(text(app.strip()[0]), /1 个问题 · 1 个会话/);
+app.strip()[0].onclick();
+assert.equal(app.rows().length, 1);
+assert.match(text(app.$("drawer-content")), /1 个会话 · 1 个问题/);
 assert.equal(app.$("filter-note").hidden, false);
 assert.equal(app.legend("待诊断").attrs["aria-pressed"], "true");
-app.legend("待诊断").onclick();
+app.$("tab-session").onclick();
 assert.equal(app.cards().length, 2);
-assert.equal(app.$("filter-note").hidden, false);
+assert.equal(app.$("progress-legend").hidden, true);
+assert.equal(app.$("filter-note").hidden, true);
+app.$("tab-category").onclick();
+assert.equal(app.legend("待诊断").attrs["aria-pressed"], "true", "issue selection is remembered");
+app.legend("全部").onclick();
+assert.equal(app.$("filter-note").hidden, true);
+app.$("tab-session").onclick();
 
 // --- search matches ids, titles and category names ---------------------------------------------------------
 app.search("fails verification");
@@ -186,8 +201,8 @@ app.press(app.$("drawer-content"));
 assert.equal(app.$("drawer").hidden, false, "a click inside the drawer keeps it open");
 app.press(app.$("drawer-content"), app.$("dash-panel"));
 assert.equal(app.$("drawer").hidden, false, "a press that starts in the drawer (text selection, resize) keeps it open");
-app.press(app.legend("待诊断"));
-assert.equal(app.$("drawer").hidden, false, "a click on a control (here a progress filter) keeps it open");
+app.press(app.$("dash-search"));
+assert.equal(app.$("drawer").hidden, false, "a click on a search control keeps it open");
 app.press(all(cardOf("1 个问题")).find(node => matches(node, ".chips")));
 assert.equal(app.$("drawer-title").textContent, a.session_id, "a click in a card's chip gap is not empty space");
 app.open(cardOf("1 个问题")).onclick();
@@ -202,12 +217,13 @@ assert.equal(app.location.hash, "#view=session");
 app.press(app.$("dash-grid"));
 assert.equal(app.$("drawer").hidden, true, "an empty-space click with nothing open is a no-op");
 
-// --- a progress filter narrows the drawer and says so ------------------------------------------------------
+// --- search narrows the session drawer and says so ---------------------------------------------------------
 app.open(app.cards().find(card => text(card).includes("3 个问题"))).onclick();
-app.legend("待诊断").onclick();
+app.search("diagnosed only");
 assert.equal(app.rows().length, 1);
 assert.match(text(app.$("drawer-content")), /问题 1 \/ 3（已按筛选）/);
-app.legend("待诊断").onclick();
+assert.doesNotMatch(text(app.cards()[0]), /未分类/, "category chips follow the same search as the issue count");
+app.search("");
 app.escape();
 
 // --- category chip jumps to the category view and opens its drawer -----------------------------------------
@@ -233,6 +249,7 @@ const groups = all(app.$("drawer-content")).filter(node => node.className.includ
 assert.equal(groups.length, 2, "issues are grouped per session");
 app.legend("验证失败").onclick();
 assert.equal(app.rows().length, 1);
+assert.match(text(app.$("drawer-content")), /1 个会话 · 1 个问题/);
 app.legend("验证失败").onclick();
 app.escape();
 assert.equal(app.strip()[0].tag, "button", "the uncategorized strip is itself the control");
@@ -282,6 +299,8 @@ app.$("source-filter").value = option.value;
 app.$("source-filter").onchange();
 assert.equal(app.cards().length, 1);
 assert.match(text(app.$("dash-stats")), /2 会话/, "header totals stay project-wide");
+assert.match(text(app.$("session-attention")), /1 个会话存在验证失败的问题/);
+app.$("tab-category").onclick();
 assert.equal(text(app.$("progress-legend")).includes("验证失败 1"), true);
 assert.equal(text(app.$("progress-legend")).includes("验证通过"), false, "the legend follows the source scope");
 
@@ -291,13 +310,15 @@ odd.sessions.push({dir: "broken", href: "./broken/preview.html", session_id: "br
 odd.sessions.push({...JSON.parse(JSON.stringify(a)), dir: "quiet", href: "./quiet/preview.html", session_id: "quiet", issues: [], preview: {exists: false, stale: true}, problem_count: 2, problems: ["ISSUE-009: bad"]});
 app = boot(odd);
 assert.equal(app.cards().length, 4);
-// A progress filter asks about issues, so sessions without any issue (or without readable records) drop out;
-// a text search still finds them by Session ID so they can be inspected.
+assert.match(text(app.$("session-attention")), /2 个会话有记录不可读取/);
+// A saved issue filter must not hide empty or damaged sessions after switching back.
+app.$("tab-category").onclick();
 app.legend("待诊断").onclick();
-assert.deepEqual(app.cards().map(card => card.dataset.key), [a.dir]);
-app.legend("待诊断").onclick();
+app.$("tab-session").onclick();
+assert.equal(app.cards().length, 4);
 app.search("quiet");
 assert.deepEqual(app.cards().map(card => card.dataset.key), ["quiet"]);
+assert.match(text(app.$("session-attention")), /1 个会话有记录不可读取/);
 app.search("");
 assert.equal(app.cards().length, 4);
 const broken = app.cards().find(card => card.dataset.key === "broken");
@@ -356,8 +377,10 @@ assert.equal(app.$("tab-session").tabIndex, 0, "clicking moves the tab stop back
 const nothing = JSON.parse(JSON.stringify(base));
 for (const s of nothing.sessions) s.issues = [];
 app = boot(nothing);
-assert.match(text(app.$("progress-legend")), /尚无保留问题（不代表会话正确）/);
+assert.equal(app.$("session-attention").hidden, true);
+assert.equal(app.$("progress-legend").hidden, true);
 app.$("tab-category").onclick();
+assert.match(text(app.$("progress-legend")), /全部 0/);
 assert.match(text(app.cards()[0]), /还没有问题分类/);
 assert.equal(app.strip().length, 0);
 
@@ -409,7 +432,8 @@ assert.match(text(app.$("filter-note")), /1 个会话 · 2 个问题/);
 app.go("#view=category&project=a");
 assert.match(text(app.$("filter-note")), /1 个会话 · 1 个问题/, "a parent matches only its own directly associated issue");
 app.$("tab-session").onclick();
-assert.match(text(app.$("filter-note")), /2 个会话 · 4 个问题/);
+assert.equal(app.$("filter-note").hidden, true);
+assert.equal(app.cards().length, 2);
 app.open(app.cards()[0]).onclick();
 assert.equal(app.rows().length, 3);
 assert.ok(app.rows().every(row => all(row).filter(n => n.tag === "a").every(n => !n.href.includes("&project="))));
@@ -436,3 +460,32 @@ assert.equal(app.$("project-choice").open, false, "clicking another control clos
 app.$("project-choice").open = true;
 app.press(app.$("dash-panel"));
 assert.equal(app.$("project-choice").open, false, "clicking page content closes the menu");
+
+// Attention counts sessions once, follows search, and is absent from the issue view.
+const uncertain = JSON.parse(JSON.stringify(base));
+uncertain.sessions[0].issues.forEach(issue => { issue.progress = "inconclusive"; });
+app = boot(uncertain);
+assert.match(text(app.$("session-attention")), /1 个会话存在“无法判断”的验证结论/);
+app.search("nothing-matches-this");
+assert.equal(app.$("session-attention").hidden, true);
+all(app.$("filter-note")).find(node => node.tag === "button").onclick();
+assert.equal(app.$("session-attention").hidden, false);
+assert.equal(app.$("filter-note").hidden, true);
+app.$("tab-category").onclick();
+assert.equal(app.$("session-attention").hidden, true);
+
+// Category order uses only matching issues, even if a different category has a larger unfiltered history.
+const ranked = JSON.parse(JSON.stringify(base));
+ranked.categories.other = {name: "Other", definition: "Another category"};
+ranked.sessions = [a, b].map((s, index) => ({...JSON.parse(JSON.stringify(s)), issues: [
+  {id: "ISSUE-001", title: "Keep", category: shellId, progress: "pending", updated_ms: 1},
+  {id: "ISSUE-002", title: "Old", category: "other", progress: "diagnosed", updated_ms: 2},
+  {id: "ISSUE-003", title: "Old", category: "other", progress: "diagnosed", updated_ms: 2},
+  ...(index ? [] : [{id: "ISSUE-004", title: "Keep", category: "other", progress: "pending", updated_ms: 3}]),
+]}));
+app = boot(ranked);
+app.$("tab-category").onclick();
+assert.equal(app.cards()[0].dataset.key, "other");
+app.legend("待诊断").onclick();
+assert.equal(app.cards()[0].dataset.key, shellId);
+assert.match(text(app.cards()[0]), /2 个会话 · 2 个问题/);
