@@ -582,7 +582,11 @@
     for (const key of ["input", "output"]) {
       const detail = el("details", undefined, "detail-section");
       detail.open = true;
-      const content = pre(node[key] ?? "原始记录未提供值");
+      const value = node[key];
+      const empty = value == null || (typeof value === "string" && !value.trim());
+      const content = empty
+        ? el("p", value == null ? "原始记录未提供值" : (key === "input" ? "输入为空" : "输出为空"), "muted")
+        : pre(value);
       if (ref && data.references[refKey(ref)]?.location?.field?.includes(`/${key}`)) detail.classList.add("highlight-field");
       detail.append(el("summary", key === "input" ? "节点输入" : "节点输出"), content);
       bodies.push(detail);
