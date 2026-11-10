@@ -145,7 +145,7 @@
 | 大盘元素 | 沿用的单会话页样式 |
 | --- | --- |
 | 顶栏 | 同一 `.topbar`：橙色 `ATK` 标识 + 标题“轨迹大盘”；右侧为统计和维度切换 |
-| 维度切换 `会话 \| 异常` | 与 `.stage-tabs .active` 相同：选中项为 `--accent` 文字、`--brand` 边框、`--tint` 底色 |
+| 维度切换 `会话 \| 异常` | 下划线式页签 `.view-tabs`（不再用单会话页的按钮式 `.stage-tabs`）：页签行底部 1px `--line` 分隔线，选中项 `--accent` 文字 + 2px `--brand` 下划线，未选中项 `--muted` 文字无边框；搜索与来源筛选位于同一行右侧。语义为 `tablist`/`tab`/`tabpanel`，仅选中页签可 Tab 聚焦，左右方向键（循环）、Home/End 切换 |
 | 会话卡片、分类卡片 | 与 `.issue-card` 相同：白底、`--line` 边框、8px 圆角；悬停时 `--tint` 底色和 `#e4b89b` 边框；选中时左侧 3px `--brand` 内描边 |
 | ID 文本 | `.issue-id-text`：`--accent` 色、等宽、12px 粗体 |
 | 分类标签 | `.seg-chip` 配色：`#fff8f1` 底、`--accent` 文字、4px 圆角 |

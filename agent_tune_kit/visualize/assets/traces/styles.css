@@ -2,12 +2,19 @@
 /* The dashboard drawer is mostly issue titles, so it opens wider than the session page's default. */
 :root { --drawer-width: min(640px, 92vw) }
 .dash { flex: 1; min-width: 0; padding: 14px clamp(12px, 2vw, 24px) 28px; display: flex; flex-direction: column; gap: 12px }
-.dash-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px }
-.dash-controls .search-label { flex: 1 1 260px; max-width: 440px; min-width: 0 }
+/* The view switch is an underlined tab bar: the bar's bottom line separates it from the panel, and the selected tab's
+   brand underline sits on that line. Search and the source filter ride on the right of the same bar. */
+.dash-controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; border-bottom: 1px solid var(--line) }
+.dash-controls .search-label { flex: 1 1 260px; max-width: 440px; min-width: 0; margin-left: auto }
+.dash-controls .search-label, #source-choice { margin-bottom: 7px }
+.view-tabs { display: flex; gap: 4px }
+.view-tabs [role=tab] { height: 40px; margin-bottom: -1px; padding: 0 16px; border: 0; border-bottom: 2px solid transparent; border-radius: 6px 6px 0 0; background: transparent; color: var(--muted); font-weight: 600 }
+.view-tabs [role=tab]:hover { color: var(--ink); background: #edf1f4 }
+.view-tabs [role=tab][aria-selected=true] { color: var(--accent); border-bottom-color: var(--brand); background: transparent; cursor: default }
+.dash-panel { display: flex; flex-direction: column; gap: 12px; min-width: 0 }
 .dash-controls input { display: block; width: 100%; height: 34px; padding: 0 11px; font-size: 13px; border-color: #cdd8e1 }
 .dash-controls input:hover { border-color: #9baebb }
 .dash-controls select { max-width: 240px }
-.stage-tabs button { height: 34px }
 #dash-stats { font-size: 12px; white-space: nowrap }
 
 .dash-progress { display: flex; flex-direction: column; gap: 8px }
@@ -87,4 +94,9 @@ button.category-tag:hover { background: #ffe8d2 }
 
 @media (max-width: 800px) {
   .dash-grid { grid-template-columns: 1fr }
+  /* Search wraps under the tabs here, so the tab line moves onto the tab row itself. */
+  .dash-controls { border-bottom: 0 }
+  .view-tabs { flex-basis: 100%; border-bottom: 1px solid var(--line) }
+  .dash-controls .search-label { max-width: none; margin-left: 0 }
+  .dash-controls .search-label, #source-choice { margin-bottom: 0 }
 }

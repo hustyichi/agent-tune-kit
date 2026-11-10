@@ -15,20 +15,22 @@
   <div id="warnings" class="page-warnings" role="status"></div>
   <main class="dash">
     <div class="dash-controls">
-      <div id="view-tabs" class="stage-tabs" role="tablist" aria-label="维度">
-        <button id="tab-session" type="button" role="tab">会话</button>
-        <button id="tab-category" type="button" role="tab">异常</button>
+      <div id="view-tabs" class="view-tabs" role="tablist" aria-label="维度">
+        <button id="tab-session" type="button" role="tab" aria-controls="dash-panel">会话</button>
+        <button id="tab-category" type="button" role="tab" aria-controls="dash-panel">异常</button>
       </div>
       <label class="search-label"><span class="sr-only">搜索</span><input id="dash-search" type="search" placeholder="搜索 Session ID、问题编号、标题、分类"></label>
       <label id="source-choice" hidden><span class="sr-only">来源</span><select id="source-filter"></select></label>
     </div>
-    <section class="dash-progress" aria-label="实际进度分布">
-      <div id="progress-bar" class="progress-bar" role="img"></div>
-      <div id="progress-legend" class="progress-legend"></div>
-    </section>
-    <div id="filter-note" class="filter-note" role="status" hidden></div>
-    <div id="dash-grid" class="dash-grid"></div>
-    <div id="dash-strip"></div>
+    <div id="dash-panel" class="dash-panel" role="tabpanel" aria-labelledby="tab-session">
+      <section class="dash-progress" aria-label="实际进度分布">
+        <div id="progress-bar" class="progress-bar" role="img"></div>
+        <div id="progress-legend" class="progress-legend"></div>
+      </section>
+      <div id="filter-note" class="filter-note" role="status" hidden></div>
+      <div id="dash-grid" class="dash-grid"></div>
+      <div id="dash-strip"></div>
+    </div>
   </main>
   <aside id="drawer" class="drawer" role="dialog" aria-modal="false" aria-labelledby="drawer-title" hidden tabindex="-1">
     <div class="drawer-resizer" id="drawer-resizer" aria-hidden="true"></div>

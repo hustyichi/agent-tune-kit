@@ -95,12 +95,24 @@
   const latestOf = items => items.reduce((max, {issue}) => issue.updated_ms != null && issue.updated_ms > max ? issue.updated_ms : max, -1);
 
   // --- page chrome ----------------------------------------------------------------------------------------------
+  const TABS = [["tab-session", "session"], ["tab-category", "category"]];
   function renderTabs() {
-    for (const [id, view] of [["tab-session", "session"], ["tab-category", "category"]]) {
-      const tab = $(id);
-      tab.classList.toggle("active", state.view === view);
-      tab.setAttribute("aria-selected", String(state.view === view));
+    for (const [id, view] of TABS) {
+      const tab = $(id), selected = state.view === view;
+      tab.setAttribute("aria-selected", String(selected));
+      tab.tabIndex = selected ? 0 : -1;
+      if (selected) $("dash-panel").setAttribute("aria-labelledby", id);
     }
+  }
+  // Tablist keyboard pattern: arrows (wrapping), Home and End move to and activate the neighbouring tab.
+  function onTabKey(event) {
+    const at = TABS.findIndex(([, view]) => view === state.view);
+    const steps = {ArrowLeft: at - 1, ArrowRight: at + 1, Home: 0, End: TABS.length - 1};
+    if (!(event.key in steps)) return;
+    event.preventDefault();
+    const [id, view] = TABS[(steps[event.key] + TABS.length) % TABS.length];
+    if (view !== state.view) setView(view);
+    $(id).focus();
   }
   function renderProgress() {
     const counts = countBy(scoped().flatMap(s => s.issues));
@@ -385,8 +397,10 @@
     $("source-choice").hidden = false;
     select.onchange = () => { state.source = select.value; render(); };
   }
-  $("tab-session").onclick = () => setView("session");
-  $("tab-category").onclick = () => setView("category");
+  for (const [id, view] of TABS) {
+    $(id).onclick = () => setView(view);
+    $(id).onkeydown = onTabKey;
+  }
   $("dash-search").oninput = event => { state.q = event.target.value.trim().toLowerCase(); render(); };
   $("drawer-close").onclick = closeDrawer;
   document.addEventListener("keydown", event => {

@@ -37,7 +37,7 @@ const text = node => [node.textContent, ...node.children.map(text)].join(" ").re
 
 function boot(data) {
   const ids = new Map();
-  for (const id of ["project-name", "dash-stats", "warnings", "source-choice", "source-filter", "tab-session", "tab-category", "dash-search", "progress-bar", "progress-legend", "filter-note", "dash-grid", "dash-strip", "drawer", "drawer-title", "drawer-content", "drawer-close", "drawer-resizer"]) {
+  for (const id of ["project-name", "dash-stats", "warnings", "source-choice", "source-filter", "tab-session", "tab-category", "dash-panel", "dash-search", "progress-bar", "progress-legend", "filter-note", "dash-grid", "dash-strip", "drawer", "drawer-title", "drawer-content", "drawer-close", "drawer-resizer"]) {
     ids.set(id, new Node("div"));
   }
   ids.get("source-choice").hidden = true;
@@ -78,6 +78,7 @@ function boot(data) {
   };
 }
 
+const selected = id => app.$(id).getAttribute("aria-selected") === "true";
 const byDir = (data, id) => data.sessions.find(s => s.session_id === id);
 const a = byDir(base, "session-a"), b = byDir(base, "session-b");
 const shellId = Object.keys(base.categories)[0];
@@ -85,8 +86,11 @@ const shellName = base.categories[shellId].name;
 
 // --- default view, cards and progress ----------------------------------------------------------------------
 let app = boot(base);
-assert.equal(app.$("tab-session").className.includes("active"), true, "opens on the session view");
-assert.equal(app.$("tab-category").className.includes("active"), false);
+assert.equal(selected("tab-session"), true, "opens on the session view");
+assert.equal(selected("tab-category"), false);
+assert.equal(app.$("tab-session").tabIndex, 0, "only the selected tab is in the tab order");
+assert.equal(app.$("tab-category").tabIndex, -1);
+assert.equal(app.$("dash-panel").getAttribute("aria-labelledby"), "tab-session");
 assert.equal(app.$("source-choice").hidden, true, "a single source needs no source filter");
 assert.equal(app.cards().length, 2);
 assert.equal(app.location.hash, "", "an empty hash already means the default view, so first load leaves the URL alone");
@@ -152,7 +156,7 @@ app.escape();
 // --- category chip jumps to the category view and opens its drawer -----------------------------------------
 const chip = all(app.cards().find(card => text(card).includes(shellName))).find(node => node.tag === "button" && node.className.includes("category-tag"));
 chip.onclick();
-assert.equal(app.$("tab-category").className.includes("active"), true);
+assert.equal(selected("tab-category"), true);
 assert.equal(app.$("drawer-title").textContent, shellName);
 assert.equal(app.location.hash, `#view=category&category=${encodeURIComponent(shellId)}`);
 app.escape();
@@ -188,14 +192,14 @@ app.go("#view=category&category=~uncategorized");
 assert.equal(app.$("drawer-title").textContent, "未分类");
 app.go("#view=session&session=does-not-exist");
 assert.equal(app.$("drawer").hidden, true);
-assert.equal(app.$("tab-session").className.includes("active"), true);
+assert.equal(selected("tab-session"), true);
 app.go("#view=category&category=made-up");
 assert.equal(app.$("drawer").hidden, true, "an unknown category does not open an empty drawer");
 app.go(`#view=session&session=${encodeURIComponent(b.dir)}`);
 assert.equal(app.$("drawer-title").textContent, b.session_id);
 app.go("");
 assert.equal(app.$("drawer").hidden, true);
-assert.equal(app.$("tab-session").className.includes("active"), true, "no hash means the default session view");
+assert.equal(selected("tab-session"), true, "no hash means the default session view");
 
 // --- copy ------------------------------------------------------------------------------------------------------
 app = boot(base);
@@ -246,6 +250,27 @@ assert.match(text(app.$("drawer-content")), /生成命令：[\s\S]*atk visualize
 assert.match(text(app.$("drawer-content")), /记录读取失败 2/);
 assert.match(text(app.$("drawer-content")), /没有保留问题不代表会话正确/);
 assert.equal(app.rows().length, 0);
+
+// --- tab keyboard: arrows wrap and activate, Home/End jump, other keys pass through -------------------------
+app = boot(base);
+const key = (id, name) => { let prevented = false; app.$(id).onkeydown({key: name, preventDefault() { prevented = true; }}); return prevented; };
+assert.equal(key("tab-session", "ArrowRight"), true);
+assert.equal(selected("tab-category"), true);
+assert.equal(app.$("tab-category").focused, true, "focus follows the activated tab");
+assert.equal(app.$("dash-panel").getAttribute("aria-labelledby"), "tab-category");
+assert.equal(app.location.hash, "#view=category");
+key("tab-category", "ArrowRight");
+assert.equal(selected("tab-session"), true, "ArrowRight wraps back to the first tab");
+key("tab-session", "ArrowLeft");
+assert.equal(selected("tab-category"), true, "ArrowLeft wraps to the last tab");
+key("tab-category", "Home");
+assert.equal(selected("tab-session"), true);
+key("tab-session", "End");
+assert.equal(selected("tab-category"), true);
+assert.equal(key("tab-category", "Tab"), false, "Tab leaves the tablist untouched");
+app.$("tab-session").onclick();
+assert.equal(selected("tab-session"), true);
+assert.equal(app.$("tab-session").tabIndex, 0, "clicking moves the tab stop back");
 
 // --- empty project -----------------------------------------------------------------------------------------------
 const nothing = JSON.parse(JSON.stringify(base));
