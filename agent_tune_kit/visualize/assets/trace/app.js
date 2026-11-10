@@ -632,18 +632,77 @@
       return !keyOnly || n.level === "ERROR" || !["heartbeat", "healthcheck", "sandking_env.read"].includes(n.name);
     });
   }
-  function summaryOf(n) {
-    const out = n.output;
-    if (n.level === "ERROR") return "运行时错误";
-    if (typeof out === "string") return out.slice(0,180).replace(/\s+/g," ").trim();
-    if (out && typeof out === "object") {
-      for (const k of ["result_summary","outcome","status","finishReason","message","text","stdout"]) {
-        if (typeof out[k] === "string" && out[k]) return out[k].slice(0,180).replace(/\s+/g," ").trim();
+  function eventState(n) {
+    const out = n.output, input = n.input;
+    const statuses = [out?.status, out?.outcome, input?.result].filter(v => typeof v === "string" && v.trim());
+    const failed = String(n.level).toUpperCase() === "ERROR"
+      || statuses.some(v => ["error", "failed", "failure", "fail"].includes(v.trim().toLowerCase()))
+      || out?.success === false || out?.is_error === true || out?.isError === true
+      || (typeof out?.error === "string" ? !!out.error.trim()
+        : out?.error === true || (out?.error && typeof out.error === "object" && Object.keys(out.error).length > 0));
+    const status = statuses[0]?.trim() || (out?.success === true ? "success" : "");
+    return {failed: !!failed, label: failed ? "失败" : (["success", "succeeded"].includes(status.toLowerCase()) ? "成功" : status)};
+  }
+  function previewText(value, depth = 0) {
+    // shortcut: cap traversal at six levels/eight blocks, extend when a supported payload nests deeper.
+    if (value == null || depth > 6) return "";
+    if (typeof value !== "object") return String(value).replace(/\s+/g," ").trim().slice(0,500);
+    if (Array.isArray(value)) return value.slice(0,8).map(v => previewText(v, depth + 1)).filter(Boolean).join(" · ").slice(0,500);
+    if (value.type === "tool_use") return [value.name, value.input?.file_path || value.input?.command || value.input?.skill]
+      .map(v => previewText(v, depth + 1)).filter(Boolean).join(" · ").slice(0,500);
+    for (const key of ["text", "thinking", "content", "message", "description"]) {
+      const text = previewText(value[key], depth + 1);
+      if (text) return text;
+    }
+    return "";
+  }
+  function eventPreview(n, state = eventState(n)) {
+    const out = n.output, input = n.input;
+    if (state.failed) {
+      const error = typeof out?.error === "string" || typeof out?.error === "object" ? out.error : null;
+      for (const value of [error, out?.stderr, out?.message, out?.result_summary, out]) {
+        const text = previewText(value);
+        if (text) return text;
       }
     }
-    if (typeof out === "boolean" || typeof out === "number") return String(out);
-    if (n.until > n.at) return `${((n.until-n.at)/1000).toLocaleString(undefined, {maximumFractionDigits:3})} s`;
-    return "—";
+    if (out?.["mcs.state.to"]) return [input?.["mcs.state.from"], out["mcs.state.to"]].filter(Boolean).map(v => previewText(v)).join(" → ");
+    if (out?.["mcs.workspace.scope"]) return previewText(["scope", "doc_root_count", "project_count"]
+      .filter(k => out[`mcs.workspace.${k}`] != null).map(k => `${k}=${out[`mcs.workspace.${k}`]}`).join(" · "));
+    if (out?.usedTokens != null && out?.maxTokens != null) return previewText(`${out.usedTokens} / ${out.maxTokens} tokens${out.percentage != null ? ` · ${out.percentage}` : ""}`);
+    if (input?.result && input?.format) return previewText(`输入 · result=${input.result} · format=${input.format}`);
+    for (const [key, label] of [["file_path", "文件"], ["command", "命令"], ["skill", "Skill"]]) {
+      if (typeof input?.[key] === "string" && input[key].trim()) return previewText(`${label}：${input[key]}`);
+    }
+    if (out?.tool_name) return previewText([out.tool_name, out.primary_param || out.message].filter(Boolean).join(" · "));
+    if (Array.isArray(out?.ops)) {
+      const text = previewText(out.ops.filter(op => op && ["/message", ""].includes(op.path)).map(op => op.value));
+      if (text) return text;
+    }
+    if (input?.message?.content) {
+      const text = previewText(input.message.content);
+      if (text) return `输入 · ${text}`;
+    }
+    if (input?.subtype) return previewText(`subtype=${input.subtype}${input.model ? ` · model=${input.model}` : ""}`);
+    for (const value of [out, ...["message", "result_summary", "text", "stdout", "stderr", "error", "outcome", "status", "finishReason"].map(k => out?.[k])]) {
+      const text = previewText(value);
+      if (text) return text;
+    }
+    for (const [label, value] of [["输出", out], ["输入", input]]) {
+      if (value && typeof value === "object") {
+        const fields = Object.entries(value).filter(([, v]) => v != null && typeof v !== "object" && previewText(v));
+        if (fields.length) return previewText(`${label} · ${fields.slice(0,4).map(([k,v]) => `${k}=${previewText(v)}`).join(" · ")}`);
+      } else {
+        const text = previewText(value);
+        if (text) return `${label} · ${text}`;
+      }
+    }
+    return "未记录可预览内容";
+  }
+  function eventDuration(n) {
+    const ms = Number.isFinite(n.at) && Number.isFinite(n.until) && n.until > n.at
+      ? n.until - n.at : n.output?.duration_ms ?? n.input?.durationMs;
+    if (!Number.isFinite(ms) || ms < 0) return "";
+    return ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toLocaleString(undefined, {maximumFractionDigits:3})} s`;
   }
   function segmentMembership(index) {
     if (!investigation) return null;
@@ -796,20 +855,33 @@
       const traceCell = el("span", undefined, "trace-col");
       const tag = el("span", trackLabel(n.track), "trace-tag"); tag.title = n.trace_id || n.reference.path; traceCell.append(tag);
       const action = el("span", undefined, "node-main"), name = n.name || String(n.id || "未命名记录");
-      const label = el("span", name, "node-label"); label.title = name;
-      action.append(label, el("span", n.type, "node-branch"));
+      const state = eventState(n);
+      const label = el("span", undefined, "node-label"); label.title = name;
+      if (state.failed) {
+        row.classList.add("is-error");
+        const icon = el("span", "⚠", "event-error-icon");
+        icon.setAttribute("role", "img"); icon.setAttribute("aria-label", "执行异常"); icon.title = "执行异常";
+        label.append(icon);
+      }
+      label.append(el("span", name, "node-name"));
+      const tags = el("span", undefined, "node-tags"); tags.append(el("span", n.type, "node-branch"));
+      action.append(label, tags);
       const membership = item.part
         ? {part: item.part, index: item.fragIndex, anchor: item.part.anchors.includes(i)}
         : (item.membership || segmentMembership(i));
       if (membership?.part) {
         row.classList.add("in-fragment");
-        for (const note of fieldNotes(i, membership.part)) action.append(el("span", `★ ${note}`, "evidence-note"));
+        for (const note of fieldNotes(i, membership.part)) tags.append(el("span", `★ ${note}`, "evidence-note"));
       }
       if (n.issue_ids?.length) {
-        for (const id of n.issue_ids.slice(0, 3)) action.append(el("span", shortIssue(id), "issue-pill"));
+        for (const id of n.issue_ids.slice(0, 3)) tags.append(el("span", shortIssue(id), "issue-pill"));
       }
-      const result = el("span", summaryOf(n), "result-col"); result.title = result.textContent;
-      row.append(time, traceCell, action, result); content.append(row);
+      const result = el("span", eventPreview(n, state), "result-col"); result.title = result.textContent;
+      const meta = el("span", undefined, "event-meta"), duration = eventDuration(n);
+      if (state.label) { const status = el("span", state.label, "event-status"); status.title = state.label; meta.append(status); }
+      if (duration) meta.append(el("span", duration));
+      if (!state.label && !duration) meta.append(el("span", "—"));
+      row.append(time, traceCell, action, result, meta); content.append(row);
     }
     if (!count) content.append(el("p", timeline().order.length ? "没有符合筛选条件的记录。" : "此会话没有可浏览的记录。", "empty"));
     list.style.paddingTop = `${first * rowHeight}px`;

@@ -134,8 +134,8 @@ body.rail-collapsed #rail-toggle { transform: rotate(180deg) }
   .segments-only { grid-column: 1/-1 }
 }
 .stream { overflow: hidden; max-height: 100vh; max-height: 100dvh }
-.row-grid { display: grid; grid-template-columns: 106px 58px minmax(160px,1.2fr) minmax(100px,.8fr); gap: 10px; padding-inline: 16px; align-items: center }
-.stream.single .row-grid { grid-template-columns: 106px minmax(160px,1.2fr) minmax(100px,.8fr) }
+.row-grid { display: grid; grid-template-columns: 96px 42px clamp(210px,24%,320px) minmax(0,1fr) 76px; gap: 12px; padding-inline: 16px; align-items: center }
+.stream.single .row-grid { grid-template-columns: 96px clamp(210px,24%,320px) minmax(0,1fr) 76px }
 .stream.single .trace-col { display: none }
 .stream-header { color: var(--muted); font-size: 11px; min-height: 31px; background: #f0f4f6; border-bottom: 1px solid var(--line); font-weight: 600 }
 #trace-scroll {
@@ -146,17 +146,27 @@ body.rail-collapsed #rail-toggle { transform: rotate(180deg) }
 .trace-row:hover { background: #f5f9fa }
 .trace-row.in-fragment { background: #fffaf4; box-shadow: inset 3px 0 #f0b27a }
 .trace-row[aria-current=true] { background: var(--tint); box-shadow: inset 3px 0 var(--brand) }
+.trace-row.is-error { background: #fff2f1; box-shadow: inset 3px 0 #c0392b }
+.trace-row.is-error:hover { background: #ffe8e6 }
+.trace-row.is-error[aria-current=true] { background: #ffe0dc; box-shadow: inset 3px 0 #c0392b, inset 0 0 0 1px var(--brand) }
 .segment-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-inline: 16px; background: #fff3e6; color: var(--accent); font-size: 12px; font-weight: 650 }
 .segment-header .seg-meta { color: var(--muted); font-weight: 500 }
 .fold-row { color: var(--muted); font-size: 12px; background: #f7f9fa; justify-content: center }
 .time-col { font-size: 12px; color: #485c6a }
 .trace-tag { display: inline-block; min-width: 26px; text-align: center; font-size: 11px; background: #edf3f5; color: #355363; border-radius: 4px; padding: 1px 5px }
-.node-main { display: flex; gap: 8px; min-width: 0; align-items: baseline; flex-wrap: wrap }
-.node-label, .result-col { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
-.node-label { font-weight: 600; font-size: 13px }
+.node-main { display: flex; flex-direction: column; min-width: 0 }
+.node-label { display: flex; align-items: center; gap: 6px; min-width: 0; font-weight: 600; font-size: 13px; line-height: 17px }
+.node-name, .event-status { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; max-width: 100% }
+.node-tags { display: flex; align-items: baseline; gap: 7px; min-width: 0; overflow: hidden; line-height: 14px }
 .node-branch { font: 10px var(--mono); color: #647784 }
 .result-col { color: var(--muted); font-size: 12px }
+.trace-row .result-col { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; white-space: normal; line-height: 16px; color: #40566a }
+.event-meta { display: flex; flex-direction: column; align-items: flex-end; min-width: 0; font: 11px/15px var(--mono); color: var(--muted) }
+.event-status { font-family: var(--sans, sans-serif) }
+.event-error-icon, .is-error .event-status { color: #b12c21 }
+.event-error-icon, .node-branch, .issue-pill { flex-shrink: 0 }
 .evidence-note, .issue-pill { color: var(--accent); font-size: 10px; white-space: nowrap }
+.evidence-note { min-width: 0; overflow: hidden; text-overflow: ellipsis }
 .issue-pill { background: #ffe8d2; border-radius: 999px; padding: 0 6px }
 
 .overview-grid { display: grid; grid-template-columns: 1fr; gap: 12px }
@@ -217,7 +227,7 @@ pre { background: var(--bg); border-radius: 6px; padding: 8px 12px; font-size: 1
   .lane-legend { gap: 8px; flex-wrap: wrap }
   .row-grid { grid-template-columns: 80px 34px minmax(0,1fr); gap: 8px; padding-inline: 7px }
   .stream.single .row-grid { grid-template-columns: 80px minmax(0,1fr) }
-  .result-col { display: none }
+  .result-col, .trace-row .result-col, .event-meta { display: none }
   .node-branch { font-size: 9px }
   #fragment-bar { flex-wrap: wrap; padding: 5px 8px }
   .fragment-controls { flex-wrap: wrap }
