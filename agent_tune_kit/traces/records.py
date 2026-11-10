@@ -9,6 +9,7 @@ from agent_tune_kit.errors import UserActionRequired
 from agent_tune_kit.results.evidence import json_bytes, now, safe_path, write_manifest
 from agent_tune_kit.utils.files import write_text_atomic
 
+from .categories import check_issue_category
 from .segments import resolve_segments, segments_for_storage
 from .store import (
     STATES,
@@ -64,6 +65,7 @@ def load_issue(session_dir, issue_id):
         or any(not isinstance(issue.get(key), str) for key in ("title", "description", "created_at"))
         or any(not isinstance(issue.get(key), list) for key in ("notes", "history"))
         or issue.get("status") not in ISSUE_STATES
+        or ("category" in issue and not isinstance(issue["category"], str))
     ):
         raise UserActionRequired("Invalid issue identity or record structure.")
     segments = issue.get("segments", [])
@@ -171,7 +173,11 @@ def prepare_issue(session_dir, data, *, dry_run=False):
             "segments": [],
         }
     )
-    for field in ("title", "description", "evidence", "status", "notes", "selection_reason", "segments"):
+    if "category" in data:
+        data["category"] = check_issue_category(
+            directory.parent, data["category"], previous.get("category") if previous else None
+        )
+    for field in ("title", "description", "evidence", "status", "notes", "selection_reason", "segments", "category"):
         if field in data:
             issue[field] = data[field]
     if not previous:
@@ -220,6 +226,7 @@ def prepare_issue(session_dir, data, *, dry_run=False):
                     "title",
                     "description",
                     "selection_reason",
+                    "category",
                     "evidence",
                     "segments",
                     "status",
@@ -336,8 +343,9 @@ def save_diagnosis(session_dir, issue_id, text, diagnosis_id=None):
         "segments": issue.get("segments", []),
         "created_at": now(),
     }
-    if "selection_reason" in issue:
-        snapshot["selection_reason"] = issue["selection_reason"]
+    for optional in ("selection_reason", "category"):
+        if optional in issue:
+            snapshot[optional] = issue[optional]
     _refs(directory, issue["evidence"])
     for segment in snapshot["segments"]:
         _refs(directory, segment["evidence"])

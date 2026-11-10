@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from agent_tune_kit.traces import records, store
+from agent_tune_kit.traces import categories, records, store
 from agent_tune_kit.traces.capture import fetch_session, import_session
 from agent_tune_kit.traces.query import overview, search, show
 
@@ -34,6 +34,12 @@ def register(subparsers):
     init.add_argument("--config", help="non-secret configuration JSON file")
     init.add_argument("--project-file", help="project context Markdown file")
     init.add_argument("--json", action="store_true")
+    category = actions.add_parser("category", help="list or update the project issue category vocabulary")
+    category.add_argument("--project-root", default=".")
+    mode = category.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--list", action="store_true", help="list categories with per-session issue counts")
+    mode.add_argument("--data", help="category JSON; revising the vocabulary requires its current revision")
+    category.add_argument("--json", action="store_true")
     for action in [
         "migrate",
         "fetch",
@@ -100,6 +106,10 @@ def execute(args):
     if args.action == "init":
         text = Path(args.project_file).read_text(encoding="utf-8") if args.project_file else None
         return store.init_workspace(args.project_root, config=read_json(args.config), project_text=text)
+    if args.action == "category":
+        if args.list:
+            return categories.list_categories(args.project_root)
+        return categories.save_category(args.project_root, read_json(args.data))
     source = read_json(args.source)
     if args.action == "migrate":
         from agent_tune_kit.traces.migrate import migrate

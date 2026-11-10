@@ -18,7 +18,9 @@ def component(value):
     if not isinstance(value, str) or not value.strip():
         raise UserActionRequired("An explicit nonempty native ID is required.")
     name = quote(value, safe="")
-    if name.startswith(".") or name.casefold() in {"project.md", "config.json", "_export_summary"}:
+    # Names of the files that live beside session directories at the archive root.
+    reserved = {"project.md", "config.json", "categories.json", "index.html", "_export_summary"}
+    if name.startswith(".") or name.casefold() in reserved:
         name = "%" + format(ord(name[0]), "02X") + name[1:]
     if len(name) > 200:
         name = name[:150] + "~" + hashlib.sha256(value.encode()).hexdigest()

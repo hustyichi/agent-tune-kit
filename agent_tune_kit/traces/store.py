@@ -88,7 +88,7 @@ def read_json(path):
         if not isinstance(value, dict):
             raise ValueError
         return value
-    except (OSError, ValueError, UnicodeError):
+    except (OSError, ValueError, UnicodeError, RecursionError):
         raise UserActionRequired(f"Missing or damaged Trace record: {path.name}") from None
 
 
