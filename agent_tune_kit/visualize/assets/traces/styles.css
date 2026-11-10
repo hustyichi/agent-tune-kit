@@ -14,7 +14,6 @@
 .dash-controls .search-label, #source-choice { margin-bottom: 7px }
 /* Keep the toolbar geometry when the issue-only project filter is hidden. */
 .dash-controls #project-choice[hidden] { display: block !important; visibility: hidden }
-.dash-controls .project-choice summary { height: 34px; padding: 6px 12px }
 .view-tabs { display: flex; gap: 4px }
 .view-tabs [role=tab] { height: 40px; margin-bottom: -1px; padding: 0 16px; border: 0; border-bottom: 2px solid transparent; border-radius: 6px 6px 0 0; background: transparent; color: var(--muted); font-weight: 600 }
 .view-tabs [role=tab]:hover { color: var(--ink); background: #edf1f4 }

@@ -453,6 +453,7 @@
   let pressedOutside = false;
   document.addEventListener("pointerdown", event => { pressedOutside = state.drawer !== null && dismissable(event.target); });
   document.addEventListener("click", event => {
+    if (!event.target.closest("#project-choice")) $("project-choice").open = false;
     const close = pressedOutside && state.drawer !== null && dismissable(event.target);
     pressedOutside = false;
     if (close) closeDrawer();

@@ -30,6 +30,9 @@ body.rail-collapsed #rail-toggle { transform: rotate(180deg) }
 .rail-filters .search-label { flex: 1; min-width: 0 }
 .rail-filters input, .rail-filters select { width: 100%; height: 32px; font-size: 12px; padding: 0 8px }
 .rail-filters select { width: auto; min-width: 88px }
+.rail-filters .project-choice { margin-bottom: 0; font-size: 12px }
+.rail-filters .project-choice summary { height: 32px; padding: 6px 8px; white-space: nowrap }
+.rail-filters .project-menu { left: 0; right: auto }
 .rail-list { flex: 1; min-height: 0; overflow: auto; padding: 8px; display: flex; flex-direction: column; gap: 8px }
 .issue-card { display: flex; flex-direction: column; gap: 6px; width: 100%; text-align: left; padding: 10px }
 .issue-card-head { justify-content: space-between; gap: 6px; width: 100% }

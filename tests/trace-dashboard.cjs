@@ -57,6 +57,7 @@ function boot(data) {
     ids.set(id, Object.assign(new Node("div"), {id}));
   }
   for (const id of ["drawer-title", "drawer-title-tools", "drawer-tools", "drawer-content", "drawer-close", "drawer-resizer"]) ids.get(id).parentElement = ids.get("drawer");
+  for (const id of ["project-summary", "project-clear", "project-filter"]) ids.get(id).parentElement = ids.get("project-choice");
   for (const id of ["dash-grid", "dash-strip", "progress-bar", "progress-legend", "filter-note"]) ids.get(id).parentElement = ids.get("dash-panel");
   ids.get("source-choice").hidden = true;
   ids.get("drawer").hidden = true;
@@ -406,3 +407,13 @@ app.$("project-choice").open = true;
 app.$("project-choice").onkeydown({key: "Escape"});
 assert.equal(app.$("project-choice").open, false);
 assert.equal(app.$("project-summary").focused, true);
+app.$("project-choice").open = true;
+app.press(betaInput);
+assert.equal(app.$("project-choice").open, true, "clicking a project checkbox keeps the menu open");
+app.press(app.$("project-clear"));
+assert.equal(app.$("project-choice").open, true, "clearing the selection keeps the menu open");
+app.press(app.$("dash-search"));
+assert.equal(app.$("project-choice").open, false, "clicking another control closes the menu");
+app.$("project-choice").open = true;
+app.press(app.$("dash-panel"));
+assert.equal(app.$("project-choice").open, false, "clicking page content closes the menu");
