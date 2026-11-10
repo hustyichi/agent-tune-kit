@@ -4,7 +4,7 @@ requires-python = ">=3.11"
 
 [[package]]
 name = "agent-tune-kit"
-version = "2.3.1"
+version = "2.3.2"
 source = { editable = "." }
 
 [package.dev-dependencies]
