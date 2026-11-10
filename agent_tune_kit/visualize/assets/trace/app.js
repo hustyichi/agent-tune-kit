@@ -1042,6 +1042,7 @@
       const mine = card.dataset.issueId === activeId;
       card.setAttribute("aria-current", String(mine));
       card.querySelectorAll(".seg-chip").forEach((chip, index) => chip.setAttribute("aria-current", String(mine && investigation.index === index)));
+      if (mine && investigation.index >= 2) card.querySelectorAll(".seg-more").forEach(more => { more.open = true; });
     }
   }
   function renderIssueRail() {
@@ -1072,16 +1073,32 @@
       const card = el("article", undefined, "issue-card");
       card.dataset.issueId = issue.id;
       const head = el("div", undefined, "issue-card-head");
-      head.append(el("span", issue.id, "issue-id-text"), el("span", undefined, `progress-dot ${progress.klass}`));
+      const status = el("span", undefined, "issue-progress");
+      const dot = el("span", undefined, `progress-dot ${progress.klass}`);
+      dot.setAttribute("aria-hidden", "true");
+      status.append(dot, el("span", progress.label, "issue-progress-label"));
+      status.title = progress.label;
+      head.append(el("span", issue.id, "issue-id-text"), status);
       const body = el("div", undefined, "issue-card-body");
-      body.append(projectLabels(item));
       const title = el("h3");
-      title.append(button(issue.title || "问题", () => startIssue(item), "issue-title"));
-      body.append(title, el("div", progress.label, "issue-progress"));
+      const titleButton = button(issue.title || "问题", () => startIssue(item), "issue-title");
+      titleButton.title = issue.title || "问题";
+      title.append(titleButton);
+      body.append(title, projectLabels(item));
       const tag = categoryTag(issue.category);
       if (tag) body.append(tag);
       const segs = el("div", undefined, "seg-list");
+      const heading = el("div", undefined, "seg-heading");
+      heading.append(el("span", "关联证据"), el("span", item.fragments.length ? `${item.fragments.length} 段` : ""));
+      segs.append(heading);
       const parts = item.fragments.length ? item.fragments : [{summary: "未圈定范围", unscoped: true}];
+      const more = parts.length > 2 ? el("details", undefined, "seg-more") : null;
+      const moreList = el("div", undefined, "seg-more-list");
+      if (more) {
+        const summary = el("summary", `展开其余 ${parts.length - 2} 条证据`);
+        more.ontoggle = () => { summary.textContent = `${more.open ? "收起" : "展开"}其余 ${parts.length - 2} 条证据`; };
+        more.append(summary, moreList);
+      }
       parts.forEach((part, index) => {
         const summary = part.summary || (part.unscoped ? "未圈定范围" : `片段 ${index + 1}`);
         const chip = button("", () => startIssue(item, index), `seg-chip${part.unscoped ? " unscoped" : ""}`);
@@ -1094,8 +1111,9 @@
           chip.append(el("span", meta, "seg-chip-meta mono"));
           chip.title += ` · ${meta}`;
         }
-        segs.append(chip);
+        (index < 2 ? segs : moreList).append(chip);
       });
+      if (more) segs.append(more);
       const actions = el("div", undefined, "card-actions");
       actions.append(
         button("定位", () => startIssue(item)),

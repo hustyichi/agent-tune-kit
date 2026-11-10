@@ -148,6 +148,47 @@ test("issue titles enter fragment navigation directly", () => {
   assert.equal(new URLSearchParams(app.location.hash.slice(1)).get("issue"), "ISSUE-001");
 });
 
+test("cards lead with the complete title, then projects, and show progress once in the header", () => {
+  const app = boot();
+  const title = "POS 首版订单的明细、合计和币种不一致，需要核对跨项目长标题与完整内容".repeat(4);
+  app.data.issues[0].record.title = title;
+  app.data.issues[0].root_projects.push({id: "long", name: "long-project-name".repeat(12)});
+  app.context.render();
+  const card = app.cards()[0], [head, body] = card.children;
+  assert.equal(text(head).match(/待诊断/g).length, 1);
+  assert.equal(text(body).includes("待诊断"), false);
+  assert.equal(body.children[0].tag, "h3");
+  assert.equal(body.children[0].children[0].textContent, title);
+  assert.equal(body.children[0].children[0].title, title);
+  assert.equal(body.children[1].className, "issue-projects");
+  assert.match(text(body.children[1]), /magic-code-server（待确认）、long-project-name/);
+});
+
+test("two evidence entries stay visible and navigation reveals later entries without losing their index", () => {
+  const app = boot();
+  app.data.issues[0].fragments = Array.from({length: 4}, (_, i) => ({id: `S${i+1}`, summary: `Evidence ${i+1}`, anchors: []}));
+  app.context.render();
+  let card = app.cards()[0];
+  const list = card.children.find(node => node.className === "seg-list");
+  assert.equal(list.children.filter(node => node.className === "seg-chip").length, 2);
+  const more = nodes(card).find(node => node.className === "seg-more");
+  assert.ok(!more.open);
+  assert.equal(more.children[0].textContent, "展开其余 2 条证据");
+  more.open = true; more.ontoggle();
+  assert.equal(more.children[0].textContent, "收起其余 2 条证据");
+  nodes(more).filter(node => node.className === "seg-chip")[1].onclick();
+  assert.equal(new URLSearchParams(app.location.hash.slice(1)).get("seg"), "S4");
+  app.go("#issue=ISSUE-001&seg=S3");
+  card = app.cards()[0];
+  assert.equal(nodes(card).find(node => node.className === "seg-more").open, true);
+  const chips = nodes(card).filter(node => node.className === "seg-chip");
+  assert.deepEqual(chips.map(chip => chip["aria-current"]), ["false", "false", "true", "false"]);
+  app.data.issues[0].fragments = [];
+  app.context.render();
+  assert.equal(nodes(app.cards()[0]).some(node => node.className === "seg-more"), false);
+  assert.match(text(app.cards()[0]), /未圈定范围/);
+});
+
 test("back to dashboard opens the session view without a drawer", () => {
   const app = boot();
   vm.runInContext(slice("\n  if (data.dashboard.available) {", "  for (const warning of data.warnings)"), app.context);
