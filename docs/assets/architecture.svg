@@ -45,7 +45,7 @@
   <rect x="416" y="526" width="276" height="205" rx="8" fill="#fffef9" stroke="#d3dcd2"/>
   <text x="436" y="557" font-size="15" font-weight="650" style="fill:#af492b">02</text>
   <text x="436" y="593" font-size="20" class="command">$atk-diagnose</text>
-  <text x="436" y="632" font-size="25" font-weight="600">异常诊断</text>
+  <text x="436" y="632" font-size="25" font-weight="600">问题诊断</text>
   <text x="436" y="657" font-size="17" class="muted">规则与语义判断，初步定位</text>
   <text x="436" y="690" font-size="20" class="file">judgments.csv</text>
   <text x="436" y="714" font-size="20" class="file">failure_cases.csv</text>

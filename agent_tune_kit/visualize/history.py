@@ -46,6 +46,7 @@ REPORT_KEYWORDS = (
     "priority",
     "recommend",
     "摘要",
+    "问题",
     "异常",
     "失败",
     "原因",
@@ -185,7 +186,10 @@ def _parse_tuning_plan_targets(plan_path: Path) -> dict[str, Any]:
         if stripped.startswith("##"):
             _flush()
             heading = stripped.lstrip("#").strip()
-            in_targets = "目标异常清单" in heading or "target failures" in heading.lower()
+            in_targets = any(
+                title in heading.lower()
+                for title in ("目标问题清单", "目标异常清单", "target issues", "target failures")
+            )
             continue
         if not in_targets:
             continue

@@ -158,7 +158,7 @@ Do not copy a single `skills/*` directory by itself; keep `skills/`, `templates/
 
 - First test run: no version exists, so `eval_runner.py` creates `.atk/results/v1/eval_results.csv`.
 - First report: no previous version exists, so `v1/report.md` is a single-version report.
-- First tuning: writes `v1/tuning_plan.md` with `## 目标异常清单`, `## 调优手段`, and `## 关联改动`.
+- First tuning: writes `v1/tuning_plan.md` with `## 目标问题清单`, `## 调优手段`, and `## 关联改动`.
 - Second test run: `v1/eval_results.csv` exists, so the runner creates `v2/eval_results.csv`.
 - Second report: `v2/report.md` reads `v1/tuning_plan.md` and classifies each target as `已解决`, `部分解决`, `未解决`, or `无法判断`.
 
@@ -170,7 +170,7 @@ Run:
 python3 scripts/validate_skill_pack.py
 git diff --check
 find skills templates docs scripts .codex-plugin -maxdepth 4 -type f | sort
-grep -R "agent_output\|ground_truth\|failure_cases.csv\|failure_cases.html\|tuning_plan.md\|目标异常清单\|调优手段\|关联改动\|source.path" skills templates docs README.md README.en.md .codex-plugin scripts
+grep -R "agent_output\|ground_truth\|failure_cases.csv\|failure_cases.html\|tuning_plan.md\|目标问题清单\|调优手段\|关联改动\|source.path" skills templates docs README.md README.en.md .codex-plugin scripts
 ```
 
 `validate_skill_pack.py` checks required files, required sections, manifest fields, installer behavior, PRD traceability, canonical version helper names and snippets, output paths, non-goal boundaries, dataset-only/pre-results classifications such as `atk-dataset`, and each Skill's precondition/failure behavior.

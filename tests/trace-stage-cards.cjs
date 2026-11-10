@@ -6,12 +6,14 @@ const vm = require("node:vm");
 
 class Element {
   constructor(tag) { this.tag = tag; this.children = []; this.textContent = ""; this.className = ""; this.classList = {add: name => { this.className += ` ${name}`; }}; }
+  get tagName() { return this.tag.toUpperCase(); }
   append(...children) { this.children.push(...children); }
   setAttribute(name, value) { this[name] = value; }
 }
 const source = fs.readFileSync(path.join(__dirname, "../agent_tune_kit/visualize/assets/trace/app.js"), "utf8");
 const helpers = source.slice(source.indexOf("  const el ="), source.indexOf("  const markdown ="));
 const cards = source.slice(source.indexOf("  const textPresent ="), source.indexOf("  function appendDiagnoses("));
+const diagnoses = source.slice(source.indexOf("  function appendDiagnoses("), source.indexOf("  function renderDiagnosis("));
 const showIssue = source.slice(source.indexOf("  const showIssue ="), source.indexOf("  function pickFromLane("));
 const progress = source.slice(source.indexOf("  const progressOf ="), source.indexOf("  const shortIssue ="));
 const container = new Element("div");
@@ -23,9 +25,16 @@ const context = vm.createContext({
   sourceLinks: new Map([["src/reader.ts#L3", "../../../src/reader.ts#L3"]]),
   markdown: {normalizeLink: value => value},
   location: {protocol: "file:"},
+  renderDiagnosis: text => {
+    const body = new Element("div");
+    for (const line of text.split("\n").filter(Boolean)) {
+      body.append(Object.assign(new Element(line.startsWith("## ") ? "h2" : "p"), {textContent: line.replace(/^## /, "")}));
+    }
+    return body;
+  },
 });
 vm.runInContext(`let activeIssue, returnToDiagnosis, origin, issueTrigger, issueStage;
-${helpers}\n${cards}\n${showIssue}\n${progress}
+${helpers}\n${cards}\n${diagnoses}\n${showIssue}\n${progress}
 this.showIssue = showIssue; this.progressOf = progressOf;`, context);
 const nodes = node => [node, ...node.children.flatMap(nodes)];
 const text = node => nodes(node).map(item => item.textContent).join("\n");
@@ -112,6 +121,17 @@ assert.match(text(rendered), /修改记录不可读取/);
 assert.doesNotMatch(text(rendered), /HIDDEN_PATH/);
 rendered = renderStage({...item, changes: []}, "verifications");
 assert.match(text(rendered), /尚未记录实际验证/);
+for (const headings of [
+  ["问题描述", "问题根因", "最小修复方案"],
+  ["异常描述", "异常根因", "最小修复方案"],
+  ["Issue description", "Root cause", "Minimal fix"],
+]) {
+  const diagnosis = {text: headings.map(heading => `## ${heading}\nDetails.`).join("\n")};
+  rendered = renderStage({...item, diagnoses: [diagnosis]}, "diagnoses");
+  const titles = nodes(rendered).filter(node => node.tag === "h2").map(node => node.textContent);
+  assert.deepEqual(titles, headings[0] === "Issue description" ? headings : ["问题描述", "问题根因", "最小修复方案"]);
+  assert.equal(diagnosis.text, headings.map(heading => `## ${heading}\nDetails.`).join("\n"), "Archived text stays unchanged");
+}
 console.log("Stage rendering: concise changes, causal pairs, scoped conclusions, samples, links and legacy states passed.");
 
 module.exports = {renderStage, text, nodes};

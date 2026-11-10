@@ -16,7 +16,7 @@ def history_fixture(tmp_path, verdicts=None):
     rows = [{"atk_id": str(i), "agent_output": "answer"} for i in range(1, 5)]
     write_csv(old / "eval_results.csv", fields, rows)
     write_csv(old / "failure_cases.csv", fields, rows)
-    (old / "tuning_plan.md").write_text("## 目标异常清单\n- atk_id: 1, atk_id: 2\n")
+    (old / "tuning_plan.md").write_text("## 目标问题清单\n- atk_id: 1, atk_id: 2\n")
     write_csv(current / "eval_results.csv", fields, rows[:3])
     write_csv(current / "failure_cases.csv", fields, [rows[2]])
     if verdicts is not None:
@@ -62,8 +62,10 @@ def test_partial_or_invalid_judgments_do_not_resolve_targets(tmp_path, verdicts)
     assert history["previousTargets"]["targets"][0]["resolution"] == "indeterminate"
 
 
-def test_only_explicit_current_passes_resolve_targets(tmp_path):
+@pytest.mark.parametrize("heading", ["目标问题清单", "目标异常清单", "Target issues", "Target failures"])
+def test_only_explicit_current_passes_resolve_targets(tmp_path, heading):
     fixture = history_fixture(tmp_path, [("1", "passed"), ("2", "passed"), ("3", "failed")])
+    (fixture[1] / "v1/tuning_plan.md").write_text(f"## {heading}\n- atk_id: 1, atk_id: 2\n")
     history = get_history(fixture)
     assert history["previousTargets"]["targets"][0]["resolution"] == "resolved"
     assert history["versions"][-1]["passedCount"] == 2
@@ -74,6 +76,15 @@ def test_only_explicit_current_passes_resolve_targets(tmp_path):
     history = get_history(fixture)
     assert history["previousTargets"]["targets"][0]["resolution"] == "indeterminate"
     assert history["versions"][-1]["passedCount"] == 0
+
+
+@pytest.mark.parametrize("heading", ["问题数据清单", "异常数据清单"])
+def test_report_context_recognizes_current_and_legacy_issue_headings(tmp_path, heading):
+    from agent_tune_kit.visualize.history import read_report_context
+
+    report = tmp_path / "report.md"
+    report.write_text(f"# Report\n\n## {heading}\n- atk_id: 1\n")
+    assert read_report_context(report)["excerpts"] == [{"heading": heading, "text": heading}]
 
 
 def test_rule_template_preserves_unknown_and_failure_only_rerun_input(tmp_path):

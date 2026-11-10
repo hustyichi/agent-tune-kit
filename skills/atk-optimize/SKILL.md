@@ -23,7 +23,7 @@ Use the installed `atk` CLI from the target project cwd. Check `atk --version` a
 - Current version directory resolved from `.atk/results/vN`.
 - Required current file: `report.md`.
 - Target Agent source files and configuration.
-- Optional existing test results, abnormal cases, logs, and previous reports for context.
+- Optional existing test results, recorded issues, logs, and previous reports for context.
 - Optional local private tuning context: `.atk/context.md`, especially `Tuning Objective`, `Agent Behavior Standard`,
   `Ground Truth Standard`, and `Tuning Decisions`.
 - Shared rules in `docs/shared-versioning-and-confirmation.md`.
@@ -46,7 +46,7 @@ Use the installed `atk` CLI from the target project cwd. Check `atk --version` a
    tuning-plan note and route the correction to `$atk-dataset`.
 8. Run the smallest relevant validation available in the target repo.
 9. Write `tuning_plan.md` in the current version directory with exact headings:
-   - `## 目标异常清单`
+   - `## 目标问题清单`
    - `## 调优手段`
    - `## 关联改动`
 10. Suggest a user git commit/checkpoint in the final handoff; do not perform automatic rollback or baseline restore.
@@ -56,7 +56,7 @@ Use the installed `atk` CLI from the target project cwd. Check `atk --version` a
 ```markdown
 # Tuning Plan - <current version>
 
-## 目标异常清单
+## 目标问题清单
 - <problem summary + triggering input feature / expected result / actual output; include natural ID if present>
 
 ## 调优手段

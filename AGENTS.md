@@ -26,6 +26,11 @@ Use `./scripts/release-version.sh <version> --publish --dry-run` only when the u
 
 Python targets 3.11+. Use 4-space indentation, double quotes, and a 120-character line length. Ruff is the source of truth for formatting and linting; avoid manual style exceptions unless the existing code already requires them. Prefer clear snake_case names for functions, variables, and test modules. Skill directories use kebab-case names such as `skills/atk-diagnose/`.
 
+## 术语约定
+
+- 检测、诊断、修复和验证的业务对象统一称为“问题”（Issue）；界面、文档、Skill 指令与新生成报告均使用这一表述。
+- “异常”仅用于程序异常、执行异常或格式异常等技术语义，以及读取历史标题／字段值的兼容逻辑。现有 CLI、路径、字段名和状态枚举保持兼容，不随展示名称改动。
+
 ## Testing Guidelines
 
 Tests use `pytest` and should be named `tests/test_*.py`. Add focused regression tests for CLI behavior, installer behavior, release checks, and generated artifact paths. When changing skill payloads or templates, run both `uv run pytest` and `python scripts/validate_skill_pack.py`.

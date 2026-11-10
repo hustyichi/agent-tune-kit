@@ -89,7 +89,7 @@
     if (!data.dashboard.available) return el("span", text, "category-tag");
     const link = el("a", text, "category-tag");
     link.href = dashboardHash(`view=category&category=${encodeURIComponent(id)}`);
-    link.title = "在大盘中查看这类异常";
+    link.title = "在大盘中查看这类问题";
     return link;
   };
   const shortIssue = id => String(id || "").replace(/^ISSUE-/, "") || id;
@@ -297,15 +297,21 @@
     for (const [index, diagnosis] of item.diagnoses.slice().reverse().entries()) {
       const snapshot = diagnosis.snapshot;
       const body = diagnosis.error ? el("p", diagnosis.error, "warning") : renderDiagnosis(diagnosis.text);
-      const headings = [...body.children].filter(node => node.tagName === "H2").map(node => node.textContent);
-      const structured = headings.join("|") === "异常描述|异常根因|最小修复方案"
+      const headingNodes = [...body.children].filter(node => node.tagName === "H2");
+      // Display legacy section titles consistently without rewriting archived diagnoses.
+      for (const heading of headingNodes) {
+        if (heading.textContent === "异常描述") heading.textContent = "问题描述";
+        if (heading.textContent === "异常根因") heading.textContent = "问题根因";
+      }
+      const headings = headingNodes.map(node => node.textContent);
+      const structured = headings.join("|") === "问题描述|问题根因|最小修复方案"
         || headings.join("|") === "Issue description|Root cause|Minimal fix";
       if (index === 0 && structured) {
         container.append(body);
         continue;
       }
       if (index === 0) {
-        const description = section("异常描述");
+        const description = section("问题描述");
         description.append(el("p", item.record.description || item.record.title));
         for (const [position, part] of item.fragments.entries()) {
           const cite = button(part.id || `片段 ${position + 1}`, () => openDiagnosisSegment(item, position, cite), "diagnosis-cite");
@@ -1053,7 +1059,7 @@
       box.append(note);
     }
     if (!filtered.length) {
-      box.append(el("p", data.issues.length ? "没有符合筛选条件的问题。" : data.session.detections.length ? "已保存检测记录，尚无保留问题；不代表会话没有问题。" : "尚未进行异常识别。", "empty"));
+      box.append(el("p", data.issues.length ? "没有符合筛选条件的问题。" : data.session.detections.length ? "已保存检测记录，尚无保留问题；不代表会话没有问题。" : "尚未进行问题识别。", "empty"));
       return;
     }
     for (const item of filtered) {

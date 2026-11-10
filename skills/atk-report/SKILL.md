@@ -53,7 +53,7 @@ Use the installed `atk` CLI from the target project cwd. Check `atk --version` a
 6. Resolve previous version with `resolve_previous_version(current_dir)`.
 7. If no previous version exists, generate a single-version report and explain that no previous version can be compared.
 8. If previous version exists but lacks `tuning_plan.md`, degrade to a single-version or lower-confidence report with explicit explanation.
-9. After explicitly matching target IDs and reviewing comparability, use `atk results compare --ids <id...> --json` per target group. If previous `tuning_plan.md` exists, extract targets from `## 目标异常清单` and classify them using explicit current judgments: all IDs passed → `已解决`; all failed → `未解决`; a fully judged mix → `部分解决`; any unknown/unexecuted target → `无法判断`. Check standards and sample comparability before attributing improvement.
+9. After explicitly matching target IDs and reviewing comparability, use `atk results compare --ids <id...> --json` per target group. If previous `tuning_plan.md` exists, extract targets from `## 目标问题清单` (also accept the legacy `## 目标异常清单` when reading existing plans) and classify them using explicit current judgments: all IDs passed → `已解决`; all failed → `未解决`; a fully judged mix → `部分解决`; any unknown/unexecuted target → `无法判断`. Check standards and sample comparability before attributing improvement.
 10. Write `report.md` in the current version directory.
 11. Append to `.atk/context.md` only when the report captures durable user-confirmed feedback or tuning decisions that
     should guide future loops. Do not write dataset headers, row counts, result paths, metrics snapshots, or routine run
@@ -75,7 +75,7 @@ Include these sections:
 
 ## 执行摘要
 ## 测试结果统计
-## 异常数据清单
+## 问题数据清单
 ## 归因分析
 ## 跨版本调优验证
 ## 建议下一步
@@ -85,9 +85,9 @@ The `## 跨版本调优验证` section must include when applicable:
 
 - 对比版本：当前版本、上一版本
 - 上一轮调优计划摘要（来源：上一版本 `tuning_plan.md`）
-- 上一轮目标异常逐条复核：`已解决` / `部分解决` / `未解决` / `无法判断`
+- 上一轮目标问题逐条复核：`已解决` / `部分解决` / `未解决` / `无法判断`
 - 新增问题
-- 观察性指标变化（异常总数、比例等，可选）
+- 观察性指标变化（问题总数、比例等，可选）
 - 验证结论：上一轮调优是否符合预期，是否建议继续下一轮调优
 
 ## Matching guidance

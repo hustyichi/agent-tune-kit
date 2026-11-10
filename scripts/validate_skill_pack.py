@@ -427,7 +427,7 @@ def main():
                 )
             except SyntaxError as exc:
                 errors.append(f"{rel} invalid Python: {exc}")
-    for heading in ["## 目标异常清单", "## 调优手段", "## 关联改动"]:
+    for heading in ["## 目标问题清单", "## 调优手段", "## 关联改动"]:
         require(heading in texts.get("skills/atk-optimize/SKILL.md", ""), f"missing tuning heading {heading}", errors)
     for status in ["已解决", "部分解决", "未解决", "无法判断"]:
         require(status in texts.get("skills/atk-report/SKILL.md", ""), f"missing comparison status {status}", errors)

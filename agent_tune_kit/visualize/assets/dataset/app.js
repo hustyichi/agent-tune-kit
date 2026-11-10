@@ -720,7 +720,7 @@
     box.appendChild(el("p", { text: "导出后由 atk-dataset 导入生效；修改答案不会继承旧确认。" }));
     var feedback = el("textarea", {
       class: "review-note",
-      placeholder: "仅异常项填写：用一句明确反馈描述预期结果或验收标准应如何调整…",
+      placeholder: "仅问题项填写：用一句明确反馈描述预期结果或验收标准应如何调整…",
       oninput: function (ev) {
         setFeedback(row, ev.target.value);
         renderMeta();

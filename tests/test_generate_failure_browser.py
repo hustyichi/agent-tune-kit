@@ -156,7 +156,7 @@ class GenerateFailureBrowserTests(unittest.TestCase):
             ]:
                 self.assertIn(phrase, text)
             self.assertRegex(text, r"id=[\"']stat-card-abnormal[\"']")
-            self.assertIn("合并异常用例", text)
+            self.assertIn("合并问题用例", text)
             self.assertIn("失败率", text)
 
     def test_static_visualization_has_no_user_frontend_dependency_contract(self) -> None:

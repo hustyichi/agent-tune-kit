@@ -166,7 +166,7 @@ $atk-trace-optimize Implement the selected plan for ISSUE-001 in session <sessio
 $atk-trace-verify Verify the candidate for ISSUE-001 in session <session-id> and check relevant behavior that should still work.
 ```
 
-Without specified issues, diagnosis reviews all available session traces and works through existing and newly found anomalies, prioritizing causes directly related to project code, configuration, tool contracts, Prompt or Skill. Findings established as unrelated to the existing implementation may be skipped with an explanation. Findings with uncertain relevance remain open for investigation. Specified issues or concrete symptoms limit the investigation scope. You can start directly with diagnosis without a separate detection invocation.
+Without specified issues, diagnosis reviews all available session traces and works through existing and newly found issues, prioritizing causes directly related to project code, configuration, tool contracts, Prompt or Skill. Findings established as unrelated to the existing implementation may be skipped with an explanation. Findings with uncertain relevance remain open for investigation. Specified issues or concrete symptoms limit the investigation scope. You can start directly with diagnosis without a separate detection invocation.
 
 Diagnoses and verification conclusions are saved per issue. If the evidence cannot establish which candidate loaded or whether key verification conditions were met, the verification outcome is `inconclusive`. Investigation results identify unread ranges and evidence gaps. As new issues surface, work through them individually or start another analysis with a new session trace.
 

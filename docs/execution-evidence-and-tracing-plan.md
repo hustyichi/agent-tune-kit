@@ -639,7 +639,7 @@ atk results import-evidence --source <本地原生运行目录> --adapter <项�
 
 1. CLI 将参数解析交给统一 evidence 读取模块；`--execution-dir` 不要求 CSV／Run，版本定位则核对 Run 与本项映射。页面复用同一读取模块，保留安全转义和有界预览。
 2. judgments 保留原四列及新增 `evidence_refs`，同时保全现有失败表中的扩展归因字段。沿用“失效旧判定 → 原子写失败投影 → 原子写新判定”的中断安全顺序。
-3. 在 results 层集中实现有效判定与失败集合读取。必须同时替换 `summary.effective_verdicts` 的失败表覆盖、runner 的失败重跑取数、`visualize/history.py` 的直接回退，以及 `visualize/failures.py::generate_failure_browser` 直接把失败表样本标为异常的路径。新格式失败表只能补解释，状态必须来自有效判定；无 CSV 或证据失效时不能恢复 failed，legacy 保持原兼容行为。
+3. 在 results 层集中实现有效判定与失败集合读取。必须同时替换 `summary.effective_verdicts` 的失败表覆盖、runner 的失败重跑取数、`visualize/history.py` 的直接回退，以及 `visualize/failures.py::generate_failure_browser` 直接把失败表样本标为有问题的路径。新格式失败表只能补解释，状态必须来自有效判定；无 CSV 或证据失效时不能恢复 failed，legacy 保持原兼容行为。
 4. 页面不自行解析新 manifest 或跟随任意附件路径；现有 `safe_log_href` 的词法校验不足以防软链接越界，新证据链接统一检查实际路径。
 5. init/eval/diagnose/report/optimize/失败可视化的 Skill 更新读取责任；诊断先固定版本与执行项，再引用事件／附件，不用当前工作树补造历史原因。
 6. `execution/rules.py` 的旧过滤器只生成失败表，其 V2 输出作为待确认候选，不能自动成为有效 failed；需经 `apply-judgments` 形成显式判定，或迁移为已有 `judge(row)` 接口。旧规则配旧结果继续兼容，不新增规则引擎。

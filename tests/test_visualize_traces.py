@@ -401,6 +401,7 @@ def test_generated_page_is_safe_offline_and_leaves_every_record_untouched(projec
     output = Path(result["output_path"])
     assert output == trace_root(project) / "index.html" and output.stat().st_size < 200_000
     html = output.read_text(encoding="utf-8")
+    assert re.search(r'id="tab-category"[^>]*>问题</button>', html)
     assert "connect-src 'none'" in html and "default-src 'none'" in html
     assert SECRET_BODY not in html, "raw trace bodies must never be embedded"
     assert html.count("</script>") == 2 and "<img src=x" not in html

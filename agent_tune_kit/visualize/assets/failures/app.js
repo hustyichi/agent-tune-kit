@@ -17,7 +17,7 @@
     input: "输入",
     expected: "期望",
     actual: "实际输出",
-    reason: "异常原因",
+    reason: "问题原因",
     log: "日志",
   };
 
@@ -488,7 +488,7 @@
       var isAbnormal = ["true", "1", "yes", "y", "异常", "失败", "fail", "failed", "bad"].indexOf(value.toLowerCase()) >= 0;
       if (isAbnormal) {
         return el("div", { class: "cell-text" }, [
-          el("span", { class: "badge issue", text: "● 异常" })
+          el("span", { class: "badge issue", text: "● 问题" })
         ]);
       } else if (value.toLowerCase() === "false") {
         return el("div", { class: "cell-text" }, [
@@ -567,7 +567,7 @@
   function openInspector(row) {
     state.selectedRowNumber = row.rowNumber;
     setText("inspector-row-badge", "#" + row.rowNumber);
-    setText("inspector-title", "异常数据详情");
+    setText("inspector-title", "问题数据详情");
     setText("inspector-subtitle", "case " + rowId(row) + " · " + (roleField("reason") || "保留全部 failure_cases.csv 字段"));
     renderInspectorBody(row);
     if ($("inspector-overlay-pane")) $("inspector-overlay-pane").hidden = false;
@@ -717,8 +717,8 @@
       
       var reasonText = reasonField ? normalizeText(row.values[reasonField]) : "";
       var descBox = el("div", { class: "status-banner-desc-box" });
-      var label = el("strong", { class: "status-banner-desc-label" }, ["异常原因描述："]);
-      var textVal = el("span", { class: "status-banner-desc-val", text: reasonText || "无异常原因描述" });
+      var label = el("strong", { class: "status-banner-desc-label" }, ["问题原因描述："]);
+      var textVal = el("span", { class: "status-banner-desc-val", text: reasonText || "尚未记录问题原因" });
       descBox.appendChild(label);
       descBox.appendChild(textVal);
       content.appendChild(descBox);
@@ -873,14 +873,14 @@
       },
     }, [
       el("option", { value: "", text: "未审阅" }),
-      el("option", { value: "confirmed_failure", text: "确认异常" }),
-      el("option", { value: "false_positive", text: "误报/非异常" }),
+      el("option", { value: "confirmed_failure", text: "确认问题" }),
+      el("option", { value: "false_positive", text: "误报/无问题" }),
       el("option", { value: "needs_followup", text: "需继续分析" }),
     ]);
     select.value = getStatus(row);
     var note = el("textarea", {
       class: "review-note",
-      placeholder: "审阅备注（可选）：记录异常原因、修复建议或复核结论…",
+      placeholder: "审阅备注（可选）：记录问题原因、修复建议或复核结论…",
       oninput: function (ev) {
         setNote(row, ev.target.value);
         renderMeta();
@@ -1248,7 +1248,7 @@
       }
     }, [
       el("span", { html: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>' }),
-      "异常 (" + counts.abnormal + ")"
+      "问题 (" + counts.abnormal + ")"
     ]);
 
     container.appendChild(allBtn);

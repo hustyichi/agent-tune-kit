@@ -113,6 +113,7 @@ REPORT_KEYWORDS = (
     "priority",
     "recommend",
     "摘要",
+    "问题",
     "异常",
     "失败",
     "原因",

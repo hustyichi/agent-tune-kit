@@ -100,7 +100,7 @@
   const categoryChip = id => {
     if (!id) return el("span", "未分类", "category-tag plain");
     const chip = button(categoryName(id), () => setView("category", id), "category-tag");
-    chip.title = `查看“${categoryName(id)}”的同类异常`;
+    chip.title = `查看“${categoryName(id)}”的同类问题`;
     return chip;
   };
   const empty = text => el("div", text, "empty-dash");
@@ -208,7 +208,7 @@
       for (const [id, n] of entries.slice(0, 3)) {
         if (id === NONE) { chips.append(el("span", `未分类 ${n}`, "category-tag plain")); continue; }
         const chip = button(`${categoryName(id)} ${n}`, () => setView("category", id), "category-tag");
-        chip.title = `查看“${categoryName(id)}”的同类异常`; chips.append(chip);
+        chip.title = `查看“${categoryName(id)}”的同类问题`; chips.append(chip);
       }
       if (entries.length > 3) chips.append(el("span", `+${entries.length - 3}`, "category-tag plain"));
       card.append(chips);
@@ -235,7 +235,7 @@
     if (info?.deprecated) card.dataset.deprecated = "true";
     if (isOpen("category", key)) card.setAttribute("aria-current", "true");
     const head = el("div", undefined, "card-head");
-    const open = previewButton("category", key, `查看异常分类 ${categoryName(key)}`, "card-open");
+    const open = previewButton("category", key, `查看问题分类 ${categoryName(key)}`, "card-open");
     const title = el("span", categoryName(key), "card-title"); title.title = categoryName(key);
     open.append(title);
     head.append(open);
@@ -257,7 +257,7 @@
         categoryName(a[0]).localeCompare(categoryName(b[0]));
     });
     for (const [key, items] of real) grid.append(categoryCard(key, items));
-    if (!real.length) grid.append(empty(state.progress || state.q ? "没有符合筛选条件的分类。" : "还没有异常分类。检测时会为问题选择分类，同类异常会在这里汇总。"));
+    if (!real.length) grid.append(empty(state.progress || state.q ? "没有符合筛选条件的分类。" : "还没有问题分类。检测时会为问题选择分类，同类问题会在这里汇总。"));
     const none = visible.find(([key]) => key === NONE);
     if (!none) return;
     const all = categoryGroups().get(NONE);

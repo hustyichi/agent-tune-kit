@@ -358,7 +358,7 @@ for (const s of nothing.sessions) s.issues = [];
 app = boot(nothing);
 assert.match(text(app.$("progress-legend")), /尚无保留问题（不代表会话正确）/);
 app.$("tab-category").onclick();
-assert.match(text(app.cards()[0]), /还没有异常分类/);
+assert.match(text(app.cards()[0]), /还没有问题分类/);
 assert.equal(app.strip().length, 0);
 
 console.log("Dashboard rendering: views, filters, drawers, deep links, sources, unreadable and empty sessions passed.");
