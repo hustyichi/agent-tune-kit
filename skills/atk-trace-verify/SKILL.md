@@ -17,7 +17,7 @@ Original session, explicit owner issue/change ID, verification target, real runt
 
 ## Outputs
 
-A new verification under the change, including execution status, loading evidence, actual input/output, per-issue `pass`/`fail`/`inconclusive`, scope and limits, plus the original session's generated `preview.html`. All attempts remain.
+A new verification under the change, including execution status, loading evidence, actual input/output, per-issue `pass`/`fail`/`inconclusive`, scope and limits, plus the original session's generated `preview.html` and the refreshed project dashboard. All attempts remain.
 
 ## Workflow
 
@@ -27,8 +27,8 @@ A new verification under the change, including execution status, loading evidenc
 4. Execute without changing the candidate. Record actual command/input, runtime/loading facts and output. Explicit batch verification uses existing evaluation/diagnosis/report commands and references real results; it does not rewrite old batch artifacts.
 5. Retain new Session/Trace IDs in this verification's evidence linked to original session/change, never as captures of the historical investigated session. Local tests need no invented Session ID. New remote evidence uses its new native Session ID with the shared downloader and this verification's archive destination.
 6. Finish the same verification using `id`, expected `revision`, actual `status`, `candidate_loaded`, `loading_evidence`, `execution`, `verification_summary`, `conclusions`, `limitations` and `evidence`. Derive `verification_summary` from the actual execution/output: `method` states what was executed, its scope and necessary comparison conditions; `sample_scope` distinguishes new samples from cumulative samples and says which earlier attempts are included (or states that there are no samples); `observations` lists the key observed facts with denominators. Use short factual sentences, not copied commands, logs or JSON. Each target issue gets `{outcome: pass|fail|inconclusive, reason: ...}` with a concise explanation of scope. Unknown loading or essential comparability requires `inconclusive` for the modification's effect even when output looks correct. Keep `limitations` as concise statements of untested behavior and attribution gaps; an empty list means no additional known limits, not universal success. Failed/blocked/interrupted records also need honest summaries, including what never ran. One issue's result does not decide another. Never rewrite a finished result or invent a new verification just to add a summary.
-7. After the stage's final record writes, generate/update the original investigated session's default `preview.html` once using `atk visualize trace --session-id <original-id> --overwrite --no-open --json`, reusing its project/source options. Include saved failed/blocked/interrupted attempts and inconclusive results; do not refresh on each running-state write or target issue. Consume only the CLI summary; do not read the generated HTML into context or invoke a separate visualization Skill. Preserve any known user-edited preview instead of overwriting it.
-8. Deliver execution status, loading proof, per-issue results, evidence, limits and preview path/warnings. Keep every attempt rather than only the latest/best pass. Repeat/control/protected cases follow actual risk/model variability, not a universal invented threshold. Stop unless further repair was requested.
+7. After the stage's final record writes, generate/update the original investigated session's default `preview.html` once using `atk visualize trace --session-id <original-id> --overwrite --no-open --json`, reusing its project/source options. Include saved failed/blocked/interrupted attempts and inconclusive results; do not refresh on each running-state write or target issue. Consume only the CLI summary; do not read the generated HTML into context or invoke a separate visualization Skill. Preserve any known user-edited preview instead of overwriting it. Then refresh the project dashboard once with `atk visualize traces --overwrite --no-open --json`, reusing the same project option.
+8. Deliver execution status, loading proof, per-issue results, evidence, limits and preview/dashboard paths and warnings. Keep every attempt rather than only the latest/best pass. Repeat/control/protected cases follow actual risk/model variability, not a universal invented threshold. Stop unless further repair was requested.
 
 When referring to a recorded location inside the Issue, cite `ISSUE-<id>/S<n>` so the offline preview can link back to that segment.
 
@@ -36,7 +36,7 @@ When referring to a recorded location inside the Issue, cite `ISSUE-<id>/S<n>` s
 
 Missing inputs/runtime/credentials produce honest blocked/inconclusive records. Do not silently edit the candidate, auto-optimize after failure, fabricate execution or infer aggregate success from one passing attempt. Later judgments preserve earlier results.
 
-Preview failure does not change verification conclusions or block the next authorized stage. Report that the preview is unavailable or stale; keep saved records and any previous page.
+Preview or dashboard failure does not change verification conclusions or block the next authorized stage. Report that the preview or dashboard is unavailable or stale; keep saved records and any previous page.
 
 ## CLI dependency
 

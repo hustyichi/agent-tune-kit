@@ -17,7 +17,7 @@ A bound session, selected issue or explicit symptom, archived evidence, relevant
 
 ## Outputs
 
-One immutable issue diagnosis Markdown combining facts, hypotheses, causal explanation, repair/verification plan and gaps, plus the session's generated `preview.html`. Actual experiments retain necessary inputs/outputs under the issue.
+One immutable issue diagnosis Markdown combining facts, hypotheses, causal explanation, repair/verification plan and gaps, plus the session's generated `preview.html` and the refreshed project dashboard. Actual experiments retain necessary inputs/outputs under the issue.
 
 ## Workflow
 
@@ -26,8 +26,8 @@ One immutable issue diagnosis Markdown combining facts, hypotheses, causal expla
 3. Investigate competing explanations as needed for the goal. Run useful authorized experiments, recording running state before execution, actual output and limits. On resumption inspect logs, process/run IDs and artifacts before repeating a possibly completed operation.
 4. Write the diagnosis in the structure below, distinguishing confirmed causes, rejected leads and unresolved causes with the next discriminating check. Reconcile the issue title/description with the diagnosed problem. Narrowing the same incident uses its existing ID; an independently evidenced defect with no established causal link belongs in a separate linked issue, not as an asserted cause of the original. If scope or retention changes, revise through `atk trace issue` with its `id` and current `revision`, recording why and what remains unresolved in `notes`; preserve history and do not silently discard other symptoms. A rejected implementation hypothesis alone does not exclude a serious, recurring or user-focused issue. The save command adds the issue snapshot.
 5. Save with `atk trace diagnose --session-id <id> --issue-id <issue> --file <markdown-file> --json`, optionally `--diagnosis-id`. Revisions create new files. Do not overwrite an adopted diagnosis or silently alter an earlier change's rationale. If final synthesis produces a clearer or materially different explanation, save that explanation before generating the preview and delivering results; do not reserve it for the chat summary.
-6. After all diagnosis and issue revisions for this stage, generate/update the session's default `preview.html` once using `atk visualize trace --session-id <id> --overwrite --no-open --json`, reusing the same project/source options. Create it even when no earlier preview exists; batch multiple diagnosed issues into this single refresh. Consume only the CLI summary; do not read the generated HTML into context or invoke a separate visualization Skill. Preserve any known user-edited preview instead of overwriting it.
-7. Deliver cause/uncertainty, record path, preview path/warnings and next action from the saved diagnosis. Continue to optimize only when repair is requested and in scope. Ask only for a concrete necessary ambiguity or changed authorization.
+6. After all diagnosis and issue revisions for this stage, generate/update the session's default `preview.html` once using `atk visualize trace --session-id <id> --overwrite --no-open --json`, reusing the same project/source options. Create it even when no earlier preview exists; batch multiple diagnosed issues into this single refresh. Consume only the CLI summary; do not read the generated HTML into context or invoke a separate visualization Skill. Preserve any known user-edited preview instead of overwriting it. Then refresh the project dashboard once with `atk visualize traces --overwrite --no-open --json`, reusing the same project option.
+7. Deliver cause/uncertainty, record path, preview/dashboard paths and warnings and next action from the saved diagnosis. Continue to optimize only when repair is requested and in scope. Ask only for a concrete necessary ambiguity or changed authorization.
 
 ## Diagnosis structure
 
@@ -45,7 +45,7 @@ Before saving, check that the description independently identifies the mismatch,
 
 Unrecoverable historical conditions or uncontrolled causes limit conclusions; they do not justify unrelated changes. Preserve failed experiments and prior diagnoses. Plausible fixes are not cause proof. Do not create a separate plan copy or batch `tuning_plan.md`.
 
-Preview failure does not undo diagnosis or block the next authorized stage. Report that the preview is unavailable or stale; keep saved records and any previous page.
+Preview or dashboard failure does not undo diagnosis or block the next authorized stage. Report that the preview or dashboard is unavailable or stale; keep saved records and any previous page.
 
 ## CLI dependency
 

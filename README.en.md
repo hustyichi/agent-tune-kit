@@ -153,6 +153,8 @@ Detection retains issues with serious impact, recurrence, direct relevance to yo
 
 The capture, detect, diagnose, optimize and verify Skills generate or update `.atk/traces/<session_id>/preview.html` at stage end without opening a browser. Use `$atk-visualize-trace` when you want to open it; refresh an already open page after the file changes. Initialization has no session trace and does not generate an empty page.
 
+These stages also refresh the project dashboard `.atk/traces/index.html`, which shows issues and actual progress across all sessions by session or by issue category and links back to each session page. To open it, send `$atk-visualize-trace Open the trace dashboard`. Issues recorded before categories existed show as uncategorized until their session is analyzed again.
+
 Use Trace IDs to locate evidence within the session and open issue details to read the retention reason. Review any retained content in the HTML before sharing it.
 
 ### 3. Investigate, Fix, and Verify an Issue as Needed
@@ -167,7 +169,7 @@ Start with diagnosis when you already have a specific issue and session evidence
 
 ### Where to Find Trace Outputs
 
-Each session archive is stored under `.atk/traces/<session_id>/` in your Agent project. Files appear as you run the corresponding steps.
+Each session archive is stored under `.atk/traces/<session_id>/` in your Agent project. Files appear as you run the corresponding steps. The project dashboard `index.html` and the category list `categories.json` sit directly under `.atk/traces/`.
 
 | File or directory | What it shows |
 | --- | --- |

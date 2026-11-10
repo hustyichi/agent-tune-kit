@@ -143,7 +143,8 @@ The following are host-produced records, not automatic CLI diagnoses. Each `--da
 
 | Command | Required or relevant data |
 | --- | --- |
-| `atk trace issue --session-id ID --data FILE --json` | `title`, `description`; optional `selection_reason` (nonempty string), `segments`, top-level `evidence`, stable `id`, `status`, `notes`; updates include `revision`. `--dry-run` validates and reports covered nodes without writing |
+| `atk trace issue --session-id ID --data FILE --json` | `title`, `description`; optional `selection_reason` (nonempty string), `category` (a project category ID), `segments`, top-level `evidence`, stable `id`, `status`, `notes`; updates include `revision`. `--dry-run` validates and reports covered nodes without writing |
+| `atk trace category --list --json` / `atk trace category --data FILE --json` | Project-level, no Session ID. `--list` returns the vocabulary, its `revision` and per-session usage. `--data` adds or revises one category: `id`, `name`, `definition`, optional `deprecated`, and the current vocabulary `revision` once the vocabulary exists |
 | `atk trace detect --session-id ID --data FILE --json` | nonempty `scope` describing inspected and unread material, actual `status`, `gaps: []`; inputs bind current file digests; updates include `id`/`revision` |
 | `atk trace diagnose --session-id ID --issue-id ISSUE --file MD --json` | Markdown combining observed issue/evidence, facts/hypotheses, cause, repair/verification plan and gaps; optional `--diagnosis-id`. Markdown may cite `ISSUE-001/S2` |
 | `atk trace change --session-id ID --issue-id ISSUE --data FILE --json` | Begin with `status: "running"`, nonempty `before` identifying actual baseline and adopted `diagnoses`; finish with same `id`/`revision`, actual `candidate`, `diff`, `checks: []`, `change_summary`, `remaining_verification` and `status: "completed"` |
@@ -152,6 +153,29 @@ The following are host-produced records, not automatic CLI diagnoses. Each `--da
 Detection selects findings before creating Issues. The selection policy lives in [atk-trace-detect](../skills/atk-trace-detect/SKILL.md#which-findings-to-retain). Detection writes `selection_reason` to explain why an issue warrants investigation. The title and description first state a concrete, evidence-backed mismatch understandable without the trace, then add impact/recovery, relevant recurrence, implementation leads and unresolved questions. The [description guidance](../skills/atk-trace-detect/SKILL.md#write-a-recognizable-problem) defines the host's semantic check. The CLI validates record shape, not semantic quality. The reason remains optional for compatibility; omission during an update preserves it. Revisions retain the previous reason in history, and new diagnoses snapshot the reason when present.
 
 [Diagnosis](../skills/atk-trace-diagnose/SKILL.md) continues from those questions without treating selection as proof of a cause. Its description identifies the problem independently; each cause must explain that problem, and each fix must address a cause or uncertainty. Scope changes reconcile the live issue while preserving history; an independent defect without an established causal link is recorded separately. Final summaries draw from the saved explanations. Rejected leads and any revised scope or retention reason must be explained; an unresolved implementation cause alone does not invalidate a serious, recurring or user-focused issue. Filtered minor observations do not get a separate issue list; coverage still records the focus, selection scope and gaps. Zero retained issues is not a correctness verdict.
+
+### Issue categories
+
+A project keeps one category vocabulary in `.atk/traces/categories.json`, so the same kind of problem can be followed across sessions in the dashboard:
+
+```json
+{
+  "schema_version": 1,
+  "revision": 3,
+  "categories": [{
+    "id": "shell-arg-retry",
+    "name": "Shell 路径/参数传递导致反复重试",
+    "definition": "工具调用因相对路径、stdin 或变量未展开失败并重试；不含业务逻辑错误",
+    "deprecated": false,
+    "created_at": "2026-11-10T10:00:00+08:00",
+    "updated_at": "2026-11-10T10:00:00+08:00"
+  }]
+}
+```
+
+`id` is lowercase kebab-case (at most 64 characters) and never changes. `name` and `definition` can be revised; the definition should state how the category differs from its nearest neighbor. Entries are never deleted: mark an unused category `deprecated: true`. Issues that already reference it keep displaying it, but new or changed assignments cannot use it. Every write must carry the vocabulary's current `revision` (the first category needs none), which prevents concurrent detections from overwriting each other.
+
+An Issue has at most one `category`, which must name an existing category. A missing `category` means uncategorized; older records need no migration. Changing it creates a new Issue revision with the old value in history, omission during an update preserves it, and new diagnoses snapshot it. [Detection](../skills/atk-trace-detect/SKILL.md#assign-a-category) assigns categories, reuses existing ones first and fills in uncategorized issues of the session it inspects. It does not edit other sessions. Categories are for display and navigation only: they do not merge, resolve or rank issues.
 
 ### Issue segments
 
@@ -283,12 +307,48 @@ The diagnosis tab shows the latest structured diagnosis under Issue description,
 
 In a local preview, a diagnosis link such as `[Project setup](src/project.py#L42)` opens a file resolved against the project root at generation time. ATK checks that the file exists under that root and excludes hidden paths. Older absolute `path:line` links use the same checks. Unresolved paths have a copy control. The line fragment marks the cited line, and scrolling to it depends on the file viewer.
 
+### Actual progress
+
+The preview, its issue filter and the dashboard all show actual progress derived from saved records. The declared issue `status` is ignored, except that `excluded` always shows **已排除**. Otherwise the first matching rule applies:
+
+| Progress | Rule |
+| --- | --- |
+| **修复中** | The newest completed or running change linked to the issue is still `running` |
+| **无法判断** | That change has a verification record that cannot be read, so its newest outcome is unknown |
+| **验证通过** / **验证失败** / **无法判断** | Its newest finished (`completed` or `partial`) verification's outcome for this issue: `pass`, `fail`, or `inconclusive`. A missing or malformed conclusion counts as **无法判断**, never as a pass |
+| **验证中** | No finished verification yet, and one is `running` |
+| **待验证** | That change is completed with no finished or running verification |
+| **已诊断** | No change, at least one diagnosis |
+| **待诊断** | No diagnosis |
+
+“Newest” compares `created_at` instants. Records without a time or timezone never count as newest. A newer completed or running change replaces the progress of an older verified one, because the older result says nothing about the newer candidate. Failed, blocked and interrupted changes and verification attempts do not move progress; they stay visible in the issue drawer, and a later re-check that is running or stopped early does not erase a finished result. A shared change is judged by each target issue's own conclusion.
+
+### Project dashboard
+
+After refreshing their session preview, capture, detect, diagnose, optimize and verify also refresh the project dashboard once:
+
+```sh
+atk visualize traces --overwrite --no-open --json
+```
+
+The dashboard is `.atk/traces/index.html`, one offline page covering every archived session in the project. To open it, ask `$atk-visualize-trace` for the dashboard or run the command without `--no-open`. Initialization does not create it. Options are `--project-root`, authorized `--overwrite`, `--open` and `--no-open`. The JSON summary reports session, issue and category counts, progress counts, stale previews, warnings and whether a browser opened. Failure keeps the previous page and does not undo the stage.
+
+- **会话** (default) shows one card per session with its source, last update, issue count, a progress bar and category tags. Sessions with unreadable records, no retained issues or a missing or stale preview stay visible with that state. No retained issues does not mean the session was correct.
+- **异常** shows one card per category, with session and issue counts and progress. Uncategorized issues are grouped in one strip at the bottom; they are categorized when their session is detected again.
+- The progress legend filters both views and the drawers. Search matches Session IDs, issue IDs, titles and category names. A source filter appears only when sessions come from more than one source.
+- A card opens a right-side drawer listing its issues, unfinished first. Each issue links to its place in the session preview (`preview.html#issue=…`). A session drawer also shows capture and detection coverage and the command to generate a missing or stale preview.
+- Deep links: `#view=session&session=<dir>` and `#view=category&category=<id>`. When the dashboard exists beside a default preview, the preview shows **← 大盘** and its category tags link to the dashboard.
+
+A preview is stale when its session records changed after it was generated; regenerate that session's preview to update it. The dashboard embeds issue titles, category definitions and source type/instance/project/environment, but no raw trace bodies, configuration or credentials. Review it before sharing.
+
 ## Archive layout and separation
 
 ```text
 .atk/traces/
 ├── config.json
 ├── project.md
+├── categories.json                       # Project category vocabulary, when created
+├── index.html                            # Project dashboard
 └── <session_id>/
     ├── session.json                      # Source, capture scope, and detection records
     ├── raw/
@@ -306,6 +366,6 @@ In a local preview, a diagnosis link such as `[Project setup](src/project.py#L42
     └── preview.html
 ```
 
-Files appear as their corresponding steps run. The archive uses native Session and Trace IDs as path components, with escaping where needed. Read `session.json` for detection coverage, including a completed analysis with zero findings. Issues share the retained traces. Session Skills refresh `preview.html` with the latest diagnoses, changes and verification attempts; regenerate manually after direct record edits. Explicit batch verification creates ordinary new batch results and links them from the trace verification record.
+Files appear as their corresponding steps run. The archive uses native Session and Trace IDs as path components, with escaping where needed; IDs that collide with root files such as `categories.json` or `index.html` are escaped too. Read `session.json` for detection coverage, including a completed analysis with zero findings. Issues share the retained traces. Session Skills refresh `preview.html` with the latest diagnoses, changes and verification attempts; regenerate manually after direct record edits. Explicit batch verification creates ordinary new batch results and links them from the trace verification record.
 
 No private trace, credential, company gateway or business example is bundled. Automated fixture tests establish deterministic behavior; real Langfuse deployment compatibility, fresh host loading and actual business repair require their own evidence. A successful local import is not a remote API or business-effect acceptance result.

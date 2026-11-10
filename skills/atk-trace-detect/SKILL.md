@@ -17,7 +17,7 @@ An identified session, archived captures, optional focus and confirmed project s
 
 ## Outputs
 
-Selected per-issue records with a retention reason and a detection entry binding inspected traces, scope, unread material and gaps, plus the session's generated `preview.html`. Zero retained issues still requires coverage. Do not create an auxiliary observation list or a duplicate report.
+Selected per-issue records with a retention reason and a project category, a detection entry binding inspected traces, scope, unread material and gaps, plus the session's generated `preview.html` and the refreshed project dashboard. Zero retained issues still requires coverage. Do not create an auxiliary observation list or a duplicate report.
 
 ## Which findings to retain
 
@@ -40,16 +40,26 @@ Keep the description about what is established. Missing verification does not pr
 
 Before saving, read the title and description on their own: can a reader say what went wrong, why it is a mismatch, and which evidence supports it? If not, rewrite or narrow the claim. This is a semantic check by the host, not a keyword or sentence-count gate.
 
+## Assign a category
+
+The project keeps one category vocabulary in `.atk/traces/categories.json` so the same kind of problem can be followed across sessions in the dashboard. Categories are display and navigation only: they do not merge, resolve or rank issues.
+
+- Before saving issues, read the vocabulary and its usage with `atk trace category --list --json`.
+- Give every retained issue exactly one `category`. Reuse an existing category when its `definition` covers the observed failure pattern; judge by the problem, not by shared words in the title. Create a new one only when none fits, with `atk trace category --data <json-file> --json` holding a stable kebab-case `id`, a short `name` and a `definition` that states what belongs and how it differs from the nearest existing category. Revising an existing vocabulary requires its current `revision` from the listing (the first category needs none); on a stale revision, list again and re-decide.
+- Do not reference a deprecated category in a new assignment.
+- In this session only, also fill in `category` for existing uncategorized issues. Change only `category` with the issue's `id` and current `revision`; leave titles, descriptions, segments and other sessions' issues unchanged.
+- Do not rename, merge or deprecate categories unless the user asks.
+
 ## Workflow
 
 1. Read `atk trace status --session-id <id> --json`, existing issues and optional project/context standards. Inspect current traces with `atk trace overview --session-id <id> --json`.
 2. Establish intent and outcome, then inspect the critical path through `atk trace overview --session-id <id> --trace-id <trace> --offset <n> --limit <n> --json` (session-time order with `node_id` / parent), `atk trace search --session-id <id> --text <text> --offset <n> --limit <n> --json` and `atk trace show --session-id <id> --ref <reference-json-file> --json`. Read decisive model/tool inputs, outputs, parent links and artifacts. Time order alone is not causality; missing parents/multiple roots remain explicit.
 3. Identify supported mismatches, omissions, incorrect tool behavior, recovery failures or unsupported completion claims, then apply “Which findings to retain”. For each selected issue, write a concise `selection_reason` stating which condition applies and why, and author `title`/`description` using “Write a recognizable problem”. A retained issue is worth investigating, not necessarily a confirmed implementation defect.
-4. Review existing issue identities before adding/updating; CLI does no semantic deduplication. For each distinct problem location, write one `segments[]` entry with a free-text `summary` and the smallest `scope` that still explains it (`node` for an execution unit and its descendants, or `from`/`to` for a continuous range on one Trace). Split across Traces. Put field references under that segment; keep only non-locatable materials in top-level `evidence`. Optional `atk trace issue --dry-run --data <json-file> --json` reports covered node counts and durations before writing. Save with `atk trace issue --session-id <id> --data <json-file> --json`. Issue fields are `title`, `description`, `selection_reason`, optional `segments` / top-level `evidence`; updates include existing `id` and `revision`. Obtain hashed references using `atk trace ref --session-id <id> --path <session-relative-file> --pointer <json-pointer> --json`. Check cited fields after reimport. Omission never resolves an issue; exclusion retains reasons/history.
+4. Review existing issue identities before adding/updating; CLI does no semantic deduplication. For each distinct problem location, write one `segments[]` entry with a free-text `summary` and the smallest `scope` that still explains it (`node` for an execution unit and its descendants, or `from`/`to` for a continuous range on one Trace). Split across Traces. Put field references under that segment; keep only non-locatable materials in top-level `evidence`. Optional `atk trace issue --dry-run --data <json-file> --json` reports covered node counts and durations before writing. Save with `atk trace issue --session-id <id> --data <json-file> --json`. Issue fields are `title`, `description`, `selection_reason`, `category` (see “Assign a category”), optional `segments` / top-level `evidence`; updates include existing `id` and `revision`, and omitting `category` on an update keeps its current value. Obtain hashed references using `atk trace ref --session-id <id> --path <session-relative-file> --pointer <json-pointer> --json`. Check cited fields after reimport. Omission never resolves an issue; exclusion retains reasons/history.
 5. Save coverage with `atk trace detect --session-id <id> --data <json-file> --json`: `scope`, actual `status` and `gaps`; updates bind `id` and `revision`. Include the user's focus, applied selection scope, checked nodes/rounds and unread ranges, including zero retained issues, partial and interrupted analysis. New capture does not change old coverage facts. Reassessing existing issues requires an explicit reason and revision history; omission never deletes or resolves them.
 6. If final synthesis makes a problem clearer or changes its scope, revise the record before generating the preview and delivering results rather than leaving the clearest explanation only in chat.
-7. After all issue and coverage writes, generate/update the session's default `preview.html` once using `atk visualize trace --session-id <id> --overwrite --no-open --json`, reusing the same project/source options. Include zero-issue, partial and interrupted analysis with retained material. Consume only the CLI summary; do not read the generated HTML into context or invoke a separate visualization Skill. Preserve any known user-edited preview instead of overwriting it.
-8. Deliver stable IDs, retention reasons, impact, evidence, coverage, gaps and preview path/warnings, drawing the summary from the saved problem statements. If none qualify, say “No issues met this detection's selection criteria”, not that the session was correct. Default depth ends at the selected issue list: explain obvious causes, but leave decisive causal experiments to diagnose and do not execute the Agent by default. For an explicit continuous investigation/repair request, continue within authorization without fixed per-stage approvals.
+7. After all issue and coverage writes, generate/update the session's default `preview.html` once using `atk visualize trace --session-id <id> --overwrite --no-open --json`, reusing the same project/source options. Include zero-issue, partial and interrupted analysis with retained material. Consume only the CLI summary; do not read the generated HTML into context or invoke a separate visualization Skill. Preserve any known user-edited preview instead of overwriting it. Then refresh the project dashboard once with `atk visualize traces --overwrite --no-open --json`, reusing the same project option.
+8. Deliver stable IDs, retention reasons, categories, impact, evidence, coverage, gaps and preview/dashboard paths and warnings, drawing the summary from the saved problem statements. List any category created in this detection with its issues, so the user can ask to merge or rename it. If none qualify, say “No issues met this detection's selection criteria”, not that the session was correct. Default depth ends at the selected issue list: explain obvious causes, but leave decisive causal experiments to diagnose and do not execute the Agent by default. For an explicit continuous investigation/repair request, continue within authorization without fixed per-stage approvals.
 
 ## Starting from local files
 
@@ -65,7 +75,7 @@ Repeat `--path` for selected files; inspect native Session ownership before impo
 
 Unread material remains unknown. Empty issues do not prove correctness. Missing evidence for one part does not erase supported findings elsewhere. Do not promote a suspected cause, silently re-download, or invent expected answers.
 
-Preview failure does not undo detection or block the next authorized stage. Report that the preview is unavailable or stale; keep saved records and any previous page.
+Preview or dashboard failure does not undo detection or block the next authorized stage. Report that the preview or dashboard is unavailable or stale; keep saved records and any previous page.
 
 ## CLI dependency
 

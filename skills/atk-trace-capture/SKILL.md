@@ -17,7 +17,7 @@ An explicit Session ID and source, existing Trace configuration, optional declar
 
 ## Outputs
 
-Session identity, local path, actual trace/observation counts, selector/field scope, integrity/completeness and gaps, plus the session's generated `preview.html`. No empty issue directories.
+Session identity, local path, actual trace/observation counts, selector/field scope, integrity/completeness and gaps, plus the session's generated `preview.html` and the refreshed project dashboard. No empty issue directories.
 
 ## Workflow
 
@@ -26,14 +26,14 @@ Session identity, local path, actual trace/observation counts, selector/field sc
 3. Use `atk trace fetch --session-id <id> --json`, optionally `--config <file> --from-time <timestamp> --to-time <timestamp>`. The CLI handles Session filtering, cursor pagination and updates by native Trace ID. Existing issues survive reimport.
 4. For local material use `atk trace import --session-id <id> --source <source-json> --path <file> --json`, repeating `--path`. Supply `--association <json>` only with sourced association proof; use `--retention <json>` as needed. A supplied ID or directory name alone is not ownership proof. Import necessary ATK execution evidence with original identities/provenance, not an entire project.
 5. Inspect the result/overview. Explain partial failures, missing fields/ownership, unknown formats, visibility and declared limits. Empty responses, one trace and matching hashes do not establish a complete session. Transformed bytes are retained evidence, not original network bytes or a sealed original ATK package.
-6. With retained session material, generate/update its default `preview.html` once at stage end using `atk visualize trace --session-id <id> --overwrite --no-open --json`, reusing the same project/source options. If the final fetch/import already returned a successful preview and no later writes occurred, reuse it. This applies to partial captures too. Consume only the CLI summary; do not read the generated HTML into context or invoke a separate visualization Skill. Preserve any known user-edited preview instead of overwriting it.
-7. Deliver Session ID, archive path, scale, scope, gaps and preview path/warnings. Stop for capture-only requests; continue to detect only when analysis was also requested.
+6. With retained session material, generate/update its default `preview.html` once at stage end using `atk visualize trace --session-id <id> --overwrite --no-open --json`, reusing the same project/source options. If the final fetch/import already returned a successful preview and no later writes occurred, reuse it. This applies to partial captures too. Consume only the CLI summary; do not read the generated HTML into context or invoke a separate visualization Skill. Preserve any known user-edited preview instead of overwriting it. Then refresh the project dashboard once with `atk visualize traces --overwrite --no-open --json`, reusing the same project option.
+7. Deliver Session ID, archive path, scale, scope, gaps and preview/dashboard paths and warnings. Stop for capture-only requests; continue to detect only when analysis was also requested.
 
 ## Failure behavior
 
 Missing identity/association does not create a substitute session. Preserve authorized partial material and actual failure status. Do not silently switch source/API, print credentials/headers/error bodies, or modify source files.
 
-Preview failure does not undo acquisition or block the next authorized stage. Report that the preview is unavailable or stale; keep saved records and any previous page.
+Preview or dashboard failure does not undo acquisition or block the next authorized stage. Report that the preview or dashboard is unavailable or stale; keep saved records and any previous page.
 
 ## CLI dependency
 

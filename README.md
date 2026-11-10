@@ -153,6 +153,8 @@ $atk-visualize-trace 打开 <session-id> 的执行泳道，从问题跳到相关
 
 采集、分析、诊断、修复和验证 Skill 在阶段结束后默认生成或更新 `.atk/traces/<session_id>/preview.html`，不自动打开浏览器。需要打开时使用 `$atk-visualize-trace`；已打开的页面在文件更新后需刷新。初始化没有会话轨迹，不生成空页面。
 
+这些阶段同时刷新项目大盘 `.atk/traces/index.html`，按会话或异常分类查看全部会话的问题和实际进度，并可跳回各会话页。需要打开时发送 `$atk-visualize-trace 打开轨迹大盘`。早于分类功能的问题显示为“未分类”，对应会话重新分析时补上。
+
 可用 Trace ID 定位会话内的证据，在问题详情中查看保留理由。分享 HTML 前请核对其中留存的正文。
 
 ### 3. 按问题调查、修复和验证（按需）
@@ -167,7 +169,7 @@ $atk-trace-verify 验证 <session-id> 的 ISSUE-001 对应候选，并检查相�
 
 ### 查看轨迹产物
 
-会话归档保存在 Agent 项目的 `.atk/traces/<session_id>/` 下，文件随对应步骤生成。
+会话归档保存在 Agent 项目的 `.atk/traces/<session_id>/` 下，文件随对应步骤生成。项目大盘 `index.html` 和分类表 `categories.json` 位于 `.atk/traces/` 根目录。
 
 | 文件或目录 | 用途 |
 | --- | --- |
