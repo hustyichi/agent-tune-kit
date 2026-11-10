@@ -532,7 +532,7 @@
     return content;
   };
   const showNodeDetails = (node, targetIndex, ref) => {
-    openDrawer(node.name || node.id || "轨迹节点", "event");
+    openDrawer(node.name || node.id || "事件", "event");
     backToIssue();
     const body = el("div", undefined, "event-detail");
     body.dataset.nodeIndex = String(targetIndex);
@@ -791,7 +791,7 @@
         const row = el("div", undefined, "segment-header");
         row.append(el("span", part.summary || (part.unscoped ? "未圈定范围" : "片段")));
         const meta = el("span", undefined, "seg-meta");
-        meta.append(el("span", `${part.node_count || part.anchors.length || 0} 节点`));
+        meta.append(el("span", `${part.node_count || part.anchors.length || 0} 条事件`));
         if (part.duration_ms != null) meta.append(el("span", elapsed(part.duration_ms)));
         row.append(meta);
         content.append(row);
@@ -804,7 +804,7 @@
         }, "row-grid fold-row");
         const label = item.expanded
           ? `⋯ 收起已展开的 ${item.indices.length} 条 ⋯`
-          : `⋯ 展开这 ${item.count} 条上下文记录${item.gap != null ? ` · 跨度 ${elapsed(item.gap)}` : ""} ⋯`;
+          : `⋯ 展开这 ${item.count} 条上下文事件${item.gap != null ? ` · 跨度 ${elapsed(item.gap)}` : ""} ⋯`;
         row.append(el("span", label));
         content.append(row);
         continue;
@@ -817,7 +817,7 @@
       if (n.start_time) time.title = n.start_time;
       const traceCell = el("span", undefined, "trace-col");
       const tag = el("span", trackLabel(n.track), "trace-tag"); tag.title = n.trace_id || n.reference.path; traceCell.append(tag);
-      const action = el("span", undefined, "node-main"), name = n.name || String(n.id || "未命名记录");
+      const action = el("span", undefined, "node-main"), name = n.name || String(n.id || "未命名事件");
       const state = eventState(n);
       const label = el("span", undefined, "node-label"); label.title = name;
       if (state.failed) {
@@ -846,7 +846,7 @@
       if (!state.label && !duration) meta.append(el("span", "—"));
       row.append(time, traceCell, action, result, meta); content.append(row);
     }
-    if (!count) content.append(el("p", timeline().order.length ? "没有符合筛选条件的记录。" : "此会话没有可浏览的记录。", "empty"));
+    if (!count) content.append(el("p", timeline().order.length ? "没有符合筛选条件的事件。" : "此会话没有可浏览的事件。", "empty"));
     list.style.paddingTop = `${first * rowHeight}px`;
     list.style.paddingBottom = `${(count - last) * rowHeight}px`;
     list.replaceChildren(content);
@@ -903,18 +903,18 @@
     $("trace-choice").hidden = !track || tracks.length < 2;
     $("lane-reset").hidden = !track;
     $("trace-filter").title = track ? `${trackLabel(displayedScope)} · ${track.trace_id || "归档材料"}` : "";
-    $("records-title").textContent = track ? `Event · ${trackLabel(displayedScope)}` : "Event";
+    $("records-title").textContent = track ? `事件 · ${trackLabel(displayedScope)}` : "事件";
     const coverage = currentCapture?.manifest.completeness || {};
     const native = tracks.filter(t => t.trace_id != null);
-    const notes = track ? [track.trace_id || "归档材料", `${track.rows.length || track.roots.length} 条记录`] : [`${native.length} 条 Trace`];
+    const notes = track ? [track.trace_id || "归档材料", `${track.rows.length || track.roots.length} 条事件`] : [`${native.length} 条 Trace`];
     if (!track) notes.push(native.length && native.length === tracks.length ?
-      `${native.reduce((n, t) => n + t.rows.length, 0)} 个观测` : `${order.length} 条记录`);
+      `${native.reduce((n, t) => n + t.rows.length, 0)} 条事件` : `${order.length} 条事件`);
     const ends = tracks.reduce((hi,t) => Math.max(hi,t.end ?? -Infinity), -Infinity);
     const duration = track ? track.end - track.start : ends - startTime();
-    if (Number.isFinite(duration) && (!track || track.start !== null)) notes.push(`观测跨度 ${elapsed(duration)}`);
+    if (Number.isFinite(duration) && (!track || track.start !== null)) notes.push(`时间跨度 ${elapsed(duration)}`);
     if (coverage.status === "partial") notes.push("部分采集");
     $("summary").textContent = notes.join(" · ");
-    $("session-stats").textContent = `${native.length} Trace · ${order.length} 观测 · ${data.issues.length} 问题`;
+    $("session-stats").textContent = `${native.length} Trace · ${order.length} 条事件 · ${data.issues.length} 问题`;
     scroller.parentElement.classList.toggle("single", tracks.length === 1 || displayedScope !== null);
     streamRows = filteredRows();
     displayRows = buildDisplayRows(streamRows);

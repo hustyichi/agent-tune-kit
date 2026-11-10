@@ -45,13 +45,13 @@ window.createSwimlanes = function createSwimlanes({el, button, elapsed, startTim
     const close = button("收起", () => { members.hidden = true; trigger.focus({preventScroll:true}); });
     const list = el("div", undefined, "member-list");
     members.replaceChildren(list);
-    list.append(el("strong", `${indices.length} 个动作`), close);
+    list.append(el("strong", `${indices.length} 条事件`), close);
     let offset = 0;
-    const more = button("更多动作", append);
+    const more = button("更多事件", append);
     function append() {
       for (const i of indices.slice(offset, offset + 40)) {
         const n = capture.nodes[i];
-        const link = button(n.name || String(n.id || "查看记录"), () => onPick(i));
+        const link = button(n.name || String(n.id || "查看事件"), () => onPick(i));
         link.dataset.nodeIndex = i;
         list.append(link);
       }
@@ -123,7 +123,7 @@ window.createSwimlanes = function createSwimlanes({el, button, elapsed, startTim
         const i = batch[0], n = nodes[i], indices = batch;
         const mark = button("", () => listMembers(indices, mark), indices.length > 1 ? "lane-mark cluster" : "lane-mark");
         mark.style.left = `${pct(n.at)}%`;
-        mark.title = `${elapsed(n.at-start, true)} · ${indices.length === 1 ? n.name || n.type : indices.length + " 个动作"}`;
+        mark.title = `${elapsed(n.at-start, true)} · ${indices.length === 1 ? n.name || n.type : indices.length + " 条事件"}`;
         mark.setAttribute("aria-label", mark.title); marks.set(mark, indices);
         track.append(mark);
       }
@@ -151,7 +151,7 @@ window.createSwimlanes = function createSwimlanes({el, button, elapsed, startTim
       row.dataset.track = number;
       const left = el("div", undefined, "lane-heading");
       const pick = button("", () => onPick(track.rows[0] ?? track.roots[0]), "lane-toggle");
-      pick.title = `定位 ${label} 首条记录 · ${title}`;
+      pick.title = `定位 ${label} 首条事件 · ${title}`;
       pick.setAttribute("aria-label", pick.title);
       const text = el("span", undefined, "lane-text");
       const note = el("span", undefined, "lane-note");
@@ -172,7 +172,7 @@ window.createSwimlanes = function createSwimlanes({el, button, elapsed, startTim
       }
       if (scope === null && tracks.length > 1) {
         const zoom = button("聚焦", () => onZoom(number), "lane-zoom");
-        zoom.title = `聚焦 ${label} · 仅查看此 Trace 的泳道与 Event`; zoom.setAttribute("aria-label", zoom.title); left.append(zoom);
+        zoom.title = `聚焦 ${label} · 仅查看此 Trace 的泳道与事件`; zoom.setAttribute("aria-label", zoom.title); left.append(zoom);
       }
       const activeParts = fragments.length ? fragments : preview;
       for (const [index, part] of activeParts) {

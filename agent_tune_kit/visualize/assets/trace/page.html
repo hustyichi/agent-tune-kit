@@ -43,7 +43,7 @@
         <div class="lane-footer">
           <div class="lane-legend">
             <span><i class="legend-track"></i>执行范围</span>
-            <span><i class="legend-tick"></i>动作</span>
+            <span><i class="legend-tick"></i>事件</span>
             <span id="legend-fragment" hidden><i class="legend-fragment"></i>问题片段</span>
           </div>
         </div>
@@ -62,16 +62,16 @@
       </section>
       <section class="record-panel" aria-labelledby="records-title">
         <div class="records-heading">
-          <div class="records-title"><h2 id="records-title">Event</h2><span id="trace-count" class="muted" aria-live="polite"></span></div>
+          <div class="records-title"><h2 id="records-title">事件</h2><span id="trace-count" class="muted" aria-live="polite"></span></div>
           <div class="toolbar record-filters">
-            <label><span class="sr-only">记录范围</span><select id="record-mode"><option value="">全部记录</option><option value="key">关键动作</option><option value="error">仅看异常</option></select></label>
+            <label><span class="sr-only">事件范围</span><select id="record-mode"><option value="">全部事件</option><option value="key">关键事件</option><option value="error">仅看异常</option></select></label>
             <label><span class="sr-only">类型</span><select id="type-filter"></select></label>
-            <label class="search-label"><span class="sr-only">搜索记录</span><input id="trace-search" type="search" placeholder="搜索动作或输入输出"></label>
+            <label class="search-label"><span class="sr-only">搜索事件</span><input id="trace-search" type="search" placeholder="搜索事件或输入输出"></label>
           </div>
         </div>
         <div class="panel stream">
-          <div class="row-grid stream-header"><span>会话时间</span><span class="trace-col">Trace</span><span>动作</span><span class="result-col">内容预览</span><span class="event-meta">状态 / 耗时</span></div>
-          <div id="trace-scroll" tabindex="0" aria-label="执行记录，按时间顺序"><div id="trace-list"></div></div>
+          <div class="row-grid stream-header"><span>会话时间</span><span class="trace-col">Trace</span><span>事件</span><span class="result-col">内容预览</span><span class="event-meta">状态 / 耗时</span></div>
+          <div id="trace-scroll" tabindex="0" aria-label="事件列表，按时间顺序"><div id="trace-list"></div></div>
         </div>
       </section>
     </div>
