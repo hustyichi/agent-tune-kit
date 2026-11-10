@@ -19,6 +19,7 @@ from agent_tune_kit.results.evidence import safe_path
 from agent_tune_kit.traces import records
 from agent_tune_kit.traces.categories import category_map, load_catalog
 from agent_tune_kit.traces.progress import PROGRESS, issue_progress, parse_instant, summarize
+from agent_tune_kit.traces.projects import project_map, root_projects
 from agent_tune_kit.traces.store import read_json, trace_root
 from agent_tune_kit.utils.files import write_text_atomic
 
@@ -110,6 +111,7 @@ def _issue_entries(session_dir, status):
             {
                 "id": issue["id"],
                 "title": _text(issue["title"], TITLE_LIMIT),
+                "root_projects": root_projects(session_dir.parent, issue),
                 "category": category if isinstance(category, str) and category else None,
                 "progress": issue_progress(issue, pairs)["key"],
                 "segments": len(issue.get("segments") or []),
@@ -148,6 +150,9 @@ def _session_entry(session_dir):
     archived = parse_instant(session.get("created_at"))
     updated = _latest([archived, *issue_stamps, *(parse_instant(item.get("updated_at")) for item in detections)])
     mtime = _preview_mtime(session_dir)
+    registry = session_dir.parent / "projects.json"
+    if registry.is_file():
+        updated = max(updated or 0, registry.stat().st_mtime)
     last = detections[-1] if detections else None
     scope = last.get("scope") if last and isinstance(last.get("scope"), dict) else {}
     traces, observations = completeness.get("trace_count"), completeness.get("observation_count")
@@ -199,6 +204,12 @@ def build_dashboard_data(project_root):
     # Newest activity first; sessions whose time is unknown go last.
     sessions.sort(key=lambda item: (item.get("updated_ms") is None, -(item.get("updated_ms") or 0), item["dir"]))
     warnings = []
+    from agent_tune_kit.traces.projects import load_projects
+
+    try:
+        load_projects(root)
+    except UserActionRequired:
+        warnings.append("工程目录不可读取；根因项目暂显示记录中的 ID。")
     try:
         load_catalog(root)
     except UserActionRequired:
@@ -206,6 +217,7 @@ def build_dashboard_data(project_root):
     return {
         "project": Path(project_root).resolve().name,
         "sessions": sessions,
+        "projects": project_map(root),
         "categories": {
             key: {name: entry[name] for name in ("name", "definition", "deprecated")}
             for key, entry in category_map(root).items()

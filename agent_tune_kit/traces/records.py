@@ -10,6 +10,7 @@ from agent_tune_kit.results.evidence import json_bytes, now, safe_path, write_ma
 from agent_tune_kit.utils.files import write_text_atomic
 
 from .categories import check_issue_category
+from .projects import load_projects, validate_links
 from .segments import resolve_segments, segments_for_storage
 from .store import (
     STATES,
@@ -173,6 +174,8 @@ def prepare_issue(session_dir, data, *, dry_run=False):
             "segments": [],
         }
     )
+    if "project_links" in data:
+        issue["project_links"] = validate_links(directory, data["project_links"])
     if "category" in data:
         data["category"] = check_issue_category(
             directory.parent, data["category"], previous.get("category") if previous else None
@@ -227,6 +230,7 @@ def prepare_issue(session_dir, data, *, dry_run=False):
                     "description",
                     "selection_reason",
                     "category",
+                    "project_links",
                     "evidence",
                     "segments",
                     "status",
@@ -325,9 +329,11 @@ def save_detection(session_dir, data):
 
 
 @_locked_write
-def save_diagnosis(session_dir, issue_id, text, diagnosis_id=None):
+def save_diagnosis(session_dir, issue_id, text, diagnosis_id=None, expected_revision=None):
     directory = Path(session_dir)
     issue = load_issue(directory, issue_id)
+    if expected_revision is not None and expected_revision != issue["revision"]:
+        raise UserActionRequired("Stale diagnosis issue revision.")
     if not isinstance(text, str) or not text.strip():
         raise UserActionRequired("Diagnosis must contain an explanation and a plan.")
     diagnosis_id = _id(diagnosis_id, "DIA")
@@ -343,9 +349,11 @@ def save_diagnosis(session_dir, issue_id, text, diagnosis_id=None):
         "segments": issue.get("segments", []),
         "created_at": now(),
     }
-    for optional in ("selection_reason", "category"):
+    for optional in ("selection_reason", "category", "project_links"):
         if optional in issue:
             snapshot[optional] = issue[optional]
+    if issue.get("project_links"):
+        snapshot["project_registry"] = load_projects(directory.parent)
     _refs(directory, issue["evidence"])
     for segment in snapshot["segments"]:
         _refs(directory, segment["evidence"])
@@ -502,6 +510,19 @@ def save_change(session_dir, issue_id, data):
     if not previous and change["status"] != "running":
         raise UserActionRequired("Save a running change before applying the implementation.")
     _validate_change_summary(change)
+    for summary in change.get("change_summary", []):
+        if isinstance(summary, dict) and "project_id" in summary:
+            from .projects import project_map
+
+            entry = project_map(directory.parent).get(summary["project_id"])
+            if entry is None:
+                raise UserActionRequired("Unknown modification project.")
+            base = directory.parent.parent.parent.resolve()
+            project_path = (base / entry["path"]).resolve()
+            for file in summary.get("files", []):
+                target = safe_path(base, file)
+                if not target.resolve().is_relative_to(project_path):
+                    raise UserActionRequired("Modification file is outside its project.")
     for field in ("verifications", "schema_version", "owner_issue", "created_at"):
         if field in data and (not previous or data[field] != previous.get(field)):
             raise UserActionRequired(f"Change {field} is managed by its dedicated operation.")

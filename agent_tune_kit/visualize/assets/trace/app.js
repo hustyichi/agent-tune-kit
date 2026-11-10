@@ -21,6 +21,18 @@
   let investigation = null, scopeBefore = null, previewIssue = null, expandedFolds = new Set(), railFilter = null;
   const captureById = new Map(data.captures.map(c => [c.id, c]));
   const issueById = new Map(data.issues.map(item => [item.record.id, item]));
+
+  const projectSelection = new Set(new URLSearchParams(location.hash.slice(1)).getAll("project"));
+  const projectMatches = item => !projectSelection.size || [...projectSelection].some(id => {
+    const roots = item.root_projects || [];
+    if (id === "~unattributed") return !roots.length;
+    return roots.some(root => { let current = root.id; const seen = new Set(); while (current && !seen.has(current)) { if (current === id) return true; seen.add(current); current = data.projects?.[current]?.parent_id; } return false; });
+  });
+  const projectText = item => (item.root_projects || []).map(p => p.name + (p.pending ? "（待确认）" : "")).join("、") || "待归因";
+  for (const p of Object.values(data.projects || {})) { const option = el("option", p.abbreviation || p.name); option.value = p.id; $("project-filter").append(option); }
+  for (const option of $("project-filter").options) option.selected = projectSelection.has(option.value);
+  const projectOverview = el("p", `根因项目：${[...new Set(data.issues.map(projectText))].join("、") || "待归因"}`);
+  $("project-filter").parentElement.append(projectOverview);
   const filters = ["trace-filter", "type-filter", "trace-search", "record-mode"];
   const list = $("trace-list"), scroller = $("trace-scroll");
   const scope = () => $("trace-filter").value === "" ? null : Number($("trace-filter").value);
@@ -257,6 +269,7 @@
       return;
     }
     for (const [index, diagnosis] of item.diagnoses.slice().reverse().entries()) {
+      const snapshot = diagnosis.snapshot;
       const body = diagnosis.error ? el("p", diagnosis.error, "warning") : renderDiagnosis(diagnosis.text);
       const headings = [...body.children].filter(node => node.tagName === "H2").map(node => node.textContent);
       const structured = headings.join("|") === "异常描述|异常根因|最小修复方案"
@@ -275,6 +288,11 @@
         container.append(description);
       }
       const details = el("details", undefined, "detail-section");
+      if (snapshot?.project_links) {
+        const entries = new Map((snapshot.project_registry?.projects || []).map(p => [p.id, p]));
+        const names = snapshot.project_links.filter(p => p.role === "root_cause").map(p => { const entry = entries.get(p.project_id); return (entry?.abbreviation || entry?.name || p.project_id) + (p.evidence_state === "supported" ? "" : "（待确认）"); });
+        body.prepend(el("p", `诊断时的根因项目：${names.join("、") || "待归因"}`));
+      }
       const name = diagnosis.reference.path.split("/").pop();
       details.append(el("summary", `展开原诊断 · ${name}`), body);
       container.append(details);
@@ -373,7 +391,7 @@
     $("drawer-content").append(tabs);
     if (stage === "issue") {
       const description = section("问题描述");
-      description.append(el("p", issue.description || issue.title));
+      description.append(el("p", `根因项目：${projectText(item)}`), el("p", issue.description || issue.title));
       $("drawer-content").append(description);
       if (typeof issue.selection_reason === "string" && issue.selection_reason.trim()) {
         const reason = section("保留理由");
@@ -969,6 +987,7 @@
     const text = $("issue-search").value.toLocaleLowerCase();
     const status = $("issue-status").value;
     const filtered = data.issues.filter(item => {
+      if (!projectMatches(item) && new URLSearchParams(location.hash.slice(1)).get("issue") !== item.record.id) return false;
       if (railFilter && !railFilter.ids.includes(item.record.id)) return false;
       const progress = progressOf(item).label;
       if (status && progress !== status) return false;
@@ -994,6 +1013,11 @@
       const head = el("div", undefined, "issue-card-head");
       head.append(el("span", issue.id, "issue-id-text"), el("span", undefined, `progress-dot ${progress.klass}`));
       const body = el("div", undefined, "issue-card-body");
+      const projects = el("p", `根因项目：${projectText(item)}`);
+      if (data.dashboard.available) for (const project of item.root_projects || []) {
+        const link = el("a", project.name); link.href = dashboardHash(`view=session&project=${encodeURIComponent(project.id)}`); projects.append(link);
+      }
+      body.append(projects);
       body.append(el("h3", issue.title || "问题"), el("div", progress.label, "issue-progress"));
       const tag = categoryTag(issue.category);
       if (tag) body.append(tag);
@@ -1083,6 +1107,7 @@
   $("capture-filter").closest("label").hidden = Boolean(currentCapture?.current);
   options($("capture-filter"), data.captures.map(c => c.id));
   if (currentCapture) $("capture-filter").value = currentCapture.id;
+  $("project-filter").onchange = () => { projectSelection.clear(); for (const option of $("project-filter").selectedOptions) projectSelection.add(option.value); const params = new URLSearchParams(location.hash.slice(1)); params.delete("project"); for (const id of projectSelection) params.append("project", id); history.replaceState(null, "", `#${params}`); renderIssueRail(); };
   $("capture-filter").onchange = () => { investigation = null; scopeBefore = null; railFilter = null; chooseCapture(); renderIssueRail(); renderTraces(); };
   $("trace-filter").onchange = () => focusTrace(scope());
   for (const id of ["trace-search","type-filter","record-mode"]) $(id).addEventListener(id === "trace-search" ? "input" : "change", () => renderTraces());

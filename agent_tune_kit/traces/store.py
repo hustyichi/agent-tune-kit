@@ -199,6 +199,7 @@ def load_session(session_dir):
         manifest = value.get("archive")
         if (
             directory.name != archive.component(value.get("session_id"))
+            and not (directory.name == "projects.json" and value.get("session_id") == "projects.json")
             or value.get("source") != normalize_source(value.get("source"))
             or not isinstance(manifest, dict)
             or not isinstance(manifest.get("files"), list)

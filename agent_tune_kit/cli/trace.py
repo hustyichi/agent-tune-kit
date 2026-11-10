@@ -34,6 +34,13 @@ def register(subparsers):
     init.add_argument("--config", help="non-secret configuration JSON file")
     init.add_argument("--project-file", help="project context Markdown file")
     init.add_argument("--json", action="store_true")
+    project = actions.add_parser("project", help="discover, list or update workspace projects")
+    project.add_argument("--project-root", default=".")
+    mode = project.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--discover", action="store_true")
+    mode.add_argument("--list", action="store_true")
+    mode.add_argument("--data")
+    project.add_argument("--json", action="store_true")
     category = actions.add_parser("category", help="list or update the project issue category vocabulary")
     category.add_argument("--project-root", default=".")
     mode = category.add_mutually_exclusive_group(required=True)
@@ -100,9 +107,18 @@ def register(subparsers):
             parser.add_argument("--issue-id", required=True)
             parser.add_argument("--file", required=True, help="root cause and repair/verification plan Markdown")
             parser.add_argument("--diagnosis-id")
+            parser.add_argument("--expected-revision", type=int)
 
 
 def execute(args):
+    if args.action == "project":
+        from agent_tune_kit.traces.projects import discover_projects, load_projects, save_project
+
+        if args.discover:
+            return discover_projects(args.project_root)
+        if args.list:
+            return load_projects(store.trace_root(args.project_root))
+        return save_project(args.project_root, read_json(args.data))
     if args.action == "init":
         text = Path(args.project_file).read_text(encoding="utf-8") if args.project_file else None
         return store.init_workspace(args.project_root, config=read_json(args.config), project_text=text)
@@ -162,6 +178,7 @@ def execute(args):
             args.issue_id,
             Path(args.file).read_text(encoding="utf-8"),
             diagnosis_id=args.diagnosis_id,
+            expected_revision=args.expected_revision,
         )
     data = read_json(args.data)
     if args.action == "issue":

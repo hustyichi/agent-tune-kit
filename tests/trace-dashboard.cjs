@@ -10,6 +10,8 @@ const base = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
 
 class Node {
   constructor(tag) { this.tag = tag; this.children = []; this.textContent = ""; this.className = ""; this.dataset = {}; this.attrs = {}; this.style = {}; this.hidden = false; }
+  get options() { return this.children; }
+  get selectedOptions() { return this.children.filter(node => node.selected); }
   get lastChild() { return this.children[this.children.length - 1]; }
   append(...items) { for (const item of items) this.children.push(typeof item === "string" ? Object.assign(new Node("#text"), {textContent: item}) : item); }
   replaceChildren(...items) { this.children = []; this.append(...items); }
@@ -37,7 +39,7 @@ const text = node => [node.textContent, ...node.children.map(text)].join(" ").re
 
 function boot(data) {
   const ids = new Map();
-  for (const id of ["project-name", "dash-stats", "warnings", "source-choice", "source-filter", "tab-session", "tab-category", "dash-panel", "dash-search", "progress-bar", "progress-legend", "filter-note", "dash-grid", "dash-strip", "drawer", "drawer-title", "drawer-content", "drawer-close", "drawer-resizer"]) {
+  for (const id of ["project-filter", "project-name", "dash-stats", "warnings", "source-choice", "source-filter", "tab-session", "tab-category", "dash-panel", "dash-search", "progress-bar", "progress-legend", "filter-note", "dash-grid", "dash-strip", "drawer", "drawer-title", "drawer-content", "drawer-close", "drawer-resizer"]) {
     ids.set(id, new Node("div"));
   }
   ids.get("source-choice").hidden = true;
@@ -110,7 +112,7 @@ assert.equal(app.$("filter-note").hidden, false);
 assert.equal(app.legend("待诊断").attrs["aria-pressed"], "true");
 app.legend("待诊断").onclick();
 assert.equal(app.cards().length, 2);
-assert.equal(app.$("filter-note").hidden, true);
+assert.equal(app.$("filter-note").hidden, false);
 
 // --- search matches ids, titles and category names ---------------------------------------------------------
 app.search("fails verification");
@@ -282,3 +284,14 @@ assert.match(text(app.cards()[0]), /还没有异常分类/);
 assert.equal(app.strip().length, 0);
 
 console.log("Dashboard rendering: views, filters, drawers, deep links, sources, unreadable and empty sessions passed.");
+
+const attributed = JSON.parse(JSON.stringify(base));
+attributed.projects = {ape: {id: "ape", name: "APE"}, ot: {id: "ot", name: "OT"}};
+for (const session of attributed.sessions) for (const issue of session.issues) issue.root_projects = [{id: "ape", name: "APE", pending: true}];
+app = boot(attributed);
+app.go("#view=session&project=ot");
+assert.equal(app.rows().length, 0);
+assert.equal(app.cards().filter(card => card.dataset.key).length, 0);
+app.go("#view=session&project=ape");
+assert.ok(app.cards().length > 0);
+assert.match(text(app.cards()[0]), /APE（待确认）/);

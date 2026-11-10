@@ -15,6 +15,7 @@ from zoneinfo import ZoneInfo
 from agent_tune_kit.errors import UserActionRequired
 from agent_tune_kit.traces.categories import category_map
 from agent_tune_kit.traces.progress import PROGRESS, instant, issue_progress
+from agent_tune_kit.traces.projects import project_map, root_projects
 from agent_tune_kit.traces.segments import resolve_segments
 from agent_tune_kit.utils.files import read_text_bounded, write_text_atomic
 
@@ -127,10 +128,16 @@ def build_trace_data(project_root, *, session_id, source=None):
         if truncated:
             raise ValueError(f"Record exceeds preview limit: {ref['path']}")
         summaries[ref["path"]] = ref["sha256"]
+        snapshot = None
         first, _, body = text.partition("\n")
         if first.startswith("<!-- atk-issue-snapshot {") and first.rstrip("\r").endswith("} -->"):
+            snapshot = json.loads(first[len("<!-- atk-issue-snapshot ") : -len(" -->")])
             text = body.lstrip("\r\n")
-        return {"reference": ref, "text": text}
+        return {
+            "reference": ref,
+            "text": text,
+            **({"snapshot": snapshot} if snapshot and "project_links" in snapshot else {}),
+        }
 
     captures = []
     if "archive" in session:
@@ -156,7 +163,12 @@ def build_trace_data(project_root, *, session_id, source=None):
         try:
             issue = read_record(path)
             records.load_issue(session_dir, path.parent.name)
-            item = {"record": issue, "diagnoses": [], "changes": []}
+            item = {
+                "root_projects": root_projects(session_dir.parent, issue),
+                "record": issue,
+                "diagnoses": [],
+                "changes": [],
+            }
             for ref in issue.get("diagnoses", []):
                 try:
                     item["diagnoses"].append(read_diagnosis(ref))
@@ -285,6 +297,7 @@ def build_trace_data(project_root, *, session_id, source=None):
         "references": references,
         "record_digests": summaries,
         "warnings": warnings,
+        "projects": project_map(session_dir.parent),
         "categories": {
             key: {name: entry[name] for name in ("name", "definition", "deprecated")}
             for key, entry in category_map(session_dir.parent).items()

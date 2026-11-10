@@ -19,7 +19,7 @@ def component(value):
         raise UserActionRequired("An explicit nonempty native ID is required.")
     name = quote(value, safe="")
     # Names of the files that live beside session directories at the archive root.
-    reserved = {"project.md", "config.json", "categories.json", "index.html", "_export_summary"}
+    reserved = {"project.md", "config.json", "categories.json", "projects.json", "index.html", "_export_summary"}
     if name.startswith(".") or name.casefold() in reserved:
         name = "%" + format(ord(name[0]), "02X") + name[1:]
     if len(name) > 200:
