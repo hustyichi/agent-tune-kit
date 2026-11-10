@@ -96,11 +96,19 @@ async function check(browser, width) {
         const link = links.nth(keys.indexOf(key));
         const want = await page.evaluate(k => {
           const d = JSON.parse(document.getElementById("trace-data").textContent), ref = d.references[k];
-          return {index:ref.location.node_index, pointer:ref.reference.pointer || "", value:ref.preview.text};
+          return {index:ref.location.node_index, pointer:ref.reference.pointer || "", value:ref.preview.text, field:ref.location.field};
         }, key);
         await link.click(); await settle();
         assert.equal(await page.locator("#evidence-field").getAttribute("data-pointer"), want.pointer);
-        assert.equal(await page.locator("#evidence-field pre").textContent(), want.value);
+        const evidence = page.locator("#evidence-field");
+        const tag = await evidence.evaluate(node => node.tagName);
+        if (tag === "MARK") {
+          const value = JSON.parse(want.value), text = await evidence.textContent();
+          const plainText = ["/input", "/output"].includes(want.field) && typeof value === "string";
+          assert.deepEqual(plainText ? text : JSON.parse(text), value);
+        } else if (tag === "P") {
+          assert.match(await evidence.textContent(), /原始记录未提供值|输入为空|输出为空/);
+        } else assert.equal(await evidence.locator("pre").textContent(), want.value);
         assert.equal(Number(await page.locator("#drawer-content [data-node-index]").getAttribute("data-node-index")), want.index);
         const visibleMark = await page.evaluate(() => {
           const mark = document.querySelector(".current-tick:not([hidden])") || document.querySelector(".root-info[aria-current=true]");

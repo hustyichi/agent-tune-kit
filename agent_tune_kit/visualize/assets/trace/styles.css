@@ -162,7 +162,6 @@ body.rail-collapsed #rail-toggle { transform: rotate(180deg) }
 .overview-grid { display: grid; grid-template-columns: 1fr; gap: 12px }
 .overview-card { text-align: left; padding: 16px; min-width: 0; overflow-wrap: anywhere }
 .overview-card h3 { margin-block: 5px 8px }
-.parent-links, .breadcrumb { display: flex; gap: 8px; flex-wrap: wrap; align-items: center }
 
 .detail-section .diagnosis-path { color: var(--muted); font-size: 12px; font-weight: 500 }
 .diagnosis-markdown { line-height: 1.65 }
@@ -180,8 +179,8 @@ body.rail-collapsed #rail-toggle { transform: rotate(180deg) }
 .evidence-link { display: block; width: 100%; text-align: left; white-space: normal; overflow-wrap: anywhere }
 .evidence-link strong, .evidence-link code { display: block }
 .evidence-link code, #evidence-field>code { font-size: 12px; color: var(--muted) }
-#evidence-field, .highlight-field { border-left: 3px solid var(--brand) }
-.highlight-field { background: #fff7ee }
+#evidence-field { background: #fff0c2; color: inherit; outline: 2px solid var(--brand); outline-offset: 2px; scroll-margin-block: 12px }
+section#evidence-field { outline: 0; border-left: 3px solid var(--brand) }
 pre { background: var(--bg); border-radius: 6px; padding: 8px 12px; font-size: 12px; overflow: auto; max-height: 480px; white-space: pre-wrap; overflow-wrap: anywhere }
 .outcome { border-left: 2px solid var(--brand); padding-left: 8px }
 .outcome strong { display: block }
@@ -192,8 +191,10 @@ pre { background: var(--bg); border-radius: 6px; padding: 8px 12px; font-size: 1
 .change-item { border-bottom: 1px solid var(--line); padding-bottom: 8px }
 .change-item .detail-section { border: 0; padding: 0; margin-block: 12px }
 .source-file { font-size: 12px }
-.drawer-search { width: 100%; margin-bottom: 8px }
-.copy-ref { font-size: 12px }
+.event-detail > .detail-section:first-child { margin-top: 0 }
+.payload-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px }
+.payload-heading h3, .payload-heading button { margin: 0 }
+.event-detail pre { margin: 0; max-height: min(480px, 50vh) }
 
 @media(max-width:960px) {
   .workspace { grid-template-columns: 1fr; grid-template-rows: auto minmax(0,1fr) }

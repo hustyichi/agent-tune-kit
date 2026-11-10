@@ -19,6 +19,13 @@ SOURCE = {"type": "local", "instance": "synthetic", "project": "demo", "environm
 SESSION_ID = "SESSION-synthetic"
 
 
+def test_event_details_show_complete_payloads_and_inline_evidence():
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("Node is required for the dependency-free renderer check")
+    subprocess.run([node, str(Path(__file__).with_name("trace-event-detail.cjs"))], check=True)
+
+
 def test_stage_cards_render_concise_evidence_without_raw_records():
     node = shutil.which("node")
     if not node:

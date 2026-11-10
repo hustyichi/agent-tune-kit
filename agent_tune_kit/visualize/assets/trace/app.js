@@ -474,7 +474,7 @@
       $("trace-filter").value = ""; clearRecordFilters(); renderTraces();
     }
     selectAndScroll(index);
-    showNodeDetails(capture, node, index, ref);
+    showNodeDetails(node, index, ref);
     requestAnimationFrame(() => {
       const mark = swim.scrollSelected();
       if (!mark) return;
@@ -491,111 +491,84 @@
     selectedNode = node;
     swim.select(index);
     markVisibleRows();
-    showNodeDetails(currentCapture, node, index, null);
+    showNodeDetails(node, index, null);
     const coversRow = innerWidth <= 800 && scroller.contains(trigger) &&
       trigger.getBoundingClientRect().bottom > drawer.getBoundingClientRect().top;
     if (keepAbove || coversRow) drawer.classList.add("above-record");
     returnFocus = trigger;
     syncHash();
   }
-  const copyReference = ref => {
-    const payload = JSON.stringify({path: ref.path, sha256: ref.sha256, pointer: ref.pointer || undefined, line: ref.line || undefined}, null, 2);
-    const done = () => {};
-    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(payload).then(done, done);
+  const payloadContent = (value, root, field) => {
+    const content = el("pre");
+    function append(value, path, depth) {
+      const indent = "  ".repeat(depth);
+      const text = depth ? JSON.stringify(value, null, 2).replace(/\n/g, `\n${indent}`) : pretty(value);
+      if (path === field) {
+        const mark = el("mark", text);
+        mark.id = "evidence-field";
+        content.append(mark);
+      } else if (field?.startsWith(`${path}/`) && value && typeof value === "object") {
+        const array = Array.isArray(value), entries = Object.entries(value);
+        content.append(array ? "[" : "{");
+        entries.forEach(([key, child], index) => {
+          content.append(`${index ? "," : ""}\n${indent}  ${array ? "" : JSON.stringify(key) + ": "}`);
+          append(child, `${path}/${key.replace(/~/g, "~0").replace(/\//g, "~1")}`, depth + 1);
+        });
+        content.append(`${entries.length ? "\n" + indent : ""}${array ? "]" : "}"}`);
+      } else content.append(text);
+    }
+    append(value, root, 0);
+    return content;
   };
-  const showNodeDetails = (capture, node, targetIndex, ref) => {
+  const showNodeDetails = (node, targetIndex, ref) => {
     openDrawer(node.name || node.id || "轨迹节点", "event");
     backToIssue();
-    const crumbs = el("div", undefined, "breadcrumb");
-    const siblings = node.trace_id ? capture.nodes.filter(item => item.trace_id === node.trace_id) : [];
-    const byId = new Map();
-    for (const item of siblings) if (item.type !== "TRACE" && item.id) {
-      if (byId.has(item.id)) byId.set(item.id, null); else byId.set(item.id, item);
-    }
-    const chain = [];
-    let cursor = node;
-    const seen = new Set();
-    while (cursor && !seen.has(cursor)) {
-      seen.add(cursor);
-      chain.unshift(cursor);
-      cursor = cursor.parent_id ? byId.get(cursor.parent_id) : null;
-    }
-    for (const item of chain) {
-      crumbs.append(button(item.name || item.id || item.type, () => navigateNode(capture, item)));
-    }
-    $("drawer-content").append(crumbs);
-    const identification = el("p", `Trace ${node.trace_id || "无归属"} · ${node.type} · ${elapsed(node.at == null ? null : node.at - startTime(), true)}`, "mono muted");
-    identification.dataset.nodeIndex = String(targetIndex);
-    identification.dataset.traceId = node.trace_id || "";
-    identification.dataset.nodeId = node.id || "";
-    $("drawer-content").append(identification);
-    if (node.reference) {
-      $("drawer-content").append(button("复制引用", () => copyReference(node.reference), "copy-ref"));
-    }
-    if (ref) $("drawer-content").append(fieldPreview(ref, data.references[refKey(ref)]));
-    if (node.issue_ids?.length) {
-      const cited = section("引用此节点的问题");
-      for (const id of node.issue_ids) {
-        const item = issueById.get(id);
-        if (!item) continue;
-        const bits = [];
-        for (const part of item.fragments) {
-          if (part.capture_id !== capture.id || !part.anchors.includes(targetIndex)) continue;
-          const fields = part.refs.map(pos => {
-            const saved = issueEvidence(item)[pos];
-            return saved?.location?.node_index === targetIndex ? (saved.location.field || saved.reference.pointer || "") : "";
-          }).filter(Boolean);
-          bits.push(`${part.id || "片段"}${fields.length ? " · " + fields.join(", ") : ""}`);
-        }
-        cited.append(button(`${id}${bits.length ? " · " + bits.join("；") : ""}`, () => startIssue(item)));
-      }
-      $("drawer-content").append(cited);
-    }
-    const meta = {id: node.id, trace_id: node.trace_id, type: node.type, start_time: node.start_time, end_time: node.end_time, reference: node.reference};
-    if (node.level) meta.level = node.level;
-    const metadata = el("details", undefined, "detail-section");
-    metadata.append(el("summary", "节点与原始引用"), pre(meta)); $("drawer-content").append(metadata);
-    const relations = section("调用关联");
-    if (node.paired != null) {
-      const partner = capture.nodes[node.paired];
-      relations.append(button(`配对动作 · ${partner.name || partner.type}`, () => navigateNode(capture, partner)));
-    }
-    const wrapper = siblings.find(item => item.type === "TRACE");
-    if (wrapper && wrapper !== node) relations.append(button("所属 Trace", () => navigateNode(capture, wrapper)));
-    if (!node.trace_id && node.parent_id) relations.append(el("p", "缺少 Trace 归属，无法确认父子关系。", "muted"));
-    if (node.type !== "TRACE" && node.id && byId.get(node.id) === node) {
-      const links = el("div", undefined, "parent-links");
-      for (const child of siblings.filter(item => item.parent_id === node.id && item !== node)) {
-        links.append(button(`子节点 · ${child.name || child.id}`, () => navigateNode(capture, child)));
-      }
-      if (links.childElementCount) relations.append(links);
-    }
-    if (relations.childElementCount > 1) $("drawer-content").append(relations);
-    const search = el("input", undefined, "drawer-search");
-    search.type = "search"; search.placeholder = "在详情中搜索";
-    $("drawer-content").append(search);
-    const bodies = [];
+    const body = el("div", undefined, "event-detail");
+    body.dataset.nodeIndex = String(targetIndex);
+    body.dataset.traceId = node.trace_id || "";
+    body.dataset.nodeId = node.id || "";
+    const saved = ref && data.references[refKey(ref)];
+    const field = saved?.preview && !saved.error ? saved.location?.field : undefined;
     for (const key of ["input", "output"]) {
-      const detail = el("details", undefined, "detail-section");
-      detail.open = true;
+      const label = key === "input" ? "输入" : "输出";
+      const detail = el("section", undefined, "detail-section");
+      const heading = el("div", undefined, "payload-heading");
+      heading.append(el("h3", label));
       const value = node[key];
+      if (value != null) {
+        const copy = button("复制", async () => {
+          try {
+            await navigator.clipboard.writeText(pretty(value));
+            copy.textContent = "已复制";
+          } catch {
+            copy.textContent = "复制失败，请选中文本";
+          }
+        });
+        copy.setAttribute("aria-label", `复制${label}`);
+        heading.append(copy);
+      }
       const empty = value == null || (typeof value === "string" && !value.trim());
       const content = empty
-        ? el("p", value == null ? "原始记录未提供值" : (key === "input" ? "输入为空" : "输出为空"), "muted")
-        : pre(value);
-      if (ref && data.references[refKey(ref)]?.location?.field?.includes(`/${key}`)) detail.classList.add("highlight-field");
-      detail.append(el("summary", key === "input" ? "节点输入" : "节点输出"), content);
-      bodies.push(detail);
-      $("drawer-content").append(detail);
+        ? el("p", value == null ? "原始记录未提供值" : `${label}为空`, "muted")
+        : payloadContent(value, `/${key}`, field);
+      if (empty && field === `/${key}`) content.id = "evidence-field";
+      detail.append(heading, content);
+      body.append(detail);
     }
-    const raw = el("details", undefined, "detail-section");
-    raw.append(el("summary", "原始 JSON"), pre(node));
-    bodies.push(raw);
-    $("drawer-content").append(raw);
-    search.oninput = () => {
-      const q = search.value.trim().toLocaleLowerCase();
-      for (const box of bodies) box.hidden = Boolean(q) && !pretty(box.textContent).toLocaleLowerCase().includes(q);
-    };
+    let evidence = body.querySelector("#evidence-field");
+    if (evidence) {
+      evidence.dataset.pointer = saved.preview.resolved_pointer || ref.pointer || "";
+      evidence.title = evidence.dataset.pointer;
+    } else if (ref) {
+      if (saved?.preview) {
+        evidence = fieldPreview(ref, saved);
+        body.append(evidence);
+      } else body.append(el("p", saved?.error || "此引用没有可用的归档预览。", "warning"));
+    }
+    $("drawer-content").append(body);
+    if (evidence) requestAnimationFrame(() => {
+      if (evidence.isConnected) evidence.scrollIntoView({block:"nearest"});
+    });
   };
   function showSessionInfo() {
     openDrawer("会话信息", "session");
