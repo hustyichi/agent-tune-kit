@@ -65,6 +65,10 @@ An independent agent applied the revised Skills to five existing issues in a use
 
 Private archive records remain in the downstream project's ignored `.atk` directory. This exercise establishes clearer descriptions and aligned attribution for the selected cases, not general detection quality, business repair effects or production causality.
 
+## Change and verification readability diagnosis (2026-11-10)
+
+The [readability diagnosis](trace-change-verification-readability-diagnosis.md) records a user-selected local preview's missing default change explanation, raw execution rendering and unindexed change/verification evidence. The reference-index regression is traced to `886773f`; a minimal synthetic archive reproduces it, and an in-memory reference-scope probe restores the patch preview. All 16 existing visualization pytest tests pass, exposing a coverage gap. This is a diagnosis only: no implementation, archived conclusion, browser acceptance or business-effect baseline was changed.
+
 ## External protocol sources
 
 Checked 2026-11-05: [Langfuse Public API](https://langfuse.com/docs/api-and-data-platform/features/public-api), [deprecated API migration](https://langfuse.com/faq/all/deprecated-api-migration). Server, SDK and endpoint versions remain separate; historical local exports do not establish server v4 compatibility.
