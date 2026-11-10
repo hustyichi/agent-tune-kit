@@ -44,7 +44,10 @@ const change = {record: {
   ],
   remaining_verification: ["Confirm the first read succeeds."],
 }, verifications: []};
-const item = {record: {id: "ISSUE-001", title: "Wrong path"}, changes: [change], diagnoses: []};
+const item = {
+  record: {id: "ISSUE-001", title: "Wrong path"}, changes: [change], diagnoses: [],
+  progress: {key: "inconclusive", label: "无法判断"},
+};
 let rendered = renderStage(item, "changes");
 const pairs = nodes(rendered).filter(node => node.className === "change-item");
 assert.equal(pairs.length, 2);
@@ -80,7 +83,8 @@ assert.match(text(rendered), /No full Agent replay/);
 assert.doesNotMatch(text(rendered), /OTHER_ISSUE_REASON|HIDDEN_/);
 const literal = nodes(rendered).find(node => node.textContent === "<img src=x onerror=alert(1)>");
 assert.equal(literal.children.length, 0);
-assert.equal(context.progressOf(item).label, "有验证记录");
+// Progress is computed once in Python (traces/progress.py); the page only shows it and never re-derives it.
+assert.deepEqual({...context.progressOf(item)}, {label: "无法判断", klass: "inconclusive"});
 for (const outcome of ["pass", "fail"]) {
   verification.record.conclusions["ISSUE-001"] = {outcome, reason: "Scoped result."};
   assert.match(text(renderStage(item, "verifications")), new RegExp(`效果结论：${outcome === "pass" ? "通过" : "未通过"}`));

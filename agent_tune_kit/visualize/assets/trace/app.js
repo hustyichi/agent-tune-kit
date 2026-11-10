@@ -42,12 +42,17 @@
     const capture = captureById.get(saved?.location?.capture_id);
     return {saved, capture, node:capture?.nodes[saved.location.node_index]};
   };
-  const progressOf = item => {
-    const verified = item.changes.some(change => (change.verifications || []).length);
-    if (verified) return {label: "有验证记录", klass: "verified"};
-    if (item.changes.length) return {label: "有修改记录", klass: "changed"};
-    if (item.diagnoses.length) return {label: "已诊断", klass: "diagnosed"};
-    return {label: item.record.status || "待处理", klass: ""};
+  const progressOf = item => ({label: item.progress.label, klass: item.progress.key});
+  const dashboardHash = params => `../index.html#${params}`;
+  const categoryTag = id => {
+    if (!id) return null;
+    const info = data.categories[id];
+    const text = `${info ? info.name : id}${info?.deprecated ? "（已弃用）" : ""}`;
+    if (!data.dashboard.available) return el("span", text, "category-tag");
+    const link = el("a", text, "category-tag");
+    link.href = dashboardHash(`view=category&category=${encodeURIComponent(id)}`);
+    link.title = "在大盘中查看这类异常";
+    return link;
   };
   const shortIssue = id => String(id || "").replace(/^ISSUE-/, "") || id;
   const issueCounts = () => {
@@ -569,6 +574,11 @@
   }
 
   $("session-title").textContent = data.session.session_id;
+  if (data.dashboard.available) {
+    const back = $("dashboard-link");
+    back.href = dashboardHash(`view=session&session=${encodeURIComponent(data.dashboard.session)}`);
+    back.hidden = false;
+  }
   for (const warning of data.warnings) $("warnings").append(el("p", warning, "warning"));
 
   const rowHeight = parseInt(getComputedStyle(list).getPropertyValue("--row-height"), 10) || 40;
@@ -961,7 +971,7 @@
     const filtered = data.issues.filter(item => {
       if (railFilter && !railFilter.ids.includes(item.record.id)) return false;
       const progress = progressOf(item).label;
-      if (status && item.record.status !== status && progress !== status) return false;
+      if (status && progress !== status) return false;
       if (!text) return true;
       return pretty(item.record).toLocaleLowerCase().includes(text) || progress.toLocaleLowerCase().includes(text);
     });
@@ -985,6 +995,8 @@
       head.append(el("span", issue.id, "issue-id-text"), el("span", undefined, `progress-dot ${progress.klass}`));
       const body = el("div", undefined, "issue-card-body");
       body.append(el("h3", issue.title || "问题"), el("div", progress.label, "issue-progress"));
+      const tag = categoryTag(issue.category);
+      if (tag) body.append(tag);
       const segs = el("div", undefined, "seg-list");
       const parts = item.fragments.length ? item.fragments : [{summary: "未圈定范围", unscoped: true}];
       parts.forEach((part, index) => {
@@ -1075,8 +1087,8 @@
   $("trace-filter").onchange = () => focusTrace(scope());
   for (const id of ["trace-search","type-filter","record-mode"]) $(id).addEventListener(id === "trace-search" ? "input" : "change", () => renderTraces());
   $("segments-only").onchange = () => renderTraces(scroller.scrollTop);
-  const statusValues = [...new Set(data.issues.flatMap(item => [item.record.status, progressOf(item).label]).filter(Boolean))];
-  options($("issue-status"), statusValues, "全部状态");
+  const presentProgress = new Set(data.issues.map(item => item.progress.label));
+  options($("issue-status"), data.progress_legend.map(entry => entry.label).filter(label => presentProgress.has(label)), "全部进度");
   $("issue-search").oninput = () => { railFilter = null; renderIssueRail(); };
   $("issue-status").onchange = () => { railFilter = null; renderIssueRail(); };
   const collapsed = localStorage.getItem(RAIL_KEY) === "1";

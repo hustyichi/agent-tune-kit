@@ -13,6 +13,8 @@ from urllib.parse import quote, unquote, urlsplit
 from zoneinfo import ZoneInfo
 
 from agent_tune_kit.errors import UserActionRequired
+from agent_tune_kit.traces.categories import category_map
+from agent_tune_kit.traces.progress import PROGRESS, instant, issue_progress
 from agent_tune_kit.traces.segments import resolve_segments
 from agent_tune_kit.utils.files import read_text_bounded, write_text_atomic
 
@@ -20,6 +22,7 @@ from .render import neutralize_script_close, open_in_browser, safe_json_for_html
 from .timeline import build_timeline, legacy_point_fragments, recorded_segments
 
 ASSETS = resources.files("agent_tune_kit.visualize").joinpath("assets", "trace")
+SHARED_STYLES = resources.files("agent_tune_kit.visualize").joinpath("assets", "shared", "base.css")
 RECORD_LIMIT = 1024 * 1024
 # shortcut: collect plain inline destinations, use a shared parser if reference-style links are needed.
 INLINE_LINK = re.compile(r"\]\((?:<([^<>\n]+)>|([^\s)]+))\)")
@@ -91,13 +94,8 @@ def _locate_evidence(captures, references, issues):
 
 
 def _record_time(item):
-    try:
-        stamp = datetime.fromisoformat(item["record"]["created_at"].replace("Z", "+00:00"))
-        if stamp.tzinfo is not None:
-            return stamp.timestamp()
-    except (KeyError, TypeError, ValueError, AttributeError, OverflowError):
-        pass
-    return float("inf")
+    record = item.get("record") if isinstance(item, dict) else None
+    return instant(record if isinstance(record, dict) else {})
 
 
 def build_trace_data(project_root, *, session_id, source=None):
@@ -118,7 +116,10 @@ def build_trace_data(project_root, *, session_id, source=None):
         if truncated:
             raise ValueError(f"Record exceeds preview limit: {relative}")
         summaries[relative] = hashlib.sha256(path.read_bytes()).hexdigest()
-        return json.loads(text)
+        try:
+            return json.loads(text)
+        except RecursionError:
+            raise ValueError(f"Record nesting is too deep: {relative}") from None
 
     def read_diagnosis(ref):
         path = store.validate_ref(session_dir, ref)
@@ -190,6 +191,15 @@ def build_trace_data(project_root, *, session_id, source=None):
                 except (OSError, ValueError, UserActionRequired, KeyError, TypeError) as exc:
                     item["changes"].append({"reference": ref, "error": str(exc)})
             item["changes"].sort(key=_record_time)
+            item["progress"] = issue_progress(
+                issue,
+                [
+                    # An unreadable verification stays in the list as None so it cannot hide behind an older result.
+                    (change["record"], [entry.get("record") for entry in change["verifications"]])
+                    for change in item["changes"]
+                    if "record" in change
+                ],
+            )
             issues.append(item)
         except (OSError, ValueError, UserActionRequired) as exc:
             warnings.append(f"Issue {path.parent.name}: {exc}")
@@ -275,6 +285,13 @@ def build_trace_data(project_root, *, session_id, source=None):
         "references": references,
         "record_digests": summaries,
         "warnings": warnings,
+        "categories": {
+            key: {name: entry[name] for name in ("name", "definition", "deprecated")}
+            for key, entry in category_map(session_dir.parent).items()
+        },
+        "progress_legend": [{"key": key, "label": label} for key, label in PROGRESS],
+        # generate_trace() enables the dashboard link only for the default preview beside an existing index.html.
+        "dashboard": {"available": False, "session": session_dir.name},
         "generated_at": datetime.now(ZoneInfo("Asia/Shanghai")).isoformat(timespec="seconds"),
     }
 
@@ -342,8 +359,14 @@ def generate_trace(project_root=".", *, session_id, source=None, output_path=Non
     if output.exists() and not overwrite:
         raise UserActionRequired(f"Trace preview already exists: {output}; use --overwrite to regenerate it.")
     data["source_links"] = _source_links(data["issues"], project_root, output)
+    data["dashboard"]["available"] = (
+        output.resolve() == (session_dir / "preview.html").resolve() and (session_dir.parent / "index.html").is_file()
+    )
     template = ASSETS.joinpath("page.html").read_text(encoding="utf-8")
-    page = template.replace("__STYLES__", ASSETS.joinpath("styles.css").read_text(encoding="utf-8"))
+    styles = (
+        SHARED_STYLES.read_text(encoding="utf-8") + "\n" + ASSETS.joinpath("styles.css").read_text(encoding="utf-8")
+    )
+    page = template.replace("__STYLES__", styles)
     page = page.replace("__LANES__", neutralize_script_close(ASSETS.joinpath("lanes.js").read_text(encoding="utf-8")))
     vendor = ASSETS.joinpath("vendor")
     notice = vendor.joinpath("markdown-it.LICENSE").read_text(encoding="utf-8")

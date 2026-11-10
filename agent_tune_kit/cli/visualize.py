@@ -4,6 +4,7 @@ import sys
 from agent_tune_kit.errors import UserActionRequired
 from agent_tune_kit.visualize import generate_dataset, generate_failures
 from agent_tune_kit.visualize.trace import generate_trace
+from agent_tune_kit.visualize.traces import generate_traces
 
 from .output import emit
 from .trace import add_session_options, read_json
@@ -17,6 +18,8 @@ def add_options(parser, kind):
         parser.add_argument("--json", action="store_true")
     if kind == "dataset":
         parser.add_argument("--dataset-path", default=".atk/datasets/dataset.csv")
+    elif kind == "traces":
+        parser.add_argument("--project-root", default=".")
     elif kind == "trace":
         add_session_options(parser)
         parser.add_argument("--output-path")
@@ -31,14 +34,17 @@ def register(subparsers):
     commands = subparsers.add_parser("visualize", help="generate offline review pages").add_subparsers(
         dest="action", required=True
     )
-    for kind in ["dataset", "failures", "trace"]:
-        add_options(commands.add_parser(kind), kind)
+    helps = {"traces": "generate the project dashboard of every archived trace session"}
+    for kind in ["dataset", "failures", "trace", "traces"]:
+        add_options(commands.add_parser(kind, help=helps.get(kind)), kind)
 
 
 def execute(args):
     options = dict(overwrite=args.overwrite, open_browser=args.open_browser)
     if args.action == "dataset":
         return generate_dataset(args.dataset_path, **options)
+    if args.action == "traces":
+        return generate_traces(args.project_root, **options)
     if args.action == "trace":
         return generate_trace(
             args.project_root,

@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Agent Tune Kit · 轨迹大盘</title>
+  <style>__STYLES__</style>
+</head>
+<body>
+  <header class="topbar"><div class="topbar-inner">
+    <div class="brand-line"><span class="brand">ATK</span><strong>轨迹大盘</strong><span id="project-name" class="session-id"></span></div>
+    <div class="topbar-meta"><span id="dash-stats" class="muted"></span></div>
+  </div></header>
+  <div id="warnings" class="page-warnings" role="status"></div>
+  <main class="dash">
+    <div class="dash-controls">
+      <div id="view-tabs" class="stage-tabs" role="tablist" aria-label="维度">
+        <button id="tab-session" type="button" role="tab">会话</button>
+        <button id="tab-category" type="button" role="tab">异常</button>
+      </div>
+      <label class="search-label"><span class="sr-only">搜索</span><input id="dash-search" type="search" placeholder="搜索 Session ID、问题编号、标题、分类"></label>
+      <label id="source-choice" hidden><span class="sr-only">来源</span><select id="source-filter"></select></label>
+    </div>
+    <section class="dash-progress" aria-label="实际进度分布">
+      <div id="progress-bar" class="progress-bar" role="img"></div>
+      <div id="progress-legend" class="progress-legend"></div>
+    </section>
+    <div id="filter-note" class="filter-note" role="status" hidden></div>
+    <div id="dash-grid" class="dash-grid"></div>
+    <div id="dash-strip"></div>
+  </main>
+  <aside id="drawer" class="drawer" role="dialog" aria-modal="false" aria-labelledby="drawer-title" hidden tabindex="-1">
+    <div class="drawer-resizer" id="drawer-resizer" aria-hidden="true"></div>
+    <div class="drawer-header"><h2 id="drawer-title"></h2><button id="drawer-close" type="button" aria-label="关闭详情">关闭 ×</button></div>
+    <div id="drawer-content" class="drawer-content"></div>
+  </aside>
+  <script id="dashboard-data" type="application/json">__DATA__</script>
+  <script>__APP__</script>
+</body>
+</html>
