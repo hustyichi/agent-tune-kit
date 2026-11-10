@@ -28,7 +28,13 @@
     </aside>
     <div class="main-pane">
       <div class="view-heading">
-        <div><h1 id="lane-title">完整会话</h1><div id="summary" class="muted"></div></div>
+        <div class="view-scope">
+          <div class="scope-heading">
+            <h1 id="lane-title"><span id="scope-title">完整会话</span><label id="trace-choice" hidden><span class="sr-only">切换聚焦 Trace</span><select id="trace-filter"></select></label></h1>
+            <button id="lane-reset" type="button" hidden>← 返回完整会话</button>
+          </div>
+          <div id="summary" class="muted"></div>
+        </div>
         <div class="view-actions"><label class="capture-choice">快照 <select id="capture-filter"></select></label></div>
       </div>
       <div id="capture-status" role="status"></div>
@@ -40,7 +46,6 @@
             <span><i class="legend-tick"></i>动作</span>
             <span id="legend-fragment" hidden><i class="legend-fragment"></i>问题片段</span>
           </div>
-          <button id="lane-reset" type="button" hidden>← 返回完整会话</button>
         </div>
         <div id="lane-members" hidden></div>
       </section>
@@ -59,7 +64,6 @@
         <div class="records-heading">
           <div class="records-title"><h2 id="records-title">Event</h2><span id="trace-count" class="muted" aria-live="polite"></span></div>
           <div class="toolbar record-filters">
-            <label id="trace-choice"><span class="sr-only">Trace</span><select id="trace-filter"></select></label>
             <label><span class="sr-only">记录范围</span><select id="record-mode"><option value="">全部记录</option><option value="key">关键动作</option><option value="error">仅看异常</option></select></label>
             <label><span class="sr-only">类型</span><select id="type-filter"></select></label>
             <label class="search-label"><span class="sr-only">搜索记录</span><input id="trace-search" type="search" placeholder="搜索动作或输入输出"></label>

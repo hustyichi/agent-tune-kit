@@ -34,10 +34,50 @@ const {chromium} = require("playwright");
           assert.ok(sizes.preview > sizes.action, "Give content more space than action names");
           assert.equal(sizes.overflow, false);
         }
-        await page.locator("#trace-filter").selectOption("0");
+      }
+      const tracks = await page.evaluate(() => JSON.parse(document.getElementById("trace-data").textContent).captures.at(-1).timeline.tracks);
+      assert.equal(await page.locator(".record-filters #trace-filter").count(), 0);
+      assert.equal(await page.locator("#trace-filter").isVisible(), false);
+      assert.equal(await page.locator("#lane-reset").isVisible(), false);
+      if (tracks.length > 1) {
+        const selected = page.locator(".trace-row").first();
+        const selectedIndex = await selected.getAttribute("data-node-index");
+        await selected.click();
+        await page.keyboard.press("Escape");
+        const previousTop = await page.locator("#trace-scroll").evaluate(el => {
+          el.scrollTop = Math.min(400, el.scrollHeight - el.clientHeight);
+          return el.scrollTop;
+        });
+        const focus = page.locator('.trace-overview[data-track="0"] .lane-zoom');
+        assert.equal(await focus.textContent(), "聚焦");
+        await focus.click();
+        assert.equal(await page.locator(".trace-overview").count(), 1);
+        assert.equal(await page.locator("#scope-title").textContent(), "聚焦");
+        assert.equal(await page.locator("#trace-filter").inputValue(), "0");
+        assert.equal(await page.locator("#records-title").textContent(), "Event · T1");
+        assert.ok(await page.locator("#summary").textContent().then(text => text.includes(tracks[0].trace_id)));
         assert.ok(await page.locator(".stream.single").count());
         assert.equal(await page.locator(".trace-row .trace-col").first().isVisible(), false);
-        await page.locator("#trace-filter").selectOption("");
+        assert.ok(await page.locator("#trace-filter").evaluate(el => el === document.activeElement));
+        assert.ok(await page.locator("#lane-reset").evaluate(el => el.getBoundingClientRect().bottom <= document.getElementById("lane-chart").getBoundingClientRect().top));
+        await page.locator("#trace-filter").selectOption("1");
+        assert.equal(await page.locator(".trace-overview").getAttribute("data-track"), "1");
+        assert.equal(await page.locator("#records-title").textContent(), "Event · T2");
+        assert.equal(await page.locator("#trace-count").textContent(), `${tracks[1].rows.length} 条`);
+        await page.locator("#trace-search").fill("no matching event");
+        assert.equal(await page.locator("#trace-count").textContent(), "0 条");
+        assert.equal(await page.locator(".trace-overview").count(), 1);
+        assert.equal(await page.locator("#records-title").textContent(), "Event · T2");
+        assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "focused header overflows horizontally");
+        await page.locator("#lane-reset").click();
+        assert.equal(await page.locator(".trace-overview").count(), tracks.length);
+        assert.equal(await page.locator("#trace-filter").isVisible(), false);
+        assert.equal(await page.locator("#trace-search").inputValue(), "");
+        assert.equal(await page.locator("#trace-scroll").evaluate(el => el.scrollTop), previousTop);
+        assert.equal(await page.locator(".current-tick:visible").getAttribute("data-node-index"), selectedIndex);
+        assert.ok(await focus.evaluate(el => el === document.activeElement));
+      } else {
+        assert.equal(await page.locator(".lane-zoom").count(), 0);
       }
       await page.locator("#record-mode").selectOption({label:"仅看异常"});
       assert.ok(await page.locator(".trace-row.is-error").count());

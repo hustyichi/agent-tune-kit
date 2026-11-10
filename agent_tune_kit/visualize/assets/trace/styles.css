@@ -70,6 +70,11 @@ body.rail-collapsed .rail-list { padding-inline: 4px }
 .main-pane { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 10px; padding: 12px clamp(12px, 2vw, 22px) 14px; overflow: hidden }
 .view-heading, .records-heading, .lane-footer { justify-content: space-between }
 .view-heading { flex-wrap: wrap; gap: 8px }
+.view-scope { min-width: 0; max-width: 100% }
+.scope-heading, #lane-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap }
+.scope-heading { gap: 8px 16px }
+#trace-filter { width: 112px; font: inherit; border: 0; background-color: transparent; padding-block: 0 }
+#summary { overflow-wrap: anywhere }
 #summary, .capture-choice, .lane-footer, #trace-count, #rail-count { font-size: 12px; color: var(--muted) }
 .capture-choice { gap: 6px }
 .capture-choice select { max-width: 190px }
@@ -115,7 +120,7 @@ body.rail-collapsed .rail-list { padding-inline: 4px }
 .legend-track { width: 15px; height: 7px; background: #c2d6de }
 .legend-tick { width: 3px; height: 10px; background: var(--track) }
 .legend-fragment { width: 14px; height: 8px; border: 1px solid #b65d1e; background: #ffe2bb }
-#lane-reset { padding: 1px 6px; color: var(--accent) }
+#lane-reset { font-size: 12px; color: var(--accent) }
 #lane-members { padding: 6px 14px; max-height: 16vh; overflow: auto; border-top: 1px solid var(--line) }
 .member-list { display: flex; align-items: center; gap: 4px; flex-wrap: wrap }
 .member-list button { font-size: 12px; padding: 3px 6px }
@@ -139,15 +144,14 @@ body.rail-collapsed .rail-list { padding-inline: 4px }
 .toolbar { flex-wrap: wrap; gap: 8px }
 .record-filters { gap: 8px; max-width: 100% }
 .record-filters label { display: block; min-width: 0 }
-#trace-filter { width: 152px }
 #record-mode { width: 104px }
 #type-filter { width: 142px }
 #trace-search { width: 208px }
 .toolbar select:has(option:checked:not([value=""])) { border-color: #deb493; color: var(--accent) }
 @container (max-width: 650px) {
   .record-filters { display: grid; width: 100%; grid-template-columns: repeat(2,minmax(0,1fr)) }
-  .record-filters :is(#trace-filter,#record-mode,#type-filter,#trace-search) { width: 100% }
-  .record-filters:has(#trace-choice[hidden]) .search-label { grid-column: 1/-1 }
+  .record-filters :is(#record-mode,#type-filter,#trace-search) { width: 100% }
+  .record-filters .search-label { grid-column: 1/-1 }
 }
 .stream { overflow: hidden; max-height: 100vh; max-height: 100dvh }
 .row-grid { display: grid; grid-template-columns: 96px 42px clamp(210px,24%,320px) minmax(0,1fr) 76px; gap: 12px; padding-inline: 16px; align-items: center }

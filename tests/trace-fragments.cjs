@@ -50,7 +50,7 @@ function boot() {
     ${slice("  function segmentMembership(", "  function fieldNotes(")}
     ${slice("  function buildDisplayRows(", "  function markVisibleRows(")}
     ${slice("  function selectAndScroll(", '  scroller.addEventListener("scroll"')}
-    ${slice("  function renderTraces(", "  function focusTrace(")}
+    ${slice("  function renderTraces(", "  function chooseCapture(")}
     ${slice("  function showFragmentBar()", "  function showFragmentEvidence()")}
     ${slice("  function exitIssue()", "  function syncRailSelection()")}
     this.inspect = () => ({displayRows, selected: selectedIndex(), investigation});
@@ -166,6 +166,64 @@ test("issue switching defaults to fragments and exit restores original filters a
   assert.equal(app.$("type-filter").value, "EVENT");
   assert.equal(app.$("trace-search").value, "read");
   assert.equal(app.$("trace-scroll").scrollTop, 80);
+  assert.equal(app.$("trace-count").textContent, "6 条");
+  assert.equal(app.$("records-title").textContent, "Event · T1");
+  assert.equal(app.$("trace-choice").hidden, false);
+});
+
+test("Trace focus, switching and issue navigation restore the complete session view", () => {
+  const app = boot();
+  assert.equal(app.$("scope-title").textContent, "完整会话");
+  assert.equal(app.$("trace-choice").hidden, true);
+  assert.equal(app.$("lane-reset").hidden, true);
+  app.$("type-filter").value = "EVENT";
+  app.$("trace-search").value = "read";
+  app.context.renderTraces();
+  app.context.selectAndScroll(6);
+  const top = app.$("trace-scroll").scrollTop;
+  app.context.focusTrace(0);
+  assert.equal(app.$("scope-title").textContent, "聚焦");
+  assert.equal(app.$("trace-choice").hidden, false);
+  assert.equal(app.$("lane-reset").hidden, false);
+  assert.equal(app.$("records-title").textContent, "Event · T0");
+  assert.deepEqual(visible(app.rows()), [0, 2, 4, 6, 8, 10]);
+  // A native select changes its value before invoking the shared focus handler.
+  app.$("trace-filter").value = "1";
+  app.context.focusTrace(1);
+  assert.equal(app.$("records-title").textContent, "Event · T1");
+  assert.deepEqual(visible(app.rows()), [1, 3, 5, 7, 9, 11]);
+  app.context.startIssue(app.item, 1);
+  assert.equal(app.$("trace-choice").hidden, true);
+  assert.equal(app.$("lane-reset").hidden, true);
+  assert.equal(app.$("records-title").textContent, "Event");
+  assert.deepEqual(visible(app.rows()), [2, 3, 6, 7, 8]);
+  app.context.exitIssue();
+  assert.equal(app.$("trace-filter").value, "1");
+  assert.equal(app.$("trace-choice").hidden, false);
+  app.$("trace-search").value = "no match";
+  app.context.renderTraces();
+  assert.equal(app.$("records-title").textContent, "Event · T1");
+  assert.equal(app.$("trace-count").textContent, "0 条");
+  app.context.focusTrace(null);
+  assert.equal(app.$("trace-filter").value, "");
+  assert.equal(app.$("trace-choice").hidden, true);
+  assert.equal(app.$("lane-reset").hidden, true);
+  assert.equal(app.$("type-filter").value, "EVENT");
+  assert.equal(app.$("trace-search").value, "read");
+  assert.equal(app.$("trace-scroll").scrollTop, top);
+  assert.equal(app.context.inspect().selected, 6);
+  assert.equal(app.$("records-title").textContent, "Event");
+  assert.equal(app.$("trace-count").textContent, "12 条");
+});
+
+test("a single Trace needs no focus switch or return control", () => {
+  const app = boot();
+  app.capture.timeline.tracks = app.capture.timeline.tracks.slice(0, 1);
+  app.capture.timeline.order = app.capture.timeline.tracks[0].rows;
+  app.context.renderTraces();
+  assert.equal(app.$("scope-title").textContent, "完整会话");
+  assert.equal(app.$("trace-choice").hidden, true);
+  assert.equal(app.$("lane-reset").hidden, true);
   assert.equal(app.$("trace-count").textContent, "6 条");
 });
 

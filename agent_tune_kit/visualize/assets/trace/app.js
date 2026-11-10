@@ -134,6 +134,10 @@
     swim.restore(state.lanes);
     window.scrollTo(0, state.scroll);
     if (state.focus?.isConnected) state.focus.focus({preventScroll:true});
+    else if (state.focus?.matches(".lane-zoom")) {
+      const track = state.focus.closest(".trace-overview").dataset.track;
+      document.querySelector(`.trace-overview[data-track="${track}"] .lane-zoom`)?.focus({preventScroll:true});
+    }
   }
   const setDrawerWidth = width => {
     const clamped = Math.max(320, Math.min(window.innerWidth * 0.92, width));
@@ -895,10 +899,14 @@
     const track = tracks[displayedScope];
     drawLanes();
     showFragmentBar();
-    $("lane-title").textContent = track ? `只看 ${trackLabel(displayedScope)} · ${track.trace_id || "归档材料"}` : "完整会话";
+    $("scope-title").textContent = track ? "聚焦" : "完整会话";
+    $("trace-choice").hidden = !track || tracks.length < 2;
+    $("lane-reset").hidden = !track;
+    $("trace-filter").title = track ? `${trackLabel(displayedScope)} · ${track.trace_id || "归档材料"}` : "";
+    $("records-title").textContent = track ? `Event · ${trackLabel(displayedScope)}` : "Event";
     const coverage = currentCapture?.manifest.completeness || {};
     const native = tracks.filter(t => t.trace_id != null);
-    const notes = [track ? `${track.rows.length || track.roots.length} 条记录` : `${native.length} 条 Trace`];
+    const notes = track ? [track.trace_id || "归档材料", `${track.rows.length || track.roots.length} 条记录`] : [`${native.length} 条 Trace`];
     if (!track) notes.push(native.length && native.length === tracks.length ?
       `${native.reduce((n, t) => n + t.rows.length, 0)} 个观测` : `${order.length} 条记录`);
     const ends = tracks.reduce((hi,t) => Math.max(hi,t.end ?? -Infinity), -Infinity);
@@ -937,16 +945,19 @@
     }
     $("trace-filter").value = number === null ? "" : String(number);
     selectedNode = null; renderTraces();
-    if (number !== null) $("lane-reset").focus({preventScroll:true});
+    if (number !== null) $("trace-filter").focus({preventScroll:true});
   }
   function chooseCapture() {
     currentCapture = captureById.get($("capture-filter").value) || null;
     selectedNode = null; clearRecordFilters(); expandedFolds = new Set();
     const {tracks} = timeline();
     const select = $("trace-filter");
-    select.replaceChildren(new Option("全部 Trace",""));
-    tracks.forEach((t,i) => select.add(new Option(`${trackLabel(i)} · ${t.trace_id || t.file.split("/").pop()}`, String(i))));
-    $("trace-choice").hidden = tracks.length < 2;
+    select.replaceChildren(new Option("完整会话",""));
+    tracks.forEach((t,i) => {
+      const option = new Option(trackLabel(i), String(i));
+      option.title = t.trace_id || t.file.split("/").pop();
+      select.add(option);
+    });
     options($("type-filter"), [...new Set((currentCapture?.nodes || []).map(n => n.type).filter(Boolean))], "全部类型");
     $("capture-status").replaceChildren();
     if (currentCapture?.error) $("capture-status").append(el("p",currentCapture.error,"warning"));

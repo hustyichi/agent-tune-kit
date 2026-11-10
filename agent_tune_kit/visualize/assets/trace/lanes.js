@@ -96,7 +96,6 @@ window.createSwimlanes = function createSwimlanes({el, button, elapsed, startTim
     chart.replaceChildren();
     marks = new Map(); cursors = [];
     document.getElementById("legend-fragment").hidden = !(fragments.length || preview.length);
-    document.getElementById("lane-reset").hidden = scope === null;
     if (!scoped.length) { chart.append(el("p", "此快照没有可浏览的执行轨迹。", "empty")); return; }
     const axis = el("div", undefined, "lane-row lane-axis");
     const ticks = el("div", undefined, "axis-ticks");
@@ -172,8 +171,8 @@ window.createSwimlanes = function createSwimlanes({el, button, elapsed, startTim
         marks.set(info, track.roots); left.append(info);
       }
       if (scope === null && tracks.length > 1) {
-        const zoom = button("放大", () => onZoom(number), "lane-zoom");
-        zoom.title = `只看此 Trace · ${label}`; zoom.setAttribute("aria-label", zoom.title); left.append(zoom);
+        const zoom = button("聚焦", () => onZoom(number), "lane-zoom");
+        zoom.title = `聚焦 ${label} · 仅查看此 Trace 的泳道与 Event`; zoom.setAttribute("aria-label", zoom.title); left.append(zoom);
       }
       const activeParts = fragments.length ? fragments : preview;
       for (const [index, part] of activeParts) {

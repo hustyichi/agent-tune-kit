@@ -30,9 +30,8 @@ async function check(browser, width) {
   assert.equal(new Set(controls.map(item => item.height)).size, 1, "Filter controls must align");
   if (width < 650) {
     assert.equal(controls[0].y, controls[1].y);
-    assert.equal(controls[2].y, controls[3].y);
     assert.ok(controls[2].y >= controls[0].y + controls[0].height);
-    assert.ok(controls[3].width >= 130, "Search must stay readable on narrow screens");
+    assert.ok(controls[2].width >= 130, "Search must stay readable on narrow screens");
   }
 
   // Reach every original observation by scrolling alone, across window and Trace boundaries.
