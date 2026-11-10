@@ -645,7 +645,7 @@
         if (!searchable.has(n)) searchable.set(n, pretty(n).toLocaleLowerCase());
         return searchable.get(n).includes(query);
       }
-      return mode !== "key" || n.level === "ERROR" || !["heartbeat", "healthcheck", "sandking_env.read"].includes(n.name);
+      return true;
     });
   }
   function eventState(n) {
