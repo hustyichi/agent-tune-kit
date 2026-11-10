@@ -14,7 +14,7 @@
   const projectMatches = item => state.view === "session" || !projectSelection.size || [...projectSelection].some(id => {
     const roots = item.root_projects || [];
     if (id === "~unattributed") return !roots.length;
-    return roots.some(root => { let current = root.id; const seen = new Set(); while (current && !seen.has(current)) { if (current === id) return true; seen.add(current); current = data.projects?.[current]?.parent_id; } return false; });
+    return roots.some(root => root.id === id);
   });
   const projectText = item => (item.root_projects || []).map(p => p.name + (p.pending ? "（待确认）" : "")).join("、") || "待归因";
   const projectInputs = [];

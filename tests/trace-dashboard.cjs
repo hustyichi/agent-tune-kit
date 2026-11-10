@@ -388,13 +388,26 @@ assert.equal(app.$("project-summary").textContent, "关联项目：全部");
 
 // Different issues in one session can have different projects or remain unattributed.
 const mixed = JSON.parse(JSON.stringify(base));
-mixed.projects = {a: {id: "a", name: "Alpha"}, b: {id: "b", name: "Beta"}};
+mixed.projects = {
+  workspace: {id: "workspace", name: "Workspace"},
+  a: {id: "a", name: "Alpha", parent_id: "workspace"},
+  b: {id: "b", name: "Beta", parent_id: "a"},
+};
 mixed.sessions[0].issues[0].root_projects = [{id: "a", name: "Alpha"}];
 mixed.sessions[0].issues[1].root_projects = [{id: "b", name: "Beta"}];
 mixed.sessions[0].issues[2].root_projects = [];
 app = boot(mixed);
-app.go("#view=category&project=a");
+app.go("#view=category&project=workspace");
+assert.match(text(app.$("filter-note")), /0 个会话 · 0 个问题/, "ancestors do not inherit project attribution");
+assert.equal(app.cards().filter(card => card.dataset.key).length, 0);
+assert.equal(app.strip().length, 0);
+app.go("#view=category&project=b");
 assert.match(text(app.$("filter-note")), /1 个会话 · 1 个问题/);
+assert.match(text(app.cards()[0]), /关联项目：Beta/);
+app.go("#view=category&project=a&project=b");
+assert.match(text(app.$("filter-note")), /1 个会话 · 2 个问题/);
+app.go("#view=category&project=a");
+assert.match(text(app.$("filter-note")), /1 个会话 · 1 个问题/, "a parent matches only its own directly associated issue");
 app.$("tab-session").onclick();
 assert.match(text(app.$("filter-note")), /2 个会话 · 4 个问题/);
 app.open(app.cards()[0]).onclick();

@@ -77,11 +77,13 @@ function boot(hash = "", available = true) {
   };
 }
 
-test("root selection supports parents, OR, unattributed, clear and progress intersection", () => {
+test("root selection matches exact projects, OR, unattributed, clear and progress intersection", () => {
   const app = boot();
   app.select(["workspace"]);
+  assert.equal(app.$("rail-count").textContent, "0/3", "a parent does not match a child's issues");
+  app.select(["server"]);
   assert.equal(app.$("rail-count").textContent, "1/3");
-  app.select(["workspace", "~unattributed"]);
+  app.select(["server", "~unattributed"]);
   assert.deepEqual(app.cards().map(card => card.dataset.issueId), ["ISSUE-001", "ISSUE-003"]);
   app.$("issue-status").value = "已诊断"; app.context.render();
   assert.equal(app.$("rail-count").textContent, "0/3");
@@ -90,22 +92,33 @@ test("root selection supports parents, OR, unattributed, clear and progress inte
   assert.equal(app.$("rail-count").textContent, "3/3");
 });
 
+test("a parent project matches only its own directly associated issues", () => {
+  const app = boot();
+  app.data.issues[1].root_projects = [{id: "workspace", name: "Workspace"}];
+  app.select(["workspace"]);
+  assert.deepEqual(app.cards().map(card => card.dataset.issueId), ["ISSUE-002"]);
+  app.select(["server"]);
+  assert.deepEqual(app.cards().map(card => card.dataset.issueId), ["ISSUE-001"]);
+  app.select(["workspace", "server"]);
+  assert.deepEqual(app.cards().map(card => card.dataset.issueId), ["ISSUE-001", "ISSUE-002"]);
+});
+
 test("project parameters survive rendering, issue and event navigation, and reload", () => {
-  const app = boot("#project=workspace&project=~unattributed");
+  const app = boot("#project=server&project=~unattributed");
   for (const action of [() => app.context.syncHash(), () => app.context.selectIssue("ISSUE-001"), () => app.context.selectEvent()]) {
     action();
-    assert.deepEqual(new URLSearchParams(app.location.hash.slice(1)).getAll("project"), ["workspace", "~unattributed"]);
+    assert.deepEqual(new URLSearchParams(app.location.hash.slice(1)).getAll("project"), ["server", "~unattributed"]);
     assert.equal(boot(app.location.hash).$("rail-count").textContent, "2/3");
   }
   assert.equal(new URLSearchParams(app.location.hash.slice(1)).get("event"), "trace-1/obs-1");
 });
 
 test("hash navigation restores checkboxes, counts, empty filters and explicit issue visibility", () => {
-  const app = boot("#project=workspace");
+  const app = boot("#project=server");
   app.go("#project=other");
   assert.deepEqual(app.cards().map(card => card.dataset.issueId), ["ISSUE-002"]);
   assert.deepEqual(app.inputs().filter(input => input.checked).map(input => input.value), ["other"]);
-  app.go("#project=workspace&issue=ISSUE-002");
+  app.go("#project=server&issue=ISSUE-002");
   assert.deepEqual(app.cards().map(card => card.dataset.issueId), ["ISSUE-001", "ISSUE-002"]);
   app.go("");
   assert.equal(app.$("rail-count").textContent, "3/3");
@@ -114,7 +127,7 @@ test("hash navigation restores checkboxes, counts, empty filters and explicit is
 });
 
 test("initial deep links keep an explicitly selected issue visible even without fragments", () => {
-  const hash = "#project=workspace&issue=ISSUE-002";
+  const hash = "#project=server&issue=ISSUE-002";
   const app = boot(hash);
   app.data.issues[1].fragments = [];
   app.context.syncHash();

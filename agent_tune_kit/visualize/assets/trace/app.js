@@ -27,7 +27,7 @@
   const projectMatches = item => !projectSelection.size || [...projectSelection].some(id => {
     const roots = item.root_projects || [];
     if (id === "~unattributed") return !roots.length;
-    return roots.some(root => { let current = root.id; const seen = new Set(); while (current && !seen.has(current)) { if (current === id) return true; seen.add(current); current = data.projects?.[current]?.parent_id; } return false; });
+    return roots.some(root => root.id === id);
   });
   const projectInputs = [];
   for (const p of [{id: "~unattributed", name: "待归因"}, ...Object.values(data.projects || {})]) {
