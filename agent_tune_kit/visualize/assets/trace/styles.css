@@ -35,7 +35,8 @@ body.rail-collapsed #rail-toggle { transform: rotate(180deg) }
 .issue-card { display: flex; flex-direction: column; gap: 6px; width: 100%; text-align: left; padding: 10px }
 .issue-card-head { justify-content: space-between; gap: 6px; width: 100% }
 .issue-card-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; width: 100% }
-.issue-card-body h3 { font-size: 13px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden }
+.issue-card-body h3 { font-size: 13px; line-height: 1.35 }
+.issue-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; width: 100%; padding: 0; border: 0; background: none; text-align: left; font: inherit }
 .issue-progress { font-size: 11px; color: var(--muted) }
 .issue-projects { font-size: 12px; color: var(--muted); overflow-wrap: anywhere }
 .issue-projects a { color: var(--accent); text-decoration: none }
@@ -106,12 +107,13 @@ body.rail-collapsed #rail-toggle { transform: rotate(180deg) }
 .lane-mark.current-tick { z-index: 2 }
 .lane-evidence { padding: 2px 4px; color: var(--accent); font-size: 10px; background: var(--tint) }
 
-#fragment-bar { border-left: 3px solid var(--brand); background: var(--tint); padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px; border-radius: 8px }
+#fragment-bar { border-left: 3px solid var(--brand); background: var(--tint); padding: 8px 12px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; border-radius: 8px }
 .fragment-title { min-width: 0; font-size: 13px }
 .fragment-title strong, .fragment-title span { display: block }
 #fragment-issue { overflow: hidden; white-space: nowrap; text-overflow: ellipsis }
 #fragment-position { color: var(--accent); font-size: 12px }
-.fragment-controls { flex-shrink: 0; gap: 5px }
+.fragment-controls { flex-wrap: wrap; gap: 5px }
+.records-title { flex-wrap: wrap }
 .fragment-controls button { font-size: 12px; padding: 4px 8px }
 
 .record-panel, .stream { display: flex; flex-direction: column; flex: 1; min-height: 0 }
@@ -120,7 +122,6 @@ body.rail-collapsed #rail-toggle { transform: rotate(180deg) }
 .toolbar { flex-wrap: wrap; gap: 8px }
 .record-filters { gap: 8px; max-width: 100% }
 .record-filters label { display: block; min-width: 0 }
-.segments-only { display: inline-flex !important; align-items: center; gap: 6px; white-space: nowrap; color: var(--muted); font-size: 12px }
 #trace-filter { width: 152px }
 #record-mode { width: 104px }
 #type-filter { width: 142px }
@@ -130,7 +131,6 @@ body.rail-collapsed #rail-toggle { transform: rotate(180deg) }
   .record-filters { display: grid; width: 100%; grid-template-columns: repeat(2,minmax(0,1fr)) }
   .record-filters :is(#trace-filter,#record-mode,#type-filter,#trace-search) { width: 100% }
   .record-filters:has(#trace-choice[hidden]) .search-label { grid-column: 1/-1 }
-  .segments-only { grid-column: 1/-1 }
 }
 .stream { overflow: hidden; max-height: 100vh; max-height: 100dvh }
 .row-grid { display: grid; grid-template-columns: 96px 42px clamp(210px,24%,320px) minmax(0,1fr) 76px; gap: 12px; padding-inline: 16px; align-items: center }
@@ -151,6 +151,7 @@ body.rail-collapsed #rail-toggle { transform: rotate(180deg) }
 .segment-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-inline: 16px; background: #fff3e6; color: var(--accent); font-size: 12px; font-weight: 650 }
 .segment-header .seg-meta { color: var(--muted); font-weight: 500 }
 .fold-row { color: var(--muted); font-size: 12px; background: #f7f9fa; justify-content: center }
+.fold-row > span { grid-column: 1 / -1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
 .time-col { font-size: 12px; color: #485c6a }
 .trace-tag { display: inline-block; min-width: 26px; text-align: center; font-size: 11px; background: #edf3f5; color: #355363; border-radius: 4px; padding: 1px 5px }
 .node-main { display: flex; flex-direction: column; min-width: 0 }

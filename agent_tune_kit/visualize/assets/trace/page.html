@@ -51,7 +51,8 @@
           <button id="fragment-next" aria-label="下一片段">下一片段 →</button>
           <button id="fragment-fields">片段证据</button>
           <button id="fragment-detail">问题详情</button>
-          <button id="fragment-exit">取消选中</button>
+          <button id="fragment-context">查看完整上下文</button>
+          <button id="fragment-exit">退出问题定位</button>
         </div>
       </section>
       <section class="record-panel" aria-labelledby="records-title">
@@ -59,7 +60,6 @@
           <div class="records-title"><h2 id="records-title">Event</h2><span id="trace-count" class="muted" aria-live="polite"></span></div>
           <div class="toolbar record-filters">
             <label id="trace-choice"><span class="sr-only">Trace</span><select id="trace-filter"></select></label>
-            <label class="segments-only"><input id="segments-only" type="checkbox"> 仅看片段</label>
             <label><span class="sr-only">记录范围</span><select id="record-mode"><option value="">全部记录</option><option value="key">关键动作</option></select></label>
             <label><span class="sr-only">类型</span><select id="type-filter"></select></label>
             <label class="search-label"><span class="sr-only">搜索记录</span><input id="trace-search" type="search" placeholder="搜索动作或输入输出"></label>

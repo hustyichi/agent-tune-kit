@@ -43,11 +43,11 @@ function boot(hash = "", available = true) {
     document: {getElementById: $, createElement: tag => new Element(tag), createTextNode: text => Object.assign(new Element("#text"), {textContent: text}), addEventListener: (name, fn) => { listeners[name] = fn; }},
     window: {addEventListener() {}},
     history: {replaceState: (_s, _t, url) => { location.hash = url.startsWith("#") ? url : ""; }},
-    pretty: JSON.stringify, drawLanes() {}, rememberView() {}, showIssue() {},
+    pretty: JSON.stringify, drawLanes() {}, rememberView() {}, showIssue() {}, renderTraces() {},
   });
   vm.runInContext(menuSource, context);
   vm.runInContext(`
-    let investigation = null, selectedNode = null, railFilter = null, previewIssue = null, scopeBefore = null;
+    let investigation = null, selectedNode = null, railFilter = null, previewIssue = null, scopeBefore = null, expandedFolds = new Set();
     const currentCapture = null;
     const issueById = new Map(data.issues.map(item => [item.record.id, item]));
     const partNow = () => investigation?.item.fragments[investigation.index];
@@ -140,6 +140,12 @@ test("standalone previews keep project names readable without broken dashboard l
   const app = boot("", false);
   assert.match(text(app.cards()[0]), /关联项目：magic-code-server（待确认）/);
   assert.equal(nodes(app.cards()[0]).filter(node => node.tag === "a").length, 0);
+});
+
+test("issue titles enter fragment navigation directly", () => {
+  const app = boot();
+  nodes(app.cards()[0]).find(node => node.className === "issue-title").onclick();
+  assert.equal(new URLSearchParams(app.location.hash.slice(1)).get("issue"), "ISSUE-001");
 });
 
 test("back to dashboard opens the session view without a drawer", () => {

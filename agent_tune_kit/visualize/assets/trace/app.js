@@ -116,7 +116,7 @@
     return {
       capture: currentCapture?.id,
       filters: filters.map(id => $(id).value),
-      segmentsOnly: $("segments-only").checked,
+      showContext: investigation?.showContext || false,
       selected: selectedNode,
       top: scroller.scrollTop,
       lanes: swim.snapshot(),
@@ -128,7 +128,7 @@
     $("capture-filter").value = state.capture || "";
     chooseCapture();
     filters.forEach((id, i) => { $(id).value = state.filters[i]; });
-    $("segments-only").checked = Boolean(state.segmentsOnly);
+    if (investigation) investigation.showContext = Boolean(state.showContext);
     selectedNode = state.selected;
     renderTraces(state.top);
     swim.restore(state.lanes);
@@ -431,6 +431,7 @@
         $("drawer-content").append(reason);
       }
       const segments = issue.segments || [];
+      if (!segments.length) $("drawer-content").append(el("p", "该问题尚未圈定片段，可查看已记录的关联证据。", "muted"));
       if (segments.length) {
         const box = section("关联片段");
         segments.forEach((segment, index) => {
@@ -717,37 +718,29 @@
   }
   function buildDisplayRows(rows) {
     if (!investigation || !rows.length) return rows.map(index => ({kind: "row", index}));
-    const only = $("segments-only").checked;
+    const only = !investigation.showContext;
     const item = investigation.item;
     const local = item.fragments
       .map((part, fragIndex) => ({part, fragIndex}))
-      .filter(({part}) => part.capture_id === currentCapture?.id);
+      .filter(({part}) => part.capture_id === currentCapture?.id && part.anchors.length);
     if (!local.length) return rows.map(index => ({kind: "row", index}));
-    const ordered = [...rows];
-    const rowPos = new Map(ordered.map((index, pos) => [index, pos]));
     const result = [];
-    const covered = new Set();
-    const headers = [];
+    const members = new Map(), headers = new Map();
     for (const {part, fragIndex} of local) {
-      const members = ordered.filter(i => {
+      const indexes = rows.filter(i => {
         if (part.anchors.includes(i)) return true;
         if (only) return false;
         const n = currentCapture.nodes[i];
         return part.start != null && n.at != null && n.track === part.track && n.at >= part.start && n.at <= part.end;
       });
-      if (!members.length && !(part.unscoped && part.anchors.some(i => rowPos.has(i)))) continue;
-      const first = members[0] ?? part.anchors.find(i => rowPos.has(i));
-      if (first == null) continue;
-      headers.push({fragIndex, part, at: rowPos.get(first), members});
+      if (!indexes.length) continue;
+      const first = indexes[0];
+      if (!headers.has(first)) headers.set(first, []);
+      headers.get(first).push({kind: "header", fragIndex, part});
+      for (const index of indexes) if (!members.has(index)) members.set(index, {kind: "row", index, fragIndex, part});
     }
-    headers.sort((a, b) => a.at - b.at || a.fragIndex - b.fragIndex);
-    let cursor = 0;
     function emitFold(between) {
       if (!between.length) return;
-      if (!only) {
-        for (const index of between) result.push({kind: "row", index, membership: segmentMembership(index)});
-        return;
-      }
       const key = `${between[0]}:${between[between.length - 1]}`;
       if (expandedFolds.has(key)) {
         for (const index of between) result.push({kind: "row", index, membership: segmentMembership(index)});
@@ -758,35 +751,18 @@
       const gap = first?.at != null && last?.until != null ? last.until - first.at : null;
       result.push({kind: "fold", key, indices: between, count: between.length, gap});
     }
-    for (const header of headers) {
-      const firstPos = Math.min(...header.members.map(i => rowPos.get(i)));
-      if (firstPos > cursor) emitFold(ordered.slice(cursor, firstPos).filter(i => !covered.has(i)));
-      result.push({kind: "header", fragIndex: header.fragIndex, part: header.part});
-      for (const index of header.members) {
-        if (covered.has(index)) continue;
-        result.push({kind: "row", index, fragIndex: header.fragIndex, part: header.part});
-        covered.add(index);
+    // Walk the session clock so concurrent Traces and overlapping segments never lose records.
+    let between = [];
+    for (const index of rows) {
+      if (only && !members.has(index)) {
+        between.push(index);
+        continue;
       }
-      cursor = Math.max(cursor, Math.max(...header.members.map(i => rowPos.get(i))) + 1);
+      emitFold(between); between = [];
+      result.push(...(headers.get(index) || []));
+      result.push(members.get(index) || {kind: "row", index});
     }
-    if (cursor < ordered.length) emitFold(ordered.slice(cursor).filter(i => !covered.has(i)));
-    if (!only) {
-      // Keep every filtered row exactly once, in time order, with headers before their first member.
-      const byIndex = new Map();
-      for (const entry of result) if (entry.kind === "row") byIndex.set(entry.index, entry);
-      const headersByFirst = new Map();
-      for (const header of headers) {
-        const first = header.members.find(i => byIndex.has(i));
-        if (first != null) headersByFirst.set(first, header);
-      }
-      const merged = [];
-      for (const index of ordered) {
-        const header = headersByFirst.get(index);
-        if (header) merged.push({kind: "header", fragIndex: header.fragIndex, part: header.part});
-        merged.push(byIndex.get(index) || {kind: "row", index, membership: segmentMembership(index)});
-      }
-      return merged;
-    }
+    emitFold(between);
     return result;
   }
 
@@ -823,7 +799,7 @@
         }, "row-grid fold-row");
         const label = item.expanded
           ? `⋯ 收起已展开的 ${item.indices.length} 条 ⋯`
-          : `⋯ 折叠 ${item.count} 条${item.gap != null ? ` · 空档 ${elapsed(item.gap)}` : ""} ⋯`;
+          : `⋯ 展开这 ${item.count} 条上下文记录${item.gap != null ? ` · 跨度 ${elapsed(item.gap)}` : ""} ⋯`;
         row.append(el("span", label));
         content.append(row);
         continue;
@@ -875,6 +851,8 @@
     const n = currentCapture.nodes[index];
     selectedNode = n;
     swim.select(index); swim.scrollSelected();
+    const fold = displayRows.find(item => item.kind === "fold" && !item.expanded && item.indices.includes(index));
+    if (fold) { expandedFolds.add(fold.key); renderTraces(scroller.scrollTop); }
     let pos = displayRows.findIndex(item => item.kind === "row" && item.index === index);
     if (pos < 0 && timeline().tracks[n.track].roots.includes(index)) {
       pos = displayRows.findIndex(item => item.kind === "row" && currentCapture.nodes[item.index].track === n.track);
@@ -932,6 +910,15 @@
     streamRows = filteredRows();
     displayRows = buildDisplayRows(streamRows);
     $("trace-count").textContent = `${streamRows.length} 条`;
+    const related = new Set((investigation?.item.fragments || []).filter(p => p.capture_id === currentCapture?.id).flatMap(p => p.anchors));
+    if (related.size) {
+      const inside = streamRows.filter(i => related.has(i)).length;
+      const visible = displayRows.filter(row => row.kind === "row").length;
+      const label = investigation.item.fragments.some(p => p.scope_kind) ? "片段内" : "关联证据";
+      $("trace-count").textContent = investigation.showContext
+        ? `共 ${streamRows.length} 条 · ${label} ${inside} 条`
+        : `${label} ${inside} 条 · 已折叠 ${streamRows.length - visible} 条${visible > inside ? ` · 已展开上下文 ${visible - inside} 条` : ""}`;
+    }
     list.style.paddingTop = "0px";
     list.style.paddingBottom = `${displayRows.length * rowHeight}px`;
     scroller.scrollTop = top;
@@ -965,29 +952,45 @@
   }
   function showFragmentBar() {
     const part = partNow();
-    $("fragment-bar").hidden = !part;
-    if (!part) return;
+    $("fragment-bar").hidden = !investigation;
+    if (!investigation) return;
     const {item,index} = investigation;
-    $("fragment-issue").textContent = `${item.record.id} · ${item.record.title}`;
+    $("fragment-issue").textContent = `正在查看 ${item.record.id} · ${item.record.title}`;
     $("fragment-issue").title = $("fragment-issue").textContent;
+    const scoped = item.fragments.filter(p => p.scope_kind);
+    const mode = scoped.length ? `${investigation.showContext ? "完整上下文" : "问题片段"} · 共 ${scoped.length} 个片段` : "该问题尚未圈定片段";
+    $("fragment-position").textContent = mode;
+    $("fragment-context").hidden = !item.fragments.some(p => p.capture_id === currentCapture?.id && p.anchors.length);
+    $("fragment-context").textContent = investigation.showContext ? (scoped.length ? "返回问题片段" : "返回关联证据") : "查看完整上下文";
+    for (const id of ["fragment-prev", "fragment-next", "fragment-fields"]) $(id).hidden = !part;
+    if (!part) return;
     const labels = {trace:"执行级证据", file:"归档引用", untimed:"时间未知", point:"未圈定范围", segment:"片段"};
     const range = part.start == null ? (part.unscoped ? "未圈定范围" : labels[part.kind] || part.kind) : `${elapsed(part.start-startTime(),true)} – ${elapsed(part.end-startTime(),true)}`;
     const title = part.summary || `片段 ${index+1}`;
-    $("fragment-position").textContent = [`${title} · ${index+1} / ${item.fragments.length}`, part.track == null ? null : trackLabel(part.track), range].filter(Boolean).join(" · ");
+    $("fragment-position").textContent = [mode, `${title} · ${index+1} / ${item.fragments.length}`, part.track == null ? null : trackLabel(part.track), range].filter(Boolean).join(" · ");
     $("fragment-prev").disabled = index === 0;
     $("fragment-next").disabled = index+1 === item.fragments.length;
-    $("fragment-fields").textContent = `片段证据 (${part.refs.length+(part.context_refs?.length || 0)})`;
+    $("fragment-fields").textContent = `${part.scope_kind ? "片段证据" : "关联证据"} (${part.refs.length+(part.context_refs?.length || 0)})`;
   }
   function startIssue(item, fragmentIndex = null) {
-    if (!item.fragments.length) { showIssue(item); syncRailSelection(); return; }
     const before = investigation?.before || rememberView();
     const priorScope = investigation ? investigation.priorScope : scopeBefore;
-    investigation = {item, before, priorScope, index:0};
-    previewIssue = null;
+    investigation = {item, before, priorScope, index:0, showContext:false};
+    expandedFolds = new Set();
+    previewIssue = null; selectedNode = null;
+    if (!item.fragments.length) { renderTraces(); showIssue(item); return; }
     const preferred = fragmentIndex != null && fragmentIndex >= 0 ? fragmentIndex
       : item.fragments.findIndex(f => f.capture_id === currentCapture?.id && f.anchors.length);
     goFragment(preferred < 0 ? 0 : preferred);
     if ($("drawer").hidden) $("fragment-fields").focus({preventScroll:true});
+  }
+  function toggleFragmentContext() {
+    investigation.showContext = !investigation.showContext;
+    expandedFolds = new Set();
+    const part = partNow(), selected = selectedIndex();
+    renderTraces();
+    const index = investigation.showContext ? selected : part?.anchors[0];
+    if (index != null && index >= 0) selectAndScroll(index);
   }
   function goFragment(index) {
     const part = investigation?.item.fragments[index];
@@ -998,8 +1001,9 @@
     }
     $("trace-filter").value = ""; clearRecordFilters(); selectedNode = null;
     scopeBefore = null; renderTraces();
-    if (part.anchors.length) {
-      selectAndScroll(part.anchors[0]); $("fragment-bar").scrollIntoView({block:"nearest"});
+    const anchor = part.anchors.find(index => streamRows.includes(index));
+    if (anchor != null) {
+      selectAndScroll(anchor); $("fragment-bar").scrollIntoView({block:"nearest"});
     } else {
       const ref = evidenceRefAt(investigation.item, part.refs[0]);
       activeIssue = investigation.item; issueStage = "fragment";
@@ -1071,7 +1075,9 @@
       head.append(el("span", issue.id, "issue-id-text"), el("span", undefined, `progress-dot ${progress.klass}`));
       const body = el("div", undefined, "issue-card-body");
       body.append(projectLabels(item));
-      body.append(el("h3", issue.title || "问题"), el("div", progress.label, "issue-progress"));
+      const title = el("h3");
+      title.append(button(issue.title || "问题", () => startIssue(item), "issue-title"));
+      body.append(title, el("div", progress.label, "issue-progress"));
       const tag = categoryTag(issue.category);
       if (tag) body.append(tag);
       const segs = el("div", undefined, "seg-list");
@@ -1160,6 +1166,7 @@
   $("fragment-next").onclick = () => goFragment(investigation.index+1);
   $("fragment-fields").onclick = showFragmentEvidence;
   $("fragment-detail").onclick = () => showIssue(investigation.item);
+  $("fragment-context").onclick = toggleFragmentContext;
   $("fragment-exit").onclick = exitIssue;
   $("lane-reset").onclick = () => focusTrace(null);
   $("capture-filter").closest("label").hidden = Boolean(currentCapture?.current);
@@ -1169,7 +1176,6 @@
   $("capture-filter").onchange = () => { investigation = null; scopeBefore = null; railFilter = null; chooseCapture(); renderIssueRail(); renderTraces(); };
   $("trace-filter").onchange = () => focusTrace(scope());
   for (const id of ["trace-search","type-filter","record-mode"]) $(id).addEventListener(id === "trace-search" ? "input" : "change", () => renderTraces());
-  $("segments-only").onchange = () => renderTraces(scroller.scrollTop);
   const presentProgress = new Set(data.issues.map(item => item.progress.label));
   options($("issue-status"), data.progress_legend.map(entry => entry.label).filter(label => presentProgress.has(label)), "全部进度");
   $("issue-search").oninput = () => { railFilter = null; renderIssueRail(); };
