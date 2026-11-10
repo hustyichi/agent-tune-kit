@@ -92,6 +92,15 @@
     return chip;
   };
   const empty = text => el("div", text, "empty-dash");
+  // A card's own control previews it in the drawer; pressing it again while that preview is open closes it.
+  const isOpen = (view, key) => state.view === view && state.drawer === key;
+  const previewButton = (view, key, label, className) => {
+    const node = button("", () => (isOpen(view, key) ? closeDrawer() : setView(view, key)), className);
+    if (label) node.setAttribute("aria-label", label);
+    node.setAttribute("aria-controls", "drawer");
+    node.setAttribute("aria-expanded", String(isOpen(view, key)));
+    return node;
+  };
 
   // --- grouping by category -------------------------------------------------------------------------------------
   function categoryGroups() {
@@ -158,11 +167,11 @@
   function sessionCard(s) {
     const card = el("article", undefined, "dash-card session-card");
     card.dataset.key = s.dir;
-    if (state.view === "session" && state.drawer === s.dir) card.setAttribute("aria-current", "true");
+    if (isOpen("session", s.dir)) card.setAttribute("aria-current", "true");
     const head = el("div", undefined, "card-head");
-    const open = button("", () => setView("session", s.dir), "card-open");
+    const open = previewButton("session", s.dir, `查看会话 ${s.session_id}`, "card-open");
     const title = el("span", shortId(s.session_id), "card-title mono"); title.title = s.session_id;
-    open.append(title); open.setAttribute("aria-label", `查看会话 ${s.session_id}`);
+    open.append(title);
     head.append(open, copyButton(s.session_id, "复制 Session ID"));
     card.append(head);
     if (s.error) {
@@ -213,11 +222,11 @@
     const card = el("article", undefined, "dash-card category-card");
     card.dataset.key = key;
     if (info?.deprecated) card.dataset.deprecated = "true";
-    if (state.view === "category" && state.drawer === key) card.setAttribute("aria-current", "true");
+    if (isOpen("category", key)) card.setAttribute("aria-current", "true");
     const head = el("div", undefined, "card-head");
-    const open = button("", () => setView("category", key), "card-open");
+    const open = previewButton("category", key, `查看异常分类 ${categoryName(key)}`, "card-open");
     const title = el("span", categoryName(key), "card-title"); title.title = categoryName(key);
-    open.append(title); open.setAttribute("aria-label", `查看异常分类 ${categoryName(key)}`);
+    open.append(title);
     head.append(open);
     if (info?.deprecated) head.append(flag("已弃用"));
     card.append(head, el("div", info ? info.definition : "分类词表中没有这条分类，按分类 ID 显示。", "card-definition"));
@@ -241,9 +250,9 @@
     const none = visible.find(([key]) => key === NONE);
     if (!none) return;
     const all = categoryGroups().get(NONE);
-    const node = button("", () => setView("category", NONE), "dash-card dash-strip");
+    const node = previewButton("category", NONE, null, "dash-card dash-strip");
     node.dataset.key = NONE;
-    if (state.view === "category" && state.drawer === NONE) node.setAttribute("aria-current", "true");
+    if (isOpen("category", NONE)) node.setAttribute("aria-current", "true");
     node.append(el("strong", "未分类"), el("span", `${all.length} 个问题 · ${new Set(all.map(item => item.s.dir)).size} 个会话`), el("span", "相关会话下次检测时补充分类", "muted"));
     strip.append(node);
   }
@@ -426,6 +435,19 @@
   $("drawer-close").onclick = closeDrawer;
   document.addEventListener("keydown", event => {
     if (event.key === "Escape" && state.drawer !== null) { event.preventDefault(); closeDrawer(); }
+  });
+  // Light dismiss: the drawer is a preview, so a click on empty page space closes it. Clicks inside the drawer, on a
+  // card (including gaps between its chips) or on any control (filters, search, tabs, links) keep their own meaning;
+  // cards switch the preview instead. The press must also start outside, so a text selection or a resize drag that
+  // ends outside never closes it.
+  const KEEPS_DRAWER = "#drawer, .dash-card, a, button, input, select, textarea, label, summary, [role=tab]";
+  const dismissable = target => !target?.closest?.(KEEPS_DRAWER);
+  let pressedOutside = false;
+  document.addEventListener("pointerdown", event => { pressedOutside = state.drawer !== null && dismissable(event.target); });
+  document.addEventListener("click", event => {
+    const close = pressedOutside && state.drawer !== null && dismissable(event.target);
+    pressedOutside = false;
+    if (close) closeDrawer();
   });
   let resizing = false;
   $("drawer-resizer").addEventListener("pointerdown", event => { resizing = true; $("drawer-resizer").setPointerCapture(event.pointerId); event.preventDefault(); });

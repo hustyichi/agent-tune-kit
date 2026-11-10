@@ -13,7 +13,21 @@ class Node {
   get options() { return this.children; }
   get selectedOptions() { return this.children.filter(node => node.selected); }
   get lastChild() { return this.children[this.children.length - 1]; }
-  append(...items) { for (const item of items) this.children.push(typeof item === "string" ? Object.assign(new Node("#text"), {textContent: item}) : item); }
+  append(...items) {
+    for (const item of items) {
+      const node = typeof item === "string" ? Object.assign(new Node("#text"), {textContent: item}) : item;
+      node.parentElement = this; this.children.push(node);
+    }
+  }
+  // Enough of Element.closest for the dashboard's light-dismiss check: "#id", ".class", tag names and [role=...].
+  closest(selector) {
+    const parts = selector.split(",").map(part => part.trim());
+    const hit = node => parts.some(part => part.startsWith("#") ? node.id === part.slice(1)
+      : part.startsWith(".") ? node.className.split(/\s+/).includes(part.slice(1))
+      : part.startsWith("[role=") ? node.attrs.role === part.slice(6, -1) : node.tag === part);
+    for (let node = this; node; node = node.parentElement) if (hit(node)) return node;
+    return null;
+  }
   replaceChildren(...items) { this.children = []; this.append(...items); }
   setAttribute(name, value) { this.attrs[name] = String(value); }
   getAttribute(name) { return this.attrs[name] ?? null; }
@@ -40,8 +54,10 @@ const text = node => [node.textContent, ...node.children.map(text)].join(" ").re
 function boot(data) {
   const ids = new Map();
   for (const id of ["project-filter", "project-name", "dash-stats", "warnings", "source-choice", "source-filter", "tab-session", "tab-category", "dash-panel", "dash-search", "progress-bar", "progress-legend", "filter-note", "dash-grid", "dash-strip", "drawer", "drawer-title", "drawer-content", "drawer-close", "drawer-resizer"]) {
-    ids.set(id, new Node("div"));
+    ids.set(id, Object.assign(new Node("div"), {id}));
   }
+  for (const id of ["drawer-title", "drawer-content", "drawer-close", "drawer-resizer"]) ids.get(id).parentElement = ids.get("drawer");
+  for (const id of ["dash-grid", "dash-strip", "progress-bar", "progress-legend", "filter-note"]) ids.get(id).parentElement = ids.get("dash-panel");
   ids.get("source-choice").hidden = true;
   ids.get("drawer").hidden = true;
   const store = new Node("script"); store.textContent = JSON.stringify(data); ids.set("dashboard-data", store);
@@ -77,6 +93,8 @@ function boot(data) {
     search: value => $("dash-search").oninput({target: {value}}),
     go: hash => { location.hash = hash; listeners.window.hashchange(); },
     escape: () => listeners.document.keydown({key: "Escape", preventDefault() {}}),
+    // A mouse click as the document sees it: the press lands on `down`, the click on `up` (the same node by default).
+    press: (down, up = down) => { listeners.document.pointerdown({target: down}); listeners.document.click({target: up}); },
   };
 }
 
@@ -147,6 +165,31 @@ app.escape();
 assert.equal(app.$("drawer").hidden, true);
 assert.equal(app.location.hash, "#view=session");
 
+// --- the dashboard drawer is a preview: light dismiss, toggle and switch -----------------------------------
+const cardOf = label => app.cards().find(card => text(card).includes(label));
+app.open(cardOf("3 个问题")).onclick();
+assert.equal(app.open(cardOf("3 个问题")).getAttribute("aria-expanded"), "true");
+assert.equal(app.open(cardOf("1 个问题")).getAttribute("aria-expanded"), "false");
+app.press(app.$("drawer-content"));
+assert.equal(app.$("drawer").hidden, false, "a click inside the drawer keeps it open");
+app.press(app.$("drawer-content"), app.$("dash-panel"));
+assert.equal(app.$("drawer").hidden, false, "a press that starts in the drawer (text selection, resize) keeps it open");
+app.press(app.legend("待诊断"));
+assert.equal(app.$("drawer").hidden, false, "a click on a control (here a progress filter) keeps it open");
+app.press(all(cardOf("1 个问题")).find(node => matches(node, ".chips")));
+assert.equal(app.$("drawer-title").textContent, a.session_id, "a click in a card's chip gap is not empty space");
+app.open(cardOf("1 个问题")).onclick();
+assert.equal(app.$("drawer-title").textContent, b.session_id, "another card switches the preview without closing");
+app.open(cardOf("1 个问题")).onclick();
+assert.equal(app.$("drawer").hidden, true, "pressing the open card again closes its preview");
+assert.equal(app.location.hash, "#view=session");
+app.open(cardOf("3 个问题")).onclick();
+app.press(app.$("dash-grid"));
+assert.equal(app.$("drawer").hidden, true, "a click on empty page space closes the preview");
+assert.equal(app.location.hash, "#view=session");
+app.press(app.$("dash-grid"));
+assert.equal(app.$("drawer").hidden, true, "an empty-space click with nothing open is a no-op");
+
 // --- a progress filter narrows the drawer and says so ------------------------------------------------------
 app.open(app.cards().find(card => text(card).includes("3 个问题"))).onclick();
 app.legend("待诊断").onclick();
@@ -184,7 +227,13 @@ assert.equal(app.strip()[0].tag, "button", "the uncategorized strip is itself th
 app.strip()[0].onclick();
 assert.equal(app.$("drawer-title").textContent, "未分类");
 assert.equal(app.rows().length, 2);
-app.escape();
+assert.equal(app.strip()[0].getAttribute("aria-expanded"), "true");
+app.strip()[0].onclick();
+assert.equal(app.$("drawer").hidden, true, "the uncategorized strip toggles its preview like a card");
+app.open(app.cards()[0]).onclick();
+app.open(app.cards()[0]).onclick();
+assert.equal(app.$("drawer").hidden, true, "a category card toggles its preview");
+assert.equal(app.location.hash, "#view=category");
 
 // --- deep links ------------------------------------------------------------------------------------------------
 app.go(`#view=category&category=${shellId}`);

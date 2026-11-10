@@ -1,6 +1,11 @@
 /* Dashboard-only rules; tokens, controls, the top bar and the drawer come from shared/base.css. */
 /* The dashboard drawer is mostly issue titles, so it opens wider than the session page's default. */
 :root { --drawer-width: min(640px, 92vw) }
+/* The drawer is a preview here: it slides in when it appears. Switching cards keeps it shown, so it does not replay. */
+.drawer:not([hidden]) { animation: drawer-in .18s ease-out }
+@keyframes drawer-in { from { transform: translateX(24px); opacity: 0 } }
+@keyframes sheet-in { from { transform: translateY(24px); opacity: 0 } }
+@media (prefers-reduced-motion: reduce) { .drawer:not([hidden]) { animation: none } }
 .dash { flex: 1; min-width: 0; padding: 14px clamp(12px, 2vw, 24px) 28px; display: flex; flex-direction: column; gap: 12px }
 /* The view switch is an underlined tab bar: the bar's bottom line separates it from the panel, and the selected tab's
    brand underline sits on that line. Search and the source filter ride on the right of the same bar. */
@@ -93,6 +98,8 @@ button.category-tag:hover { background: #ffe8d2 }
 .row-pending { color: var(--muted) }
 
 @media (max-width: 800px) {
+  /* The drawer is a bottom sheet here, so it rises instead (reduced motion still zeroes the duration). */
+  .drawer:not([hidden]) { animation-name: sheet-in }
   .dash-grid { grid-template-columns: 1fr }
   /* Search wraps under the tabs here, so the tab line moves onto the tab row itself. */
   .dash-controls { border-bottom: 0 }
