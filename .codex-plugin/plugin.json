@@ -1,6 +1,6 @@
 {
   "name": "agent-tune-kit",
-  "version": "2.3.3",
+  "version": "2.3.4",
   "description": "Local Codex plugin for batch Agent evaluation and session trace tuning with evidence-backed issues, focused changes, verification and offline review.",
   "author": {
     "name": "hustyichi",
