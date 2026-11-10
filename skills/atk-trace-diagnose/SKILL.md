@@ -1,6 +1,6 @@
 ---
 name: atk-trace-diagnose
-description: Investigate a selected session issue and save one evidence-backed root-cause and repair/verification plan; use for known issues without requiring full-session detection first.
+description: Diagnose session issues and save evidence-backed root-cause and repair/verification plans. Without a specified issue, review all session anomalies, prioritizing causes in the project implementation.
 metadata:
   compatibility: Requires the installed ATK CLI on PATH with trace and visualize trace commands.
 ---
@@ -9,25 +9,34 @@ metadata:
 
 ## Purpose
 
-Explain a selected issue and prepare a repair/verification plan. Diagnosis does not implicitly modify the Agent implementation.
+Explain session issues and prepare per-issue repair/verification plans, prioritizing causes directly related to the project implementation. Diagnosis does not implicitly modify the Agent implementation.
 
 ## Inputs
 
-A bound session, selected issue or explicit symptom, archived evidence, relevant code/runtime information and existing records. A complete detect pass is not required.
+A bound session, optional selected issues or explicit symptoms, archived evidence, relevant code/runtime information and existing records. A prior detect pass is optional.
 
 ## Outputs
 
-One immutable issue diagnosis Markdown combining facts, hypotheses, causal explanation, repair/verification plan and gaps, plus the session's generated `preview.html` and the refreshed project dashboard. Actual experiments retain necessary inputs/outputs under the issue.
+An immutable diagnosis Markdown per diagnosed issue combining facts, hypotheses, causal explanation, repair/verification plan and gaps, plus inspection coverage for session-wide review, the session's generated `preview.html` and the refreshed project dashboard. Actual experiments retain necessary inputs/outputs under the issue.
+
+## Investigation scope
+
+- When the user specifies issues or concrete symptoms, investigate that scope. A known symptom can start directly with diagnosis after binding an issue to session evidence.
+- Without specified issues or symptoms, review all anomalies in the bound session. Page through all available traces and consider both existing issues and previously unrecorded problems. Reuse the [detection workflow's](../atk-trace-detect/SKILL.md) evidence, issue identity, category and coverage rules with the implementation focus below, then continue through diagnosis in the same invocation. Work through every supported anomaly without stopping after the first or highest-priority issue. Record inspected and unread ranges, exclusions and gaps with `atk trace detect`, including zero-issue and partial reviews.
+
+Prioritize connections to project code, configuration, tool contracts/integration, Prompt and Skill. An anomaly may be skipped when evidence establishes that its cause is unrelated to the existing implementation, including the implementation's handling of external failures. An unknown cause or rejected hypothesis alone does not establish that it is unrelated. Keep uncertain findings with their evidence gaps and next discriminating check. For explicitly requested issues, report the attribution even when the cause is outside the project.
+
+When skipping an existing issue as unrelated, use `atk trace issue` with its `id` and current `revision` to set `status` to `excluded` and append the evidence-backed reason to its existing `notes`, preserving evidence and history. Findings established as unrelated before issue creation need only a brief reason in review coverage.
 
 ## Workflow
 
-1. Read session status, target issue (including `selection_reason`, impact, recurrence scope, implementation leads and unresolved questions) and existing diagnoses/changes/verifications. Retention explains why investigation matters; it is not root-cause proof. Older issues without a reason remain diagnosable. From a known symptom, locate/import the identified session and bind an issue with evidence and the user's investigation reason; do not require full-session detect or fabricate identity.
-2. Start with the unresolved questions from detection. Inspect original references and relevant code, configuration, tool contracts, Prompt and Skill, including actual loading/runtime provenance. Current checkout does not prove historical runtime. Separate a symptom's origin from propagation through native links, not timing alone. Serious, recurring or explicitly requested issues remain worth investigating when no implementation cause is established; do not invent a code fix or dismiss them as model limitations.
+1. Locate/import the identified session and read its status, issues (including `selection_reason`, impact, recurrence scope, implementation leads and unresolved questions) and existing diagnoses/changes/verifications. Apply the investigation scope above and bind new issues to evidence as needed. Retention explains why investigation matters but is not root-cause proof. Older issues without a reason remain diagnosable. Reuse existing diagnoses or exclusions when their evidence and scope still apply, preserving their history.
+2. For each issue requiring investigation, start with its unresolved questions. Inspect original references and relevant code, configuration, tool contracts, Prompt and Skill, including actual loading/runtime provenance. Current checkout does not prove historical runtime. Separate a symptom's origin from propagation through native links, not timing alone. Apply the implementation relevance rule above and continue steps 3–5 for each issue needing a diagnosis.
 3. Investigate competing explanations as needed for the goal. Run useful authorized experiments, recording running state before execution, actual output and limits. On resumption inspect logs, process/run IDs and artifacts before repeating a possibly completed operation.
-4. Write the diagnosis in the structure below, distinguishing confirmed causes, rejected leads and unresolved causes with the next discriminating check. Reconcile the issue title/description with the diagnosed problem. Narrowing the same incident uses its existing ID; an independently evidenced defect with no established causal link belongs in a separate linked issue, not as an asserted cause of the original. If scope or retention changes, revise through `atk trace issue` with its `id` and current `revision`, recording why and what remains unresolved in `notes`; preserve history and do not silently discard other symptoms. A rejected implementation hypothesis alone does not exclude a serious, recurring or user-focused issue. The save command adds the issue snapshot.
+4. Write the diagnosis in the structure below, distinguishing confirmed causes, rejected leads and unresolved causes with the next discriminating check. Reconcile the issue title/description with the diagnosed problem. Narrowing the same incident uses its existing ID. Record an independently evidenced defect with no established causal link as a separate linked issue. If scope or retention changes, revise through `atk trace issue` with its `id` and current `revision`, recording why and what remains unresolved in `notes` while preserving history. The save command adds the issue snapshot.
 5. Save with `atk trace diagnose --session-id <id> --issue-id <issue> --file <markdown-file> --json`, optionally `--diagnosis-id`. Revisions create new files. Do not overwrite an adopted diagnosis or silently alter an earlier change's rationale. If final synthesis produces a clearer or materially different explanation, save that explanation before generating the preview and delivering results; do not reserve it for the chat summary.
-6. After all diagnosis and issue revisions for this stage, generate/update the session's default `preview.html` once using `atk visualize trace --session-id <id> --overwrite --no-open --json`, reusing the same project/source options. Create it even when no earlier preview exists; batch multiple diagnosed issues into this single refresh. Consume only the CLI summary; do not read the generated HTML into context or invoke a separate visualization Skill. Preserve any known user-edited preview instead of overwriting it. Then refresh the project dashboard once with `atk visualize traces --overwrite --no-open --json`, reusing the same project option.
-7. Deliver cause/uncertainty, record path, preview/dashboard paths and warnings and next action from the saved diagnosis. Continue to optimize only when repair is requested and in scope. Ask only for a concrete necessary ambiguity or changed authorization.
+6. After all diagnosis, issue and coverage writes for this stage, generate/update the session's default `preview.html` once using `atk visualize trace --session-id <id> --overwrite --no-open --json`, reusing the same project/source options. Create it even when no earlier preview exists, batching multiple diagnosed issues into this single refresh. Consume only the CLI summary. Do not read the generated HTML into context or invoke a separate visualization Skill. Preserve any known user-edited preview instead of overwriting it. Then refresh the project dashboard once with `atk visualize traces --overwrite --no-open --json`, reusing the same project option.
+7. Deliver per-issue causes/uncertainties, record paths and next actions from saved diagnoses, plus exclusions and reasons, inspection gaps, preview/dashboard paths and warnings. Partial coverage remains explicit even when every currently known issue was handled. Continue to optimize only when repair is requested and in scope. Ask only for a concrete necessary ambiguity or changed authorization.
 
 ## Diagnosis structure
 
