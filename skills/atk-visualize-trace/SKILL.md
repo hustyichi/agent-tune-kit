@@ -17,7 +17,7 @@ Session mode: an explicit session/source with retained captures and available is
 
 ## Outputs
 
-Session mode: one `.atk/traces/<session_id>/preview.html`, or an explicit output path. Dashboard mode: one `.atk/traces/index.html`. No sidecars, analysis records, issue summary, evaluation version or frontend dependencies.
+Session mode: one `.atk/traces/<session_id>/preview.html`, or an explicit output path, plus the refreshed project dashboard at `.atk/traces/index.html`. Dashboard mode: one `.atk/traces/index.html`. No sidecars, analysis records, issue summary, evaluation version or frontend dependencies.
 
 ## Dashboard mode
 
@@ -27,13 +27,13 @@ Use it when the user asks to see all sessions, the overall picture or the dashbo
 
 1. Resolve archived data with `atk trace status --session-id <id> --json`. Reuse its actual source; do not fetch/substitute data to fill display gaps.
 2. Run `atk visualize trace --session-id <id> --json`, optionally `--source <source-json> --output-path <file> --overwrite --no-open`. Use `--overwrite` to refresh the default generated preview left by session stages. Opening is default for explicit visualization requests; automatic stage generation always uses `--no-open`. Replace only an authorized generated preview without discarding user edits.
-3. The fixed generator reads manifests/issues, checks references, safely embeds data/CSS/JavaScript and writes atomically. Do not handwrite HTML or install frontend packages. Optional stages stay empty; broken references are visible while healthy material remains readable.
+3. After successful preview generation, refresh the corresponding project dashboard once with `atk visualize traces --overwrite --no-open --json`, reusing the same `--project-root` (or the same working directory when omitted). Do this even with an explicit preview output path; the dashboard remains in the archive project's `.atk/traces/index.html`. Consume only the CLI summary. The fixed generators read manifests/issues, check references, safely embed data/CSS/JavaScript and write atomically. Do not read the generated HTML into context, handwrite HTML or install frontend packages. Optional stages stay empty; broken references are visible while healthy material remains readable.
 4. Start with the full captured session. Read all records in time order, or focus one Trace. Select an issue to highlight its related ranges and move through them with the fragment controls. Open a fragment’s evidence to inspect its cited Trace, node and field. Exit fragment navigation to restore the prior view. File-only and unavailable references retain their original identities. The issue drawer also retains diagnosis, candidate and verification stages. Shared changes follow the owner path. Escape closes details. When the project dashboard exists beside the default preview, the page links back to it.
-5. Report output path, trace count, digests and browser result. Open failure still delivers the file. After regeneration, an already open page needs a browser refresh; it performs no background requests. Labeled truncation points to retained evidence. Sharing HTML shares embedded previews, not the entire archive.
+5. Report preview and dashboard paths, trace count, digests, browser result and dashboard warnings, including stale previews. Open failure still delivers the file. After regeneration, an already open page needs a browser refresh; it performs no background requests. Labeled truncation points to retained evidence. Sharing HTML shares embedded previews, not the entire archive.
 
 ## Failure behavior
 
-Failed generation/overwrite preserves old output and all source records. Do not alter conclusions, download or execute an Agent. Empty issues/completed stages do not prove correctness or repair success. No page editing, feedback export or background writeback: update authoritative records through the host and regenerate.
+Failed generation/overwrite preserves old output and all source records. Dashboard refresh failure does not undo the generated preview: deliver it and report the dashboard as unavailable or stale, preserving any previous dashboard. Do not alter conclusions, download or execute an Agent. Empty issues/completed stages do not prove correctness or repair success. No page editing, feedback export or background writeback: update authoritative records through the host and regenerate.
 
 ## CLI dependency
 
