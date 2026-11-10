@@ -182,6 +182,6 @@ Each session archive is stored under `.atk/traces/<session_id>/` in your Agent p
 
 [Trace tuning guide for source configuration, supported formats, and archive layout](docs/trace-tuning.md)
 
-[Multi-project attribution and filtering proposal (not yet implemented, Chinese)](docs/trace-project-attribution-design.md)
+[Multi-project attribution and filtering details (Chinese)](docs/trace-project-attribution-design.md)
 
 Use `atk trace project` to register workspace projects and submodules. Issues can have multiple root-cause projects, filterable in the dashboard and session issue list. Repair details describe modification locations.
