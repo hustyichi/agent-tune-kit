@@ -570,30 +570,6 @@
       if (evidence.isConnected) evidence.scrollIntoView({block:"nearest"});
     });
   };
-  function showSessionInfo() {
-    openDrawer("会话信息", "session");
-    const overview = el("div", undefined, "overview-grid");
-    const overviewCard = (title, value) => { const card = section(title, value); card.className = "overview-card"; overview.append(card); return card; };
-    overviewCard("来源与会话身份", {session_id: data.session.session_id, session_key: data.session.session_key, source: data.source});
-    overviewCard("项目与运行线索", data.project || "未初始化项目上下文；这不阻塞已有轨迹分析。");
-    const coverage = overviewCard("实际检查覆盖");
-    coverage.append(el("p", data.session.detections.length ? "以下为各次检测的输入、检查范围与缺口；不会因重采或零问题而自动扩大覆盖。" : "尚未记录异常识别；当前只提供原始采集材料。", "muted"));
-    for (const detection of data.session.detections) {
-      const detail = el("details"); detail.append(el("summary", `${detection.id || "检查记录"} · ${detection.status || "状态未提供"}`), pre(detection)); appendReferences(detail, detection); coverage.append(detail);
-    }
-    for (const capture of data.captures) {
-      const card = overviewCard(capture.current ? "会话轨迹" : `采集 ${capture.id}`);
-      if (capture.error) card.append(el("p", capture.error, "warning"));
-      const detail = el("details"); detail.append(el("summary", "查看获取范围、字段、完整性和摘要"), pre(capture.manifest));
-      card.append(detail, button("浏览此快照", () => {
-        $("capture-filter").value = capture.id; investigation = null; scopeBefore = null; chooseCapture(); renderTraces(); closeDrawer(false);
-      }));
-    }
-    const digests = overviewCard("生成时采用的处理记录摘要");
-    const digestDetails = el("details"); digestDetails.append(el("summary", "展开记录与 SHA-256"), pre(data.record_digests)); digests.append(digestDetails);
-    $("drawer-content").append(overview);
-  }
-
   $("session-title").textContent = data.session.session_id;
   if (data.dashboard.available) {
     const back = $("dashboard-link");
@@ -1077,7 +1053,7 @@
       box.append(note);
     }
     if (!filtered.length) {
-      box.append(el("p", data.issues.length ? "没有符合筛选条件的问题。" : data.session.detections.length ? "已保存检测记录，尚无保留问题；请查看检查范围与缺口。" : "尚未进行异常识别。", "empty"));
+      box.append(el("p", data.issues.length ? "没有符合筛选条件的问题。" : data.session.detections.length ? "已保存检测记录，尚无保留问题；不代表会话没有问题。" : "尚未进行异常识别。", "empty"));
       return;
     }
     for (const item of filtered) {
@@ -1180,7 +1156,6 @@
   $("fragment-detail").onclick = () => showIssue(investigation.item);
   $("fragment-exit").onclick = exitIssue;
   $("lane-reset").onclick = () => focusTrace(null);
-  $("session-info").onclick = showSessionInfo;
   $("capture-filter").closest("label").hidden = Boolean(currentCapture?.current);
   options($("capture-filter"), data.captures.map(c => c.id));
   if (currentCapture) $("capture-filter").value = currentCapture.id;

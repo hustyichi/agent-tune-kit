@@ -295,12 +295,11 @@
   const bullets = (node, items) => { const list = el("ul"); for (const item of items) list.append(el("li", item)); node.append(list); };
 
   // The session drawer is a preview: the header carries identity and the way in; below it at most a few one-line
-  // notes appear, and only when something makes the issue list untrustworthy or needs an action. Source, scale and
-  // full detection coverage live on the session page (「会话信息」).
+  // notes appear, and only when something makes the issue list untrustworthy or needs an action.
   function sessionNotes(s, box) {
     if (!s.detection) box.append(el("p", "尚未检测，问题列表为空不代表会话没有问题。", "warning"));
     else if (s.detection.status !== "completed") {
-      box.append(el("p", `最近一次检测${statusText(s.detection.status)}，问题可能不全；检测缺口见会话页「会话信息」。`, "warning"));
+      box.append(el("p", `最近一次检测${statusText(s.detection.status)}，问题可能不全。`, "warning"));
     }
     if (s.problem_count) {
       const node = textDetails(`${s.problem_count} 条记录读取失败`, inner => {

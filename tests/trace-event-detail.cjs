@@ -17,7 +17,7 @@ const nodes = element => [element, ...element.children.filter(child => typeof ch
 const source = fs.readFileSync(path.join(__dirname, "../agent_tune_kit/visualize/assets/trace/app.js"), "utf8");
 const helpers = source.slice(source.indexOf("  const pretty ="), source.indexOf("  const markdown ="));
 const preview = source.slice(source.indexOf("  const fieldPreview ="), source.indexOf("  const openReference ="));
-const renderer = source.slice(source.indexOf("  const payloadContent ="), source.indexOf("  function showSessionInfo("));
+const renderer = source.slice(source.indexOf("  const payloadContent ="), source.indexOf('  $("session-title").textContent'));
 const container = new Element("div"), data = {references: {}};
 let title, copied, clipboardError = false, returns = 0;
 const context = vm.createContext({

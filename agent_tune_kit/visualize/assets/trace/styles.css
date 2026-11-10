@@ -56,7 +56,6 @@ body.rail-collapsed #rail-toggle { transform: rotate(180deg) }
 .capture-choice { gap: 6px }
 .capture-choice select { max-width: 190px }
 #capture-status:empty, #warnings:empty { display: none }
-.overview-card { border: 1px solid var(--line); border-radius: 9px; background: white }
 .timeline-panel { flex: none; min-width: 0 }
 .lane-scroll { max-height: 33vh; overflow: auto; scrollbar-width: thin; overscroll-behavior-x: contain; border-radius: 9px 9px 0 0 }
 .lane-row { display: grid; grid-template-columns: clamp(168px, 20%, 250px) minmax(0,1fr); column-gap: 12px; padding: 0 16px 0 12px; align-items: center; min-height: 47px; border-bottom: 1px solid #e9eef2 }
@@ -168,10 +167,6 @@ body.rail-collapsed #rail-toggle { transform: rotate(180deg) }
 .evidence-note, .issue-pill { color: var(--accent); font-size: 10px; white-space: nowrap }
 .evidence-note { min-width: 0; overflow: hidden; text-overflow: ellipsis }
 .issue-pill { background: #ffe8d2; border-radius: 999px; padding: 0 6px }
-
-.overview-grid { display: grid; grid-template-columns: 1fr; gap: 12px }
-.overview-card { text-align: left; padding: 16px; min-width: 0; overflow-wrap: anywhere }
-.overview-card h3 { margin-block: 5px 8px }
 
 .detail-section .diagnosis-path { color: var(--muted); font-size: 12px; font-weight: 500 }
 .diagnosis-markdown { line-height: 1.65 }

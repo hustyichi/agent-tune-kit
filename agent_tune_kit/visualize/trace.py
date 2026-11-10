@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import re
@@ -107,7 +106,6 @@ def build_trace_data(project_root, *, session_id, source=None):
     session_dir = store.resolve_session(project_root, session_id, source)
     session = store.load_session(session_dir)
     warnings = []
-    summaries = {"session.json": hashlib.sha256((session_dir / "session.json").read_bytes()).hexdigest()}
     references = {}
 
     def read_record(path):
@@ -117,7 +115,6 @@ def build_trace_data(project_root, *, session_id, source=None):
         text, truncated = read_text_bounded(path, RECORD_LIMIT)
         if truncated:
             raise ValueError(f"Record exceeds preview limit: {relative}")
-        summaries[relative] = hashlib.sha256(path.read_bytes()).hexdigest()
         try:
             return json.loads(text)
         except RecursionError:
@@ -128,7 +125,6 @@ def build_trace_data(project_root, *, session_id, source=None):
         text, truncated = read_text_bounded(path, RECORD_LIMIT)
         if truncated:
             raise ValueError(f"Record exceeds preview limit: {ref['path']}")
-        summaries[ref["path"]] = ref["sha256"]
         snapshot = None
         first, _, body = text.partition("\n")
         if first.startswith("<!-- atk-issue-snapshot {") and first.rstrip("\r").endswith("} -->"):
@@ -152,8 +148,6 @@ def build_trace_data(project_root, *, session_id, source=None):
     for capture_id in session.get("captures", []):
         try:
             manifest = store.read_capture(session_dir, capture_id, verify=True)
-            relative = f"captures/{capture_id}/manifest.json"
-            summaries[relative] = store.evidence_ref(session_dir, relative)["sha256"]
             captures.append({"id": capture_id, "manifest": manifest, "nodes": query.nodes(session_dir, capture_id)})
         except (OSError, ValueError, UserActionRequired) as exc:
             captures.append({"id": capture_id, "manifest": {}, "nodes": [], "error": str(exc)})
@@ -183,7 +177,6 @@ def build_trace_data(project_root, *, session_id, source=None):
                         raise ValueError("Shared change locator conflicts with its owning issue.")
                     change_ref = store.evidence_ref(session_dir, relative)
                     changed = {"reference": change_ref, "record": change, "verifications": []}
-                    summaries[relative] = change_ref["sha256"]
                     change_path = store.validate_ref(session_dir, change_ref)
                     for verification_path in sorted((change_path.parent / "verifications").glob("*/result.json")):
                         try:
@@ -229,7 +222,7 @@ def build_trace_data(project_root, *, session_id, source=None):
                 refs.extend([scope.get("from"), scope.get("to")])
         return [ref for ref in refs if isinstance(ref, dict)]
 
-    for ref in _references([session["detections"], [all_issue_refs(item) for item in issues]]):
+    for ref in _references([all_issue_refs(item) for item in issues]):
         key = _reference_key(ref)
         if key in references:
             continue
@@ -277,26 +270,11 @@ def build_trace_data(project_root, *, session_id, source=None):
                 if fragment.get("kind") in {"point", "untimed", "trace"}:
                     fragment["unscoped"] = True
 
-    project = ""
-    project_path = session_dir.parent / "project.md"
-    if project_path.exists():
-        if project_path.resolve().is_relative_to(session_dir.parent.resolve()):
-            project, truncated = read_text_bounded(project_path, 32 * 1024)
-            if truncated:
-                warnings.append("Project context preview is truncated at 32 KiB; read project.md for the full text.")
-        else:
-            warnings.append("Project context is unavailable: unsafe project.md path.")
-
-    # Current configuration is deliberately omitted: it can contain credential references.
-    safe_source = {key: session.get("source", {}).get(key) for key in ("type", "instance", "project", "environment")}
     return session_dir, {
         "session": session,
-        "source": safe_source,
-        "project": project,
         "captures": captures,
         "issues": issues,
         "references": references,
-        "record_digests": summaries,
         "warnings": warnings,
         "projects": project_map(session_dir.parent),
         "categories": {

@@ -98,6 +98,9 @@ def digests(directory):
 def test_capture_only_preview_is_safe_offline_and_read_only(tmp_path):
     result = capture(tmp_path, observations=70)
     session_dir = Path(result["session_dir"])
+    project_context = "Project notes are not part of the session preview."
+    project_path = session_dir.parent / "project.md"
+    project_path.write_text(project_context)
     before = digests(session_dir)
     generated = trace.generate_trace(tmp_path, session_id=SESSION_ID, open_browser=False)
     html = Path(generated["output_path"]).read_text()
@@ -110,6 +113,10 @@ def test_capture_only_preview_is_safe_offline_and_read_only(tmp_path):
     assert "connect-src 'none'" in html
     assert not re.search(r'<(?:script|link)[^>]+(?:src|href)=["\']https?://', html)
     assert "fetch(" not in html and "XMLHttpRequest" not in html
+    assert "session-info" not in html and "showSessionInfo" not in html
+    assert not {"project", "source", "record_digests"} & data.keys()
+    assert project_context not in html
+    assert project_path.read_text() == project_context
     assert digests(session_dir) == before
     assert not (tmp_path / ".atk/results").exists()
 
@@ -138,7 +145,6 @@ def test_diagnosis_preview_removes_only_the_generated_snapshot(tmp_path):
         {"reference": saved["ref"], "text": body},
         {"reference": legacy_ref, "text": legacy},
     ]
-    assert data["record_digests"][saved["ref"]["path"]] == saved["ref"]["sha256"]
     assert digests(session_dir) == before
 
 
