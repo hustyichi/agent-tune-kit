@@ -39,6 +39,16 @@ const {chromium} = require("playwright");
         assert.equal(await page.locator(".trace-row .trace-col").first().isVisible(), false);
         await page.locator("#trace-filter").selectOption("");
       }
+      await page.locator("#record-mode").selectOption({label:"仅看异常"});
+      assert.ok(await page.locator(".trace-row.is-error").count());
+      assert.equal(await page.locator(".trace-row:not(.is-error)").count(), 0);
+      await page.locator("#trace-search").fill("no matching event");
+      assert.equal(await page.locator("#trace-count").textContent(), "0 条");
+      assert.equal(await page.locator("#trace-list .empty").textContent(), "没有符合筛选条件的记录。");
+      await page.locator("#record-mode").selectOption("");
+      await page.locator("#trace-search").fill("");
+      assert.ok(await page.locator(".trace-row:not(.is-error)").count());
+      await page.locator("#record-mode").selectOption("error");
       await page.locator("#trace-search").fill(failure.id);
       const row = page.locator(`.trace-row[data-node-index="${failure.index}"]`);
       await row.waitFor();

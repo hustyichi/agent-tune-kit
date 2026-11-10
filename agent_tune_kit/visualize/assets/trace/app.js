@@ -595,7 +595,7 @@
   }
   function filteredRows() {
     const query = $("trace-search").value.trim().toLocaleLowerCase();
-    const type = $("type-filter").value, keyOnly = $("record-mode").value === "key", track = scope();
+    const type = $("type-filter").value, mode = $("record-mode").value, track = scope();
     const {order, tracks} = timeline();
     let candidates = order;
     if (query || type === "TRACE") {
@@ -608,11 +608,12 @@
     return candidates.filter(i => {
       const n = currentCapture.nodes[i];
       if ((track !== null && n.track !== track) || (type && n.type !== type)) return false;
+      if (mode === "error" && !eventState(n).failed) return false;
       if (query) {
         if (!searchable.has(n)) searchable.set(n, pretty(n).toLocaleLowerCase());
         return searchable.get(n).includes(query);
       }
-      return !keyOnly || n.level === "ERROR" || !["heartbeat", "healthcheck", "sandking_env.read"].includes(n.name);
+      return mode !== "key" || n.level === "ERROR" || !["heartbeat", "healthcheck", "sandking_env.read"].includes(n.name);
     });
   }
   function eventState(n) {

@@ -46,7 +46,7 @@ function boot() {
     const partNow = () => investigation?.item.fragments[investigation.index];
     const selectedIndex = () => currentCapture.nodes.indexOf(selectedNode);
     ${slice("  function rememberView()", "  const setDrawerWidth =")}
-    ${slice("  function clearRecordFilters()", "  function eventState(")}
+    ${slice("  function clearRecordFilters()", "  function previewText(")}
     ${slice("  function segmentMembership(", "  function fieldNotes(")}
     ${slice("  function buildDisplayRows(", "  function markVisibleRows(")}
     ${slice("  function selectAndScroll(", '  scroller.addEventListener("scroll"')}
@@ -61,6 +61,56 @@ function boot() {
 }
 const visible = rows => rows.filter(row => row.kind === "row").map(row => row.index);
 const retained = rows => rows.flatMap(row => row.kind === "row" ? [row.index] : row.kind === "fold" && !row.expanded ? row.indices : []);
+
+test("failure-only filtering matches error styling and combines with Trace, type and search", () => {
+  const app = boot();
+  app.capture.nodes[0].level = "error";
+  app.capture.nodes[2].output = {status: "failed"};
+  Object.assign(app.capture.nodes[3], {type: "TOOL", output: {success: false}});
+  app.capture.nodes[4].output = {error: "denied"};
+  app.capture.nodes[6].output = {message: "error is just text"};
+  app.capture.nodes[7].issue_ids = ["ISSUE-001"];
+  app.$("record-mode").value = "error";
+  app.context.renderTraces();
+  assert.deepEqual(visible(app.rows()), [0, 2, 3, 4]);
+  assert.equal(app.$("trace-count").textContent, "4 条");
+  app.$("trace-search").value = "read";
+  app.context.renderTraces();
+  assert.deepEqual(visible(app.rows()), [0, 2, 3, 4], "Search must not include matching normal Events");
+  app.$("type-filter").value = "EVENT";
+  app.context.renderTraces();
+  assert.deepEqual(visible(app.rows()), [0, 2, 4]);
+  app.$("trace-filter").value = "1";
+  app.context.renderTraces();
+  assert.deepEqual(visible(app.rows()), []);
+  assert.equal(app.$("trace-count").textContent, "0 条");
+  app.$("type-filter").value = "TOOL";
+  app.context.renderTraces();
+  assert.deepEqual(visible(app.rows()), [3]);
+  app.$("trace-filter").value = "";
+  app.context.clearRecordFilters();
+  app.context.renderTraces();
+  assert.deepEqual(visible(app.rows()), app.capture.timeline.order);
+});
+
+test("issue navigation restores failure-only filtering and fragment expansion cannot reveal normal Events", () => {
+  const app = boot();
+  for (const i of [2, 4, 7]) app.capture.nodes[i].level = "ERROR";
+  app.$("record-mode").value = "error";
+  app.context.renderTraces();
+  app.context.startIssue(app.item);
+  assert.equal(app.$("record-mode").value, "");
+  app.$("record-mode").value = "error";
+  app.context.renderTraces();
+  assert.deepEqual(visible(app.rows()), [2, 7]);
+  assert.deepEqual(retained(app.rows()), [2, 4, 7]);
+  app.context.expand(app.rows().find(row => row.kind === "fold").key);
+  assert.deepEqual(visible(app.rows()), [2, 4, 7]);
+  app.context.exitIssue();
+  assert.equal(app.$("record-mode").value, "error");
+  assert.deepEqual(visible(app.rows()), [2, 4, 7]);
+  assert.equal(app.$("trace-count").textContent, "3 条");
+});
 
 test("selecting an issue focuses all its fragments and preserves interleaved records", () => {
   const app = boot();
