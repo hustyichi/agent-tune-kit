@@ -10,7 +10,7 @@
   const section = (title, value) => { const node = el("section", undefined, "detail-section"); node.append(el("h3", title)); if (value !== undefined) node.append(pre(value)); return node; };
   const markdown = window.markdownit({html:false});
   markdown.renderer.rules.image = (tokens, index) => markdown.utils.escapeHtml(tokens[index].content);
-  const sourceLinks = new Map(Object.entries(data.diagnosis_source_links).map(([href, target]) => [markdown.normalizeLink(href), target]));
+  const sourceLinks = new Map(Object.entries(data.source_links).map(([href, target]) => [markdown.normalizeLink(href), target]));
   const options = (select, values, all) => { select.replaceChildren(); if (all !== undefined) { const item = el("option", all); item.value = ""; select.append(item); } for (const value of values) { const item = el("option", value); item.value = value; select.append(item); } };
   const references = value => { const result = []; const seen = new Set(); const walk = item => { if (Array.isArray(item)) item.forEach(walk); else if (item && typeof item === "object") { if (typeof item.path === "string" && typeof item.sha256 === "string") { const key = refKey(item); if (!seen.has(key)) { seen.add(key); result.push(item); } } else Object.values(item).forEach(walk); } }; walk(value); return result; };
   const RAIL_KEY = "atk-trace-rail-collapsed";
@@ -44,8 +44,8 @@
   };
   const progressOf = item => {
     const verified = item.changes.some(change => (change.verifications || []).length);
-    if (verified) return {label: "已验证", klass: "verified"};
-    if (item.changes.length) return {label: "已修改", klass: "changed"};
+    if (verified) return {label: "有验证记录", klass: "verified"};
+    if (item.changes.length) return {label: "有修改记录", klass: "changed"};
     if (item.diagnoses.length) return {label: "已诊断", klass: "diagnosed"};
     return {label: item.record.status || "待处理", klass: ""};
   };
@@ -170,28 +170,81 @@
       parent.append(link);
     }
   };
-  const recordCard = (title, record) => {
-    const card = section(title); card.classList.add("record");
-    if (record.error) card.append(el("p", record.error, "warning"));
-    const content = record.record || record.text;
-    if (content !== undefined) {
-      if (typeof content === "string") {
-        card.firstElementChild.classList.add("diagnosis-path");
-        card.append(renderDiagnosis(content));
-      } else {
-        const summary = [];
-        for (const key of ["status", "target_issues", "candidate_loaded"]) if (content[key] !== undefined) summary.push(`${key}: ${pretty(content[key])}`);
-        card.append(el("p", summary.join(" · "), "record-meta"));
-        if (content.candidate) card.append(section("候选身份", content.candidate));
-        if (content.execution) card.append(section("实际执行", content.execution));
-        if (content.conclusions) for (const [issueId, conclusion] of Object.entries(content.conclusions)) { const outcome = el("div", undefined, "outcome"); outcome.append(el("strong", `${issueId} · ${conclusion.outcome || "inconclusive"}`), el("span", conclusion.reason || "请阅读完整验证条件和依据。")); card.append(outcome); }
-        if (content.limitations && content.limitations.length) card.append(section("局限与未执行部分", content.limitations));
-        const details = el("details"); details.append(el("summary", "展开完整记录"), pre(content)); card.append(details);
+  const textPresent = value => typeof value === "string" && value.trim();
+  const textItems = value => (Array.isArray(value) ? value : [value]).filter(textPresent);
+  const recordTime = record => {
+    const date = new Date(record?.created_at);
+    return Number.isNaN(date.getTime()) ? "时间未记录" : date.toLocaleString("zh-CN", {hour12:false});
+  };
+  const stateLabel = status => ({running:"进行中", completed:"已完成", failed:"失败", blocked:"受阻", interrupted:"已中断"})[status] || "状态未记录";
+  const proseSection = (title, value, missing) => {
+    const box = section(title), items = textItems(value);
+    if (items.length === 1) box.append(el("p", items[0]));
+    else if (items.length) {
+      const list = el("ul");
+      for (const item of items) list.append(el("li", item));
+      box.append(list);
+    } else box.append(el("p", missing, "muted"));
+    return box;
+  };
+  const changeCard = change => {
+    const record = change.record || {};
+    const card = section(`修改 · ${recordTime(record)}`); card.classList.add("stage-record");
+    card.append(el("p", `修改${stateLabel(record.status)} · 效果另见实际验证`, "record-meta"));
+    if (change.error) card.append(el("p", "修改记录不可读取，请检查本地归档。", "warning"));
+    const entries = Array.isArray(record.change_summary) ? record.change_summary : [];
+    if (!entries.length) card.append(el("p", "未记录实际修改及原因的摘要。原方案不能作为已完成修改的依据；请在本地核对归档。", "muted"));
+    for (const entry of entries) {
+      const item = el("div", undefined, "change-item");
+      item.append(proseSection("修改了什么", entry?.what, "未记录实际修改说明。"));
+      item.append(proseSection("为什么修改", entry?.why, "未记录与根因对应的修改理由。"));
+      for (const path of textItems(entry?.files)) {
+        const target = sourceLinks.get(markdown.normalizeLink(path));
+        let label = path;
+        try { label = decodeURI(path); } catch { /* Keep malformed escapes as text. */ }
+        const row = el("p", undefined, "source-file");
+        if (target && location.protocol === "file:") {
+          const link = el("a", label); link.href = target; link.target = "_blank"; link.rel = "noopener noreferrer";
+          row.append(link);
+        } else row.append(el("span", `${label}（${target ? "请从本地预览打开" : "文件不存在或不在可链接范围"}）`, "muted"));
+        item.append(row);
       }
+      card.append(item);
     }
-    appendReferences(card, record);
+    card.append(proseSection("待验证内容", record.remaining_verification, "未记录待验证行为与成功条件。"));
     return card;
   };
+  const verificationCard = (verification, issueId) => {
+    const record = verification.record || {}, summary = record.verification_summary || {};
+    const card = section(`验证 · ${recordTime(record)}`); card.classList.add("stage-record");
+    card.append(el("p", `执行${stateLabel(record.status)}`, "record-meta"));
+    if (verification.error) card.append(el("p", "验证记录不可读取，请检查本地归档。", "warning"));
+    const conclusion = record.conclusions?.[issueId];
+    const outcome = el("div", undefined, "outcome");
+    const label = {pass:"通过", fail:"未通过", inconclusive:"证据不足，尚不能确认修复效果"}[conclusion?.outcome];
+    outcome.append(el("strong", `效果结论：${label || "尚无结论"}`));
+    if (textPresent(conclusion?.reason)) outcome.append(el("p", conclusion.reason));
+    card.append(outcome);
+    card.append(proseSection("如何验证", summary.method || record.execution?.method, "未记录简短的验证方法与执行范围。"));
+    card.append(proseSection("样本口径", summary.sample_scope, "未记录新增与累计样本的关系；请勿直接合计各次结果。"));
+    card.append(proseSection("观察结果", summary.observations, "未记录观察结果摘要，请在本地核对执行材料。"));
+    card.append(proseSection("局限与未覆盖范围", record.limitations,
+      Array.isArray(record.limitations) ? "未声明额外局限；结论仅适用于上述验证范围。" : "未记录验证局限，不代表已完整验证。"));
+    return card;
+  };
+  function appendVerifications(item) {
+    const container = $("drawer-content");
+    let count = 0;
+    for (const change of item.changes) {
+      if (!change.verifications?.length) continue;
+      const group = section(`对应修改 · ${recordTime(change.record)}`);
+      for (const verification of change.verifications) {
+        group.append(verificationCard(verification, item.record.id)); count++;
+      }
+      container.append(group);
+    }
+    if (!count) container.append(el("p", "尚未记录实际验证；不能据修改完成判断问题已经解决。", "empty"));
+  }
   function appendDiagnoses(item) {
     const container = $("drawer-content");
     if (!item.diagnoses.length) {
@@ -348,17 +401,9 @@
       appendDiagnoses(item);
     } else if (stage === "changes") {
       if (!item.changes.length) $("drawer-content").append(el("p", "尚未记录实际修改。局部检查不代表 Agent 效果验证。", "empty"));
-      for (const change of item.changes) $("drawer-content").append(recordCard(change.reference.path, change));
+      for (const change of item.changes) $("drawer-content").append(changeCard(change));
     } else {
-      const seen = new Set(); let count = 0;
-      for (const change of item.changes) for (const verification of change.verifications || []) {
-        const key = refKey(verification.reference);
-        if (!seen.has(key)) {
-          seen.add(key); count++;
-          $("drawer-content").append(recordCard(verification.reference.path, verification));
-        }
-      }
-      if (!count) $("drawer-content").append(el("p", "尚未记录实际验证；不能据修改完成判断问题已经解决。", "empty"));
+      appendVerifications(item);
     }
   };
   function pickFromLane(index) {

@@ -93,6 +93,8 @@ def test_trace_cli_records_real_session_without_batch_outputs(tmp_path, monkeypa
             "status": "completed",
             "candidate": {"sha256": "test-candidate-identity"},
             "diff": "synthetic fixture: restore the expected message selection",
+            "change_summary": [{"what": "Restore message selection", "why": "The wrong branch was selected"}],
+            "remaining_verification": ["Check the selected message."],
         },
     )
     change = invoke(capsys, *change_args)
@@ -122,6 +124,11 @@ def test_trace_cli_records_real_session_without_batch_outputs(tmp_path, monkeypa
                 issue_id: {"outcome": "inconclusive", "reason": "Fixture validates recording; no Agent was executed."}
             },
             "limitations": ["No business verification"],
+            "verification_summary": {
+                "method": "Exercise the record lifecycle using a synthetic fixture.",
+                "sample_scope": "No Agent runs; one CLI fixture.",
+                "observations": ["The fixture completed."],
+            },
         },
     )
     final = invoke(capsys, *verify_args)

@@ -407,6 +407,51 @@ def _sync_change_links(session_dir, owner, change):
             write_manifest(_issue_path(session_dir, issue_id), issue)
 
 
+def _summary_text(value):
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _summary_list(value, *, allow_empty=False):
+    return isinstance(value, list) and (allow_empty or bool(value)) and all(_summary_text(item) for item in value)
+
+
+def _validate_change_summary(change):
+    if "change_summary" in change or change["status"] == "completed":
+        summary = change.get("change_summary")
+        if (
+            not isinstance(summary, list)
+            or not summary
+            or any(
+                not isinstance(item, dict)
+                or not _summary_text(item.get("what"))
+                or not _summary_text(item.get("why"))
+                or not _summary_list(item.get("files", []), allow_empty=True)
+                for item in summary
+            )
+        ):
+            raise UserActionRequired("change_summary needs actual changes with nonempty what/why and optional files.")
+    if ("remaining_verification" in change or change["status"] == "completed") and not _summary_list(
+        change.get("remaining_verification")
+    ):
+        raise UserActionRequired("remaining_verification must list specific behavior still to verify.")
+
+
+def _validate_verification_summary(result):
+    if "verification_summary" in result or result["status"] != "running":
+        summary = result.get("verification_summary")
+        if (
+            not isinstance(summary, dict)
+            or not _summary_text(summary.get("method"))
+            or not _summary_text(summary.get("sample_scope"))
+            or not _summary_list(summary.get("observations"))
+        ):
+            raise UserActionRequired("verification_summary needs method, sample_scope and nonempty observations.")
+    if ("limitations" in result or result["status"] != "running") and not _summary_list(
+        result.get("limitations"), allow_empty=True
+    ):
+        raise UserActionRequired("limitations must be a list of concise statements (empty when none are known).")
+
+
 @_locked_write
 def save_change(session_dir, issue_id, data):
     directory = Path(session_dir)
@@ -448,6 +493,7 @@ def save_change(session_dir, issue_id, data):
         raise UserActionRequired("A completed change needs actual candidate identity and a recorded diff.")
     if not previous and change["status"] != "running":
         raise UserActionRequired("Save a running change before applying the implementation.")
+    _validate_change_summary(change)
     for field in ("verifications", "schema_version", "owner_issue", "created_at"):
         if field in data and (not previous or data[field] != previous.get(field)):
             raise UserActionRequired(f"Change {field} is managed by its dedicated operation.")
@@ -517,6 +563,7 @@ def save_verification(session_dir, issue_id, change_id, data):
             raise UserActionRequired("Unverified candidate loading requires an inconclusive effect judgment.")
     if result["status"] == "completed" and not result["execution"]:
         raise UserActionRequired("Completed verification needs actual execution details.")
+    _validate_verification_summary(result)
     result.update(
         change=evidence_ref(directory, _change_path(directory, issue_id, change_id).relative_to(directory).as_posix()),
         schema_version=1,

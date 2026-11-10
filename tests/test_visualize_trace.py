@@ -1,6 +1,8 @@
 import hashlib
 import json
 import re
+import shutil
+import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import quote
@@ -15,6 +17,22 @@ from agent_tune_kit.visualize import trace
 
 SOURCE = {"type": "local", "instance": "synthetic", "project": "demo", "environment": "test"}
 SESSION_ID = "SESSION-synthetic"
+
+
+def test_stage_cards_render_concise_evidence_without_raw_records():
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("Node is required for the dependency-free renderer check")
+    subprocess.run([node, str(Path(__file__).with_name("trace-stage-cards.cjs"))], check=True)
+
+
+def test_record_order_uses_instants_not_random_ids_or_timezone_strings():
+    entries = [
+        {"record": {"id": "VER-a", "created_at": "2026-01-01T00:30:00Z"}},
+        {"record": {"id": "VER-b", "created_at": "unknown"}},
+        {"record": {"id": "VER-z", "created_at": "2026-01-01T08:00:00+08:00"}},
+    ]
+    assert [item["record"]["id"] for item in sorted(entries, key=trace._record_time)] == ["VER-z", "VER-a", "VER-b"]
 
 
 def capture(project, capture_id="CAP-001", *, observations=2):
@@ -161,10 +179,35 @@ Mismatch.
 Preserve punctuation.
 """
     records.save_diagnosis(session_dir, "ISSUE-001", body)
+    changed_file = project / "src" / "changed.py"
+    changed_file.write_text("# changed", encoding="utf-8")
+    records.save_change(
+        session_dir,
+        "ISSUE-001",
+        {
+            "status": "running",
+            "before": {"commit": "base"},
+            "change_summary": [
+                {
+                    "what": "Update greeting selection.",
+                    "why": "The original selector ignored the request.",
+                    "files": [
+                        "src/changed.py#L1",
+                        relative,
+                        "escape.py",
+                        "../private.py",
+                        ".private.py",
+                        "missing.py",
+                        "https://example.com",
+                    ],
+                }
+            ],
+        },
+    )
     output = project / "review" / "preview.html"
     trace.generate_trace(project, session_id=SESSION_ID, output_path=output, open_browser=False)
-    links = payload(output.read_text())["diagnosis_source_links"]
-    assert links == {relative: f"../{relative}", legacy: f"../{relative}"}
+    links = payload(output.read_text())["source_links"]
+    assert links == {relative: f"../{relative}", legacy: f"../{relative}", "src/changed.py#L1": "../src/changed.py#L1"}
 
 
 def test_all_issue_stages_and_shared_change_show_each_verification(tmp_path):
@@ -206,9 +249,11 @@ def test_all_issue_stages_and_shared_change_show_each_verification(tmp_path):
             "status": "completed",
             "candidate": {"commit": "synthetic-candidate"},
             "diff": {"summary": "Use the requested greeting"},
+            "change_summary": [{"what": "Use the requested greeting", "why": "Request selection was ignored"}],
+            "remaining_verification": ["Return the requested greeting."],
         },
     )
-    for number, outcome in ((1, "fail"), (2, "pass")):
+    for number, outcome in ((2, "fail"), (1, "pass")):
         verification_id = f"VER-{number:03}"
         started = records.save_verification(
             session_dir,
@@ -226,6 +271,12 @@ def test_all_issue_stages_and_shared_change_show_each_verification(tmp_path):
                 "status": "completed",
                 "candidate_loaded": True,
                 "loading_evidence": ["synthetic-candidate was loaded"],
+                "verification_summary": {
+                    "method": "Run both issue cases with the fixed candidate.",
+                    "sample_scope": "Two new cases; no prior samples included.",
+                    "observations": [f"Both cases {outcome}."],
+                },
+                "limitations": [],
                 "conclusions": {
                     issue: {"outcome": outcome, "reason": "synthetic test result"}
                     for issue in ("ISSUE-001", "ISSUE-002")

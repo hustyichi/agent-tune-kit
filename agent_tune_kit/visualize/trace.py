@@ -90,6 +90,16 @@ def _locate_evidence(captures, references, issues):
             ancestor = ancestor.rpartition("/")[0]
 
 
+def _record_time(item):
+    try:
+        stamp = datetime.fromisoformat(item["record"]["created_at"].replace("Z", "+00:00"))
+        if stamp.tzinfo is not None:
+            return stamp.timestamp()
+    except (KeyError, TypeError, ValueError, AttributeError, OverflowError):
+        pass
+    return float("inf")
+
+
 def build_trace_data(project_root, *, session_id, source=None):
     """Build a disposable view without writing or changing any saved conclusion."""
     from agent_tune_kit.traces import query, records, store
@@ -175,9 +185,11 @@ def build_trace_data(project_root, *, session_id, source=None):
                                     "error": str(exc),
                                 }
                             )
+                    changed["verifications"].sort(key=_record_time)
                     item["changes"].append(changed)
                 except (OSError, ValueError, UserActionRequired, KeyError, TypeError) as exc:
                     item["changes"].append({"reference": ref, "error": str(exc)})
+            item["changes"].sort(key=_record_time)
             issues.append(item)
         except (OSError, ValueError, UserActionRequired) as exc:
             warnings.append(f"Issue {path.parent.name}: {exc}")
@@ -267,41 +279,49 @@ def build_trace_data(project_root, *, session_id, source=None):
     }
 
 
-def _diagnosis_source_links(issues, project_root, output):
+def _source_links(issues, project_root, output):
     root = Path(project_root).resolve()
     links = {}
+    destinations = []
     for item in issues:
         for diagnosis in item["diagnoses"]:
             # The renderer uses markdown-it to decide which destinations actually become links.
-            for match in INLINE_LINK.finditer(diagnosis.get("text", "")):
-                destination = match[1] or match[2]
-                try:
-                    url = urlsplit(destination)
-                    if url.scheme or url.netloc or url.query or not url.path:
-                        continue
-                    path = unquote(url.path)
-                    line = url.fragment
-                    if path.startswith("/") and not line:
-                        legacy = re.fullmatch(r"(.+):([1-9][0-9]*)", path)
-                        if legacy:
-                            path, line = legacy[1], f"L{legacy[2]}"
-                    if line and not re.fullmatch(r"L[1-9][0-9]*", line):
-                        continue
-                    candidate = root / path
-                    original = candidate.relative_to(root)
-                    resolved = candidate.resolve(strict=True)
-                    relative = resolved.relative_to(root)
-                    if any(part.startswith(".") for part in (*original.parts, *relative.parts)):
-                        continue
-                    if not resolved.is_file():
-                        continue
-                except (OSError, RuntimeError, ValueError):
-                    continue
-                try:
-                    target = quote(Path(os.path.relpath(resolved, output.parent.resolve())).as_posix(), safe="/")
-                except ValueError:
-                    target = resolved.as_uri()
-                links[destination] = target + (f"#{line}" if line else "")
+            destinations.extend(match[1] or match[2] for match in INLINE_LINK.finditer(diagnosis.get("text", "")))
+        for change in item["changes"]:
+            summary = change.get("record", {}).get("change_summary", [])
+            if isinstance(summary, list):
+                for entry in summary:
+                    files = entry.get("files", []) if isinstance(entry, dict) else []
+                    if isinstance(files, list):
+                        destinations.extend(path for path in files if isinstance(path, str))
+    for destination in destinations:
+        try:
+            url = urlsplit(destination)
+            if url.scheme or url.netloc or url.query or not url.path:
+                continue
+            path = unquote(url.path)
+            line = url.fragment
+            if path.startswith("/") and not line:
+                legacy = re.fullmatch(r"(.+):([1-9][0-9]*)", path)
+                if legacy:
+                    path, line = legacy[1], f"L{legacy[2]}"
+            if line and not re.fullmatch(r"L[1-9][0-9]*", line):
+                continue
+            candidate = root / path
+            original = candidate.relative_to(root)
+            resolved = candidate.resolve(strict=True)
+            relative = resolved.relative_to(root)
+            if any(part.startswith(".") for part in (*original.parts, *relative.parts)):
+                continue
+            if not resolved.is_file():
+                continue
+        except (OSError, RuntimeError, ValueError):
+            continue
+        try:
+            target = quote(Path(os.path.relpath(resolved, output.parent.resolve())).as_posix(), safe="/")
+        except ValueError:
+            target = resolved.as_uri()
+        links[destination] = target + (f"#{line}" if line else "")
     return links
 
 
@@ -321,7 +341,7 @@ def generate_trace(project_root=".", *, session_id, source=None, output_path=Non
         )
     if output.exists() and not overwrite:
         raise UserActionRequired(f"Trace preview already exists: {output}; use --overwrite to regenerate it.")
-    data["diagnosis_source_links"] = _diagnosis_source_links(data["issues"], project_root, output)
+    data["source_links"] = _source_links(data["issues"], project_root, output)
     template = ASSETS.joinpath("page.html").read_text(encoding="utf-8")
     page = template.replace("__STYLES__", ASSETS.joinpath("styles.css").read_text(encoding="utf-8"))
     page = page.replace("__LANES__", neutralize_script_close(ASSETS.joinpath("lanes.js").read_text(encoding="utf-8")))

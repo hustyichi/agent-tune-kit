@@ -7,6 +7,7 @@ from agent_tune_kit.errors import UserActionRequired
 from agent_tune_kit.traces.records import (
     load_change,
     load_issue,
+    load_verification,
     save_change,
     save_detection,
     save_diagnosis,
@@ -15,6 +16,13 @@ from agent_tune_kit.traces.records import (
     status,
 )
 from agent_tune_kit.traces.store import create_capture, evidence_ref, load_session, validate_ref
+
+CHANGE_SUMMARY = [{"what": "Select the requested greeting.", "why": "The old branch ignored the request."}]
+VERIFICATION_SUMMARY = {
+    "method": "Run the greeting case against the fixed candidate.",
+    "sample_scope": "One new case in this run; no prior samples included.",
+    "observations": ["The actual greeting was recorded."],
+}
 
 
 @pytest.fixture
@@ -55,6 +63,8 @@ def new_change(archive, targets=None):
             "status": "completed",
             "candidate": {"git_head": "def", "diff_sha256": "123"},
             "diff": "+ corrected implementation",
+            "change_summary": CHANGE_SUMMARY,
+            "remaining_verification": ["Confirm the requested greeting is returned."],
         },
     )
     return issue, completed
@@ -198,6 +208,8 @@ def test_verifications_remain_independent_and_do_not_rewrite_candidate(archive):
                 "revision": running["revision"],
                 "status": "completed",
                 "execution": {"command": "run agent", "run_id": outcome},
+                "verification_summary": VERIFICATION_SUMMARY,
+                "limitations": [],
                 "candidate_loaded": True,
                 "loading_evidence": ["Loaded artifact digest def from /agent/runtime."],
                 "conclusions": {issue["id"]: {"outcome": outcome, "reason": "Observed output."}},
@@ -227,6 +239,8 @@ def test_missing_loading_is_inconclusive_and_new_identity_preserved(archive):
         "revision": running["revision"],
         "status": "completed",
         "execution": {"command": "run agent", "session_id": "actual-new-session"},
+        "verification_summary": VERIFICATION_SUMMARY,
+        "limitations": ["Candidate loading is unknown."],
         "candidate_loaded": False,
         "conclusions": {issue["id"]: {"outcome": "pass", "reason": "Different output."}},
     }
@@ -339,3 +353,102 @@ except UserActionRequired as exc:
     assert stale.returncode == 2
     assert "revision" in stale.stdout
     assert load_issue(directory, issue["id"])["title"] == "Authoritative update"
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("change_summary", None),
+        ("change_summary", []),
+        ("change_summary", [{"what": "Change without a reason"}]),
+        ("change_summary", [{"what": "  ", "why": "A reason"}]),
+        ("change_summary", [{"what": "Change", "why": "Reason", "files": {"path": "src.py"}}]),
+        ("remaining_verification", []),
+        ("remaining_verification", [" "]),
+    ],
+)
+def test_change_summary_rejected_without_mutation(archive, field, value):
+    directory, _, _ = archive
+    issue = new_issue(archive)
+    save_diagnosis(directory, issue["id"], "Cause and plan")
+    run = save_change(directory, issue["id"], {"status": "running", "before": {"head": "abc"}})
+    before = Path(run["path"]).read_bytes()
+    data = {
+        "id": run["id"],
+        "revision": run["revision"],
+        "status": "completed",
+        "candidate": {"head": "def"},
+        "diff": "+fix",
+        "change_summary": CHANGE_SUMMARY,
+        "remaining_verification": ["Check the requested greeting."],
+        field: value,
+    }
+    with pytest.raises(UserActionRequired, match=field):
+        save_change(directory, issue["id"], data)
+    assert Path(run["path"]).read_bytes() == before
+
+
+@pytest.mark.parametrize("state", ["completed", "failed", "blocked", "interrupted"])
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("verification_summary", None),
+        ("verification_summary", {**VERIFICATION_SUMMARY, "method": ""}),
+        ("verification_summary", {**VERIFICATION_SUMMARY, "observations": []}),
+        ("verification_summary", {**VERIFICATION_SUMMARY, "sample_scope": ""}),
+        ("limitations", "unstructured"),
+    ],
+)
+def test_finished_verification_requires_summary_without_mutation(archive, state, field, value):
+    directory, _, _ = archive
+    issue, change = new_change(archive)
+    run = save_verification(directory, issue["id"], change["id"], {"status": "running", "execution": {"scope": "test"}})
+    before = Path(run["path"]).read_bytes()
+    data = {
+        "id": run["id"],
+        "revision": run["revision"],
+        "status": state,
+        "conclusions": {issue["id"]: {"outcome": "inconclusive", "reason": "Insufficient evidence"}},
+        "verification_summary": VERIFICATION_SUMMARY,
+        "limitations": [],
+        field: value,
+    }
+    with pytest.raises(UserActionRequired, match=field):
+        save_verification(directory, issue["id"], change["id"], data)
+    assert Path(run["path"]).read_bytes() == before
+
+
+def test_legacy_records_without_summaries_remain_readable_and_immutable(archive):
+    directory, _, _ = archive
+    issue, change = new_change(archive)
+    path = Path(change["path"])
+    legacy = json.loads(path.read_text())
+    del legacy["change_summary"]
+    legacy["remaining_verification"] = "Legacy pending check."
+    path.write_text(json.dumps(legacy))
+    before = path.read_bytes()
+    assert load_change(directory, issue["id"], change["id"])["remaining_verification"] == "Legacy pending check."
+    with pytest.raises(UserActionRequired, match="immutable"):
+        save_change(
+            directory,
+            issue["id"],
+            {"id": change["id"], "revision": change["revision"], "change_summary": CHANGE_SUMMARY},
+        )
+    run = save_verification(directory, issue["id"], change["id"], {"status": "running", "execution": {"scope": "test"}})
+    result_path = Path(run["path"])
+    legacy_result = json.loads(result_path.read_text())
+    legacy_result.update(
+        status="completed", conclusions={issue["id"]: {"outcome": "inconclusive", "reason": "Unknown"}}
+    )
+    result_path.write_text(json.dumps(legacy_result))
+    saved = result_path.read_bytes()
+    assert load_verification(directory, issue["id"], change["id"], run["id"])["status"] == "completed"
+    with pytest.raises(UserActionRequired, match="immutable"):
+        save_verification(
+            directory,
+            issue["id"],
+            change["id"],
+            {"id": run["id"], "revision": run["revision"], "verification_summary": VERIFICATION_SUMMARY},
+        )
+    assert path.read_bytes() == before
+    assert result_path.read_bytes() == saved

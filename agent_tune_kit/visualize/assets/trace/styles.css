@@ -248,6 +248,13 @@ pre { background: var(--bg); border-radius: 6px; padding: 8px 12px; font-size: 1
 .stage-tabs .active { color: var(--accent); border-color: var(--brand); background: var(--tint) }
 .outcome { border-left: 2px solid var(--brand); padding-left: 8px }
 .outcome strong { display: block }
+.stage-record { line-height: 1.65; overflow-wrap: anywhere }
+.stage-record p, .stage-record ul { margin-block: 6px }
+.stage-record ul { padding-inline-start: 22px }
+.stage-record li + li { margin-top: 6px }
+.change-item { border-bottom: 1px solid var(--line); padding-bottom: 8px }
+.change-item .detail-section { border: 0; padding: 0; margin-block: 12px }
+.source-file { font-size: 12px }
 .drawer-search { width: 100%; margin-bottom: 8px }
 .copy-ref { font-size: 12px }
 

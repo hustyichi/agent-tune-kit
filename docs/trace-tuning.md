@@ -146,8 +146,8 @@ The following are host-produced records, not automatic CLI diagnoses. Each `--da
 | `atk trace issue --session-id ID --data FILE --json` | `title`, `description`; optional `selection_reason` (nonempty string), `segments`, top-level `evidence`, stable `id`, `status`, `notes`; updates include `revision`. `--dry-run` validates and reports covered nodes without writing |
 | `atk trace detect --session-id ID --data FILE --json` | nonempty `scope` describing inspected and unread material, actual `status`, `gaps: []`; inputs bind current file digests; updates include `id`/`revision` |
 | `atk trace diagnose --session-id ID --issue-id ISSUE --file MD --json` | Markdown combining observed issue/evidence, facts/hypotheses, cause, repair/verification plan and gaps; optional `--diagnosis-id`. Markdown may cite `ISSUE-001/S2` |
-| `atk trace change --session-id ID --issue-id ISSUE --data FILE --json` | Begin with `status: "running"`, nonempty `before` identifying actual baseline and adopted `diagnoses`; finish with same `id`/`revision`, actual `candidate`, `diff`, `checks: []` and `status: "completed"` |
-| `atk trace verify --session-id ID --issue-id OWNER --change-id CHANGE --data FILE --json` | Begin with actual intended `execution` and `status: "running"`; finish same `id`/`revision`, actual status, `candidate_loaded`, `loading_evidence`, `execution`, `conclusions`, `limitations`, `evidence` |
+| `atk trace change --session-id ID --issue-id ISSUE --data FILE --json` | Begin with `status: "running"`, nonempty `before` identifying actual baseline and adopted `diagnoses`; finish with same `id`/`revision`, actual `candidate`, `diff`, `checks: []`, `change_summary`, `remaining_verification` and `status: "completed"` |
+| `atk trace verify --session-id ID --issue-id OWNER --change-id CHANGE --data FILE --json` | Begin with actual intended `execution` and `status: "running"`; finish same `id`/`revision`, actual status, `candidate_loaded`, `loading_evidence`, `execution`, `verification_summary`, `conclusions`, `limitations`, `evidence` |
 
 Detection selects findings before creating Issues. The selection policy lives in [atk-trace-detect](../skills/atk-trace-detect/SKILL.md#which-findings-to-retain). Detection writes `selection_reason` to explain why an issue warrants investigation. The title and description first state a concrete, evidence-backed mismatch understandable without the trace, then add impact/recovery, relevant recurrence, implementation leads and unresolved questions. The [description guidance](../skills/atk-trace-detect/SKILL.md#write-a-recognizable-problem) defines the host's semantic check. The CLI validates record shape, not semantic quality. The reason remains optional for compatibility; omission during an update preserves it. Revisions retain the previous reason in history, and new diagnoses snapshot the reason when present.
 
@@ -215,6 +215,42 @@ A verification conclusion has this shape:
 
 Outcomes are `pass`, `fail` and `inconclusive`; execution state is separate. Candidate loading and critical comparison conditions must be established before attributing effects to the change. Local checks establish their own narrower scope, not complete Agent success. Judge every target issue separately and retain every attempt, including failed and interrupted ones.
 
+### Concise change and verification summaries
+
+New completed changes require `change_summary`, a nonempty list pairing actual changes with their causal reasons, and `remaining_verification`, a nonempty list of observable checks still needed. For example:
+
+```json
+{
+  "change_summary": [{
+    "what": "Resolve project reads against the prepared absolute root.",
+    "why": "Preparation does not change the shell directory, so relative reads can target the wrong location.",
+    "files": ["src/projectPreparation.ts#L40"]
+  }],
+  "remaining_verification": ["Confirm both target files are read successfully on the first attempt in a full Agent replay."]
+}
+```
+
+`what` and `why` are nonempty strings. `files` is optional and contains source destinations relative to the project root, with optional `#L<number>` anchors; URL-encode spaces and literal `#` characters in paths. Existing absolute source links are also supported. The preview links only existing, non-hidden files inside the project; invalid or unavailable destinations remain labeled text. Links point to current local files, not frozen source snapshots.
+
+Every new finished verification (including failed, blocked or interrupted execution) requires `verification_summary` and a `limitations` list:
+
+```json
+{
+  "verification_summary": {
+    "method": "Compare baseline and candidate tool proposals at two historical checkpoints; no shell commands executed.",
+    "sample_scope": "8 new requests; the reported 12 requests include the prior attempt's 4 requests.",
+    "observations": ["At the first checkpoint, root-bound proposals increased from 0/3 to 1/3."]
+  },
+  "limitations": ["Actual first-read success and retry counts were not observed."]
+}
+```
+
+`method` and `sample_scope` are nonempty strings; `observations` is a nonempty string list. State zero/unexecuted samples honestly when blocked; do not invent results to fill fields. `limitations` may be empty when no additional limitations are known. A running record can omit summaries; supplied summary fields are validated. Existing `conclusions[issue_id]` remains the authority for the effect outcome and its reason. Summaries do not replace raw execution details, candidate identity, diffs or evidence in the archive.
+
+The host checks each change against the actual diff and adopted cause, and each observation against executed work and outputs. Use short sentences focused on one fact or causal relationship; retain uncertainty, negation, scope and denominators. Do not copy long Prompt/code/diagnosis/log excerpts, expose hashes or candidate versions in summary prose, or use character truncation as a substitute for summarization. Schema checks validate structure, not semantic accuracy.
+
+Old schema-version-1 records remain readable without summaries. Their preview shows only existing fields with clear meaning and labels missing explanations; `proposal` is never promoted to an actual change. Completed records remain immutable. Do not rewrite their bytes, fabricate a new verification, or derive causal summaries in the browser to improve presentation.
+
 Record running state before operations. Recovery checks actual Git/file state, process/run identities, logs and artifacts: `running` does not prove nothing happened. Never repeat a potentially completed operation blindly. Verification does not silently modify the candidate or begin another optimization. Keep diagnosis answers, expected results and hidden assertions outside tested Agent input. New validation Session/Trace IDs belong to verification evidence, not captures of the investigated historical session; local tests need no invented session.
 
 ## Browse offline
@@ -240,6 +276,8 @@ The page opens on the complete session. Layout: a collapsible issue rail on the 
 Select an Issue in the left rail (or a segment under it). Recorded segments overlay as bands on their own Trace rows; the Event list inserts segment headers and can fold the gaps between them. Cross-Trace retries stay as separate segments with the idle gap preserved. Issues without `segments` show evidence as single points labeled “未圈定范围”; the page does not invent ranges. Row badges mark Events cited by any Issue.
 
 Open an Event to inspect it in the overlay drawer (structured messages, paired tool calls, JSON tree, cited fields, copyable reference). Arrow keys move to the previous or next Event while the drawer stays open. Open Issue detail from the rail for diagnoses, changes and verifications; Markdown cites such as `ISSUE-001/S2` jump to that segment. **会话信息** in the top bar covers source, capture scope and detection coverage. Hash deep links (`#issue=…&seg=…`, `#event=…`) restore position. The page stays offline and read-only. Regenerate it to see subsequent archive changes. Field previews can be truncated and are labeled accordingly. Layout details are in [trace-swimlane-design.md](trace-swimlane-design.md).
+
+**修改候选** presents actual changes, paired reasons and pending verification, with optional source links. **实际验证** groups attempts by their change, orders records by creation time (displayed in the viewer's local timezone), and separates execution status from the current issue's effect conclusion. Undated records appear last. Sample scope is shown per attempt; the page does not sum cumulative samples. These two views contain no diff, candidate version/hash, raw JSON, collapsed technical record or recursive attachment list. Full technical records remain in the local archive. “有验证记录” in the issue rail means an attempt was recorded, not that the repair passed.
 
 The diagnosis tab shows the latest structured diagnosis under Issue description, Root cause and Minimal fix. For a legacy diagnosis, the tab starts with the saved issue description and segment links. Earlier and legacy Markdown is available in collapsed records. Select an inline segment citation to inspect its evidence, then choose **返回诊断** to continue reading. Exact references and digests are available in the archive.
 
