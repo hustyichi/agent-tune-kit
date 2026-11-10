@@ -31,12 +31,14 @@ function boot() {
     window: {scrollY: 17, scrollTo(_x, y) { this.scrollY = y; }},
     swim: {snapshot: () => ({top: 9}), restore() {}, select() {}, scrollSelected() {}},
     chooseCapture() {}, drawLanes() {}, paintWindow() {}, syncRailSelection() {}, syncHash() {},
+    closeDrawer() { $("drawer").hidden = true; },
+    openEventDrawer(node) { context.openedNode = node; },
     showIssue(issue) { context.openedIssue = issue.record.id; },
     evidenceRefAt: (_item, pos) => ({pointer: `/evidence/${pos}`}),
     openReference(ref) { context.openedReference = ref; },
   });
   vm.runInContext(`
-    let currentCapture = data.captures[0], investigation = null, scopeBefore = null, previewIssue = null;
+    let currentCapture = data.captures[0], investigation = null, scopeBefore = null, previewIssue = null, eventFocus = null;
     let selectedNode = null, expandedFolds = new Set(), activeIssue = null, issueStage = null;
     let streamRows = [], displayRows = [], displayedScope = null;
     const filters = ["trace-filter", "type-filter", "trace-search", "record-mode"];
@@ -46,6 +48,7 @@ function boot() {
     const partNow = () => investigation?.item.fragments[investigation.index];
     const selectedIndex = () => currentCapture.nodes.indexOf(selectedNode);
     ${slice("  function rememberView()", "  const setDrawerWidth =")}
+    ${slice("  function pickFromLane(", "  function navigateNode(")}
     ${slice("  function clearRecordFilters()", "  function previewText(")}
     ${slice("  function segmentMembership(", "  function fieldNotes(")}
     ${slice("  function buildDisplayRows(", "  function markVisibleRows(")}
@@ -53,7 +56,7 @@ function boot() {
     ${slice("  function renderTraces(", "  function chooseCapture(")}
     ${slice("  function showFragmentBar()", "  function showFragmentEvidence()")}
     ${slice("  function exitIssue()", "  function syncRailSelection()")}
-    this.inspect = () => ({displayRows, selected: selectedIndex(), investigation});
+    this.inspect = () => ({displayRows, selected: selectedIndex(), investigation, eventFocus});
     this.expand = key => { expandedFolds.add(key); renderTraces(); };
   `, context);
   context.renderTraces();
@@ -61,6 +64,82 @@ function boot() {
 }
 const visible = rows => rows.filter(row => row.kind === "row").map(row => row.index);
 const retained = rows => rows.flatMap(row => row.kind === "row" ? [row.index] : row.kind === "fold" && !row.expanded ? row.indices : []);
+
+test("grouped events reuse the list, keep exact membership and restore prior filters and position", () => {
+  const app = boot();
+  app.capture.nodes[0].level = "ERROR";
+  app.$("record-mode").value = "error";
+  app.$("trace-search").value = "read";
+  app.context.selectAndScroll(0);
+  app.context.renderTraces(80);
+  app.capture.nodes[2].at = app.capture.nodes[1].at;
+  app.capture.nodes[4].branch = "child";
+  app.context.focusEvents([0, 2]);
+  assert.deepEqual(visible(app.rows()), [0, 2], "Concurrent and child events outside the clicked group stay excluded");
+  assert.equal(app.$("records-title").textContent, "事件 · T0");
+  assert.equal(app.$("event-range").textContent, "所选时段 0 – 2500");
+  assert.equal(app.$("trace-count").textContent, "2 条事件");
+  assert.equal(app.$("event-reset").textContent, "返回筛选结果");
+  assert.equal(app.$("drawer").hidden, true);
+  assert.equal(app.context.inspect().selected, -1, "Opening a group must not select or open its first event");
+  app.$("record-mode").value = "error";
+  app.context.renderTraces();
+  assert.deepEqual(visible(app.rows()), [0]);
+  assert.equal(app.$("trace-count").textContent, "1 / 2 条事件");
+  app.$("trace-search").value = "no match";
+  app.context.renderTraces();
+  assert.equal(app.$("trace-count").textContent, "0 / 2 条事件");
+  assert.equal(app.$("event-reset").hidden, false);
+  app.context.focusEvents([6, 8]);
+  assert.deepEqual(visible(app.rows()), [6, 8]);
+  app.context.exitEventFocus();
+  assert.equal(app.$("event-reset").hidden, true);
+  assert.equal(app.$("event-range").hidden, true);
+  assert.equal(app.$("trace-search").value, "read");
+  assert.equal(app.$("record-mode").value, "error");
+  assert.equal(app.$("trace-scroll").scrollTop, 80);
+  assert.equal(app.context.inspect().selected, 0);
+});
+
+test("event focus and issue navigation restore each other without losing expanded context", () => {
+  const app = boot();
+  app.context.startIssue(app.item);
+  app.context.expand(app.rows().find(row => row.kind === "fold").key);
+  const before = app.rows();
+  app.context.renderTraces(40);
+  app.context.focusEvents([0, 2, 4]);
+  assert.equal(app.$("fragment-bar").hidden, true);
+  assert.equal(app.$("event-reset").textContent, "返回问题片段");
+  assert.deepEqual(visible(app.rows()), [0, 2, 4]);
+  app.context.startIssue({...app.item, record:{id:"ISSUE-002", title:"Another issue"}});
+  assert.equal(app.$("event-reset").hidden, true);
+  assert.equal(app.$("fragment-bar").hidden, false);
+  app.context.exitIssue();
+  assert.deepEqual(visible(app.rows()), [0, 2, 4]);
+  assert.equal(app.$("event-reset").hidden, false);
+  app.context.exitEventFocus();
+  assert.equal(app.context.inspect().investigation.item.record.id, "ISSUE-001");
+  assert.deepEqual(app.rows(), before);
+  assert.equal(app.$("trace-scroll").scrollTop, 40);
+});
+
+test("untimed groups work, and explicit Trace or outside-event navigation clears event focus", () => {
+  const app = boot();
+  for (const i of [2, 4]) Object.assign(app.capture.nodes[i], {at:null, until:null});
+  app.context.focusEvents([2, 4]);
+  assert.equal(app.$("event-range").textContent, "时间未知");
+  assert.deepEqual(visible(app.rows()), [2, 4]);
+  app.context.focusTrace(1);
+  assert.equal(app.$("event-reset").hidden, true);
+  assert.deepEqual(visible(app.rows()), [1, 3, 5, 7, 9, 11]);
+  app.context.focusTrace(null);
+  assert.equal(app.$("event-reset").hidden, true);
+  app.context.focusEvents([2, 4]);
+  app.context.pickFromLane(8);
+  assert.equal(app.$("event-reset").hidden, true);
+  assert.equal(app.context.inspect().selected, 8);
+  assert.equal(app.context.openedNode.id, "N8");
+});
 
 test("failure-only filtering matches error styling and combines with Trace, type and search", () => {
   const app = boot();

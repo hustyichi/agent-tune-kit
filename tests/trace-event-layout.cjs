@@ -35,6 +35,54 @@ const {chromium} = require("playwright");
           assert.equal(sizes.overflow, false);
         }
       }
+      assert.equal(await page.locator("#lane-members, .member-list").count(), 0);
+      const cluster = page.locator(".lane-mark.cluster").first();
+      if (await cluster.count()) {
+        const count = Number((await cluster.getAttribute("title")).match(/(\d+) 条事件$/)[1]);
+        const laneCount = await page.locator(".trace-overview").count();
+        await page.locator(".trace-row").first().click();
+        await page.keyboard.press("Escape");
+        await page.locator("#trace-search").fill("no matching event");
+        await cluster.press("Enter");
+        assert.equal(await page.locator("#drawer").isVisible(), false);
+        assert.equal(await page.locator("#trace-search").inputValue(), "");
+        assert.equal(await page.locator("#trace-count").textContent(), `${count} 条事件`);
+        assert.match(await page.locator("#records-title").textContent(), /事件 · T\d/);
+        assert.match(await page.locator("#event-range").textContent(), /所选时段/);
+        assert.equal(await page.locator(".trace-overview").count(), laneCount);
+        const firstIndex = await page.locator(".trace-row").first().getAttribute("data-node-index");
+        await page.setViewportSize({width:width - 20,height:982});
+        assert.equal(await page.locator("#trace-count").textContent(), `${count} 条事件`);
+        assert.equal(await page.locator(".trace-row").first().getAttribute("data-node-index"), firstIndex);
+        assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+        await page.locator(".trace-row").first().click();
+        assert.equal(await page.locator("#drawer").isVisible(), true);
+        await page.keyboard.press("Escape");
+        assert.equal(await page.locator("#event-reset").isVisible(), true);
+        await page.locator("#trace-search").fill("no matching event");
+        assert.equal(await page.locator("#trace-count").textContent(), `0 / ${count} 条事件`);
+        await page.keyboard.press("Escape");
+        assert.equal(await page.locator("#event-reset").isVisible(), false);
+        assert.equal(await page.locator("#trace-search").inputValue(), "no matching event");
+        await page.locator("#trace-search").fill("");
+        await page.setViewportSize({width,height:982});
+        const captures = await page.locator("#capture-filter option").evaluateAll(options => options.map(option => option.value));
+        if (captures.length > 1) {
+          await cluster.press("Enter");
+          await page.locator("#capture-filter").selectOption(captures[0]);
+          assert.equal(await page.locator("#event-reset").isVisible(), false);
+          await page.locator("#capture-filter").selectOption(captures.at(-1));
+        }
+      }
+      const untimed = page.locator(".untimed").first();
+      if (await untimed.count() && Number((await untimed.textContent()).split(" · ")[1]) > 1) {
+        await untimed.press("Enter");
+        assert.equal(await page.locator("#event-range").textContent(), "时间未知");
+        assert.equal(await page.locator("#drawer").isVisible(), false);
+        await page.locator("#event-reset").click();
+        assert.equal(await page.locator("#event-reset").isVisible(), false);
+        assert.ok(await untimed.evaluate(el => el === document.activeElement));
+      }
       const tracks = await page.evaluate(() => JSON.parse(document.getElementById("trace-data").textContent).captures.at(-1).timeline.tracks);
       assert.equal(await page.locator(".record-filters #trace-filter").count(), 0);
       assert.equal(await page.locator("#trace-filter").isVisible(), false);

@@ -1,9 +1,8 @@
 "use strict";
 
-window.createSwimlanes = function createSwimlanes({el, button, elapsed, startTime, onPick, onZoom, onRoot, onFragment, onIssueBadge}) {
+window.createSwimlanes = function createSwimlanes({el, button, elapsed, startTime, onPick, onGroup, onZoom, onRoot, onFragment, onIssueBadge}) {
   const chart = document.getElementById("lane-chart");
   const frame = document.getElementById("lane-scroll");
-  const members = document.getElementById("lane-members");
   let capture, scope, selected, fragments = [], preview = [], current, issueCounts = new Map(), expanded = new Set();
   let marks = new Map(), cursors = [];
 
@@ -38,28 +37,9 @@ window.createSwimlanes = function createSwimlanes({el, button, elapsed, startTim
     else if (rect.bottom > box.bottom) frame.scrollTop += rect.bottom - box.bottom + 2;
     return mark.getBoundingClientRect();
   }
-  function listMembers(indices, trigger) {
-    onPick(indices[0]);
-    if (indices.length === 1) { members.hidden = true; return; }
-    members.hidden = false;
-    const close = button("收起", () => { members.hidden = true; trigger.focus({preventScroll:true}); });
-    const list = el("div", undefined, "member-list");
-    members.replaceChildren(list);
-    list.append(el("strong", `${indices.length} 条事件`), close);
-    let offset = 0;
-    const more = button("更多事件", append);
-    function append() {
-      for (const i of indices.slice(offset, offset + 40)) {
-        const n = capture.nodes[i];
-        const link = button(n.name || String(n.id || "查看事件"), () => onPick(i));
-        link.dataset.nodeIndex = i;
-        list.append(link);
-      }
-      offset += 40;
-      if (offset < indices.length) list.append(more); else more.remove();
-    }
-    append();
-    close.focus({preventScroll:true});
+  function pickEvents(indices) {
+    if (indices.length === 1) onPick(indices[0]);
+    else onGroup(indices);
   }
   function paintBands(track, number, branch, pct, start) {
     const bands = [];
@@ -121,7 +101,8 @@ window.createSwimlanes = function createSwimlanes({el, button, elapsed, startTim
       let batch, previous = -Infinity;
       function tick() {
         const i = batch[0], n = nodes[i], indices = batch;
-        const mark = button("", () => listMembers(indices, mark), indices.length > 1 ? "lane-mark cluster" : "lane-mark");
+        const mark = button("", () => pickEvents(indices), indices.length > 1 ? "lane-mark cluster" : "lane-mark");
+        mark.dataset.nodeIndex = i;
         mark.style.left = `${pct(n.at)}%`;
         mark.title = `${elapsed(n.at-start, true)} · ${indices.length === 1 ? n.name || n.type : indices.length + " 条事件"}`;
         mark.setAttribute("aria-label", mark.title); marks.set(mark, indices);
@@ -137,7 +118,8 @@ window.createSwimlanes = function createSwimlanes({el, button, elapsed, startTim
       cursors.push({mark:cursor, number, branch, pct}); track.append(cursor);
       if (timed.length < indices.length) {
         const undated = indices.filter(i => nodes[i].at === null);
-        const link = button(`时间未知 · ${undated.length}`, () => listMembers(undated, link), "untimed");
+        const link = button(`时间未知 · ${undated.length}`, () => pickEvents(undated), "untimed");
+        link.dataset.nodeIndex = undated[0];
         marks.set(link, undated); track.append(link);
       }
       return track;
@@ -221,7 +203,7 @@ window.createSwimlanes = function createSwimlanes({el, button, elapsed, startTim
       if (capture !== next) { expanded.clear(); frame.scrollTop = 0; }
       capture = next; scope = filter; selected = index; fragments = parts; current = active;
       issueCounts = counts; preview = previewParts;
-      members.hidden = true; draw();
+      draw();
     },
     select: setSelected,
     scrollSelected,

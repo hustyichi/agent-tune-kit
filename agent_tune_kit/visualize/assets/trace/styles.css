@@ -121,9 +121,6 @@ body.rail-collapsed .rail-list { padding-inline: 4px }
 .legend-tick { width: 3px; height: 10px; background: var(--track) }
 .legend-fragment { width: 14px; height: 8px; border: 1px solid #b65d1e; background: #ffe2bb }
 #lane-reset { font-size: 12px; color: var(--accent) }
-#lane-members { padding: 6px 14px; max-height: 16vh; overflow: auto; border-top: 1px solid var(--line) }
-.member-list { display: flex; align-items: center; gap: 4px; flex-wrap: wrap }
-.member-list button { font-size: 12px; padding: 3px 6px }
 .root-info[aria-current=true], .untimed[aria-current=true] { color: var(--accent); outline: 1px solid var(--brand) }
 .short-id + .lane-count::before { content: " · " }
 .lane-mark.current-tick { z-index: 2 }
@@ -136,6 +133,8 @@ body.rail-collapsed .rail-list { padding-inline: 4px }
 #fragment-position { color: var(--accent); font-size: 12px }
 .fragment-controls { flex-wrap: wrap; gap: 5px }
 .records-title { flex-wrap: wrap }
+#event-range, #event-reset { font-size: 12px }
+#event-reset { padding: 3px 6px; color: var(--accent) }
 .fragment-controls button { font-size: 12px; padding: 4px 8px }
 
 .record-panel, .stream { display: flex; flex-direction: column; flex: 1; min-height: 0 }

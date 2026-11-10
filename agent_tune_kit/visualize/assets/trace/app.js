@@ -19,6 +19,7 @@
   let selectedNode = null, origin = null, issueTrigger = null;
   let returnToDiagnosis = null;
   let investigation = null, scopeBefore = null, previewIssue = null, expandedFolds = new Set(), railFilter = null;
+  let eventFocus = null;
   const captureById = new Map(data.captures.map(c => [c.id, c]));
   const issueById = new Map(data.issues.map(item => [item.record.id, item]));
 
@@ -103,7 +104,7 @@
     return counts;
   };
   const swim = window.createSwimlanes({
-    el, button, elapsed, startTime, onPick: pickFromLane, onZoom: focusTrace, onFragment: goFragment,
+    el, button, elapsed, startTime, onPick: pickFromLane, onGroup: focusEvents, onZoom: focusTrace, onFragment: goFragment,
     onRoot: index => openEventDrawer(currentCapture.nodes[index], document.activeElement),
     onIssueBadge: track => {
       $("issue-search").value = "";
@@ -118,6 +119,8 @@
       filters: filters.map(id => $(id).value),
       showContext: investigation?.showContext || false,
       selected: selectedNode,
+      eventFocus,
+      expandedFolds: [...expandedFolds],
       top: scroller.scrollTop,
       lanes: swim.snapshot(),
       scroll: window.scrollY,
@@ -130,6 +133,8 @@
     filters.forEach((id, i) => { $(id).value = state.filters[i]; });
     if (investigation) investigation.showContext = Boolean(state.showContext);
     selectedNode = state.selected;
+    eventFocus = state.eventFocus;
+    expandedFolds = new Set(state.expandedFolds);
     renderTraces(state.top);
     swim.restore(state.lanes);
     window.scrollTo(0, state.scroll);
@@ -137,6 +142,10 @@
     else if (state.focus?.matches(".lane-zoom")) {
       const track = state.focus.closest(".trace-overview").dataset.track;
       document.querySelector(`.trace-overview[data-track="${track}"] .lane-zoom`)?.focus({preventScroll:true});
+    } else if (state.focus?.matches(".lane-mark, .untimed")) {
+      const index = state.focus.dataset.nodeIndex;
+      const mark = document.querySelector(`#lane-chart button[data-node-index="${index}"]:not(.current-tick)`);
+      (mark || scroller).focus({preventScroll:true});
     }
   }
   const setDrawerWidth = width => {
@@ -474,6 +483,24 @@
     selectAndScroll(index);
     openEventDrawer(node, document.activeElement);
   }
+  function focusEvents(indices) {
+    const before = eventFocus?.before || rememberView();
+    const priorIssue = eventFocus ? eventFocus.investigation : investigation;
+    clearRecordFilters();
+    eventFocus = {indices, before, investigation:priorIssue};
+    investigation = null; previewIssue = null; selectedNode = null;
+    closeDrawer(false);
+    renderTraces();
+    $("records-title").scrollIntoView({block:"nearest"});
+    scroller.focus({preventScroll:true});
+  }
+  function exitEventFocus() {
+    if (!eventFocus) return;
+    const {before, investigation:priorIssue} = eventFocus;
+    eventFocus = null; investigation = priorIssue;
+    closeDrawer(false);
+    restoreView(before);
+  }
   function navigateNode(capture, node, ref = null) {
     const index = capture.nodes.indexOf(node);
     if (index < 0) return;
@@ -595,14 +622,15 @@
   const selectedIndex = () => selectedNode ? currentCapture.nodes.indexOf(selectedNode) : -1;
 
   function clearRecordFilters() {
+    eventFocus = null;
     for (const id of ["type-filter","trace-search","record-mode"]) $(id).value = "";
   }
   function filteredRows() {
     const query = $("trace-search").value.trim().toLocaleLowerCase();
     const type = $("type-filter").value, mode = $("record-mode").value, track = scope();
     const {order, tracks} = timeline();
-    let candidates = order;
-    if (query || type === "TRACE") {
+    let candidates = eventFocus ? eventFocus.indices : order;
+    if (!eventFocus && (query || type === "TRACE")) {
       const roots = tracks.flatMap(t => t.rows.length ? t.roots : []);
       candidates = order.concat(roots).sort((a,b) => {
         const left = currentCapture.nodes[a], right = currentCapture.nodes[b];
@@ -903,7 +931,17 @@
     $("trace-choice").hidden = !track || tracks.length < 2;
     $("lane-reset").hidden = !track;
     $("trace-filter").title = track ? `${trackLabel(displayedScope)} · ${track.trace_id || "归档材料"}` : "";
-    $("records-title").textContent = track ? `事件 · ${trackLabel(displayedScope)}` : "事件";
+    const eventTrack = eventFocus ? currentCapture.nodes[eventFocus.indices[0]].track : displayedScope;
+    $("records-title").textContent = eventTrack !== null ? `事件 · ${trackLabel(eventTrack)}` : "事件";
+    $("event-range").hidden = $("event-reset").hidden = !eventFocus;
+    if (eventFocus) {
+      const first = currentCapture.nodes[eventFocus.indices[0]];
+      const end = eventFocus.indices.reduce((last, i) => Math.max(last, currentCapture.nodes[i].until ?? -Infinity), -Infinity);
+      $("event-range").textContent = first.at == null ? "时间未知" : `所选时段 ${elapsed(first.at-startTime(),true)} – ${elapsed(end-startTime(),true)}`;
+      $("event-reset").textContent = eventFocus.investigation
+        ? (eventFocus.investigation.showContext ? "返回问题上下文" : "返回问题片段")
+        : eventFocus.before.filters.slice(1).some(Boolean) ? "返回筛选结果" : "返回全部";
+    }
     const coverage = currentCapture?.manifest.completeness || {};
     const native = tracks.filter(t => t.trace_id != null);
     const notes = track ? [track.trace_id || "归档材料", `${track.rows.length || track.roots.length} 条事件`] : [`${native.length} 条 Trace`];
@@ -919,6 +957,8 @@
     streamRows = filteredRows();
     displayRows = buildDisplayRows(streamRows);
     $("trace-count").textContent = `${streamRows.length} 条`;
+    if (eventFocus) $("trace-count").textContent = streamRows.length === eventFocus.indices.length
+      ? `${streamRows.length} 条事件` : `${streamRows.length} / ${eventFocus.indices.length} 条事件`;
     const related = new Set((investigation?.item.fragments || []).filter(p => p.capture_id === currentCapture?.id).flatMap(p => p.anchors));
     if (related.size) {
       const inside = streamRows.filter(i => related.has(i)).length;
@@ -936,6 +976,7 @@
     syncHash();
   }
   function focusTrace(number) {
+    eventFocus = null;
     if (number === null && scopeBefore) {
       const before = scopeBefore; scopeBefore = null; restoreView(before); return;
     }
@@ -987,6 +1028,7 @@
   function startIssue(item, fragmentIndex = null) {
     const before = investigation?.before || rememberView();
     const priorScope = investigation ? investigation.priorScope : scopeBefore;
+    eventFocus = null;
     investigation = {item, before, priorScope, index:0, showContext:false};
     expandedFolds = new Set();
     previewIssue = null; selectedNode = null;
@@ -1199,6 +1241,7 @@
   $("fragment-context").onclick = toggleFragmentContext;
   $("fragment-exit").onclick = exitIssue;
   $("lane-reset").onclick = () => focusTrace(null);
+  $("event-reset").onclick = exitEventFocus;
   $("capture-filter").closest("label").hidden = Boolean(currentCapture?.current);
   options($("capture-filter"), data.captures.map(c => c.id));
   if (currentCapture) $("capture-filter").value = currentCapture.id;
@@ -1235,6 +1278,7 @@
   document.addEventListener("keydown", event => {
     if (event.key === "Escape") {
       if (!$("drawer").hidden) { event.preventDefault(); closeDrawer(); return; }
+      if (eventFocus) { event.preventDefault(); exitEventFocus(); return; }
       if (investigation) { event.preventDefault(); exitIssue(); return; }
     }
     if (!$("drawer").hidden && drawerMode === "event" && ["ArrowDown", "ArrowUp"].includes(event.key)) {

@@ -47,7 +47,6 @@
             <span id="legend-fragment" hidden><i class="legend-fragment"></i>问题片段</span>
           </div>
         </div>
-        <div id="lane-members" hidden></div>
       </section>
       <section id="fragment-bar" aria-label="片段定位" hidden>
         <div class="fragment-title"><strong id="fragment-issue"></strong><span id="fragment-position"></span></div>
@@ -62,7 +61,7 @@
       </section>
       <section class="record-panel" aria-labelledby="records-title">
         <div class="records-heading">
-          <div class="records-title"><h2 id="records-title">事件</h2><span id="trace-count" class="muted" aria-live="polite"></span></div>
+          <div class="records-title"><h2 id="records-title">事件</h2><span id="event-range" class="muted" hidden></span><span id="trace-count" class="muted" aria-live="polite"></span><button id="event-reset" type="button" hidden>返回全部</button></div>
           <div class="toolbar record-filters">
             <label><span class="sr-only">事件范围</span><select id="record-mode"><option value="">全部事件</option><option value="key">关键事件</option><option value="error">仅看异常</option></select></label>
             <label><span class="sr-only">类型</span><select id="type-filter"></select></label>

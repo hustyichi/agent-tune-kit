@@ -47,7 +47,7 @@ function boot(hash = "", available = true) {
   });
   vm.runInContext(menuSource, context);
   vm.runInContext(`
-    let investigation = null, selectedNode = null, railFilter = null, previewIssue = null, scopeBefore = null, expandedFolds = new Set();
+    let investigation = null, selectedNode = null, railFilter = null, previewIssue = null, scopeBefore = null, expandedFolds = new Set(), eventFocus = null;
     const currentCapture = null;
     const issueById = new Map(data.issues.map(item => [item.record.id, item]));
     const partNow = () => investigation?.item.fragments[investigation.index];
