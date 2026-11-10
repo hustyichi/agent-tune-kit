@@ -51,7 +51,6 @@
     return `${part.month}-${part.day} ${part.hour === "24" ? "00" : part.hour}:${part.minute}`;
   };
   const sourceText = source => [source.type, source.environment].filter(Boolean).join(" · ") || "来源未记录";
-  const scaleText = s => s.traces != null && s.observations != null ? `${s.traces} Trace · ${s.observations} 观测` : `${s.files} 个归档文件`;
   const statusText = value => STATUS[value] || value || "未记录";
 
   // --- derived search text and source scope ---------------------------------------------------------------------
@@ -288,7 +287,7 @@
   function issueList(box, s, issues, withCategory) {
     const rows = issues.filter(issue => matchIssue(s, issue)).sort(byProgress);
     const list = el("div", undefined, "issue-list");
-    if (!rows.length) list.append(el("div", issues.length ? "没有符合筛选条件的问题。" : "无保留问题。", "empty"));
+    if (!rows.length) list.append(el("div", issues.length ? "没有符合筛选条件的问题。" : "无保留问题（不代表会话正确）。", "empty"));
     for (const issue of rows) list.append(issueRow(s, issue, withCategory));
     box.append(list);
     return {shown: rows.length, total: issues.length};
@@ -296,40 +295,35 @@
   const textDetails = (title, build) => { const node = el("details", undefined, "detail-section"); node.append(el("summary", title)); build(node); return node; };
   const bullets = (node, items) => { const list = el("ul"); for (const item of items) list.append(el("li", item)); node.append(list); };
 
-  function sessionDrawer(s, box) {
-    $("drawer-title").textContent = s.session_id;
-    const actions = el("div", undefined, "drawer-actions");
-    actions.append(copyButton(s.session_id, "复制 Session ID", "复制 Session ID"));
-    if (!s.error) { const open = el("a", "打开会话页 ↗", "link-button"); open.href = s.href; actions.append(open); }
-    box.append(actions);
-    if (s.error) { box.append(el("p", `会话记录不可读取：${s.error}`, "warning")); return; }
-    const meta = el("div", undefined, "drawer-meta");
-    for (const text of [sourceText(s.source), scaleText(s), `归档 ${when(s.archived_ms)}`, `更新 ${when(s.updated_ms)}`]) meta.append(el("span", text));
-    box.append(meta);
-    const origin = [s.source.instance, s.source.project].filter(Boolean).join(" / ");
-    if (origin) box.append(el("p", origin, "mono muted"));
-    if (!s.preview.exists || s.preview.stale) {
-      const note = el("p", s.preview.exists ? "会话页早于最近一次记录写入。刷新命令：" : "会话页尚未生成。生成命令：", "warning");
-      note.append(el("code", `atk visualize trace --session-id ${s.session_id} --overwrite --no-open`));
-      box.append(note);
+  // The session drawer is a preview: the header carries identity and the way in; below it at most a few one-line
+  // notes appear, and only when something makes the issue list untrustworthy or needs an action. Source, scale and
+  // full detection coverage live on the session page (「会话信息」).
+  function sessionNotes(s, box) {
+    if (!s.detection) box.append(el("p", "尚未检测，问题列表为空不代表会话没有问题。", "warning"));
+    else if (s.detection.status !== "completed") {
+      box.append(el("p", `最近一次检测${statusText(s.detection.status)}，问题可能不全；检测缺口见会话页「会话信息」。`, "warning"));
     }
     if (s.problem_count) {
-      box.append(textDetails(`记录读取失败 ${s.problem_count}`, node => {
-        bullets(node, s.problems);
-        if (s.problem_count > s.problems.length) node.append(el("p", `另有 ${s.problem_count - s.problems.length} 条未显示。`, "muted"));
-      }));
+      const node = textDetails(`${s.problem_count} 条记录读取失败`, inner => {
+        bullets(inner, s.problems);
+        if (s.problem_count > s.problems.length) inner.append(el("p", `另有 ${s.problem_count - s.problems.length} 条未显示。`, "muted"));
+      });
+      node.classList.add("warning"); box.append(node);
     }
-    box.append(textDetails("检测范围与缺口", node => {
-      if (s.detection) {
-        node.append(el("p", `检测状态：${statusText(s.detection.status)}`));
-        if (s.detection.focus) node.append(el("p", `关注点：${s.detection.focus}`));
-        if (s.detection.gaps.length) { node.append(el("p", "检测缺口：")); bullets(node, s.detection.gaps); }
-      } else node.append(el("p", "尚未记录检测。", "muted"));
-      const coverage = {complete: "完整", partial: "部分", unknown: "未确定"}[s.capture.completeness] || s.capture.completeness || "未记录";
-      node.append(el("p", `采集状态：${statusText(s.capture.status)} · 完整性：${coverage}`));
-      if (s.capture.gaps.length) { node.append(el("p", "采集缺口：")); bullets(node, s.capture.gaps); }
-      if (!s.issues.length) node.append(el("p", "没有保留问题不代表会话正确，请结合检测范围与缺口判断。", "muted"));
-    }));
+    if (!s.preview.exists || s.preview.stale) {
+      const command = `atk visualize trace --session-id ${s.session_id} --overwrite --no-open`;
+      const note = el("p", s.preview.exists ? "会话页已过期，不含最近的记录。" : "会话页尚未生成。", "warning note-row");
+      const copy = copyButton(command, s.preview.exists ? "复制刷新命令" : "复制生成命令", s.preview.exists ? "复制刷新命令" : "复制生成命令");
+      copy.title = command; note.append(copy); box.append(note);
+    }
+  }
+  function sessionDrawer(s, box) {
+    $("drawer-title").textContent = s.session_id;
+    $("drawer-title-tools").append(copyButton(s.session_id, "复制 Session ID"));
+    if (s.error) { box.append(el("p", `会话记录不可读取：${s.error}`, "warning")); return; }
+    const open = el("a", "打开会话页 ↗", "link-button primary"); open.href = s.href;
+    $("drawer-tools").append(open);
+    sessionNotes(s, box);
     const heading = el("div", undefined, "list-heading");
     const label = el("span", "问题"); heading.append(label); box.append(heading);
     const counts = issueList(box, s, s.issues, true);
@@ -369,7 +363,7 @@
     if (state.view === "session" && !session) { state.drawer = null; drawer.hidden = true; shown = null; return; }
     const id = `${state.view}:${state.drawer}`, fresh = shown !== id;
     const box = $("drawer-content"), keep = fresh ? 0 : box.scrollTop;
-    box.replaceChildren();
+    box.replaceChildren(); $("drawer-title-tools").replaceChildren(); $("drawer-tools").replaceChildren();
     if (session) sessionDrawer(session, box); else categoryDrawer(state.drawer, box);
     drawer.hidden = false; box.scrollTop = keep; shown = id;
     if (fresh) $("drawer-close").focus({preventScroll: true});

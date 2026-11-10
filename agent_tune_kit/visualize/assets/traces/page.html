@@ -35,7 +35,10 @@
   </main>
   <aside id="drawer" class="drawer" role="dialog" aria-modal="false" aria-labelledby="drawer-title" hidden tabindex="-1">
     <div class="drawer-resizer" id="drawer-resizer" aria-hidden="true"></div>
-    <div class="drawer-header"><h2 id="drawer-title"></h2><button id="drawer-close" type="button" aria-label="关闭详情">关闭 ×</button></div>
+    <div class="drawer-header">
+      <div class="drawer-heading"><h2 id="drawer-title"></h2><span id="drawer-title-tools"></span></div>
+      <div class="drawer-tools"><span id="drawer-tools"></span><button id="drawer-close" type="button" aria-label="关闭详情">关闭 ×</button></div>
+    </div>
     <div id="drawer-content" class="drawer-content"></div>
   </aside>
   <script id="dashboard-data" type="application/json">__DATA__</script>

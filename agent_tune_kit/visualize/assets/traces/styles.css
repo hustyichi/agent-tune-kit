@@ -12,6 +12,9 @@
 .dash-controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; border-bottom: 1px solid var(--line) }
 .dash-controls .search-label { flex: 1 1 260px; max-width: 440px; min-width: 0; margin-left: auto }
 .dash-controls .search-label, #source-choice { margin-bottom: 7px }
+/* Keep the toolbar geometry when the issue-only project filter is hidden. */
+.dash-controls #project-choice[hidden] { display: block !important; visibility: hidden }
+.dash-controls .project-choice summary { height: 34px; padding: 6px 12px }
 .view-tabs { display: flex; gap: 4px }
 .view-tabs [role=tab] { height: 40px; margin-bottom: -1px; padding: 0 16px; border: 0; border-bottom: 2px solid transparent; border-radius: 6px 6px 0 0; background: transparent; color: var(--muted); font-weight: 600 }
 .view-tabs [role=tab]:hover { color: var(--ink); background: #edf1f4 }
@@ -70,7 +73,19 @@ button.category-tag:hover { background: #ffe8d2 }
 .empty-dash { padding: 28px; text-align: center; color: var(--muted); border: 1px dashed var(--line); border-radius: 8px; background: white }
 
 .drawer-meta { font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 2px 12px; margin-bottom: 10px }
-.drawer-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px }
+/* Header: Session ID with its copy icon on the left; the way into the session page and close on the right. */
+.drawer-heading { display: flex; align-items: center; gap: 4px; min-width: 0 }
+.drawer-heading h2 { min-width: 0 }
+.drawer-tools { display: flex; align-items: center; gap: 8px; flex-shrink: 0 }
+.drawer-tools:has(> span:empty) { gap: 0 }
+.link-button.primary { font-weight: 600; background: var(--tint); border-color: #eabda0; white-space: nowrap }
+.link-button.primary:hover { background: #ffe9d6 }
+/* Notes only appear when something is off; each stays one compact line. */
+.drawer-content > .warning { font-size: 12px; margin: 0 0 8px; padding: 6px 10px }
+.drawer-content > details.warning { background: #fff9e8; border-color: #eed79d }
+.drawer-content > details.warning summary { font-size: 12px; color: #804810 }
+.note-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px }
+.note-row button { font-size: 12px; padding: 1px 8px }
 .link-button { display: inline-block; border: 1px solid var(--line); border-radius: 6px; background: white; padding: 4px 10px; font-size: 12px; color: var(--accent); text-decoration: none }
 .link-button:hover { background: var(--tint); border-color: #eabda0 }
 .drawer-content details.detail-section { padding: 8px 12px }
@@ -100,10 +115,15 @@ button.category-tag:hover { background: #ffe8d2 }
 @media (max-width: 800px) {
   /* The drawer is a bottom sheet here, so it rises instead (reduced motion still zeroes the duration). */
   .drawer:not([hidden]) { animation-name: sheet-in }
+  /* A full Session ID needs the whole sheet width: the buttons drop onto their own row instead of squeezing it. */
+  .drawer-header { flex-wrap: wrap; row-gap: 8px }
+  .drawer-heading { flex: 1 1 100% }
+  .drawer-heading h2 { font-size: 14px }
+  .drawer-tools { margin-left: auto }
   .dash-grid { grid-template-columns: 1fr }
   /* Search wraps under the tabs here, so the tab line moves onto the tab row itself. */
   .dash-controls { border-bottom: 0 }
   .view-tabs { flex-basis: 100%; border-bottom: 1px solid var(--line) }
   .dash-controls .search-label { max-width: none; margin-left: 0 }
-  .dash-controls .search-label, #source-choice { margin-bottom: 0 }
+  .dash-controls .search-label, .dash-controls .project-choice, #source-choice { margin-bottom: 0 }
 }

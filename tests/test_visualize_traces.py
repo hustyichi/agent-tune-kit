@@ -298,20 +298,20 @@ def test_categories_are_counted_and_unknown_ids_still_display(project):
     assert data["categories"] == {} and any("vocabulary" in warning for warning in data["warnings"])
 
 
-def test_zero_issue_session_is_listed_with_its_scale_and_detection(tmp_path):
+def test_zero_issue_session_is_listed_with_only_its_latest_detection_status(tmp_path):
     directory, _ = make_v2_session(tmp_path, "quiet")
+    entry = dashboard.build_dashboard_data(tmp_path)["sessions"][0]
+    assert entry["issues"] == [] and entry["error"] is None and entry["detection"] is None
     save_detection(
         directory,
         {"status": "completed", "scope": {"focus": "checked the greeting"}, "gaps": ["Screenshots were not retained."]},
     )
     entry = dashboard.build_dashboard_data(tmp_path)["sessions"][0]
-    assert entry["issues"] == [] and entry["error"] is None
-    assert (entry["traces"], entry["observations"]) == (1, 1)
-    assert entry["detection"]["status"] == "completed" and entry["detection"]["focus"] == "checked the greeting"
-    assert entry["detection"]["gaps"] == ["Screenshots were not retained."]
-    # The operation finished, but coverage is partial: both facts must reach the page, never just the first.
-    assert entry["capture"]["status"] == "completed" and entry["capture"]["completeness"] == "partial"
-    assert entry["capture"]["gaps"]
+    # The dashboard only says whether the list can be trusted; focus, gaps, scale and capture coverage stay on the
+    # session page, so they are not copied into the project-wide view.
+    assert entry["detection"] == {"status": "completed"}
+    for removed in ("traces", "observations", "files", "archived_ms", "capture"):
+        assert removed not in entry
     assert entry["source"] == {key: SOURCE[key] for key in SOURCE}
 
 

@@ -1,6 +1,6 @@
 """Project-wide dashboard over every archived session, written to ``.atk/traces/index.html``.
 
-The page only summarizes: identity, scale, actual progress and category per issue, plus a link into each session's own
+The page only summarizes: identity, actual progress and category per issue, whether the latest detection finished, plus a link into each session's own
 preview. It reads saved records through ``records.status`` (which already verifies evidence digests) and never opens
 raw trace bodies, so it stays small and fast. A damaged session or issue is reported on its own entry and cannot hide
 the healthy ones.
@@ -43,12 +43,6 @@ def _text(value, limit=TEXT_LIMIT):
         return ""
     value = value.strip()
     return value if len(value) <= limit else value[: limit - 1] + "…"
-
-
-def _texts(value):
-    if not isinstance(value, list):
-        return []
-    return [text for text in (_text(item, ITEM_LIMIT) for item in value[:LIST_LIMIT]) if text]
 
 
 def _ms(seconds):
@@ -143,8 +137,6 @@ def _session_entry(session_dir):
         )
         return entry
     session = status["session"]
-    archive = session.get("archive") if isinstance(session.get("archive"), dict) else {}
-    completeness = archive.get("completeness") if isinstance(archive.get("completeness"), dict) else {}
     detections = [item for item in session.get("detections", []) if isinstance(item, dict)]
     issues, issue_stamps = _issue_entries(session_dir, status)
     archived = parse_instant(session.get("created_at"))
@@ -153,31 +145,14 @@ def _session_entry(session_dir):
     registry = session_dir.parent / "projects.json"
     if registry.is_file():
         updated = max(updated or 0, registry.stat().st_mtime)
+    # The drawer is a preview: it only needs to say whether the issue list can be trusted. Scale, capture coverage,
+    # focus and gap details stay on the session page, which shows every detection in full.
     last = detections[-1] if detections else None
-    scope = last.get("scope") if last and isinstance(last.get("scope"), dict) else {}
-    traces, observations = completeness.get("trace_count"), completeness.get("observation_count")
     entry.update(
         session_id=session["session_id"],
         source={key: _text(session.get("source", {}).get(key), ITEM_LIMIT) for key in SAFE_SOURCE_FIELDS},
-        archived_ms=_ms(archived),
         updated_ms=_ms(updated),
-        traces=traces if type(traces) is int else None,
-        observations=observations if type(observations) is int else None,
-        files=len(archive["files"]) if isinstance(archive.get("files"), list) else len(session.get("captures", [])),
-        capture={
-            "status": _text(archive.get("status"), 40),
-            "completeness": _text(completeness.get("status"), 40),
-            "gaps": _texts(completeness.get("gaps")),
-        },
-        detection=(
-            {
-                "status": _text(last.get("status"), 40),
-                "focus": _text(scope.get("focus")),
-                "gaps": _texts(last.get("gaps")),
-            }
-            if last
-            else None
-        ),
+        detection={"status": _text(last.get("status"), 40)} if last else None,
         issues=issues,
         problems=[_problem(item) for item in status["warnings"][:LIST_LIMIT]],
         problem_count=len(status["warnings"]),

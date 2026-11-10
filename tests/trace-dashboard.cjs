@@ -53,10 +53,10 @@ const text = node => [node.textContent, ...node.children.map(text)].join(" ").re
 
 function boot(data) {
   const ids = new Map();
-  for (const id of ["project-choice", "project-summary", "project-clear", "project-filter", "project-name", "dash-stats", "warnings", "source-choice", "source-filter", "tab-session", "tab-category", "dash-panel", "dash-search", "progress-bar", "progress-legend", "filter-note", "dash-grid", "dash-strip", "drawer", "drawer-title", "drawer-content", "drawer-close", "drawer-resizer"]) {
+  for (const id of ["project-choice", "project-summary", "project-clear", "project-filter", "project-name", "dash-stats", "warnings", "source-choice", "source-filter", "tab-session", "tab-category", "dash-panel", "dash-search", "progress-bar", "progress-legend", "filter-note", "dash-grid", "dash-strip", "drawer", "drawer-title", "drawer-title-tools", "drawer-tools", "drawer-content", "drawer-close", "drawer-resizer"]) {
     ids.set(id, Object.assign(new Node("div"), {id}));
   }
-  for (const id of ["drawer-title", "drawer-content", "drawer-close", "drawer-resizer"]) ids.get(id).parentElement = ids.get("drawer");
+  for (const id of ["drawer-title", "drawer-title-tools", "drawer-tools", "drawer-content", "drawer-close", "drawer-resizer"]) ids.get(id).parentElement = ids.get("drawer");
   for (const id of ["dash-grid", "dash-strip", "progress-bar", "progress-legend", "filter-note"]) ids.get(id).parentElement = ids.get("dash-panel");
   ids.get("source-choice").hidden = true;
   ids.get("drawer").hidden = true;
@@ -159,8 +159,13 @@ for (const row of rows) {
 }
 assert.ok(rows.some(row => text(row).includes("</script><img src=x onerror=alert(1)>")), "hostile title shown literally");
 assert.ok(!all(app.$("drawer-content")).some(node => node.tag === "img"), "no element is built from record text");
-assert.match(text(app.$("drawer-content")), /检测范围与缺口/);
-assert.ok(all(app.$("drawer-content")).some(node => node.tag === "a" && node.textContent.startsWith("打开会话页") && node.href === a.href));
+// The header carries only identity and the way in: a copy icon by the title, the session page link by close.
+assert.ok(all(app.$("drawer-tools")).some(node => node.tag === "a" && node.textContent.startsWith("打开会话页") && node.href === a.href));
+all(app.$("drawer-title-tools")).find(node => node.className.includes("icon-button")).onclick();
+assert.equal(app.context.copied, a.session_id);
+// Source, scale, archive time and coverage details stay on the session page, not in this preview.
+assert.doesNotMatch(text(app.$("drawer-content")), /检测范围与缺口|观测|归档|采集状态|fixture/);
+assert.match(text(app.$("drawer-content")), /^尚未检测，问题列表为空不代表会话没有问题/, "no detection recorded yet is the only note");
 app.escape();
 assert.equal(app.$("drawer").hidden, true);
 assert.equal(app.location.hash, "#view=session");
@@ -294,12 +299,29 @@ const quiet = app.cards().find(card => card.dataset.key === "quiet");
 assert.match(text(quiet), /无保留问题（不代表会话正确）[\s\S]*预览缺失[\s\S]*2 条记录读取失败/);
 app.open(broken).onclick();
 assert.match(text(app.$("drawer-content")), /会话记录不可读取/);
-assert.ok(!all(app.$("drawer-content")).some(node => node.className.includes("link-button") && node.textContent.startsWith("打开会话页")), "no link to a page that cannot exist");
+assert.ok(!all(app.$("drawer")).some(node => node.textContent.startsWith("打开会话页")), "no link to a page that cannot exist");
+assert.ok(all(app.$("drawer-title-tools")).some(node => node.className.includes("icon-button")), "the ID can still be copied");
 app.escape();
 app.open(quiet).onclick();
-assert.match(text(app.$("drawer-content")), /生成命令：[\s\S]*atk visualize trace --session-id quiet --overwrite --no-open/);
-assert.match(text(app.$("drawer-content")), /记录读取失败 2/);
-assert.match(text(app.$("drawer-content")), /没有保留问题不代表会话正确/);
+assert.equal(all(app.$("drawer-tools")).filter(node => node.tag === "a").length, 1, "switching sessions does not stack header links");
+assert.match(text(app.$("drawer-content")), /会话页尚未生成/);
+const regenerate = all(app.$("drawer-content")).find(node => node.tag === "button" && node.textContent === "复制生成命令");
+regenerate.onclick();
+assert.equal(app.context.copied, "atk visualize trace --session-id quiet --overwrite --no-open");
+assert.match(text(app.$("drawer-content")), /2 条记录读取失败/);
+assert.match(text(app.$("drawer-content")), /无保留问题（不代表会话正确）/);
+app.escape();
+// A finished detection adds no note; any other status warns that the list may be incomplete.
+const checked = JSON.parse(JSON.stringify(base));
+checked.sessions.find(s => s.session_id === "session-a").detection = {status: "completed"};
+checked.sessions.find(s => s.session_id === "session-b").detection = {status: "partial"};
+app = boot(checked);
+app.go(`#view=session&session=${encodeURIComponent(a.dir)}`);
+assert.equal(all(app.$("drawer-content")).filter(node => node.className.includes("warning")).length, 0, "a complete, fresh session shows no notes");
+app.go(`#view=session&session=${encodeURIComponent(b.dir)}`);
+assert.match(text(app.$("drawer-content")), /最近一次检测部分完成，问题可能不全/);
+app = boot(odd);
+app.open(app.cards().find(card => card.dataset.key === "quiet")).onclick();
 assert.equal(app.rows().length, 0);
 
 // --- tab keyboard: arrows wrap and activate, Home/End jump, other keys pass through -------------------------
