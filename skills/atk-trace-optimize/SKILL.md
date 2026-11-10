@@ -17,7 +17,7 @@ A session/issue, readable diagnosis with matching digest, selected proposal, aut
 
 ## Outputs
 
-Focused implementation changes and one issue-owned change record with target issues, adopted diagnoses, baseline, actual diff/candidate and local checks. Shared changes are stored once and referenced by other target issues.
+Focused implementation changes and one issue-owned change record with target issues, adopted diagnoses, baseline, actual diff/candidate and local checks, plus the session's generated `preview.html`. Shared changes are stored once and referenced by other target issues.
 
 ## Workflow
 
@@ -26,13 +26,16 @@ Focused implementation changes and one issue-owned change record with target iss
 3. Repair the supported cause with the smallest complete change. Keep input/reference/judge corrections separate; changed criteria are not Agent improvement. Do not modify unknown or uncontrolled components merely to produce a diff.
 4. Run relevant local checks and retain commands/results, affected paths, baseline and candidate identity: a real commit when applicable, otherwise actual file/diff hashes and loading-relevant configuration. Never invent runtime/model/version evidence.
 5. Complete the same change with `id`, expected `revision`, `status: completed`, `candidate`, actual `diff` and `checks`. Completion freezes adopted diagnoses and candidate; revisions require a new change. For multiple issues, one record owns all `target_issues` and per-issue adopted `diagnoses`; other issues reference its owner path. Do not duplicate the repair or execution.
-6. Deliver changed files, candidate/change ID, checks and remaining verification scope. Continue to verify when continuously authorized without fixed stage confirmation.
+6. After the stage's final record writes, generate/update the session's default `preview.html` once using `atk visualize trace --session-id <id> --overwrite --no-open --json`, reusing the same project/source options. Include saved failed/blocked/interrupted work; do not refresh on each running-state write or target issue. Consume only the CLI summary; do not read the generated HTML into context or invoke a separate visualization Skill. Preserve any known user-edited preview instead of overwriting it.
+7. Deliver changed files, candidate/change ID, checks, remaining verification scope and preview path/warnings. Continue to verify when continuously authorized without fixed stage confirmation.
 
 When referring to a recorded location inside the Issue, cite `ISSUE-<id>/S<n>` so the offline preview can link back to that segment.
 
 ## Failure behavior
 
 Missing diagnosis/candidate proof prevents a completed-change claim. Evidence may justify more investigation instead of an artificial diff. Do not call local checks full Agent success, automatically roll back user state or optimize again merely because verification failed.
+
+Preview failure does not undo the repair or block the next authorized stage. Report that the preview is unavailable or stale; keep saved records and any previous page.
 
 ## CLI dependency
 

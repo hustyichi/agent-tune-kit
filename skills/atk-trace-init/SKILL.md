@@ -17,7 +17,7 @@ The current project, existing Trace files, optional `.atk/context.md`, project d
 
 ## Outputs
 
-`.atk/traces/project.md`, non-secret `config.json`, readiness and specific gaps. No session archive, download, issue, Agent execution or evaluation version.
+`.atk/traces/project.md`, non-secret `config.json`, readiness and specific gaps. No session archive, download, issue, Agent execution or evaluation version. Initialization has no bound session and does not generate an empty preview; session stages generate it once retained material exists.
 
 ## Workflow
 

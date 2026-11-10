@@ -17,7 +17,7 @@ An identified session, archived captures, optional focus and confirmed project s
 
 ## Outputs
 
-Selected per-issue records with a retention reason and a detection entry binding inspected traces, scope, unread material and gaps. Zero retained issues still requires coverage. Do not create an auxiliary observation list or a duplicate report.
+Selected per-issue records with a retention reason and a detection entry binding inspected traces, scope, unread material and gaps, plus the session's generated `preview.html`. Zero retained issues still requires coverage. Do not create an auxiliary observation list or a duplicate report.
 
 ## Which findings to retain
 
@@ -47,7 +47,9 @@ Before saving, read the title and description on their own: can a reader say wha
 3. Identify supported mismatches, omissions, incorrect tool behavior, recovery failures or unsupported completion claims, then apply “Which findings to retain”. For each selected issue, write a concise `selection_reason` stating which condition applies and why, and author `title`/`description` using “Write a recognizable problem”. A retained issue is worth investigating, not necessarily a confirmed implementation defect.
 4. Review existing issue identities before adding/updating; CLI does no semantic deduplication. For each distinct problem location, write one `segments[]` entry with a free-text `summary` and the smallest `scope` that still explains it (`node` for an execution unit and its descendants, or `from`/`to` for a continuous range on one Trace). Split across Traces. Put field references under that segment; keep only non-locatable materials in top-level `evidence`. Optional `atk trace issue --dry-run --data <json-file> --json` reports covered node counts and durations before writing. Save with `atk trace issue --session-id <id> --data <json-file> --json`. Issue fields are `title`, `description`, `selection_reason`, optional `segments` / top-level `evidence`; updates include existing `id` and `revision`. Obtain hashed references using `atk trace ref --session-id <id> --path <session-relative-file> --pointer <json-pointer> --json`. Check cited fields after reimport. Omission never resolves an issue; exclusion retains reasons/history.
 5. Save coverage with `atk trace detect --session-id <id> --data <json-file> --json`: `scope`, actual `status` and `gaps`; updates bind `id` and `revision`. Include the user's focus, applied selection scope, checked nodes/rounds and unread ranges, including zero retained issues, partial and interrupted analysis. New capture does not change old coverage facts. Reassessing existing issues requires an explicit reason and revision history; omission never deletes or resolves them.
-6. Deliver stable IDs, retention reasons, impact, evidence, coverage and gaps, drawing the summary from the saved problem statements. If final synthesis makes a problem clearer or changes its scope, revise the record before delivery rather than leaving the clearest explanation only in chat. If none qualify, say “No issues met this detection's selection criteria”, not that the session was correct. Default depth ends at the selected issue list: explain obvious causes, but leave decisive causal experiments to diagnose and do not execute the Agent by default. For an explicit continuous investigation/repair request, continue within authorization without fixed per-stage approvals.
+6. If final synthesis makes a problem clearer or changes its scope, revise the record before generating the preview and delivering results rather than leaving the clearest explanation only in chat.
+7. After all issue and coverage writes, generate/update the session's default `preview.html` once using `atk visualize trace --session-id <id> --overwrite --no-open --json`, reusing the same project/source options. Include zero-issue, partial and interrupted analysis with retained material. Consume only the CLI summary; do not read the generated HTML into context or invoke a separate visualization Skill. Preserve any known user-edited preview instead of overwriting it.
+8. Deliver stable IDs, retention reasons, impact, evidence, coverage, gaps and preview path/warnings, drawing the summary from the saved problem statements. If none qualify, say “No issues met this detection's selection criteria”, not that the session was correct. Default depth ends at the selected issue list: explain obvious causes, but leave decisive causal experiments to diagnose and do not execute the Agent by default. For an explicit continuous investigation/repair request, continue within authorization without fixed per-stage approvals.
 
 ## Starting from local files
 
@@ -62,6 +64,8 @@ Repeat `--path` for selected files; inspect native Session ownership before impo
 ## Failure behavior
 
 Unread material remains unknown. Empty issues do not prove correctness. Missing evidence for one part does not erase supported findings elsewhere. Do not promote a suspected cause, silently re-download, or invent expected answers.
+
+Preview failure does not undo detection or block the next authorized stage. Report that the preview is unavailable or stale; keep saved records and any previous page.
 
 ## CLI dependency
 

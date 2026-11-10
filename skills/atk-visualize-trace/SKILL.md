@@ -9,7 +9,7 @@ metadata:
 
 ## Purpose
 
-Prepare display data from existing session records and generate the fixed offline browser. This is display initialization, not acquisition, diagnosis or verification.
+Prepare display data from existing session records and generate the fixed offline browser. Session stages already generate/update their preview without opening a browser; use this Skill for explicit preview/open requests. This is display initialization, not acquisition, diagnosis or verification.
 
 ## Inputs
 
@@ -22,10 +22,10 @@ One `.atk/traces/<session_id>/preview.html`, or an explicit output path. No side
 ## Workflow
 
 1. Resolve archived data with `atk trace status --session-id <id> --json`. Reuse its actual source; do not fetch/substitute data to fill display gaps.
-2. Run `atk visualize trace --session-id <id> --json`, optionally `--source <source-json> --output-path <file> --overwrite --no-open`. Opening is default; `--no-open` is for headless/opted-out requests. Replace only an authorized generated preview without discarding user edits.
+2. Run `atk visualize trace --session-id <id> --json`, optionally `--source <source-json> --output-path <file> --overwrite --no-open`. Use `--overwrite` to refresh the default generated preview left by session stages. Opening is default for explicit visualization requests; automatic stage generation always uses `--no-open`. Replace only an authorized generated preview without discarding user edits.
 3. The fixed generator reads manifests/issues, checks references, safely embeds data/CSS/JavaScript and writes atomically. Do not handwrite HTML or install frontend packages. Optional stages stay empty; broken references are visible while healthy material remains readable.
 4. Start with the full captured session. Read all records in time order, or focus one Trace. Select an issue to highlight its related ranges and move through them with the fragment controls. Open a fragment’s evidence to inspect its cited Trace, node and field. Exit fragment navigation to restore the prior view. File-only and unavailable references retain their original identities. The issue drawer also retains diagnosis, candidate and verification stages. Shared changes follow the owner path. Escape closes details.
-5. Report output path, trace count, digests and browser result. Open failure still delivers the file. Open offline pages become stale until regenerated after disk changes; they perform no background requests. Labeled truncation points to retained evidence. Sharing HTML shares embedded previews, not the entire archive.
+5. Report output path, trace count, digests and browser result. Open failure still delivers the file. After regeneration, an already open page needs a browser refresh; it performs no background requests. Labeled truncation points to retained evidence. Sharing HTML shares embedded previews, not the entire archive.
 
 ## Failure behavior
 

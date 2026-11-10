@@ -151,7 +151,9 @@ $atk-visualize-trace Open the execution lanes for session <session-id> and jump 
 
 Detection retains issues with serious impact, recurrence, direct relevance to your stated focus, or a concrete implementation improvement lead, and explains the retention reason, evidence and inspection scope. Implementation leads include code, configuration, tool contracts, Prompt and Skill; an unresolved cause can proceed to diagnosis. Minor observations with none of these reasons are not saved separately. No retained issues does not prove the session was correct.
 
-Use Trace IDs to locate evidence within the session and open issue details to read the retention reason. You can generate a preview once traces are archived. Review any retained content in the HTML before sharing it.
+The capture, detect, diagnose, optimize and verify Skills generate or update `.atk/traces/<session_id>/preview.html` at stage end without opening a browser. Use `$atk-visualize-trace` when you want to open it; refresh an already open page after the file changes. Initialization has no session trace and does not generate an empty page.
+
+Use Trace IDs to locate evidence within the session and open issue details to read the retention reason. Review any retained content in the HTML before sharing it.
 
 ### 3. Investigate, Fix, and Verify an Issue as Needed
 

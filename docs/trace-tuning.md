@@ -16,7 +16,7 @@ Use the seven independent Skills in your Agent project:
 | `$atk-trace-verify` | Actual execution, candidate loading and per-issue effect judgments |
 | `$atk-visualize-trace` | A self-contained offline HTML browser from existing records |
 
-A known problem can go directly to diagnosis after binding its session and issue. Detection normally stops at the issue list. An explicit continuous investigation/repair request can proceed within its authorized scope without fixed per-stage confirmations. Preview generation works after any retained capture, including zero-issue and partial sessions.
+A known problem can go directly to diagnosis after binding its session and issue. Detection normally stops at the issue list. An explicit continuous investigation/repair request can proceed within its authorized scope without fixed per-stage confirmations. Capture, detect, diagnose, optimize and verify Skills generate/update the session preview at stage end without opening a browser, including zero-issue and partial sessions. Init has no bound session and does not generate an empty preview.
 
 Every session command takes `--session-id`, optional `--source <json-file>` to disambiguate, `--project-root` (default `.`), and `--json`. JSON-taking arguments such as `--ref`, `--source`, `--config`, `--data`, `--association` and `--retention` receive a JSON file path, not inline JSON text. Save a returned reference object to a file before using it with `show`. Trace IDs locate evidence inside a session; they are not independent import/download entry points. Missing native session identity or verifiable association does not create a replacement identity.
 
@@ -219,11 +219,21 @@ Record running state before operations. Recovery checks actual Git/file state, p
 
 ## Browse offline
 
+Session Skills run this command once after their final record writes, reusing the same project/source options:
+
 ```sh
-atk visualize trace --session-id SESSION_ID --json
+atk visualize trace --session-id SESSION_ID --overwrite --no-open --json
 ```
 
-The default is `.atk/traces/<session_id>/preview.html`, opened in the browser. Options include `--source`, `--project-root`, `--output-path`, authorized `--overwrite` and `--no-open`. Open failure still delivers the file; failed generation preserves previous output.
+The default `.atk/traces/<session_id>/preview.html` is a generated artifact. A stage creates it if missing and refreshes it after all issue updates, including saved failed/interrupted attempts. Verification refreshes the original investigated session. Capture reuses a successful preview returned by its final fetch/import when nothing changed afterward. Known user-edited pages are preserved. The host consumes the CLI summary and delivers the path/warnings without loading the HTML into model context. Generation failure leaves saved analysis and any previous page intact; the host reports the preview as unavailable or stale and can continue the authorized workflow.
+
+This default is orchestrated by the Skills; individual record-writing CLI commands do not each trigger a render. To explicitly regenerate and open the generated preview, use `$atk-visualize-trace` or:
+
+```sh
+atk visualize trace --session-id SESSION_ID --overwrite --json
+```
+
+Explicit visualization opens the browser by default. Options include `--source`, `--project-root`, `--output-path`, authorized `--overwrite` and `--no-open`. Open failure still delivers the file; failed generation preserves previous output. An already open page needs a browser refresh after the file is regenerated.
 
 The page opens on the complete session. Layout: a collapsible issue rail on the left, a compact swimlane chart above the Event list in the center, and an overlay drawer on the right for Event or Issue detail. Each Trace has one lane on the session clock with no permanent issue tracks. Scroll the Event list to read all observations in chronological order, including concurrent Traces. Select a lane heading or a time mark to find its records. Use **放大** to focus one Trace and **返回完整会话** to restore your position. A single Trace opens at full scale. Child lanes require an explicit subtask identity. Undated records remain accessible. Search and type filters are optional; **仅看片段** collapses records between selected segments.
 
@@ -258,6 +268,6 @@ In a local preview, a diagnosis link such as `[Project setup](src/project.py#L42
     └── preview.html
 ```
 
-Files appear as their corresponding steps run. The archive uses native Session and Trace IDs as path components, with escaping where needed. Read `session.json` for detection coverage, including a completed analysis with zero findings. Issues share the retained traces. Regenerate `preview.html` to review the latest diagnoses, changes, and verification attempts. Explicit batch verification creates ordinary new batch results and links them from the trace verification record.
+Files appear as their corresponding steps run. The archive uses native Session and Trace IDs as path components, with escaping where needed. Read `session.json` for detection coverage, including a completed analysis with zero findings. Issues share the retained traces. Session Skills refresh `preview.html` with the latest diagnoses, changes and verification attempts; regenerate manually after direct record edits. Explicit batch verification creates ordinary new batch results and links them from the trace verification record.
 
 No private trace, credential, company gateway or business example is bundled. Automated fixture tests establish deterministic behavior; real Langfuse deployment compatibility, fresh host loading and actual business repair require their own evidence. A successful local import is not a remote API or business-effect acceptance result.
