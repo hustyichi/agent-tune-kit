@@ -11,7 +11,7 @@ async function check(browser, url, viewport) {
     const list = page.locator("#trace-scroll");
     const unusedHeight = await list.evaluate(frame => {
       const panel = frame.parentElement;
-      return panel.getBoundingClientRect().bottom - parseFloat(getComputedStyle(panel).borderBottomWidth) -
+      return panel.querySelector(".event-scroll-status").getBoundingClientRect().top -
         frame.getBoundingClientRect().bottom;
     });
     assert.ok(Math.abs(unusedHeight) <= 1, `The Event panel has ${unusedHeight}px of unused space below the list`);

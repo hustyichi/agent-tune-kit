@@ -124,6 +124,7 @@
       top: scroller.scrollTop,
       lanes: swim.snapshot(),
       scroll: window.scrollY,
+      railTop: $("issue-rail-list").scrollTop,
       focus: document.activeElement,
     };
   }
@@ -138,6 +139,7 @@
     renderTraces(state.top);
     swim.restore(state.lanes);
     window.scrollTo(0, state.scroll);
+    $("issue-rail-list").scrollTop = state.railTop;
     if (state.focus?.isConnected) state.focus.focus({preventScroll:true});
     else if (state.focus?.matches(".lane-zoom")) {
       const track = state.focus.closest(".trace-overview").dataset.track;
@@ -803,7 +805,21 @@
     const chosen = selectedIndex();
     for (const row of list.querySelectorAll(".trace-row")) row.setAttribute("aria-current", String(Number(row.dataset.nodeIndex) === chosen));
   }
+  function updateScrollStatus() {
+    const count = displayRows.length;
+    const start = Math.min(count, Math.floor(scroller.scrollTop / rowHeight));
+    const end = Math.min(count, Math.ceil((scroller.scrollTop + scroller.clientHeight) / rowHeight));
+    const visible = displayRows.slice(start, end).filter(item => item.kind === "row");
+    $("event-visible-range").textContent = visible.length
+      ? `第 ${streamRows.indexOf(visible[0].index) + 1}–${streamRows.indexOf(visible.at(-1).index) + 1} 条 / 共 ${streamRows.length} 条`
+      : `共 ${streamRows.length} 条事件`;
+    $("event-scroll-hint").textContent = !count ? ""
+      : scroller.scrollHeight <= scroller.clientHeight + 1
+        ? (displayRows.some(item => item.kind === "fold" && !item.expanded) ? "片段已完整显示 · 可展开上下文" : `已显示全部 ${streamRows.length} 条`)
+        : scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 1 ? "已到列表末尾" : "向下滚动查看更多";
+  }
   function paintWindow(force = false) {
+    updateScrollStatus();
     const count = displayRows.length;
     const first = Math.max(0, Math.min(count, Math.floor(scroller.scrollTop / rowHeight)) - 8);
     const last = Math.min(count, first + Math.ceil(scroller.clientHeight / rowHeight) + 17);
@@ -878,6 +894,7 @@
     list.style.paddingTop = `${first * rowHeight}px`;
     list.style.paddingBottom = `${(count - last) * rowHeight}px`;
     list.replaceChildren(content);
+    updateScrollStatus();
     if (focus != null) list.querySelector(`[data-node-index="${focus}"]`)?.focus({preventScroll:true});
   }
   function selectAndScroll(index) {
@@ -1295,6 +1312,20 @@
     }
   });
   window.addEventListener("hashchange", () => applyHash());
+  const compactTimeline = matchMedia("(min-width: 961px) and (max-height: 680px)");
+  let timelineCollapsed = null;
+  const updateTimelineVisibility = () => {
+    const collapsed = timelineCollapsed ?? compactTimeline.matches;
+    $("timeline-panel").hidden = collapsed;
+    $("timeline-toggle").textContent = collapsed ? "展开泳道" : "收起泳道";
+    $("timeline-toggle").setAttribute("aria-expanded", String(!collapsed));
+  };
+  $("timeline-toggle").onclick = () => {
+    timelineCollapsed = !$("timeline-panel").hidden;
+    updateTimelineVisibility();
+  };
+  compactTimeline.addEventListener("change", updateTimelineVisibility);
+  updateTimelineVisibility();
   const initialHash = location.hash;
   chooseCapture(); renderIssueRail(); renderTraces(); applyHash(initialHash);
 })();

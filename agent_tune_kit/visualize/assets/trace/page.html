@@ -24,7 +24,7 @@
         <details id="project-choice" class="project-choice"><summary id="project-summary">关联项目：全部</summary><div class="project-menu"><p>含子项目</p><button id="project-clear" type="button">清空筛选</button><div id="project-filter" role="group" aria-label="关联项目"></div></div></details>
       <label><span class="sr-only">状态</span><select id="issue-status"></select></label>
       </div>
-      <div id="issue-rail-list" class="rail-list"></div>
+      <div id="issue-rail-list" class="rail-list" tabindex="0" aria-label="问题列表"></div>
     </aside>
     <div class="main-pane">
       <div class="view-heading">
@@ -35,10 +35,10 @@
           </div>
           <div id="summary" class="muted"></div>
         </div>
-        <div class="view-actions"><label class="capture-choice">快照 <select id="capture-filter"></select></label></div>
+        <div class="view-actions"><button id="timeline-toggle" type="button" aria-controls="timeline-panel" aria-expanded="true">收起泳道</button><label class="capture-choice">快照 <select id="capture-filter"></select></label></div>
       </div>
       <div id="capture-status" role="status"></div>
-      <section class="panel timeline-panel" aria-labelledby="lane-title">
+      <section id="timeline-panel" class="panel timeline-panel" aria-labelledby="lane-title">
         <div id="lane-scroll" class="lane-scroll" tabindex="0" aria-label="执行泳道"><div id="lane-chart"></div></div>
         <div class="lane-footer">
           <div class="lane-legend">
@@ -70,7 +70,8 @@
         </div>
         <div class="panel stream">
           <div class="row-grid stream-header"><span>会话时间</span><span class="trace-col">Trace</span><span>事件</span><span class="result-col">内容预览</span><span class="event-meta">状态 / 耗时</span></div>
-          <div id="trace-scroll" tabindex="0" aria-label="事件列表，按时间顺序"><div id="trace-list"></div></div>
+          <div id="trace-scroll" tabindex="0" aria-label="事件列表，按时间顺序" aria-describedby="event-scroll-status"><div id="trace-list"></div></div>
+          <div id="event-scroll-status" class="event-scroll-status"><span id="event-visible-range"></span><span id="event-scroll-hint"></span></div>
         </div>
       </section>
     </div>

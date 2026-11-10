@@ -7,6 +7,8 @@
 .time-col, .trace-tag, .axis-ticks, .lane-id { font-family: var(--mono) }
 
 .view-heading, .view-actions, .records-heading, .records-title, .lane-footer, .lane-legend, .toolbar, .fragment-controls, .capture-choice, .rail-header, .rail-title, .rail-filters, .issue-card-head, .seg-meta { display: flex; align-items: center; gap: 10px }
+.rail-header, .rail-filters, .view-heading, .records-heading, #capture-status,
+#fragment-bar, .stream-header, .event-scroll-status { flex-shrink: 0 }
 #session-stats { font-size: 12px; white-space: nowrap }
 
 .workspace { flex: 1; min-height: 0; display: grid; grid-template-columns: var(--rail-width) minmax(0, 1fr); gap: 0 }
@@ -32,7 +34,7 @@ body.rail-collapsed #rail-toggle { transform: rotate(180deg) }
 .rail-filters > label { min-width: 0; max-width: 100% }
 .rail-filters input[type=search] { width: 100% }
 .rail-filters .project-choice { margin-bottom: 0 }
-.rail-list { flex: 1; min-height: 0; overflow: auto; padding: 12px; display: flex; flex-direction: column; gap: 12px }
+.rail-list { flex: 1; min-height: 0; overflow: auto; scrollbar-gutter: stable; scrollbar-width: thin; padding: 12px; display: flex; flex-direction: column; gap: 12px }
 .issue-card { display: flex; flex: none; flex-direction: column; gap: 10px; width: 100%; min-width: 0; text-align: left; padding: 16px; border-radius: 12px }
 .issue-card:hover, .issue-card[aria-current=true] { background: var(--paper) }
 .issue-card-head { justify-content: space-between; gap: 6px; width: 100%; flex-wrap: wrap }
@@ -78,6 +80,7 @@ body.rail-collapsed .rail-list { padding-inline: 4px }
 #summary, .capture-choice, .lane-footer, #trace-count, #rail-count { font-size: 12px; color: var(--muted) }
 .capture-choice { gap: 6px }
 .capture-choice select { max-width: 190px }
+#timeline-toggle { font-size: 12px; white-space: nowrap }
 #capture-status:empty, #warnings:empty { display: none }
 .timeline-panel { flex: none; min-width: 0 }
 .lane-scroll { max-height: 33vh; overflow: auto; scrollbar-width: thin; overscroll-behavior-x: contain; border-radius: 9px 9px 0 0 }
@@ -161,6 +164,12 @@ body.rail-collapsed .rail-list { padding-inline: 4px }
   flex: 1 1 50vh; flex-basis: 50dvh; min-height: 0;
   overflow: auto; overflow-anchor: none; scrollbar-width: thin; scrollbar-gutter: stable;
 }
+.event-scroll-status {
+  display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;
+  gap: 2px 16px; min-height: 32px; padding: 6px 16px;
+  border-top: 1px solid var(--line); background: var(--paper);
+  color: var(--muted); font-size: 12px;
+}
 .trace-row, .segment-header, .fold-row { width: 100%; height: var(--row-height); text-align: left; border: 0; border-bottom: 1px solid #edf0f3; border-radius: 0; padding-block: 0 }
 .trace-row:hover { background: #f5f9fa }
 .trace-row.in-fragment { background: #fffaf4; box-shadow: inset 3px 0 #f0b27a }
@@ -222,10 +231,26 @@ pre { background: var(--bg); border-radius: 6px; padding: 8px 12px; font-size: 1
 .payload-heading h3, .payload-heading button { margin: 0 }
 .event-detail pre { margin: 0; max-height: min(480px, 50vh) }
 
+@media (min-width: 961px) and (min-height: 560px) {
+  body { height: 100vh; height: 100dvh; min-height: 0; overflow: hidden }
+  .workspace { overflow: hidden }
+  .stream { max-height: none }
+  #trace-scroll { flex: 1 1 0 }
+  .rail-list, #trace-scroll, .lane-scroll { overscroll-behavior-y: contain }
+  .lane-scroll { max-height: 28dvh }
+  #warnings { max-height: 15dvh; overflow: auto; flex-shrink: 0 }
+}
+@media (min-width: 961px) and (max-height: 559px) {
+  .workspace { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr) }
+  .issue-rail { border-right: 0; border-bottom: 1px solid var(--line); max-height: 240px }
+  body.rail-collapsed .issue-rail { max-height: 44px }
+  body.rail-collapsed .rail-list { display: none }
+  .stream { max-height: max(340px, 70dvh) }
+  #trace-scroll { flex-basis: max(240px, 45dvh) }
+}
 @media(max-width:960px) {
   .workspace { grid-template-columns: 1fr; grid-template-rows: auto minmax(0,1fr) }
   .issue-rail { border-right: 0; border-bottom: 1px solid var(--line); max-height: max(280px, 40dvh) }
-  .rail-header, .rail-filters { flex-shrink: 0 }
   body.rail-collapsed .issue-rail { max-height: 44px }
   body.rail-collapsed .rail-list { display: none }
 }

@@ -38,11 +38,12 @@ const {chromium} = require("playwright");
       assert.equal(await page.locator("#lane-members, .member-list").count(), 0);
       const cluster = page.locator(".lane-mark.cluster").first();
       if (await cluster.count()) {
-        const count = Number((await cluster.getAttribute("title")).match(/(\d+) 条事件$/)[1]);
         const laneCount = await page.locator(".trace-overview").count();
         await page.locator(".trace-row").first().click();
         await page.keyboard.press("Escape");
         await page.locator("#trace-search").fill("no matching event");
+        // Filtering redraws the lanes after the rail width change; inspect the group that is actually activated.
+        const count = Number((await cluster.getAttribute("title")).match(/(\d+) 条事件$/)[1]);
         await cluster.press("Enter");
         assert.equal(await page.locator("#drawer").isVisible(), false);
         assert.equal(await page.locator("#trace-search").inputValue(), "");
