@@ -26,6 +26,13 @@ def test_stage_cards_render_concise_evidence_without_raw_records():
     subprocess.run([node, str(Path(__file__).with_name("trace-stage-cards.cjs"))], check=True)
 
 
+def test_session_project_filter_and_links():
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("Node is required for the dependency-free renderer check")
+    subprocess.run([node, str(Path(__file__).with_name("trace-projects.cjs"))], check=True)
+
+
 def test_record_order_uses_instants_not_random_ids_or_timezone_strings():
     entries = [
         {"record": {"id": "VER-a", "created_at": "2026-01-01T00:30:00Z"}},

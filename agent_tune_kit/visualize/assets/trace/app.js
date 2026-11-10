@@ -28,7 +28,6 @@
     if (id === "~unattributed") return !roots.length;
     return roots.some(root => { let current = root.id; const seen = new Set(); while (current && !seen.has(current)) { if (current === id) return true; seen.add(current); current = data.projects?.[current]?.parent_id; } return false; });
   });
-  const projectText = item => (item.root_projects || []).map(p => p.name + (p.pending ? "（待确认）" : "")).join("、") || "待归因";
   const projectInputs = [];
   for (const p of [{id: "~unattributed", name: "待归因"}, ...Object.values(data.projects || {})]) {
     const label = el("label"), input = el("input");
@@ -71,6 +70,22 @@
   };
   const progressOf = item => ({label: item.progress.label, klass: item.progress.key});
   const dashboardHash = params => `../index.html#${params}`;
+  const projectLabels = item => {
+    const row = el("p", "关联项目：", "issue-projects");
+    const projects = item.root_projects || [];
+    if (!projects.length) row.append(document.createTextNode("待归因"));
+    projects.forEach((project, index) => {
+      if (index) row.append(document.createTextNode("、"));
+      const name = project.name + (project.pending ? "（待确认）" : "");
+      const label = el(data.dashboard.available ? "a" : "span", name);
+      if (data.dashboard.available) {
+        label.href = dashboardHash(`view=category&project=${encodeURIComponent(project.id)}`);
+        label.title = "在大盘中查看此项目的问题";
+      }
+      row.append(label);
+    });
+    return row;
+  };
   const categoryTag = id => {
     if (!id) return null;
     const info = data.categories[id];
@@ -406,7 +421,7 @@
     $("drawer-content").append(tabs);
     if (stage === "issue") {
       const description = section("问题描述");
-      description.append(el("p", `关联项目：${projectText(item)}`), el("p", issue.description || issue.title));
+      description.append(projectLabels(item), el("p", issue.description || issue.title));
       $("drawer-content").append(description);
       if (typeof issue.selection_reason === "string" && issue.selection_reason.trim()) {
         const reason = section("保留理由");
@@ -1028,11 +1043,7 @@
       const head = el("div", undefined, "issue-card-head");
       head.append(el("span", issue.id, "issue-id-text"), el("span", undefined, `progress-dot ${progress.klass}`));
       const body = el("div", undefined, "issue-card-body");
-      const projects = el("p", `关联项目：${projectText(item)}`);
-      if (data.dashboard.available) for (const project of item.root_projects || []) {
-        const link = el("a", project.name); link.href = dashboardHash(`view=category&project=${encodeURIComponent(project.id)}`); projects.append(link);
-      }
-      body.append(projects);
+      body.append(projectLabels(item));
       body.append(el("h3", issue.title || "问题"), el("div", progress.label, "issue-progress"));
       const tag = categoryTag(issue.category);
       if (tag) body.append(tag);
@@ -1073,7 +1084,7 @@
     syncRailSelection();
   }
   function syncHash() {
-    const parts = [];
+    const parts = [...projectSelection].map(id => `project=${encodeURIComponent(id)}`);
     if (investigation) {
       parts.push(`issue=${encodeURIComponent(investigation.item.record.id)}`);
       const part = partNow();
@@ -1086,30 +1097,36 @@
     if (location.hash !== next) history.replaceState(null, "", next || location.pathname + location.search);
   }
   function applyHash(hash = location.hash) {
+    // Initial rendering can normalize the URL before the saved deep link is applied.
+    if (hash !== location.hash) history.replaceState(null, "", hash || location.pathname + location.search);
     const raw = hash.slice(1);
-    if (!raw) return;
     const params = new URLSearchParams(raw.includes("=") ? raw : `issue=${raw}`);
+    projectSelection.clear(); params.getAll("project").forEach(id => projectSelection.add(id));
+    for (const input of projectInputs) input.checked = projectSelection.has(input.value);
+    updateProjectSummary();
     const issueId = params.get("issue");
     const seg = params.get("seg");
     const event = params.get("event");
     if (issueId) {
       const item = issueById.get(issueId);
-      if (!item) return;
+      if (!item) { renderIssueRail(); return; }
       let index = 0;
       if (seg) {
         const byId = item.fragments.findIndex(part => part.id === seg);
         index = byId >= 0 ? byId : Math.max(0, Number(seg) - 1);
       }
       startIssue(item, index);
+      renderIssueRail();
       return;
     }
     if (event) {
       const [traceId, nodeId] = event.split("/");
       for (const capture of data.captures) {
         const node = capture.nodes.find(item => String(item.trace_id) === traceId && String(item.id) === nodeId);
-        if (node) { navigateNode(capture, node); return; }
+        if (node) { navigateNode(capture, node); renderIssueRail(); return; }
       }
     }
+    renderIssueRail();
   }
 
   $("fragment-prev").onclick = () => goFragment(investigation.index-1);
