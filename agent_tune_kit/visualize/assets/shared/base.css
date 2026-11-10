@@ -93,3 +93,11 @@ select:hover { border-color: #9baebb }
   .drawer.above-record { inset: 0 0 auto; border-radius: 0 0 12px 12px; border-top: 0; border-bottom: 1px solid var(--line) }
   .drawer-resizer { display: none }
 }
+
+/* Project attribution belongs to issues; the menu is shared by both issue views. */
+.project-choice { position: relative; margin-bottom: 7px; font-size: 13px }
+.project-choice summary { padding: 8px 12px; border: 1px solid var(--line); border-radius: 6px; background: white }
+.project-menu { position: absolute; right: 0; z-index: 20; width: min(300px, 80vw); max-height: 320px; overflow: auto; padding: 12px; border: 1px solid var(--line); border-radius: 6px; background: white; box-shadow: 0 6px 20px #0002 }
+.project-menu p { margin: 0 0 8px }
+#project-filter label { display: flex; align-items: center; gap: 8px; padding: 6px 0 }
+#project-filter input { width: 16px; height: 16px; min-width: 16px; padding: 0 }

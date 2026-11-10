@@ -5,7 +5,7 @@ import pytest
 from agent_tune_kit.errors import UserActionRequired
 from agent_tune_kit.traces.projects import discover_projects, load_projects, root_projects, save_project
 from agent_tune_kit.traces.records import load_issue, save_diagnosis, save_issue
-from agent_tune_kit.traces.store import create_capture, evidence_ref, trace_root
+from agent_tune_kit.traces.store import create_capture, evidence_ref, load_session, trace_root
 
 
 def test_registry_boundaries_and_discovery(tmp_path):
@@ -47,6 +47,14 @@ def test_attribution_history_snapshot_and_root_only(tmp_path):
     assert [p["id"] for p in root_projects(directory.parent, issue)] == ["ape"]
     issue = save_issue(directory, {"id": issue["id"], "revision": issue["revision"], "title": "Updated"})
     assert issue["project_links"] == links
+    session = load_session(directory)
+    assert "project_links" not in session and "root_projects" not in session
+    assert session["source"]["project"] == "source"
+    from agent_tune_kit.visualize.traces import build_dashboard_data
+
+    summary = build_dashboard_data(tmp_path)["sessions"][0]
+    assert "root_projects" not in summary and "project_links" not in summary
+    assert [p["id"] for p in summary["issues"][0]["root_projects"]] == ["ape"]
     with pytest.raises(UserActionRequired):
         save_diagnosis(directory, issue["id"], "Cause and plan", expected_revision=1)
     diagnosis = save_diagnosis(directory, issue["id"], "Cause and plan", expected_revision=issue["revision"])

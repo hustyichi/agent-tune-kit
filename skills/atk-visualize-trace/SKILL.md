@@ -51,6 +51,8 @@ Trace writes `.atk/traces/`. Do not allocate `.atk/results/vN`, create a dataset
 
 ## Projects and scope
 
+Sessions contain issues; only individual issues own project associations. Do not store or display a session-level project union. `source.project` remains the trace source namespace. Project filters apply to the dashboard issue view and the issue list within a session; the session overview is unfiltered by project. Modification projects belong to repair records and details.
+
 Use `atk trace project --list --json` to resolve existing project IDs, names, established abbreviations and workspace-relative paths. `--project-root` remains the archive workspace; it is not an attribution target. Prefer user-specified projects for investigation, then follow evidence into other projects. Never invent abbreviations or infer root cause from a caller, runtime location or proposed fix.
 
 Read the applicable project's README, AGENTS.md and CLAUDE.md (including actual filename case variants) before investigation or modification. Keep project IDs and workspace-relative paths consistent. State inspected and uninspected scope, proposed versus actual modifications, candidate versions and per-project loading evidence. When modifying another project, explain the tradeoff and remaining limits. Do not update parent gitlinks without explicit authorization.

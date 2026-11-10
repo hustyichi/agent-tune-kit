@@ -21,7 +21,7 @@
       </div>
       <div class="rail-filters">
         <label class="search-label"><span class="sr-only">搜索问题</span><input id="issue-search" type="search" placeholder="搜索问题"></label>
-        <label>根因项目（含子项目）<select id="project-filter" multiple aria-label="根因项目"><option value="~unattributed">待归因</option></select></label>
+        <details id="project-choice" class="project-choice"><summary id="project-summary">异常根因项目：全部</summary><div class="project-menu"><p>含子项目</p><button id="project-clear" type="button">清空筛选</button><div id="project-filter" role="group" aria-label="异常根因项目"></div></div></details>
       <label><span class="sr-only">状态</span><select id="issue-status"></select></label>
       </div>
       <div id="issue-rail-list" class="rail-list"></div>

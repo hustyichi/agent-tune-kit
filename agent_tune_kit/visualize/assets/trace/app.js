@@ -29,10 +29,22 @@
     return roots.some(root => { let current = root.id; const seen = new Set(); while (current && !seen.has(current)) { if (current === id) return true; seen.add(current); current = data.projects?.[current]?.parent_id; } return false; });
   });
   const projectText = item => (item.root_projects || []).map(p => p.name + (p.pending ? "（待确认）" : "")).join("、") || "待归因";
-  for (const p of Object.values(data.projects || {})) { const option = el("option", p.abbreviation || p.name); option.value = p.id; $("project-filter").append(option); }
-  for (const option of $("project-filter").options) option.selected = projectSelection.has(option.value);
-  const projectOverview = el("p", `根因项目：${[...new Set(data.issues.map(projectText))].join("、") || "待归因"}`);
-  $("project-filter").parentElement.append(projectOverview);
+  const projectInputs = [];
+  for (const p of [{id: "~unattributed", name: "待归因"}, ...Object.values(data.projects || {})]) {
+    const label = el("label"), input = el("input");
+    input.type = "checkbox"; input.value = p.id;
+    input.checked = projectSelection.has(p.id);
+    label.append(input, document.createTextNode(p.abbreviation || p.name));
+    $("project-filter").append(label); projectInputs.push(input);
+    input.onchange = () => $("project-filter").onchange();
+  }
+  const updateProjectSummary = () => {
+    $("project-summary").textContent = projectSelection.size ? `异常根因项目：已选 ${projectSelection.size} 项` : "异常根因项目：全部";
+  };
+  updateProjectSummary();
+  $("project-clear").onclick = () => { projectInputs.forEach(input => { input.checked = false; }); $("project-filter").onchange(); };
+  $("project-choice").onkeydown = event => { if (event.key === "Escape") { $("project-choice").open = false; $("project-summary").focus(); } };
+
   const filters = ["trace-filter", "type-filter", "trace-search", "record-mode"];
   const list = $("trace-list"), scroller = $("trace-scroll");
   const scope = () => $("trace-filter").value === "" ? null : Number($("trace-filter").value);
@@ -1015,7 +1027,7 @@
       const body = el("div", undefined, "issue-card-body");
       const projects = el("p", `根因项目：${projectText(item)}`);
       if (data.dashboard.available) for (const project of item.root_projects || []) {
-        const link = el("a", project.name); link.href = dashboardHash(`view=session&project=${encodeURIComponent(project.id)}`); projects.append(link);
+        const link = el("a", project.name); link.href = dashboardHash(`view=category&project=${encodeURIComponent(project.id)}`); projects.append(link);
       }
       body.append(projects);
       body.append(el("h3", issue.title || "问题"), el("div", progress.label, "issue-progress"));
@@ -1107,7 +1119,7 @@
   $("capture-filter").closest("label").hidden = Boolean(currentCapture?.current);
   options($("capture-filter"), data.captures.map(c => c.id));
   if (currentCapture) $("capture-filter").value = currentCapture.id;
-  $("project-filter").onchange = () => { projectSelection.clear(); for (const option of $("project-filter").selectedOptions) projectSelection.add(option.value); const params = new URLSearchParams(location.hash.slice(1)); params.delete("project"); for (const id of projectSelection) params.append("project", id); history.replaceState(null, "", `#${params}`); renderIssueRail(); };
+  $("project-filter").onchange = () => { projectSelection.clear(); for (const input of projectInputs) if (input.checked) projectSelection.add(input.value); updateProjectSummary(); const params = new URLSearchParams(location.hash.slice(1)); params.delete("project"); for (const id of projectSelection) params.append("project", id); history.replaceState(null, "", `#${params}`); renderIssueRail(); };
   $("capture-filter").onchange = () => { investigation = null; scopeBefore = null; railFilter = null; chooseCapture(); renderIssueRail(); renderTraces(); };
   $("trace-filter").onchange = () => focusTrace(scope());
   for (const id of ["trace-search","type-filter","record-mode"]) $(id).addEventListener(id === "trace-search" ? "input" : "change", () => renderTraces());

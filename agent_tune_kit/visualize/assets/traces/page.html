@@ -20,7 +20,7 @@
         <button id="tab-category" type="button" role="tab" aria-controls="dash-panel">异常</button>
       </div>
       <label class="search-label"><span class="sr-only">搜索</span><input id="dash-search" type="search" placeholder="搜索 Session ID、问题编号、标题、分类"></label>
-      <label>根因项目（含子项目）<select id="project-filter" multiple aria-label="根因项目"><option value="~unattributed">待归因</option></select></label>
+      <details id="project-choice" class="project-choice"><summary id="project-summary">异常根因项目：全部</summary><div class="project-menu"><p>含子项目</p><button id="project-clear" type="button">清空筛选</button><div id="project-filter" role="group" aria-label="异常根因项目"></div></div></details>
       <label id="source-choice" hidden><span class="sr-only">来源</span><select id="source-filter"></select></label>
     </div>
     <div id="dash-panel" class="dash-panel" role="tabpanel" aria-labelledby="tab-session">

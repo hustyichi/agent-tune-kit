@@ -53,7 +53,7 @@ const text = node => [node.textContent, ...node.children.map(text)].join(" ").re
 
 function boot(data) {
   const ids = new Map();
-  for (const id of ["project-filter", "project-name", "dash-stats", "warnings", "source-choice", "source-filter", "tab-session", "tab-category", "dash-panel", "dash-search", "progress-bar", "progress-legend", "filter-note", "dash-grid", "dash-strip", "drawer", "drawer-title", "drawer-content", "drawer-close", "drawer-resizer"]) {
+  for (const id of ["project-choice", "project-summary", "project-clear", "project-filter", "project-name", "dash-stats", "warnings", "source-choice", "source-filter", "tab-session", "tab-category", "dash-panel", "dash-search", "progress-bar", "progress-legend", "filter-note", "dash-grid", "dash-strip", "drawer", "drawer-title", "drawer-content", "drawer-close", "drawer-resizer"]) {
     ids.set(id, Object.assign(new Node("div"), {id}));
   }
   for (const id of ["drawer-title", "drawer-content", "drawer-close", "drawer-resizer"]) ids.get(id).parentElement = ids.get("drawer");
@@ -344,3 +344,43 @@ assert.equal(app.cards().filter(card => card.dataset.key).length, 0);
 app.go("#view=session&project=ape");
 assert.ok(app.cards().length > 0);
 assert.match(text(app.cards()[0]), /APE（待确认）/);
+assert.equal(selected("tab-category"), true, "legacy project links open issue grouping");
+app.$("tab-session").onclick();
+assert.equal(app.cards().length, base.sessions.length);
+assert.equal(app.$("project-choice").hidden, true);
+assert.ok(app.cards().every(card => !text(card).includes("根因项目")));
+assert.equal(app.location.hash, "#view=session");
+app.$("tab-category").onclick();
+assert.equal(app.$("project-choice").hidden, false);
+assert.match(app.location.hash, /project=ape/);
+app.$("project-clear").onclick();
+assert.doesNotMatch(app.location.hash, /project=/);
+assert.equal(app.$("project-summary").textContent, "异常根因项目：全部");
+
+// Different issues in one session can have different projects or remain unattributed.
+const mixed = JSON.parse(JSON.stringify(base));
+mixed.projects = {a: {id: "a", name: "Alpha"}, b: {id: "b", name: "Beta"}};
+mixed.sessions[0].issues[0].root_projects = [{id: "a", name: "Alpha"}];
+mixed.sessions[0].issues[1].root_projects = [{id: "b", name: "Beta"}];
+mixed.sessions[0].issues[2].root_projects = [];
+app = boot(mixed);
+app.go("#view=category&project=a");
+assert.match(text(app.$("filter-note")), /1 个会话 · 1 个问题/);
+app.$("tab-session").onclick();
+assert.match(text(app.$("filter-note")), /2 个会话 · 4 个问题/);
+app.open(app.cards()[0]).onclick();
+assert.equal(app.rows().length, 3);
+assert.ok(app.rows().every(row => all(row).filter(n => n.tag === "a").every(n => !n.href.includes("&project="))));
+app.go("#view=category&project=~unattributed");
+assert.match(text(app.$("filter-note")), /2 个会话 · 2 个问题/);
+const betaInput = app.$("project-filter").children.find(label => label.children[0].value === "b").children[0];
+app.$("project-clear").onclick();
+betaInput.checked = true;
+betaInput.onchange();
+assert.match(app.location.hash, /project=b/);
+assert.match(text(app.$("filter-note")), /1 个会话 · 1 个问题/);
+assert.equal(app.$("project-summary").textContent, "异常根因项目：已选 1 项");
+app.$("project-choice").open = true;
+app.$("project-choice").onkeydown({key: "Escape"});
+assert.equal(app.$("project-choice").open, false);
+assert.equal(app.$("project-summary").focused, true);
