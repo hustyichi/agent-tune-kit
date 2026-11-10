@@ -27,7 +27,7 @@
     input.onchange = () => $("project-filter").onchange();
   }
   const updateProjectSummary = () => {
-    $("project-summary").textContent = projectSelection.size ? `异常根因项目：已选 ${projectSelection.size} 项` : "异常根因项目：全部";
+    $("project-summary").textContent = projectSelection.size ? `关联项目：已选 ${projectSelection.size} 项` : "关联项目：全部";
   };
   updateProjectSummary();
   $("project-clear").onclick = () => { projectInputs.forEach(input => { input.checked = false; }); $("project-filter").onchange(); };
@@ -246,7 +246,7 @@
     const counts = countBy(items.map(item => item.issue));
     const row = el("div", undefined, "card-count");
     row.append(el("strong", `${new Set(items.map(item => item.s.dir)).size} 个会话 · ${items.length} 个问题`), el("span", `最近 ${when(latestOf(items) < 0 ? null : latestOf(items))}`, "muted"));
-    card.append(el("p", `该类异常涉及的根因项目：${[...new Set(items.map(({issue}) => projectText(issue)))].join("、")}`));
+    card.append(el("p", `关联项目：${[...new Set(items.map(({issue}) => projectText(issue)))].join("、")}`));
     card.append(row, miniBar(counts), el("div", topProgress(counts), "card-meta"));
     return card;
   }
@@ -279,7 +279,7 @@
     const jump = el("a", "↗", "row-jump"); jump.href = href; jump.setAttribute("aria-label", `在会话页打开 ${issue.id}`);
     // Title gets the full first line and may wrap; category and progress sit on their own line beneath it.
     const meta = el("div", undefined, "row-meta");
-    meta.append(el("span", `根因项目：${projectText(issue)}`, "project-tag"));
+    meta.append(el("span", `关联项目：${projectText(issue)}`, "project-tag"));
     if (withCategory) meta.append(categoryChip(issue.category));
     meta.append(el("span", LABEL.get(issue.progress), "row-progress"));
     row.append(dot, el("span", shortIssue(issue.id), "issue-id-text"), title, jump, meta);

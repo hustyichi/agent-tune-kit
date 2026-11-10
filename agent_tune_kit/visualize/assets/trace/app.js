@@ -39,7 +39,7 @@
     input.onchange = () => $("project-filter").onchange();
   }
   const updateProjectSummary = () => {
-    $("project-summary").textContent = projectSelection.size ? `异常根因项目：已选 ${projectSelection.size} 项` : "异常根因项目：全部";
+    $("project-summary").textContent = projectSelection.size ? `关联项目：已选 ${projectSelection.size} 项` : "关联项目：全部";
   };
   updateProjectSummary();
   $("project-clear").onclick = () => { projectInputs.forEach(input => { input.checked = false; }); $("project-filter").onchange(); };
@@ -303,7 +303,7 @@
       if (snapshot?.project_links) {
         const entries = new Map((snapshot.project_registry?.projects || []).map(p => [p.id, p]));
         const names = snapshot.project_links.filter(p => p.role === "root_cause").map(p => { const entry = entries.get(p.project_id); return (entry?.abbreviation || entry?.name || p.project_id) + (p.evidence_state === "supported" ? "" : "（待确认）"); });
-        body.prepend(el("p", `诊断时的根因项目：${names.join("、") || "待归因"}`));
+        body.prepend(el("p", `诊断时的关联项目：${names.join("、") || "待归因"}`));
       }
       const name = diagnosis.reference.path.split("/").pop();
       details.append(el("summary", `展开原诊断 · ${name}`), body);
@@ -403,7 +403,7 @@
     $("drawer-content").append(tabs);
     if (stage === "issue") {
       const description = section("问题描述");
-      description.append(el("p", `根因项目：${projectText(item)}`), el("p", issue.description || issue.title));
+      description.append(el("p", `关联项目：${projectText(item)}`), el("p", issue.description || issue.title));
       $("drawer-content").append(description);
       if (typeof issue.selection_reason === "string" && issue.selection_reason.trim()) {
         const reason = section("保留理由");
@@ -1025,7 +1025,7 @@
       const head = el("div", undefined, "issue-card-head");
       head.append(el("span", issue.id, "issue-id-text"), el("span", undefined, `progress-dot ${progress.klass}`));
       const body = el("div", undefined, "issue-card-body");
-      const projects = el("p", `根因项目：${projectText(item)}`);
+      const projects = el("p", `关联项目：${projectText(item)}`);
       if (data.dashboard.available) for (const project of item.root_projects || []) {
         const link = el("a", project.name); link.href = dashboardHash(`view=category&project=${encodeURIComponent(project.id)}`); projects.append(link);
       }
