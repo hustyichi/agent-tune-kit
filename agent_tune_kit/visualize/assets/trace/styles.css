@@ -28,11 +28,9 @@ body.rail-collapsed #rail-toggle { transform: rotate(180deg) }
 #rail-toggle { width: 28px; height: 28px; padding: 0; flex-shrink: 0 }
 .rail-filters { padding: 8px 10px; gap: 6px; border-bottom: 1px solid var(--line); background: white; flex-wrap: wrap }
 .rail-filters .search-label { flex: 1 0 100%; min-width: 0 }
-.rail-filters input, .rail-filters select { width: 100%; height: 32px; font-size: 12px; padding: 0 8px }
-.rail-filters select { width: auto; min-width: 88px }
-.rail-filters .project-choice { margin-bottom: 0; font-size: 12px }
-.rail-filters .project-choice summary { height: 32px; padding: 6px 8px; white-space: nowrap }
-.rail-filters .project-menu { left: 0; right: auto }
+.rail-filters > label { min-width: 0; max-width: 100% }
+.rail-filters input[type=search] { width: 100% }
+.rail-filters .project-choice { margin-bottom: 0 }
 .rail-list { flex: 1; min-height: 0; overflow: auto; padding: 8px; display: flex; flex-direction: column; gap: 8px }
 .issue-card { display: flex; flex-direction: column; gap: 6px; width: 100%; text-align: left; padding: 10px }
 .issue-card-head { justify-content: space-between; gap: 6px; width: 100% }
@@ -56,7 +54,7 @@ body.rail-collapsed #rail-toggle { transform: rotate(180deg) }
 .view-heading { flex-wrap: wrap; gap: 8px }
 #summary, .capture-choice, .lane-footer, #trace-count, #rail-count { font-size: 12px; color: var(--muted) }
 .capture-choice { gap: 6px }
-.capture-choice select { max-width: 190px; font-size: 12px }
+.capture-choice select { max-width: 190px }
 #capture-status:empty, #warnings:empty { display: none }
 .overview-card { border: 1px solid var(--line); border-radius: 9px; background: white }
 .timeline-panel { flex: none; min-width: 0 }
@@ -124,16 +122,10 @@ body.rail-collapsed #rail-toggle { transform: rotate(180deg) }
 .record-filters { gap: 8px; max-width: 100% }
 .record-filters label { display: block; min-width: 0 }
 .segments-only { display: inline-flex !important; align-items: center; gap: 6px; white-space: nowrap; color: var(--muted); font-size: 12px }
-.segments-only input { width: auto; height: auto; accent-color: var(--brand) }
-.toolbar input {
-  display: block; height: 34px; max-width: 100%; padding: 0 11px;
-  font-size: 13px; line-height: normal; border-color: #cdd8e1;
-}
 #trace-filter { width: 152px }
 #record-mode { width: 104px }
 #type-filter { width: 142px }
 #trace-search { width: 208px }
-.toolbar input:hover { border-color: #9baebb }
 .toolbar select:has(option:checked:not([value=""])) { border-color: #deb493; color: var(--accent) }
 @container (max-width: 650px) {
   .record-filters { display: grid; width: 100%; grid-template-columns: repeat(2,minmax(0,1fr)) }
@@ -205,7 +197,8 @@ pre { background: var(--bg); border-radius: 6px; padding: 8px 12px; font-size: 1
 
 @media(max-width:960px) {
   .workspace { grid-template-columns: 1fr; grid-template-rows: auto minmax(0,1fr) }
-  .issue-rail { border-right: 0; border-bottom: 1px solid var(--line); max-height: 28vh }
+  .issue-rail { border-right: 0; border-bottom: 1px solid var(--line); max-height: max(250px, 28vh) }
+  .rail-header, .rail-filters { flex-shrink: 0 }
   body.rail-collapsed .issue-rail { max-height: 44px }
   body.rail-collapsed .rail-list { display: none }
 }
@@ -219,7 +212,8 @@ pre { background: var(--bg); border-radius: 6px; padding: 8px 12px; font-size: 1
   .lane-name { max-width: 66px }
   .lane-note { font-size: 9px }
   .lane-zoom, .root-info { font-size: 11px; padding: 2px }
-  .lane-footer { padding-inline: 8px }
+  .lane-footer { padding-inline: 8px; flex-wrap: wrap }
+  .lane-legend { gap: 8px; flex-wrap: wrap }
   .row-grid { grid-template-columns: 80px 34px minmax(0,1fr); gap: 8px; padding-inline: 7px }
   .stream.single .row-grid { grid-template-columns: 80px minmax(0,1fr) }
   .result-col { display: none }

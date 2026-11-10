@@ -31,7 +31,6 @@
   };
   updateProjectSummary();
   $("project-clear").onclick = () => { projectInputs.forEach(input => { input.checked = false; }); $("project-filter").onchange(); };
-  $("project-choice").onkeydown = event => { if (event.key === "Escape") { $("project-choice").open = false; $("project-summary").focus(); } };
 
 
   const NONE = "~uncategorized"; // cannot collide with a kebab-case category ID
@@ -453,7 +452,6 @@
   let pressedOutside = false;
   document.addEventListener("pointerdown", event => { pressedOutside = state.drawer !== null && dismissable(event.target); });
   document.addEventListener("click", event => {
-    if (!event.target.closest("#project-choice")) $("project-choice").open = false;
     const close = pressedOutside && state.drawer !== null && dismissable(event.target);
     pressedOutside = false;
     if (close) closeDrawer();

@@ -5,7 +5,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
-const source = fs.readFileSync(path.join(__dirname, "../agent_tune_kit/visualize/assets/traces/app.js"), "utf8");
+const source = ["shared/project-menu.js", "traces/app.js"].map(file =>
+  fs.readFileSync(path.join(__dirname, "../agent_tune_kit/visualize/assets", file), "utf8")).join("\n");
 const base = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
 
 class Node {
@@ -69,7 +70,7 @@ function boot(data) {
     createElement: tag => new Node(tag),
     createTextNode: value => Object.assign(new Node("#text"), {textContent: value}),
     querySelectorAll: selector => [...ids.values()].flatMap(all).filter(node => matches(node, selector)),
-    addEventListener: (name, fn) => { listeners.document[name] = fn; },
+    addEventListener: (name, fn) => { (listeners.document[name] ??= []).push(fn); },
     documentElement: {style: {setProperty() {}}},
     body: new Node("body"),
   };
@@ -84,6 +85,11 @@ function boot(data) {
   });
   vm.runInContext(source, context);
   const $ = id => ids.get(id);
+  const dispatch = (name, event) => {
+    let stopped = false;
+    Object.assign(event, {preventDefault() {}, stopPropagation() { stopped = true; }});
+    for (const listener of listeners.document[name]) { listener(event); if (stopped) break; }
+  };
   return {
     $, location, context,
     cards: () => $("dash-grid").children,
@@ -93,9 +99,9 @@ function boot(data) {
     legend: label => all($("progress-legend")).find(node => node.className.includes("legend-item") && text(node).startsWith(label)),
     search: value => $("dash-search").oninput({target: {value}}),
     go: hash => { location.hash = hash; listeners.window.hashchange(); },
-    escape: () => listeners.document.keydown({key: "Escape", preventDefault() {}}),
+    escape: () => dispatch("keydown", {key: "Escape"}),
     // A mouse click as the document sees it: the press lands on `down`, the click on `up` (the same node by default).
-    press: (down, up = down) => { listeners.document.pointerdown({target: down}); listeners.document.click({target: up}); },
+    press: (down, up = down) => { dispatch("pointerdown", {target: down}); dispatch("click", {target: up}); },
   };
 }
 
@@ -404,7 +410,7 @@ assert.match(app.location.hash, /project=b/);
 assert.match(text(app.$("filter-note")), /1 个会话 · 1 个问题/);
 assert.equal(app.$("project-summary").textContent, "关联项目：已选 1 项");
 app.$("project-choice").open = true;
-app.$("project-choice").onkeydown({key: "Escape"});
+app.escape();
 assert.equal(app.$("project-choice").open, false);
 assert.equal(app.$("project-summary").focused, true);
 app.$("project-choice").open = true;

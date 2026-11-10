@@ -24,6 +24,7 @@ from .timeline import build_timeline, legacy_point_fragments, recorded_segments
 
 ASSETS = resources.files("agent_tune_kit.visualize").joinpath("assets", "trace")
 SHARED_STYLES = resources.files("agent_tune_kit.visualize").joinpath("assets", "shared", "base.css")
+PROJECT_MENU = resources.files("agent_tune_kit.visualize").joinpath("assets", "shared", "project-menu.js")
 RECORD_LIMIT = 1024 * 1024
 # shortcut: collect plain inline destinations, use a shared parser if reference-style links are needed.
 INLINE_LINK = re.compile(r"\]\((?:<([^<>\n]+)>|([^\s)]+))\)")
@@ -385,7 +386,8 @@ def generate_trace(project_root=".", *, session_id, source=None, output_path=Non
     notice = vendor.joinpath("markdown-it.LICENSE").read_text(encoding="utf-8")
     markdown = vendor.joinpath("markdown-it.min.js").read_text(encoding="utf-8")
     page = page.replace("__MARKDOWN__", neutralize_script_close(f"/*\n{notice}\n*/\n{markdown}"))
-    page = page.replace("__APP__", neutralize_script_close(ASSETS.joinpath("app.js").read_text(encoding="utf-8")))
+    scripts = PROJECT_MENU.read_text(encoding="utf-8") + "\n" + ASSETS.joinpath("app.js").read_text(encoding="utf-8")
+    page = page.replace("__APP__", neutralize_script_close(scripts))
     page = page.replace("__DATA__", safe_json_for_html(data))
     write_text_atomic(output, page)
     opened = False

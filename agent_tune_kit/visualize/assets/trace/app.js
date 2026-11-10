@@ -42,10 +42,6 @@
   };
   updateProjectSummary();
   $("project-clear").onclick = () => { projectInputs.forEach(input => { input.checked = false; }); $("project-filter").onchange(); };
-  $("project-choice").onkeydown = event => { if (event.key === "Escape") { $("project-choice").open = false; $("project-summary").focus(); } };
-  document.addEventListener("click", event => {
-    if (!event.target.closest("#project-choice")) $("project-choice").open = false;
-  });
 
   const filters = ["trace-filter", "type-filter", "trace-search", "record-mode"];
   const list = $("trace-list"), scroller = $("trace-scroll");

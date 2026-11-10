@@ -27,6 +27,7 @@ from .render import neutralize_script_close, open_in_browser, safe_json_for_html
 
 ASSETS = resources.files("agent_tune_kit.visualize").joinpath("assets", "traces")
 SHARED_STYLES = resources.files("agent_tune_kit.visualize").joinpath("assets", "shared", "base.css")
+PROJECT_MENU = resources.files("agent_tune_kit.visualize").joinpath("assets", "shared", "project-menu.js")
 INDEX_NAME = "index.html"
 PREVIEW_NAME = "preview.html"
 SAFE_SOURCE_FIELDS = ("type", "instance", "project", "environment")
@@ -230,7 +231,8 @@ def generate_traces(project_root=".", *, overwrite=False, open_browser=True):
         SHARED_STYLES.read_text(encoding="utf-8") + "\n" + ASSETS.joinpath("styles.css").read_text(encoding="utf-8")
     )
     page = template.replace("__STYLES__", styles)
-    page = page.replace("__APP__", neutralize_script_close(ASSETS.joinpath("app.js").read_text(encoding="utf-8")))
+    scripts = PROJECT_MENU.read_text(encoding="utf-8") + "\n" + ASSETS.joinpath("app.js").read_text(encoding="utf-8")
+    page = page.replace("__APP__", neutralize_script_close(scripts))
     # Data goes in last so record text can never be mistaken for a template marker.
     page = page.replace("__DATA__", safe_json_for_html(data))
     write_text_atomic(output, page)

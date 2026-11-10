@@ -6,21 +6,28 @@ const vm = require("node:vm");
 const {test} = require("node:test");
 
 const source = fs.readFileSync(path.join(__dirname, "../agent_tune_kit/visualize/assets/trace/app.js"), "utf8");
+const menuSource = fs.readFileSync(path.join(__dirname, "../agent_tune_kit/visualize/assets/shared/project-menu.js"), "utf8");
 const slice = (start, end) => source.slice(source.indexOf(start), source.indexOf(end));
 const nodes = node => [node, ...node.children.flatMap(nodes)];
 class Element {
   constructor(tag) { this.tag = tag; this.children = []; this.textContent = ""; this.value = ""; this.dataset = {}; }
-  append(...items) { this.children.push(...items); }
+  append(...items) { for (const item of items) { item.parentElement = this; this.children.push(item); } }
   replaceChildren(...items) { this.children = items; }
   setAttribute(name, value) { this[name] = value; }
   querySelectorAll(selector) { return nodes(this).filter(node => node.className === selector.slice(1)); }
   focus() { this.focused = true; }
+  closest(selector) {
+    for (let node = this; node; node = node.parentElement) if (`#${node.id}` === selector) return node;
+    return null;
+  }
 }
 const text = node => node.textContent + node.children.map(text).join("");
 
 function boot(hash = "", available = true) {
   const ids = new Map();
-  const $ = id => { if (!ids.has(id)) ids.set(id, new Element("div")); return ids.get(id); };
+  const $ = id => { if (!ids.has(id)) ids.set(id, Object.assign(new Element("div"), {id})); return ids.get(id); };
+  $("project-choice").append($("project-summary"), $("project-filter"), $("project-clear"));
+  const listeners = {};
   const data = {
     projects: {workspace: {id: "workspace", name: "Workspace"}, server: {id: "server", name: "magic-code-server", parent_id: "workspace"}, other: {id: "other", name: "Other"}},
     issues: [
@@ -33,10 +40,12 @@ function boot(hash = "", available = true) {
   const location = {hash, pathname: "/session/preview.html", search: ""};
   const context = vm.createContext({
     $, data, location, URLSearchParams,
-    document: {createElement: tag => new Element(tag), createTextNode: text => Object.assign(new Element("#text"), {textContent: text}), addEventListener() {}},
+    document: {getElementById: $, createElement: tag => new Element(tag), createTextNode: text => Object.assign(new Element("#text"), {textContent: text}), addEventListener: (name, fn) => { listeners[name] = fn; }},
+    window: {addEventListener() {}},
     history: {replaceState: (_s, _t, url) => { location.hash = url.startsWith("#") ? url : ""; }},
     pretty: JSON.stringify, drawLanes() {}, rememberView() {}, showIssue() {},
   });
+  vm.runInContext(menuSource, context);
   vm.runInContext(`
     let investigation = null, selectedNode = null, railFilter = null, previewIssue = null, scopeBefore = null;
     const currentCapture = null;
@@ -56,6 +65,8 @@ function boot(hash = "", available = true) {
   context.render();
   return {
     $, data, context, location,
+    click: node => listeners.click({target: node}),
+    escape: () => { let stopped = false; listeners.keydown({key: "Escape", preventDefault() {}, stopPropagation() { stopped = true; }}); return stopped; },
     cards: () => $("issue-rail-list").children.filter(node => node.className === "issue-card"),
     inputs: () => $("project-filter").children.map(label => label.children[0]),
     go: hash => { location.hash = hash; context.applyHash(); },
@@ -136,4 +147,21 @@ test("back to dashboard opens the session view without a drawer", () => {
   vm.runInContext(slice("\n  if (data.dashboard.available) {", "  for (const warning of data.warnings)"), app.context);
   assert.equal(app.$("dashboard-link").href, "../index.html#view=session");
   assert.equal(app.$("dashboard-link").hidden, false);
+});
+
+test("the shared project menu keeps internal clicks and dismisses outside clicks and Escape", () => {
+  const app = boot(), choice = app.$("project-choice");
+  for (const node of [app.inputs()[0], app.$("project-clear"), app.$("project-summary")]) {
+    choice.open = true; app.click(node);
+    assert.equal(choice.open, true);
+  }
+  for (const id of ["issue-search", "issue-status", "issue-rail-list", "trace-list"]) {
+    choice.open = true; app.click(app.$(id));
+    assert.equal(choice.open, false);
+  }
+  choice.open = true;
+  assert.equal(app.escape(), true, "Escape must not also exit the active issue");
+  assert.equal(choice.open, false);
+  assert.equal(app.$("project-summary").focused, true);
+  assert.equal(app.escape(), false, "Escape passes through when the menu is closed");
 });
