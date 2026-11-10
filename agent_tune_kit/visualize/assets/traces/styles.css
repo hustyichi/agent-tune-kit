@@ -10,11 +10,9 @@
 /* The view switch is an underlined tab bar: the bar's bottom line separates it from the panel, and the selected tab's
    brand underline sits on that line. Search and the source filter ride on the right of the same bar. */
 .dash-controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; border-bottom: 1px solid var(--line) }
-.dash-controls .search-label { flex: 1 1 260px; max-width: 440px; min-width: 0; margin-left: auto }
+.dash-controls .search-label { flex: 1 1 260px; max-width: 440px; min-width: 0 }
 .dash-controls .search-label, #source-choice { margin-bottom: 7px }
-/* Keep the toolbar geometry when the issue-only project filter is hidden. */
-.dash-controls #project-choice[hidden] { display: block !important; visibility: hidden }
-.view-tabs { display: flex; gap: 4px }
+.view-tabs { display: flex; gap: 4px; margin-right: auto }
 .view-tabs [role=tab] { height: 40px; margin-bottom: -1px; padding: 0 16px; border: 0; border-bottom: 2px solid transparent; border-radius: 6px 6px 0 0; background: transparent; color: var(--muted); font-weight: 600 }
 .view-tabs [role=tab]:hover { color: var(--ink); background: #edf1f4 }
 .view-tabs [role=tab][aria-selected=true] { color: var(--accent); border-bottom-color: var(--brand); background: transparent; cursor: default }
@@ -123,6 +121,6 @@ button.category-tag:hover { background: #ffe8d2 }
   /* Search wraps under the tabs here, so the tab line moves onto the tab row itself. */
   .dash-controls { border-bottom: 0 }
   .view-tabs { flex-basis: 100%; border-bottom: 1px solid var(--line) }
-  .dash-controls .search-label { max-width: none; margin-left: 0 }
+  .dash-controls .search-label { max-width: none }
   .dash-controls .search-label, .dash-controls .project-choice, #source-choice { margin-bottom: 0 }
 }
