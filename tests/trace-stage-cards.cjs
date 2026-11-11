@@ -19,10 +19,14 @@ const showIssue = source.slice(source.indexOf("  const showIssue ="), source.ind
 const progress = source.slice(source.indexOf("  const progressOf ="), source.indexOf("  const shortIssue ="));
 const container = new Element("div");
 const context = vm.createContext({
-  document: {createElement: tag => new Element(tag)},
+  document: {
+    createElement: tag => new Element(tag),
+    createTextNode: textContent => Object.assign(new Element("#text"), {textContent}),
+  },
   pretty: value => JSON.stringify(value),
   $: () => container,
   openDrawer: () => { container.children = []; },
+  appendReferences: (parent, refs) => refs.forEach(ref => parent.append(Object.assign(new Element("button"), {textContent: ref.path}))),
   sourceLinks: new Map([["src/reader.ts#L3", "../../../src/reader.ts#L3"]]),
   markdown: {normalizeLink: value => value},
   location: {protocol: "file:"},
@@ -58,6 +62,20 @@ const item = {
   record: {id: "ISSUE-001", title: "Wrong path"}, changes: [change], diagnoses: [],
   progress: {key: "inconclusive", label: "无法判断"},
 };
+const issueDetail = {record: {
+  id: "ISSUE-DETAIL", title: "Evidence access", description: "Problem description", selection_reason: "Reason to retain",
+  segments: [{id: "S1", summary: "Segment summary", evidence: [{path: "segment-only.json"}]}],
+  evidence: [{path: "extra.txt"}],
+}};
+context.showIssue(issueDetail);
+assert.ok(nodes(container).some(node => node.tag === "button" && node.textContent === "问题详情"));
+assert.ok(!nodes(container).some(node => node.tag === "h3" && node.textContent === "关联片段"));
+assert.match(text(container), /Problem description[\s\S]*Reason to retain[\s\S]*额外证据/);
+assert.deepEqual(nodes(container).filter(node => node.tag === "button" && /\.(txt|json)$/.test(node.textContent)).map(node => node.textContent), ["extra.txt"]);
+delete issueDetail.record.segments;
+context.showIssue(issueDetail);
+assert.match(text(container), /尚未圈定片段[\s\S]*关联证据/);
+assert.ok(nodes(container).some(node => node.tag === "button" && node.textContent === "extra.txt"));
 let rendered = renderStage(item, "changes");
 const pairs = nodes(rendered).filter(node => node.className === "change-item");
 assert.equal(pairs.length, 2);

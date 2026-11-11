@@ -423,7 +423,7 @@
     const issue = item.record;
     openDrawer(`${issue.id} · ${issue.title || "问题详情"}`, "issue");
     const tabs = el("nav", undefined, "stage-tabs"); tabs.setAttribute("aria-label", "问题处理阶段");
-    for (const [key, label] of [["issue", "问题与片段"], ["diagnoses", "诊断与方案"], ["changes", "修改候选"], ["verifications", "实际验证"]]) {
+    for (const [key, label] of [["issue", "问题详情"], ["diagnoses", "诊断与方案"], ["changes", "修改候选"], ["verifications", "实际验证"]]) {
       const tab = button(label, () => showIssue(item, key), key === stage ? "active" : "");
       tab.setAttribute("aria-pressed", String(key === stage)); tabs.append(tab);
     }
@@ -439,17 +439,6 @@
       }
       const segments = issue.segments || [];
       if (!segments.length) $("drawer-content").append(el("p", "该问题尚未圈定片段，可查看已记录的关联证据。", "muted"));
-      if (segments.length) {
-        const box = section("关联片段");
-        segments.forEach((segment, index) => {
-          const row = el("div", undefined, "detail-section");
-          const title = `${segment.id || `S${index + 1}`} · ${segment.summary || "未命名片段"}`;
-          row.append(button(title, () => startIssue(item, item.fragments.findIndex(part => part.id === segment.id || (!part.id && index === item.fragments.indexOf(part))))));
-          appendReferences(row, segment.evidence || []);
-          box.append(row);
-        });
-        $("drawer-content").append(box);
-      }
       if ((issue.evidence || []).length) {
         const evidence = section(segments.length ? "额外证据" : "关联证据");
         appendReferences(evidence, issue.evidence);

@@ -311,6 +311,8 @@ The diagnosis tab shows the latest structured diagnosis under Issue description,
 
 In a local preview, a diagnosis link such as `[Project setup](src/project.py#L42)` opens a file resolved against the project root at generation time. ATK checks that the file exists under that root and excludes hidden paths. Older absolute `path:line` links use the same checks. Unresolved paths have a copy control. The line fragment marks the cited line, and scrolling to it depends on the file viewer.
 
+The **问题详情** tab shows the description, linked projects and selection reason without repeating the full segment directory. Navigate segments in the rail or center, then use **片段证据（N）** to inspect the selected segment's references in the drawer. Extra evidence and legacy issues without segments keep their evidence links in Issue detail.
+
 ### Actual progress
 
 The preview, its issue filter and the dashboard all show actual progress derived from saved records. The declared issue `status` is ignored, except that `excluded` always shows **已排除**. Otherwise the first matching rule applies:
