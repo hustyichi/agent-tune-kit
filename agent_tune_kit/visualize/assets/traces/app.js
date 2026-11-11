@@ -74,8 +74,13 @@
 
   // --- small building blocks ------------------------------------------------------------------------------------
   const countBy = issues => { const counts = new Map(); for (const issue of issues) counts.set(issue.progress, (counts.get(issue.progress) || 0) + 1); return counts; };
-  const topProgress = counts => [...counts].sort((a, b) => b[1] - a[1] || ORDER.get(a[0]) - ORDER.get(b[0])).slice(0, 2).map(([key, n]) => `${LABEL.get(key)} ${n}`).join(" · ");
   const flag = (text, bad) => el("span", text, bad ? "flag bad" : "flag");
+  // Cards do not repeat routine progress (the state filter and drawers carry it); they only flag the same results the
+  // session attention notes call out: failed verification and inconclusive verdicts.
+  const attentionFlags = counts => [
+    ...(counts.get("fail") ? [flag(`验证失败 ${counts.get("fail")}`, true)] : []),
+    ...(counts.get("inconclusive") ? [flag(`无法判断 ${counts.get("inconclusive")}`)] : []),
+  ];
   const copyText = async text => {
     try { await navigator.clipboard.writeText(text); return true; } catch { /* file:// pages may refuse; fall back below */ }
     try {
@@ -262,7 +267,7 @@
     if (matched.length) {
       const counts = countBy(matched);
       const row = el("div", undefined, "card-count");
-      row.append(el("strong", `${matched.length} 个问题`), el("span", topProgress(counts), "muted"));
+      row.append(el("strong", `${matched.length} 个问题`), ...attentionFlags(counts));
       card.append(row);
     } else card.append(el("div", "无保留问题（不代表会话正确）", "card-count muted"));
     const perCategory = new Map(); let none = 0;
@@ -308,9 +313,9 @@
     card.append(head, el("div", info ? info.definition : "分类词表中没有这条分类，按分类 ID 显示。", "card-definition"));
     const counts = countBy(items.map(item => item.issue));
     const row = el("div", undefined, "card-count");
-    row.append(el("strong", `${new Set(items.map(item => item.s.dir)).size} 个会话 · ${items.length} 个问题`), el("span", latestOf(items) < 0 ? "发生时间未记录" : `最近发生 ${when(latestOf(items))}`, "muted"));
+    row.append(el("strong", `${new Set(items.map(item => item.s.dir)).size} 个会话 · ${items.length} 个问题`), el("span", latestOf(items) < 0 ? "发生时间未记录" : `最近发生 ${when(latestOf(items))}`, "muted"), ...attentionFlags(counts));
     card.append(projectLine(items.map(({issue}) => issue)));
-    card.append(row, el("div", topProgress(counts), "card-meta"));
+    card.append(row);
     return card;
   }
   // The distinct projects behind a group of issues; each offered name narrows the issue view to that project.

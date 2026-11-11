@@ -135,6 +135,12 @@ assert.ok(app.cards().every(card => text(metaOf(card)) === "发生时间未记�
 assert.equal(app.$("progress-legend").hidden, true);
 assert.equal(app.$("filter-note").hidden, true, "no redundant summary before filtering");
 assert.match(text(app.$("session-attention")), /1 个会话存在验证失败的问题/);
+// Cards flag only results that need attention; routine progress lives in the state filter and the drawers.
+const flagsOf = card => all(card).filter(node => node.className.startsWith("flag")).map(node => [text(node), node.className]);
+const sessionCardOf = id => app.cards().find(card => card.dataset.key === byDir(base, id).dir);
+assert.deepEqual(flagsOf(sessionCardOf("session-b")), [["验证失败 1", "flag bad"]], "a failed verification is flagged on its session");
+assert.deepEqual(flagsOf(sessionCardOf("session-a")), [], "pending, diagnosed and passing issues raise no flag");
+assert.ok(app.cards().every(card => !/待诊断|已诊断|验证通过/.test(text(card))), "session cards do not repeat routine progress");
 
 // --- issue filters stay in their own view and counts follow the visible rows -----------------------------
 app.$("tab-category").onclick();
@@ -305,7 +311,7 @@ assert.equal(metaOf(timedCard).title, "11-06 12:55 – 11-06 13:19", "hover show
 app.$("tab-category").onclick();
 assert.match(text(app.cards()[0]), /最近发生 11-06 12:55/, "category cards name the latest session run");
 assert.ok(app.cards().every(card => !all(card).some(node => node.className.includes("mini-bar"))), "category cards have no progress bar");
-assert.match(text(app.cards()[0]), /(待诊断|已诊断|验证失败|验证通过) \d/, "category cards keep the progress text");
+assert.ok(app.cards().every(card => !/待诊断|已诊断|验证通过/.test(text(card))), "category cards do not repeat routine progress");
 app.$("tab-session").onclick();
 assert.ok(app.cards().every(card => !all(card).some(node => node.className.includes("mini-bar") || node.attrs.role === "img")), "session cards have no progress bar");
 
@@ -506,6 +512,10 @@ const uncertain = JSON.parse(JSON.stringify(base));
 uncertain.sessions[0].issues.forEach(issue => { issue.progress = "inconclusive"; });
 app = boot(uncertain);
 assert.match(text(app.$("session-attention")), /1 个会话存在“无法判断”的验证结论/);
+assert.ok(app.cards().some(card => flagsOf(card).some(([label, cls]) => /^无法判断 \d+$/.test(label) && cls === "flag")), "inconclusive verdicts are flagged on the session card");
+app.$("tab-category").onclick();
+assert.ok(app.cards().some(card => flagsOf(card).some(([label]) => /^无法判断 \d+$/.test(label))), "and on the category card");
+app.$("tab-session").onclick();
 app.search("nothing-matches-this");
 assert.equal(app.$("session-attention").hidden, true);
 all(app.$("filter-note")).find(node => node.tag === "button").onclick();
