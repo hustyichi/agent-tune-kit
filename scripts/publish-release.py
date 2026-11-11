@@ -292,7 +292,7 @@ def main() -> int:
         for artifact in artifacts:
             print(f"- {artifact.relative_to(REPO_ROOT)}")
         print(
-            f"To publish: UV_PUBLISH_TOKEN='pypi-...' uv run python scripts/publish-release.py --repository {target.name} --publish"
+            f"To publish: UV_PUBLISH_TOKEN='pypi-...' UV_NO_CONFIG=1 uv run --locked python scripts/publish-release.py --repository {target.name} --publish"
         )
         return 0
 

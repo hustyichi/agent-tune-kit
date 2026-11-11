@@ -3,4 +3,5 @@ set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-exec uv run python scripts/release-version.py "$@"
+export UV_NO_CONFIG=1
+exec uv run --locked python scripts/release-version.py "$@"

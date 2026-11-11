@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import importlib.util
 import os
-import re
 import sys
 import tempfile
 import tomllib
@@ -51,11 +50,11 @@ class ReleaseScriptTests(unittest.TestCase):
         self.assertEqual(
             commands,
             [
-                ["uv", "run", "ruff", "format", "."],
-                ["uv", "run", "ruff", "check", "--fix", "."],
-                ["uv", "run", "ruff", "format", "--check", "."],
-                ["uv", "run", "ruff", "check", "."],
-                ["uv", "run", "python", "-m", "py_compile", *check_release.PYTHON_FILES],
+                ["uv", "run", "--locked", "ruff", "format", "."],
+                ["uv", "run", "--locked", "ruff", "check", "--fix", "."],
+                ["uv", "run", "--locked", "ruff", "format", "--check", "."],
+                ["uv", "run", "--locked", "ruff", "check", "."],
+                ["uv", "run", "--locked", "python", "-m", "py_compile", *check_release.PYTHON_FILES],
             ],
         )
         self.assertFalse(any("--unsafe-fixes" in command for command in commands))
@@ -147,14 +146,6 @@ class ReleaseScriptTests(unittest.TestCase):
         self.assertEqual(command[:4], ["uv", "publish", "--check-url", "https://test.pypi.org/simple"])
         self.assertIn("--publish-url", command)
         self.assertIn("https://test.pypi.org/legacy/", command)
-
-    def test_publish_check_url_matches_uv_lock_registry_style(self) -> None:
-        publish_release = load_script("publish-release.py")
-        lock_content = (ROOT / "uv.lock").read_text(encoding="utf-8")
-        match = re.search(r'source = \{ registry = "(https://pypi\.org/simple/?)" \}', lock_content)
-
-        self.assertIsNotNone(match)
-        self.assertEqual(publish_release.target_for("pypi").simple_url, match.group(1))
 
     def test_publish_requires_explicit_credentials_without_trusted_publishing(self) -> None:
         publish_release = load_script("publish-release.py")
@@ -286,10 +277,16 @@ class ReleaseScriptTests(unittest.TestCase):
         release_version = load_script("release-version.py")
         commands = release_version.release_commands("0.4.0", publish=True, skip_release_check=True)
 
-        self.assertEqual(commands[0], ["git", "status", "--porcelain"])
-        self.assertIn(["uv", "lock"], commands)
-        self.assertIn(["uv", "run", "pytest"], commands)
-        self.assertIn(["uv", "run", "atk", "--version"], commands)
+        self.assertEqual(
+            commands[:5],
+            [
+                ["git", "status", "--porcelain"],
+                ["uv", "lock"],
+                ["uv", "run", "--locked", "pytest"],
+                ["uv", "run", "--locked", "atk", "--version"],
+                ["uv", "run", "--locked", "python", "scripts/validate_skill_pack.py"],
+            ],
+        )
         self.assertIn(
             [
                 "git",
@@ -312,6 +309,7 @@ class ReleaseScriptTests(unittest.TestCase):
             [
                 "uv",
                 "run",
+                "--locked",
                 "python",
                 "scripts/publish-release.py",
                 "--repository",

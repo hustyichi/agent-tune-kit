@@ -87,9 +87,9 @@ def release_commands(
     commands = [
         ["git", "status", "--porcelain"],
         ["uv", "lock"],
-        ["uv", "run", "pytest"],
-        ["uv", "run", "atk", "--version"],
-        ["uv", "run", "python", "scripts/validate_skill_pack.py"],
+        ["uv", "run", "--locked", "pytest"],
+        ["uv", "run", "--locked", "atk", "--version"],
+        ["uv", "run", "--locked", "python", "scripts/validate_skill_pack.py"],
         ["git", "diff", "--check"],
         ["git", "add", *RELEASE_FILES],
         ["git", "commit", "-m", f"Prepare Agent Tune Kit {version} release"],
@@ -101,6 +101,7 @@ def release_commands(
         publish_command = [
             "uv",
             "run",
+            "--locked",
             "python",
             "scripts/publish-release.py",
             "--repository",
@@ -130,9 +131,9 @@ def commit_message(version: str) -> list[str]:
         "-m",
         "Directive: use scripts/release-version.sh for future version bumps so tag, push, and publish steps remain consistent.",
         "-m",
-        "Tested: uv run pytest; uv run atk --version; git diff --check",
+        "Tested: uv run --locked pytest; uv run --locked atk --version; git diff --check",
         "-m",
-        "Not-tested: uv run python scripts/validate_skill_pack.py may report known README/plugin documentation phrase gaps unless strict mode is used.",
+        "Not-tested: uv run --locked python scripts/validate_skill_pack.py may report known README/plugin documentation phrase gaps unless strict mode is used.",
         "-m",
         "Co-authored-by: OmX <omx@oh-my-codex.dev>",
     ]
@@ -190,13 +191,13 @@ def main() -> int:
         print(f"- {path}")
 
     run(["uv", "lock"])
-    run(["uv", "run", "pytest"])
-    version_output = capture(["uv", "run", "atk", "--version"])
+    run(["uv", "run", "--locked", "pytest"])
+    version_output = capture(["uv", "run", "--locked", "atk", "--version"])
     expected_version_output = f"agent-tune-kit {args.version}"
     if version_output != expected_version_output:
         raise ReleaseVersionError(f"unexpected CLI version output: {version_output!r}")
 
-    skill_pack = run(["uv", "run", "python", "scripts/validate_skill_pack.py"], check=False)
+    skill_pack = run(["uv", "run", "--locked", "python", "scripts/validate_skill_pack.py"], check=False)
     if skill_pack.returncode != 0 and args.strict_skill_pack:
         raise ReleaseVersionError("scripts/validate_skill_pack.py failed in strict mode")
     if skill_pack.returncode != 0:
@@ -213,6 +214,7 @@ def main() -> int:
         publish_command = [
             "uv",
             "run",
+            "--locked",
             "python",
             "scripts/publish-release.py",
             "--repository",
