@@ -138,6 +138,9 @@ for (const headings of [
   };
   rendered = renderStage({...item, diagnoses: [diagnosis]}, "diagnoses");
   assert.match(text(rendered), /诊断时的关联项目：[\s\S]*Server at diagnosis：A missing guard plausibly caused this; replay is pending\./);
+  diagnosis.snapshot.project_links = [];
+  rendered = renderStage({...item, diagnoses: [diagnosis]}, "diagnoses");
+  assert.match(text(rendered), /诊断时的关联项目：无/);
 }
 console.log("Stage rendering: concise changes, causal pairs, scoped conclusions, samples, links and legacy states passed.");
 

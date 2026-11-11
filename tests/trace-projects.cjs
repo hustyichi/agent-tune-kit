@@ -77,14 +77,14 @@ function boot(hash = "", available = true) {
   };
 }
 
-test("project selection matches exact projects, OR, unattributed, clear and progress intersection", () => {
+test("project selection matches exact projects, OR, legacy links, clear and progress intersection", () => {
   const app = boot();
   app.select(["workspace"]);
   assert.equal(app.$("rail-count").textContent, "0/3", "a parent does not match a child's issues");
   app.select(["server"]);
   assert.equal(app.$("rail-count").textContent, "1/3");
-  app.select(["server", "~unattributed"]);
-  assert.deepEqual(app.cards().map(card => card.dataset.issueId), ["ISSUE-001", "ISSUE-003"]);
+  app.select(["server", "other"]);
+  assert.deepEqual(app.cards().map(card => card.dataset.issueId), ["ISSUE-001", "ISSUE-002"]);
   app.$("issue-status").value = "已诊断"; app.context.render();
   assert.equal(app.$("rail-count").textContent, "0/3");
   app.$("issue-status").value = "";
@@ -107,8 +107,8 @@ test("project parameters survive rendering, issue and event navigation, and relo
   const app = boot("#project=server&project=~unattributed");
   for (const action of [() => app.context.syncHash(), () => app.context.selectIssue("ISSUE-001"), () => app.context.selectEvent()]) {
     action();
-    assert.deepEqual(new URLSearchParams(app.location.hash.slice(1)).getAll("project"), ["server", "~unattributed"]);
-    assert.equal(boot(app.location.hash).$("rail-count").textContent, "2/3");
+    assert.deepEqual(new URLSearchParams(app.location.hash.slice(1)).getAll("project"), ["server"]);
+    assert.equal(boot(app.location.hash).$("rail-count").textContent, "1/3");
   }
   assert.equal(new URLSearchParams(app.location.hash.slice(1)).get("event"), "trace-1/obs-1");
 });
@@ -138,6 +138,7 @@ test("initial deep links keep an explicitly selected issue visible even without 
 
 test("project names render once as links and the dashboard filter", () => {
   const app = boot();
+  assert.doesNotMatch(text(app.$("project-filter")), /待归因|无关联项目/);
   const card = app.cards()[0];
   assert.equal(text(card).match(/magic-code-server/g).length, 1);
   const links = nodes(card).filter(node => node.tag === "a");
@@ -146,7 +147,7 @@ test("project names render once as links and the dashboard filter", () => {
   assert.equal(links[0].href, "../index.html#view=category&project=server");
   app.data.issues[0].linked_projects.push({id: "other", name: "Other"}); app.context.render();
   assert.match(text(app.cards()[0]), /magic-code-server、Other/);
-  assert.match(text(app.cards()[2]), /关联项目：待归因/);
+  assert.match(text(app.cards()[2]), /关联项目：无/);
 });
 
 test("standalone previews keep project names readable without broken dashboard links", () => {

@@ -10,16 +10,15 @@
   };
   const button = (text, action, className) => { const node = el("button", text, className); node.type = "button"; node.onclick = action; return node; };
 
-  const projectSelection = new Set(new URLSearchParams(location.hash.slice(1)).getAll("project"));
+  const projectSelection = new Set(new URLSearchParams(location.hash.slice(1)).getAll("project").filter(id => id !== "~unattributed"));
   const projectMatches = item => state.view === "session" || !projectSelection.size || [...projectSelection].some(id => {
     const projects = item.linked_projects || [];
-    if (id === "~unattributed") return !projects.length;
     return projects.some(project => project.id === id);
   });
-  const projectNames = item => item.linked_projects?.length ? item.linked_projects.map(p => p.name) : ["待归因"];
-  const projectText = item => projectNames(item).join("、");
+  const projectNames = item => (item.linked_projects || []).map(p => p.name);
+  const projectText = item => projectNames(item).join("、") || "无";
   const projectInputs = [];
-  for (const p of [{id: "~unattributed", name: "待归因"}, ...Object.values(data.projects || {})]) {
+  for (const p of Object.values(data.projects || {})) {
     const label = el("label"), input = el("input");
     input.type = "checkbox"; input.value = p.id;
     input.checked = projectSelection.has(p.id);
@@ -268,7 +267,7 @@
     const counts = countBy(items.map(item => item.issue));
     const row = el("div", undefined, "card-count");
     row.append(el("strong", `${new Set(items.map(item => item.s.dir)).size} 个会话 · ${items.length} 个问题`), el("span", `最近 ${when(latestOf(items) < 0 ? null : latestOf(items))}`, "muted"));
-    card.append(el("p", `关联项目：${[...new Set(items.flatMap(({issue}) => projectNames(issue)))].join("、")}`));
+    card.append(el("p", `关联项目：${[...new Set(items.flatMap(({issue}) => projectNames(issue)))].join("、") || "无"}`));
     card.append(row, miniBar(counts), el("div", topProgress(counts), "card-meta"));
     return card;
   }
@@ -412,7 +411,7 @@
   }
   function applyHash() {
     const params = new URLSearchParams(location.hash.slice(1));
-    projectSelection.clear(); params.getAll("project").forEach(id => projectSelection.add(id));
+    projectSelection.clear(); params.getAll("project").filter(id => id !== "~unattributed").forEach(id => projectSelection.add(id));
     for (const input of projectInputs) input.checked = projectSelection.has(input.value); updateProjectSummary();
     const view = params.get("view") === "category" || (projectSelection.size && !params.get("session")) ? "category" : "session";
     let drawer = null;

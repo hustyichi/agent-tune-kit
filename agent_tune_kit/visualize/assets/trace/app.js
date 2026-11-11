@@ -23,14 +23,13 @@
   const captureById = new Map(data.captures.map(c => [c.id, c]));
   const issueById = new Map(data.issues.map(item => [item.record.id, item]));
 
-  const projectSelection = new Set(new URLSearchParams(location.hash.slice(1)).getAll("project"));
+  const projectSelection = new Set(new URLSearchParams(location.hash.slice(1)).getAll("project").filter(id => id !== "~unattributed"));
   const projectMatches = item => !projectSelection.size || [...projectSelection].some(id => {
     const projects = item.linked_projects || [];
-    if (id === "~unattributed") return !projects.length;
     return projects.some(project => project.id === id);
   });
   const projectInputs = [];
-  for (const p of [{id: "~unattributed", name: "待归因"}, ...Object.values(data.projects || {})]) {
+  for (const p of Object.values(data.projects || {})) {
     const label = el("label"), input = el("input");
     input.type = "checkbox"; input.value = p.id;
     input.checked = projectSelection.has(p.id);
@@ -70,7 +69,7 @@
   const projectLabels = item => {
     const row = el("p", "关联项目：", "issue-projects");
     const projects = item.linked_projects || [];
-    if (!projects.length) row.append(document.createTextNode("待归因"));
+    if (!projects.length) row.append(document.createTextNode("无"));
     projects.forEach((project, index) => {
       if (index) row.append(document.createTextNode("、"));
       const name = project.name;
@@ -324,7 +323,7 @@
       if (snapshot?.project_links) {
         const entries = new Map((snapshot.project_registry?.projects || []).map(p => [p.id, p]));
         const associations = el("div");
-        associations.append(el("p", "诊断时的关联项目：" + (snapshot.project_links.length ? "" : "待归因")));
+        associations.append(el("p", "诊断时的关联项目：" + (snapshot.project_links.length ? "" : "无")));
         for (const link of snapshot.project_links) {
           const entry = entries.get(link.project_id);
           associations.append(el("p", `${entry?.abbreviation || entry?.name || link.project_id}：${link.reason}`));
@@ -1228,7 +1227,7 @@
     if (hash !== location.hash) history.replaceState(null, "", hash || location.pathname + location.search);
     const raw = hash.slice(1);
     const params = new URLSearchParams(raw.includes("=") ? raw : `issue=${raw}`);
-    projectSelection.clear(); params.getAll("project").forEach(id => projectSelection.add(id));
+    projectSelection.clear(); params.getAll("project").filter(id => id !== "~unattributed").forEach(id => projectSelection.add(id));
     for (const input of projectInputs) input.checked = projectSelection.has(input.value);
     updateProjectSummary();
     const issueId = params.get("issue");

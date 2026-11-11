@@ -438,7 +438,7 @@ app.open(app.cards()[0]).onclick();
 assert.equal(app.rows().length, 3);
 assert.ok(app.rows().every(row => all(row).filter(n => n.tag === "a").every(n => !n.href.includes("&project="))));
 app.go("#view=category&project=~unattributed");
-assert.match(text(app.$("filter-note")), /2 个会话 · 2 个问题/);
+assert.equal(app.$("filter-note").hidden, true);
 const betaInput = app.$("project-filter").children.find(label => label.children[0].value === "b").children[0];
 app.$("project-clear").onclick();
 betaInput.checked = true;
@@ -498,3 +498,22 @@ app.go("#view=category&project=a&project=b");
 assert.match(text(app.$("filter-note")), /1 个会话 · 2 个问题/, "multiple associations count an issue once");
 assert.match(text(app.cards()[0]), /关联项目：Alpha、Beta/);
 assert.equal(text(app.cards()[0]).match(/Beta/g).length, 1, "shared project names appear once per category");
+
+// Empty associations contribute no placeholder to a category's project union.
+const partialProjects = JSON.parse(JSON.stringify(sharedProjects));
+partialProjects.sessions = [partialProjects.sessions[0]];
+partialProjects.sessions[0].issues[2].category = partialProjects.sessions[0].issues[0].category;
+app = boot(partialProjects);
+app.go("#view=category");
+const partialCard = app.cards().find(card => card.dataset.key === partialProjects.sessions[0].issues[0].category);
+assert.equal(partialCard.children.find(node => node.tag === "p").textContent, "关联项目：Alpha、Beta");
+assert.match(text(partialCard), /3 个问题/);
+app.open(partialCard).onclick();
+assert.ok(app.rows().some(row => text(row).includes("关联项目：无")));
+assert.doesNotMatch(text(app.$("project-filter")), /待归因|无关联项目/);
+partialProjects.sessions[0].issues.forEach(issue => { issue.linked_projects = []; });
+app = boot(partialProjects);
+app.go("#view=category");
+assert.ok(app.cards().filter(card => card.dataset.key).every(card =>
+  card.children.find(node => node.tag === "p").textContent === "关联项目：无"));
+assert.ok(app.cards().some(card => card.dataset.key));
