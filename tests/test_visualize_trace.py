@@ -141,7 +141,9 @@ def test_diagnosis_preview_removes_only_the_generated_snapshot(tmp_path):
     before = digests(session_dir)
     output = trace.generate_trace(tmp_path, session_id=SESSION_ID, open_browser=False)
     data = payload(Path(output["output_path"]).read_text())
-    assert data["issues"][0]["diagnoses"] == [
+    diagnoses = data["issues"][0]["diagnoses"]
+    assert diagnoses[0].pop("snapshot")["project_links"] == []
+    assert diagnoses == [
         {"reference": saved["ref"], "text": body},
         {"reference": legacy_ref, "text": legacy},
     ]

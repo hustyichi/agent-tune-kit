@@ -31,10 +31,10 @@ function boot(hash = "", available = true) {
   const data = {
     projects: {workspace: {id: "workspace", name: "Workspace"}, server: {id: "server", name: "magic-code-server", parent_id: "workspace"}, other: {id: "other", name: "Other"}},
     issues: [
-      {id: "ISSUE-001", roots: [{id: "server", name: "magic-code-server", pending: true}]},
-      {id: "ISSUE-002", roots: [{id: "other", name: "Other"}]},
-      {id: "ISSUE-003", roots: []},
-    ].map(({id, roots}) => ({record: {id, title: id}, root_projects: roots, progress: {key: "pending", label: "待诊断"}, fragments: [{id: "S1", summary: "Evidence", anchors: []}]})),
+      {id: "ISSUE-001", projects: [{id: "server", name: "magic-code-server"}]},
+      {id: "ISSUE-002", projects: [{id: "other", name: "Other"}]},
+      {id: "ISSUE-003", projects: []},
+    ].map(({id, projects}) => ({record: {id, title: id}, linked_projects: projects, progress: {key: "pending", label: "待诊断"}, fragments: [{id: "S1", summary: "Evidence", anchors: []}]})),
     categories: {}, dashboard: {available}, captures: [],
   };
   const location = {hash, pathname: "/session/preview.html", search: ""};
@@ -77,7 +77,7 @@ function boot(hash = "", available = true) {
   };
 }
 
-test("root selection matches exact projects, OR, unattributed, clear and progress intersection", () => {
+test("project selection matches exact projects, OR, unattributed, clear and progress intersection", () => {
   const app = boot();
   app.select(["workspace"]);
   assert.equal(app.$("rail-count").textContent, "0/3", "a parent does not match a child's issues");
@@ -94,7 +94,7 @@ test("root selection matches exact projects, OR, unattributed, clear and progres
 
 test("a parent project matches only its own directly associated issues", () => {
   const app = boot();
-  app.data.issues[1].root_projects = [{id: "workspace", name: "Workspace"}];
+  app.data.issues[1].linked_projects = [{id: "workspace", name: "Workspace"}];
   app.select(["workspace"]);
   assert.deepEqual(app.cards().map(card => card.dataset.issueId), ["ISSUE-002"]);
   app.select(["server"]);
@@ -136,22 +136,22 @@ test("initial deep links keep an explicitly selected issue visible even without 
   assert.deepEqual(app.cards().map(card => card.dataset.issueId), ["ISSUE-001", "ISSUE-002"]);
 });
 
-test("project names render once as links with pending status and the dashboard filter", () => {
+test("project names render once as links and the dashboard filter", () => {
   const app = boot();
   const card = app.cards()[0];
   assert.equal(text(card).match(/magic-code-server/g).length, 1);
   const links = nodes(card).filter(node => node.tag === "a");
   assert.equal(links.length, 1);
-  assert.equal(links[0].textContent, "magic-code-server（待确认）");
+  assert.equal(links[0].textContent, "magic-code-server");
   assert.equal(links[0].href, "../index.html#view=category&project=server");
-  app.data.issues[0].root_projects.push({id: "other", name: "Other"}); app.context.render();
-  assert.match(text(app.cards()[0]), /magic-code-server（待确认）、Other/);
+  app.data.issues[0].linked_projects.push({id: "other", name: "Other"}); app.context.render();
+  assert.match(text(app.cards()[0]), /magic-code-server、Other/);
   assert.match(text(app.cards()[2]), /关联项目：待归因/);
 });
 
 test("standalone previews keep project names readable without broken dashboard links", () => {
   const app = boot("", false);
-  assert.match(text(app.cards()[0]), /关联项目：magic-code-server（待确认）/);
+  assert.match(text(app.cards()[0]), /关联项目：magic-code-server/);
   assert.equal(nodes(app.cards()[0]).filter(node => node.tag === "a").length, 0);
 });
 
@@ -165,7 +165,7 @@ test("cards lead with the complete title, then projects, and show progress once 
   const app = boot();
   const title = "POS 首版订单的明细、合计和币种不一致，需要核对跨项目长标题与完整内容".repeat(4);
   app.data.issues[0].record.title = title;
-  app.data.issues[0].root_projects.push({id: "long", name: "long-project-name".repeat(12)});
+  app.data.issues[0].linked_projects.push({id: "long", name: "long-project-name".repeat(12)});
   app.context.render();
   const card = app.cards()[0], [head, body] = card.children;
   assert.equal(text(head).match(/待诊断/g).length, 1);
@@ -174,7 +174,7 @@ test("cards lead with the complete title, then projects, and show progress once 
   assert.equal(body.children[0].children[0].textContent, title);
   assert.equal(body.children[0].children[0].title, title);
   assert.equal(body.children[1].className, "issue-projects");
-  assert.match(text(body.children[1]), /magic-code-server（待确认）、long-project-name/);
+  assert.match(text(body.children[1]), /magic-code-server、long-project-name/);
 });
 
 test("two evidence entries stay visible and navigation reveals later entries without losing their index", () => {

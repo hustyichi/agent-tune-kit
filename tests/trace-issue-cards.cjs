@@ -13,13 +13,13 @@ assert.ok(item, "Supply a generated preview with a timed issue fragment");
 const fragment = item.fragments.find(part => part.anchors.length && part.start != null);
 const longTitle = "POS 首版订单 mock 的明细、合计和币种不一致，需要核对多个项目与完整订单数据。".repeat(5);
 const projects = [
-  {id: "server", name: "magic-code-server", pending: true},
+  {id: "server", name: "magic-code-server"},
   {id: "long", name: "long-project-name".repeat(10)},
   {id: "pos", name: "POS 订单前端"},
 ];
 item.record.title = longTitle;
 item.record.category = "mock";
-item.root_projects = projects;
+item.linked_projects = projects;
 item.fragments = Array.from({length: 4}, (_, i) => ({...fragment, id: `S${i+1}`, summary: `证据 ${i+1}：核对订单金额、税额和底部合计，保留长摘要的完整定位入口。`}));
 data.projects = Object.fromEntries(projects.map(project => [project.id, project]));
 data.categories.mock = {name: "Mock 业务数据不一致"};
@@ -27,7 +27,7 @@ data.dashboard.available = true;
 const normal = structuredClone(item);
 normal.record.id = "ISSUE-NORMAL";
 normal.record.title = "POS 首版订单 mock 的明细、合计和币种不一致";
-normal.root_projects = [];
+normal.linked_projects = [];
 normal.fragments = normal.fragments.slice(0, 2);
 data.issues = [item, normal];
 const html = input.replace(pattern, (_all, start, _data, end) => start + JSON.stringify(data).replaceAll("<", "\\u003c") + end);

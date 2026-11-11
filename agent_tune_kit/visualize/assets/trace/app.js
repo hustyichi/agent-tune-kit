@@ -25,9 +25,9 @@
 
   const projectSelection = new Set(new URLSearchParams(location.hash.slice(1)).getAll("project"));
   const projectMatches = item => !projectSelection.size || [...projectSelection].some(id => {
-    const roots = item.root_projects || [];
-    if (id === "~unattributed") return !roots.length;
-    return roots.some(root => root.id === id);
+    const projects = item.linked_projects || [];
+    if (id === "~unattributed") return !projects.length;
+    return projects.some(project => project.id === id);
   });
   const projectInputs = [];
   for (const p of [{id: "~unattributed", name: "待归因"}, ...Object.values(data.projects || {})]) {
@@ -69,11 +69,11 @@
   const dashboardHash = params => `../index.html#${params}`;
   const projectLabels = item => {
     const row = el("p", "关联项目：", "issue-projects");
-    const projects = item.root_projects || [];
+    const projects = item.linked_projects || [];
     if (!projects.length) row.append(document.createTextNode("待归因"));
     projects.forEach((project, index) => {
       if (index) row.append(document.createTextNode("、"));
-      const name = project.name + (project.pending ? "（待确认）" : "");
+      const name = project.name;
       const label = el(data.dashboard.available ? "a" : "span", name);
       if (data.dashboard.available) {
         label.href = dashboardHash(`view=category&project=${encodeURIComponent(project.id)}`);
@@ -321,6 +321,16 @@
       const headings = headingNodes.map(node => node.textContent);
       const structured = headings.join("|") === "问题描述|问题根因|最小修复方案"
         || headings.join("|") === "Issue description|Root cause|Minimal fix";
+      if (snapshot?.project_links) {
+        const entries = new Map((snapshot.project_registry?.projects || []).map(p => [p.id, p]));
+        const associations = el("div");
+        associations.append(el("p", "诊断时的关联项目：" + (snapshot.project_links.length ? "" : "待归因")));
+        for (const link of snapshot.project_links) {
+          const entry = entries.get(link.project_id);
+          associations.append(el("p", `${entry?.abbreviation || entry?.name || link.project_id}：${link.reason}`));
+        }
+        body.prepend(associations);
+      }
       if (index === 0 && structured) {
         container.append(body);
         continue;
@@ -335,11 +345,6 @@
         container.append(description);
       }
       const details = el("details", undefined, "detail-section");
-      if (snapshot?.project_links) {
-        const entries = new Map((snapshot.project_registry?.projects || []).map(p => [p.id, p]));
-        const names = snapshot.project_links.filter(p => p.role === "root_cause").map(p => { const entry = entries.get(p.project_id); return (entry?.abbreviation || entry?.name || p.project_id) + (p.evidence_state === "supported" ? "" : "（待确认）"); });
-        body.prepend(el("p", `诊断时的关联项目：${names.join("、") || "待归因"}`));
-      }
       const name = diagnosis.reference.path.split("/").pop();
       details.append(el("summary", `展开原诊断 · ${name}`), body);
       container.append(details);

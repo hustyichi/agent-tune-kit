@@ -388,14 +388,14 @@ console.log("Dashboard rendering: views, filters, drawers, deep links, sources, 
 
 const attributed = JSON.parse(JSON.stringify(base));
 attributed.projects = {ape: {id: "ape", name: "APE"}, ot: {id: "ot", name: "OT"}};
-for (const session of attributed.sessions) for (const issue of session.issues) issue.root_projects = [{id: "ape", name: "APE", pending: true}];
+for (const session of attributed.sessions) for (const issue of session.issues) issue.linked_projects = [{id: "ape", name: "APE"}];
 app = boot(attributed);
 app.go("#view=session&project=ot");
 assert.equal(app.rows().length, 0);
 assert.equal(app.cards().filter(card => card.dataset.key).length, 0);
 app.go("#view=session&project=ape");
 assert.ok(app.cards().length > 0);
-assert.match(text(app.cards()[0]), /APE（待确认）/);
+assert.match(text(app.cards()[0]), /APE/);
 assert.equal(selected("tab-category"), true, "legacy project links open issue grouping");
 app.$("tab-session").onclick();
 assert.equal(app.cards().length, base.sessions.length);
@@ -416,9 +416,9 @@ mixed.projects = {
   a: {id: "a", name: "Alpha", parent_id: "workspace"},
   b: {id: "b", name: "Beta", parent_id: "a"},
 };
-mixed.sessions[0].issues[0].root_projects = [{id: "a", name: "Alpha"}];
-mixed.sessions[0].issues[1].root_projects = [{id: "b", name: "Beta"}];
-mixed.sessions[0].issues[2].root_projects = [];
+mixed.sessions[0].issues[0].linked_projects = [{id: "a", name: "Alpha"}];
+mixed.sessions[0].issues[1].linked_projects = [{id: "b", name: "Beta"}];
+mixed.sessions[0].issues[2].linked_projects = [];
 app = boot(mixed);
 app.go("#view=category&project=workspace");
 assert.match(text(app.$("filter-note")), /0 个会话 · 0 个问题/, "ancestors do not inherit project attribution");
@@ -489,3 +489,12 @@ assert.equal(app.cards()[0].dataset.key, "other");
 app.legend("待诊断").onclick();
 assert.equal(app.cards()[0].dataset.key, shellId);
 assert.match(text(app.cards()[0]), /2 个会话 · 2 个问题/);
+
+const sharedProjects = JSON.parse(JSON.stringify(mixed));
+sharedProjects.sessions[0].issues[0].category = sharedProjects.sessions[0].issues[1].category;
+sharedProjects.sessions[0].issues[0].linked_projects.push({id: "b", name: "Beta"});
+app = boot(sharedProjects);
+app.go("#view=category&project=a&project=b");
+assert.match(text(app.$("filter-note")), /1 个会话 · 2 个问题/, "multiple associations count an issue once");
+assert.match(text(app.cards()[0]), /关联项目：Alpha、Beta/);
+assert.equal(text(app.cards()[0]).match(/Beta/g).length, 1, "shared project names appear once per category");

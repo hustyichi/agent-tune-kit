@@ -14,7 +14,7 @@ from zoneinfo import ZoneInfo
 from agent_tune_kit.errors import UserActionRequired
 from agent_tune_kit.traces.categories import category_map
 from agent_tune_kit.traces.progress import PROGRESS, instant, issue_progress
-from agent_tune_kit.traces.projects import project_map, root_projects
+from agent_tune_kit.traces.projects import linked_projects, project_map
 from agent_tune_kit.traces.segments import resolve_segments
 from agent_tune_kit.utils.files import read_text_bounded, write_text_atomic
 
@@ -159,7 +159,7 @@ def build_trace_data(project_root, *, session_id, source=None):
             issue = read_record(path)
             records.load_issue(session_dir, path.parent.name)
             item = {
-                "root_projects": root_projects(session_dir.parent, issue),
+                "linked_projects": linked_projects(session_dir.parent, issue),
                 "record": issue,
                 "diagnoses": [],
                 "changes": [],

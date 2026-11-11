@@ -172,6 +172,7 @@ def prepare_issue(session_dir, data, *, dry_run=False):
             "created_at": now(),
             "status": "open",
             "segments": [],
+            "project_links": [],
         }
     )
     if "project_links" in data:
@@ -347,9 +348,10 @@ def save_diagnosis(session_dir, issue_id, text, diagnosis_id=None, expected_revi
         "description": issue["description"],
         "evidence": issue["evidence"],
         "segments": issue.get("segments", []),
+        "project_links": validate_links(directory, issue.get("project_links", [])),
         "created_at": now(),
     }
-    for optional in ("selection_reason", "category", "project_links"):
+    for optional in ("selection_reason", "category"):
         if optional in issue:
             snapshot[optional] = issue[optional]
     if issue.get("project_links"):

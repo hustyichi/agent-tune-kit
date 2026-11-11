@@ -12,11 +12,12 @@
 
   const projectSelection = new Set(new URLSearchParams(location.hash.slice(1)).getAll("project"));
   const projectMatches = item => state.view === "session" || !projectSelection.size || [...projectSelection].some(id => {
-    const roots = item.root_projects || [];
-    if (id === "~unattributed") return !roots.length;
-    return roots.some(root => root.id === id);
+    const projects = item.linked_projects || [];
+    if (id === "~unattributed") return !projects.length;
+    return projects.some(project => project.id === id);
   });
-  const projectText = item => (item.root_projects || []).map(p => p.name + (p.pending ? "（待确认）" : "")).join("、") || "待归因";
+  const projectNames = item => item.linked_projects?.length ? item.linked_projects.map(p => p.name) : ["待归因"];
+  const projectText = item => projectNames(item).join("、");
   const projectInputs = [];
   for (const p of [{id: "~unattributed", name: "待归因"}, ...Object.values(data.projects || {})]) {
     const label = el("label"), input = el("input");
@@ -58,7 +59,7 @@
     s._source = s.error ? "" : sourceKey(s.source);
     s._text = [s.session_id, s.dir, ...Object.values(s.source || {})].join("\n").toLowerCase();
     for (const issue of s.issues) {
-      issue._text = [projectText(issue), ...(issue.root_projects || []).flatMap(p => p.aliases || []), issue.id, issue.title, issue.category || "", issue.category ? categoryName(issue.category) : "未分类", LABEL.get(issue.progress)].join("\n").toLowerCase();
+      issue._text = [projectText(issue), ...(issue.linked_projects || []).flatMap(p => p.aliases || []), issue.id, issue.title, issue.category || "", issue.category ? categoryName(issue.category) : "未分类", LABEL.get(issue.progress)].join("\n").toLowerCase();
     }
   }
   const scoped = () => data.sessions.filter(s => !state.source || s._source === state.source);
@@ -267,7 +268,7 @@
     const counts = countBy(items.map(item => item.issue));
     const row = el("div", undefined, "card-count");
     row.append(el("strong", `${new Set(items.map(item => item.s.dir)).size} 个会话 · ${items.length} 个问题`), el("span", `最近 ${when(latestOf(items) < 0 ? null : latestOf(items))}`, "muted"));
-    card.append(el("p", `关联项目：${[...new Set(items.map(({issue}) => projectText(issue)))].join("、")}`));
+    card.append(el("p", `关联项目：${[...new Set(items.flatMap(({issue}) => projectNames(issue)))].join("、")}`));
     card.append(row, miniBar(counts), el("div", topProgress(counts), "card-meta"));
     return card;
   }

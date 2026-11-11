@@ -184,4 +184,4 @@ $atk-trace-verify 验证 <session-id> 的 ISSUE-001 对应候选，并检查相�
 
 [多工程关联与项目筛选说明](docs/trace-project-attribution-design.md)
 
-支持通过 `atk trace project` 登记工作区及子模块；诊断可记录多个根因项目，大盘与会话问题栏按根因项目筛选。修改位置在修复详情中说明。
+支持通过 `atk trace project` 登记工作区及子模块；诊断按合理的原因解释记录“关联项目”，供人工审核，大盘与会话问题栏均可筛选。关联不以修复完成或验证通过为前提；不确定性写在关联理由中，修改位置在修复详情中说明。

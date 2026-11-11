@@ -1,4 +1,4 @@
-"""Workspace project registry and evidence-backed attribution."""
+"""Workspace project registry and issue associations for human review."""
 
 import configparser
 import hashlib
@@ -150,14 +150,12 @@ def validate_links(session_dir, links):
     projects = project_map(Path(session_dir).parent)
     seen = set()
     for link in links:
-        if not isinstance(link, dict):
+        if not isinstance(link, dict) or set(link) - {"project_id", "reason", "evidence", "source_paths"}:
             raise UserActionRequired("Invalid project link.")
-        key = (link.get("project_id"), link.get("role"))
-        if not all(isinstance(k, str) for k in key) or key[0] not in projects or key in seen:
+        key = link.get("project_id")
+        if not isinstance(key, str) or key not in projects or key in seen:
             raise UserActionRequired("Unknown or duplicate project link.")
         seen.add(key)
-        if key[1] not in {"root_cause", "improvement"} or link.get("evidence_state") not in {"hypothesis", "supported"}:
-            raise UserActionRequired("Invalid project attribution state.")
         if (
             not isinstance(link.get("reason"), str)
             or not link["reason"].strip()
@@ -176,18 +174,14 @@ def validate_links(session_dir, links):
     return links
 
 
-def root_projects(root, issue):
+def linked_projects(root, issue):
     projects = project_map(root)
     result = []
     links = issue.get("project_links", [])
     if not isinstance(links, list):
         return result
     for link in links:
-        if (
-            not isinstance(link, dict)
-            or not isinstance(link.get("project_id"), str)
-            or link.get("role") != "root_cause"
-        ):
+        if not isinstance(link, dict) or not isinstance(link.get("project_id"), str):
             continue
         entry = projects.get(link["project_id"], {})
         result.append(
@@ -195,7 +189,6 @@ def root_projects(root, issue):
                 **entry,
                 "id": link["project_id"],
                 "name": entry.get("abbreviation") or entry.get("name") or link["project_id"],
-                "pending": link.get("evidence_state") != "supported",
             }
         )
     return result

@@ -8,6 +8,7 @@ class Element {
   constructor(tag) { this.tag = tag; this.children = []; this.textContent = ""; this.className = ""; this.classList = {add: name => { this.className += ` ${name}`; }}; }
   get tagName() { return this.tag.toUpperCase(); }
   append(...children) { this.children.push(...children); }
+  prepend(...children) { this.children.unshift(...children); }
   setAttribute(name, value) { this[name] = value; }
 }
 const source = fs.readFileSync(path.join(__dirname, "../agent_tune_kit/visualize/assets/trace/app.js"), "utf8");
@@ -131,6 +132,12 @@ for (const headings of [
   const titles = nodes(rendered).filter(node => node.tag === "h2").map(node => node.textContent);
   assert.deepEqual(titles, headings[0] === "Issue description" ? headings : ["问题描述", "问题根因", "最小修复方案"]);
   assert.equal(diagnosis.text, headings.map(heading => `## ${heading}\nDetails.`).join("\n"), "Archived text stays unchanged");
+  diagnosis.snapshot = {
+    project_registry: {projects: [{id: "server", name: "Server at diagnosis"}]},
+    project_links: [{project_id: "server", reason: "A missing guard plausibly caused this; replay is pending."}],
+  };
+  rendered = renderStage({...item, diagnoses: [diagnosis]}, "diagnoses");
+  assert.match(text(rendered), /诊断时的关联项目：[\s\S]*Server at diagnosis：A missing guard plausibly caused this; replay is pending\./);
 }
 console.log("Stage rendering: concise changes, causal pairs, scoped conclusions, samples, links and legacy states passed.");
 

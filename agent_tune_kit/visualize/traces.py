@@ -19,7 +19,7 @@ from agent_tune_kit.results.evidence import safe_path
 from agent_tune_kit.traces import records
 from agent_tune_kit.traces.categories import category_map, load_catalog
 from agent_tune_kit.traces.progress import PROGRESS, issue_progress, parse_instant, summarize
-from agent_tune_kit.traces.projects import project_map, root_projects
+from agent_tune_kit.traces.projects import linked_projects, project_map
 from agent_tune_kit.traces.store import read_json, trace_root
 from agent_tune_kit.utils.files import write_text_atomic
 
@@ -106,7 +106,7 @@ def _issue_entries(session_dir, status):
             {
                 "id": issue["id"],
                 "title": _text(issue["title"], TITLE_LIMIT),
-                "root_projects": root_projects(session_dir.parent, issue),
+                "linked_projects": linked_projects(session_dir.parent, issue),
                 "category": category if isinstance(category, str) and category else None,
                 "progress": issue_progress(issue, pairs)["key"],
                 "segments": len(issue.get("segments") or []),
@@ -185,7 +185,7 @@ def build_dashboard_data(project_root):
     try:
         load_projects(root)
     except UserActionRequired:
-        warnings.append("工程目录不可读取；根因项目暂显示记录中的 ID。")
+        warnings.append("工程目录不可读取；关联项目暂显示记录中的 ID。")
     try:
         load_catalog(root)
     except UserActionRequired:
