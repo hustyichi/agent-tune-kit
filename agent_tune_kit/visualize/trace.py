@@ -251,7 +251,9 @@ def build_trace_data(project_root, *, session_id, source=None):
         display_refs = list(record.get("evidence", []))
         for segment in record.get("segments", []):
             display_refs.extend(segment.get("evidence", []))
-        evidence = [references[_reference_key(ref)] for ref in display_refs if _reference_key(ref) in references]
+        # Shared evidence keeps one display index so it cannot reappear as an unclaimed point.
+        display_keys = dict.fromkeys(_reference_key(ref) for ref in display_refs)
+        evidence = [references[key] for key in display_keys if key in references]
         # Fragment refs index into this combined list (top-level + segment evidence).
         item["evidence"] = evidence
         segments = record.get("segments") or []

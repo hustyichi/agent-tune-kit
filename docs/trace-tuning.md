@@ -222,6 +222,8 @@ CLI validation assigns stable `S1`, `S2`, … identifiers within the Issue, reje
 
 Detection should write one segment per distinct location, using the smallest scope that still explains the problem, and must split across Traces. Diagnosis, change and verification records stay under the Issue; their Markdown may cite `ISSUE-001/S2` so the preview can link back to that segment.
 
+Segments are ordered by their scoped observations' start times. For a final answer, scope the actual result/message event after confirming its content, rather than the enclosing Agent turn: that turn starts before the answer exists, even when its `output` contains the answer. Keep the enclosing turn as context when needed. Shared evidence may belong to multiple segments; the preview uses one display reference for it and does not add another standalone fragment.
+
 Issue IDs are stable within the session. Omitting an old issue during new detection does not resolve it. Exclusion/correction needs a reason while preserving history. Detection coverage includes zero findings, checked/unread nodes, partial work and interruptions; an empty issue list does not prove correctness. Re-capture creates new unanalyzed material rather than rewriting previous coverage.
 
 Diagnoses are immutable Markdown and include an issue snapshot (including segments when present). Adopted diagnoses bind path and digest. Change `target_issues` may list several issues and `diagnoses` maps each target issue to its adopted reference. Save a shared modification once under its owner issue; the other issues explicitly reference that owner-relative change path. Completed candidates are frozen; a new diagnosis/candidate is a new record.

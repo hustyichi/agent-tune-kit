@@ -653,6 +653,36 @@ def test_recorded_segments_render_as_fragments(tmp_path):
     assert data["issues"][0]["evidence"]
 
 
+def test_shared_segment_evidence_does_not_create_extra_fragments(tmp_path):
+    result = capture(tmp_path)
+    session_dir = Path(result["session_dir"])
+    path = "captures/CAP-001/raw/trace.json"
+    scope = store.evidence_ref(session_dir, path, "/trace/observations/0")
+    shared = store.evidence_ref(session_dir, path, "/trace/observations/1/output")
+    extra = store.evidence_ref(session_dir, path, "/trace/input")
+    records.save_issue(
+        session_dir,
+        {
+            "title": "Shared evidence",
+            "description": "Two segments refer to the same output",
+            "evidence": [extra],
+            "segments": [
+                {"summary": summary, "scope": {"node": scope}, "evidence": [shared]}
+                for summary in ("First perspective", "Second perspective")
+            ],
+        },
+    )
+    before = digests(session_dir)
+    _, data = trace.build_trace_data(tmp_path, session_id=SESSION_ID)
+    item = data["issues"][0]
+    assert len(item["evidence"]) == 2
+    assert len(item["fragments"]) == 3  # Two segments and the genuine extra Trace reference.
+    segments = [part for part in item["fragments"] if part.get("scope_kind")]
+    assert [part["id"] for part in segments] == ["S1", "S2"]
+    assert segments[0]["refs"] == segments[1]["refs"] == [1]
+    assert digests(session_dir) == before
+
+
 def test_issue_rail_hover_does_not_rebuild_rail_or_event_list():
     # Rebuilding the rail under the pointer replaced the buttons between mousedown and mouseup,
     # so clicks on 定位 / segment chips never fired. Hover may redraw the swimlanes only.
