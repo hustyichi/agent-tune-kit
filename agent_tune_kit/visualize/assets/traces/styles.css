@@ -27,7 +27,18 @@
 .filter-caption { color: var(--muted); margin-right: 5px }
 .legend-item { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 6px; background: white; color: var(--muted); padding: 3px 9px }
 .legend-item:hover { background: var(--tint) }
-.legend-item[aria-pressed=true] { background: var(--tint); color: var(--accent); border-color: #eabda0 }
+.legend-item[aria-pressed=true], .legend-item[aria-checked=true] { background: var(--tint); color: var(--accent); border-color: #eabda0 }
+/* Project choices: one chosen at a time; the count is the number of issues linked to that project. */
+.project-item { max-width: 100% }
+.project-item .project-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink) }
+.project-item[aria-checked=true] .project-name { color: var(--accent) }
+.project-item .project-count { font-weight: 700; color: var(--ink) }
+.project-item.is-empty { opacity: .6 }
+.filter-hint { font-size: 11px; margin-left: 4px }
+.card-projects { overflow-wrap: anywhere }
+.project-link { border: 0; padding: 0; background: none; color: var(--accent); font: inherit; cursor: pointer }
+.project-link:hover { text-decoration: underline }
+.project-link.current { cursor: default; font-weight: 600 }
 .swatch { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--tone) }
 .tone-pending { --tone: var(--p-pending) }
 .tone-diagnosed { --tone: var(--p-diagnosed) }
@@ -121,5 +132,5 @@ button.category-tag:hover { background: #ffe8d2 }
   .dash-controls { border-bottom: 0 }
   .view-tabs { flex-basis: 100%; border-bottom: 1px solid var(--line) }
   .dash-controls .search-label { max-width: none }
-  .dash-controls .search-label, .dash-controls .project-choice, #source-choice { margin-bottom: 0 }
+  .dash-controls .search-label, #source-choice { margin-bottom: 0 }
 }

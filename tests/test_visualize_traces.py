@@ -520,6 +520,7 @@ def test_cli_command_generates_and_reports_a_summary(project, monkeypatch, capsy
     summary = json.loads(capsys.readouterr().out)
     assert summary["sessions"] == 2 and summary["issues"] == 4 and summary["opened"] is False
     assert summary["progress"]["diagnosed"] == 1 and summary["uncategorized"] == 4
+    assert summary["projects"] == [], "no issue links a project, so none is reported"
     assert main(["visualize", "traces", "--no-open", "--json"]) == 2  # exists, so --overwrite is required
     assert "--overwrite" in capsys.readouterr().err
     assert main(["visualize", "traces", "--no-open", "--overwrite", "--json"]) == 0

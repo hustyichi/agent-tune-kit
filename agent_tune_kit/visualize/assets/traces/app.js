@@ -10,34 +10,22 @@
   };
   const button = (text, action, className) => { const node = el("button", text, className); node.type = "button"; node.onclick = action; return node; };
 
-  const projectSelection = new Set(new URLSearchParams(location.hash.slice(1)).getAll("project").filter(id => id !== "~unattributed"));
-  const projectMatches = item => state.view === "session" || !projectSelection.size || [...projectSelection].some(id => {
-    const projects = item.linked_projects || [];
-    return projects.some(project => project.id === id);
-  });
+  // Project choice is single: one linked project, or all issues. Only projects some issue links to are offered.
+  const PROJECTS = data.project_index || [];
+  const PROJECT = new Map(PROJECTS.map(entry => [entry.id, entry]));
+  // Older links may carry several projects (or the removed empty-association value): keep the first one still offered.
+  const projectFrom = params => params.getAll("project").find(id => PROJECT.has(id)) || "";
+  const projectMatches = item => state.view === "session" || !state.project || (item.linked_projects || []).some(project => project.id === state.project);
   const projectNames = item => (item.linked_projects || []).map(p => p.name);
   const projectText = item => projectNames(item).join("、") || "无";
-  const projectInputs = [];
-  for (const p of Object.values(data.projects || {})) {
-    const label = el("label"), input = el("input");
-    input.type = "checkbox"; input.value = p.id;
-    input.checked = projectSelection.has(p.id);
-    label.append(input, document.createTextNode(p.abbreviation || p.name));
-    $("project-filter").append(label); projectInputs.push(input);
-    input.onchange = () => $("project-filter").onchange();
-  }
-  const updateProjectSummary = () => {
-    $("project-summary").textContent = projectSelection.size ? `关联项目：已选 ${projectSelection.size} 项` : "关联项目：全部";
-  };
-  updateProjectSummary();
-  $("project-clear").onclick = () => { projectInputs.forEach(input => { input.checked = false; }); $("project-filter").onchange(); };
+  const projectLabel = entry => `${entry.name}${entry.deprecated ? "（已弃用）" : entry.registered === false ? "（未登记）" : ""}`;
 
 
   const NONE = "~uncategorized"; // cannot collide with a kebab-case category ID
   const ORDER = new Map(data.progress_legend.map((entry, index) => [entry.key, index]));
   const LABEL = new Map(data.progress_legend.map(entry => [entry.key, entry.label]));
   const STATUS = {completed: "已完成", partial: "部分完成", failed: "失败", blocked: "受阻", interrupted: "已中断", running: "进行中"};
-  const state = {view: "session", q: "", progress: "", source: "", drawer: null};
+  const state = {view: "session", q: "", progress: "", project: "", source: "", drawer: null};
   let shown = null;
 
   const categoryName = id => data.categories[id]?.name || id;
@@ -162,12 +150,59 @@
     }
     attention.hidden = !attention.children.length;
   }
+  const searchMatches = (s, issue) => !state.q || s._text.includes(state.q) || issue._text.includes(state.q);
+  const chooseProject = id => { state.project = state.project === id ? "" : id; syncHash(); render(); };
+  // Project counts follow source and search only: neither the progress choice nor the project choice changes them, so
+  // every project keeps its real size while one is chosen.
+  function renderProjects() {
+    const legend = $("project-legend");
+    legend.replaceChildren();
+    if (state.view !== "category") { legend.hidden = true; return; }
+    const issues = scoped().flatMap(s => s.issues.filter(issue => searchMatches(s, issue)));
+    const counts = new Map();
+    for (const issue of issues) for (const project of issue.linked_projects || []) {
+      if (PROJECT.has(project.id)) counts.set(project.id, (counts.get(project.id) || 0) + 1);
+    }
+    const order = new Map(PROJECTS.map((entry, index) => [entry.id, index]));
+    const shown = PROJECTS.filter(entry => counts.get(entry.id) || entry.id === state.project).sort((a, b) =>
+      Number(Boolean(a.deprecated)) - Number(Boolean(b.deprecated)) || Number(a.registered === false) - Number(b.registered === false) ||
+      (counts.get(b.id) || 0) - (counts.get(a.id) || 0) || order.get(a.id) - order.get(b.id));
+    // One project that holds every issue in the source scope filters nothing, so the row would only repeat the total. This
+    // is judged before search, so the row does not vanish while typing.
+    const inScope = scoped().flatMap(s => s.issues);
+    const linkedIn = new Set(inScope.flatMap(issue => (issue.linked_projects || []).map(p => p.id)).filter(id => PROJECT.has(id)));
+    const only = linkedIn.size === 1 ? [...linkedIn][0] : null;
+    const useless = !linkedIn.size || (only !== null && !state.project && inScope.every(issue => (issue.linked_projects || []).some(p => p.id === only)));
+    legend.hidden = useless;
+    if (useless) return;
+    legend.setAttribute("role", "radiogroup");
+    legend.append(el("span", "关联项目", "filter-caption"));
+    const choice = (text, id, title) => {
+      const item = button("", () => chooseProject(id), "legend-item project-item");
+      item.setAttribute("role", "radio");
+      item.setAttribute("aria-checked", String(state.project === id));
+      if (title) item.title = title;
+      item.append(...text);
+      return item;
+    };
+    legend.append(choice([document.createTextNode(`全部 ${issues.length}`)], "", "显示全部问题"));
+    for (const entry of shown) {
+      const n = counts.get(entry.id) || 0;
+      const sessions = new Set(scoped().filter(s => s.issues.some(issue => searchMatches(s, issue) && (issue.linked_projects || []).some(p => p.id === entry.id))).map(s => s.dir)).size;
+      const name = el("span", projectLabel(entry), "project-name");
+      const item = choice([name, el("span", `${n}`, "project-count"), el("span", `· ${sessions} 会话`, "muted")], entry.id,
+        state.project === entry.id ? `取消筛选 ${projectLabel(entry)}` : `只看关联 ${projectLabel(entry)} 的问题`);
+      if (!n) item.classList.add("is-empty");
+      legend.append(item);
+    }
+    if (issues.some(issue => (issue.linked_projects || []).length > 1)) legend.append(el("span", "部分问题关联多个项目，各项目数量不能相加", "filter-hint muted"));
+  }
   function renderProgress() {
     const legend = $("progress-legend");
     legend.replaceChildren();
     legend.hidden = state.view !== "category";
     if (legend.hidden) return;
-    const counts = countBy(scoped().flatMap(s => s.issues.filter(issue => projectMatches(issue) && (!state.q || s._text.includes(state.q) || issue._text.includes(state.q)))));
+    const counts = countBy(scoped().flatMap(s => s.issues.filter(issue => projectMatches(issue) && searchMatches(s, issue))));
     const total = [...counts.values()].reduce((sum, n) => sum + n, 0);
     legend.append(el("span", "处理状态", "filter-caption"));
     for (const {key, label} of [{key: "", label: "全部"}, ...data.progress_legend]) {
@@ -184,17 +219,16 @@
     const note = $("filter-note");
     note.replaceChildren();
     const progress = state.view === "category" && state.progress;
-    note.hidden = !(state.q || state.source || progress || (state.view === "category" && projectSelection.size));
+    const project = state.view === "category" && PROJECT.get(state.project);
+    note.hidden = !(state.q || state.source || progress || project);
     if (note.hidden) return;
     const matched = scoped().flatMap(s => s.issues.filter(issue => matchIssue(s, issue)));
     note.append(el("span", `当前筛选：${scoped().filter(matchSession).length} 个会话 · ${matched.length} 个问题 `));
+    if (project) note.append(document.createTextNode(`关联项目：${projectLabel(project)} `));
     if (progress) note.append(document.createTextNode(`处理状态：${LABEL.get(state.progress)}`));
     note.append(button("清除筛选", () => {
       state.q = ""; state.source = ""; $("dash-search").value = ""; $("source-filter").value = "";
-      if (state.view === "category") {
-        state.progress = ""; projectSelection.clear();
-        projectInputs.forEach(input => { input.checked = false; }); updateProjectSummary();
-      }
+      if (state.view === "category") { state.progress = ""; state.project = ""; }
       syncHash(); render();
     }));
   }
@@ -267,9 +301,25 @@
     const counts = countBy(items.map(item => item.issue));
     const row = el("div", undefined, "card-count");
     row.append(el("strong", `${new Set(items.map(item => item.s.dir)).size} 个会话 · ${items.length} 个问题`), el("span", `最近 ${when(latestOf(items) < 0 ? null : latestOf(items))}`, "muted"));
-    card.append(el("p", `关联项目：${[...new Set(items.flatMap(({issue}) => projectNames(issue)))].join("、") || "无"}`));
+    card.append(projectLine(items.map(({issue}) => issue)));
     card.append(row, miniBar(counts), el("div", topProgress(counts), "card-meta"));
     return card;
+  }
+  // The distinct projects behind a group of issues; each offered name narrows the issue view to that project.
+  function projectLine(issues) {
+    const line = el("p", "关联项目：", "card-projects");
+    const seen = new Map();
+    for (const issue of issues) for (const project of issue.linked_projects || []) if (!seen.has(project.id)) seen.set(project.id, project);
+    if (!seen.size) { line.append(document.createTextNode("无")); return line; }
+    [...seen.values()].forEach((project, index) => {
+      if (index) line.append(document.createTextNode("、"));
+      const entry = PROJECT.get(project.id);
+      if (!entry || state.project === project.id) { line.append(el("span", project.name, state.project === project.id ? "project-link current" : undefined)); return; }
+      const link = button(project.name, () => chooseProject(project.id), "project-link");
+      link.title = `只看关联 ${projectLabel(entry)} 的问题`;
+      line.append(link);
+    });
+    return line;
   }
   function renderCategories(grid, strip) {
     const visible = [...categoryGroups()].map(([key, items]) => [key, items.filter(({s, issue}) => matchIssue(s, issue))]).filter(([, items]) => items.length);
@@ -295,7 +345,7 @@
   function issueRow(s, issue, withCategory) {
     const row = el("div", undefined, "issue-row");
     const dot = el("span", undefined, `progress-dot ${issue.progress}`); dot.title = LABEL.get(issue.progress);
-    const href = `${s.href}#issue=${encodeURIComponent(issue.id)}${(state.view === "category" ? [...projectSelection] : []).map(id => `&project=${encodeURIComponent(id)}`).join("")}`;
+    const href = `${s.href}#issue=${encodeURIComponent(issue.id)}${state.view === "category" && state.project ? `&project=${encodeURIComponent(state.project)}` : ""}`;
     const title = el("a", issue.title || issue.id, "row-title"); title.href = href; title.title = `${issue.id} ${issue.title}`;
     const jump = el("a", "↗", "row-jump"); jump.href = href; jump.setAttribute("aria-label", `在会话页打开 ${issue.id}`);
     // Title gets the full first line and may wrap; category and progress sit on their own line beneath it.
@@ -400,7 +450,7 @@
 
   // --- navigation -----------------------------------------------------------------------------------------------
   function syncHash() {
-    const parts = [`view=${state.view}`, ...(state.view === "category" ? [...projectSelection].map(id => `project=${encodeURIComponent(id)}`) : [])];
+    const parts = [`view=${state.view}`, ...(state.view === "category" && state.project ? [`project=${encodeURIComponent(state.project)}`] : [])];
     if (state.drawer !== null) parts.push(`${state.view}=${encodeURIComponent(state.drawer)}`);
     const next = `#${parts.join("&")}`;
     if (location.hash !== next) history.replaceState(null, "", next);
@@ -411,9 +461,9 @@
   }
   function applyHash() {
     const params = new URLSearchParams(location.hash.slice(1));
-    projectSelection.clear(); params.getAll("project").filter(id => id !== "~unattributed").forEach(id => projectSelection.add(id));
-    for (const input of projectInputs) input.checked = projectSelection.has(input.value); updateProjectSummary();
-    const view = params.get("view") === "category" || (projectSelection.size && !params.get("session")) ? "category" : "session";
+    const project = projectFrom(params);
+    state.project = project;
+    const view = params.get("view") === "category" || (project && !params.get("session")) ? "category" : "session";
     let drawer = null;
     if (view === "session") {
       const key = params.get("session");
@@ -427,8 +477,7 @@
   }
 
   function render() {
-    $("project-choice").hidden = state.view === "session";
-    renderTabs(); renderSessionAttention(); renderProgress(); renderNote();
+    renderTabs(); renderSessionAttention(); renderProjects(); renderProgress(); renderNote();
     const grid = $("dash-grid"), strip = $("dash-strip");
     grid.replaceChildren(); strip.replaceChildren();
     if (state.view === "session") renderSessions(grid); else renderCategories(grid, strip);
@@ -460,7 +509,6 @@
     $(id).onclick = () => setView(view);
     $(id).onkeydown = onTabKey;
   }
-  $("project-filter").onchange = () => { projectSelection.clear(); for (const input of projectInputs) if (input.checked) projectSelection.add(input.value); updateProjectSummary(); syncHash(); render(); };
   $("dash-search").oninput = event => { state.q = event.target.value.trim().toLowerCase(); render(); };
   $("drawer-close").onclick = closeDrawer;
   document.addEventListener("keydown", event => {

@@ -33,7 +33,14 @@ body.rail-collapsed #rail-toggle { transform: rotate(180deg) }
 .rail-filters .search-label { flex: 1 0 100%; min-width: 0 }
 .rail-filters > label { min-width: 0; max-width: 100% }
 .rail-filters input[type=search] { width: 100% }
-.rail-filters .project-choice { margin-bottom: 0 }
+/* Project choice: one linked project or all issues; each count is the issues linked to that project. */
+.rail-projects { display: flex; flex-wrap: wrap; gap: 4px; flex: 1 0 100%; min-width: 0 }
+.project-item { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; min-width: 0; padding: 2px 8px; border: 1px solid var(--line); border-radius: 6px; background: white; color: var(--muted); font-size: 12px; line-height: 1.5 }
+.project-item:hover { background: var(--tint) }
+.project-item[aria-checked=true] { background: var(--tint); color: var(--accent); border-color: #eabda0 }
+.project-item .project-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.project-item .project-count { font-weight: 700 }
+.project-item.is-empty { opacity: .6 }
 .rail-list { flex: 1; min-height: 0; overflow: auto; scrollbar-gutter: stable; scrollbar-width: thin; padding: 12px; display: flex; flex-direction: column; gap: 12px }
 .issue-card { display: flex; flex: none; flex-direction: column; gap: 10px; width: 100%; min-width: 0; text-align: left; padding: 16px; border-radius: 12px }
 .issue-card:hover, .issue-card[aria-current=true] { background: var(--paper) }

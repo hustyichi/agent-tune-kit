@@ -5,8 +5,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
-const source = ["shared/project-menu.js", "traces/app.js"].map(file =>
-  fs.readFileSync(path.join(__dirname, "../agent_tune_kit/visualize/assets", file), "utf8")).join("\n");
+const source = fs.readFileSync(path.join(__dirname, "../agent_tune_kit/visualize/assets/traces/app.js"), "utf8");
 const base = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
 
 class Node {
@@ -54,12 +53,11 @@ const text = node => [node.textContent, ...node.children.map(text)].join(" ").re
 
 function boot(data) {
   const ids = new Map();
-  for (const id of ["project-choice", "project-summary", "project-clear", "project-filter", "project-name", "dash-stats", "warnings", "source-choice", "source-filter", "tab-session", "tab-category", "dash-panel", "dash-search", "session-attention", "progress-legend", "filter-note", "dash-grid", "dash-strip", "drawer", "drawer-title", "drawer-title-tools", "drawer-tools", "drawer-content", "drawer-close", "drawer-resizer"]) {
+  for (const id of ["project-legend", "project-name", "dash-stats", "warnings", "source-choice", "source-filter", "tab-session", "tab-category", "dash-panel", "dash-search", "session-attention", "progress-legend", "filter-note", "dash-grid", "dash-strip", "drawer", "drawer-title", "drawer-title-tools", "drawer-tools", "drawer-content", "drawer-close", "drawer-resizer"]) {
     ids.set(id, Object.assign(new Node("div"), {id}));
   }
   for (const id of ["drawer-title", "drawer-title-tools", "drawer-tools", "drawer-content", "drawer-close", "drawer-resizer"]) ids.get(id).parentElement = ids.get("drawer");
-  for (const id of ["project-summary", "project-clear", "project-filter"]) ids.get(id).parentElement = ids.get("project-choice");
-  for (const id of ["dash-grid", "dash-strip", "session-attention", "progress-legend", "filter-note"]) ids.get(id).parentElement = ids.get("dash-panel");
+  for (const id of ["dash-grid", "dash-strip", "session-attention", "project-legend", "progress-legend", "filter-note"]) ids.get(id).parentElement = ids.get("dash-panel");
   ids.get("dash-search").tag = "input";
   ids.get("source-choice").hidden = true;
   ids.get("drawer").hidden = true;
@@ -98,6 +96,9 @@ function boot(data) {
     rows: () => all($("drawer-content")).filter(node => matches(node, ".issue-row")),
     open: card => all(card).find(node => matches(node, ".card-open")),
     legend: label => all($("progress-legend")).find(node => node.className.includes("legend-item") && text(node).startsWith(label)),
+    project: label => $("project-legend").children.find(node => node.className.includes("project-item") && text(node).startsWith(label)),
+    projects: () => $("project-legend").children.filter(node => node.className.includes("project-item")).map(text),
+    chosen: () => $("project-legend").children.filter(node => node.attrs["aria-checked"] === "true").map(text),
     search: value => $("dash-search").oninput({target: {value}}),
     go: hash => { location.hash = hash; listeners.window.hashchange(); },
     escape: () => dispatch("keydown", {key: "Escape"}),
@@ -386,80 +387,97 @@ assert.equal(app.strip().length, 0);
 
 console.log("Dashboard rendering: views, filters, drawers, deep links, sources, unreadable and empty sessions passed.");
 
+// --- linked projects: single choice, counts beside progress -------------------------------------------------------
+const index = (data, entries) => { data.project_index = entries.map(([id, name, issues, sessions, extra]) => ({id, name, issues, sessions, registered: true, deprecated: false, ...extra})); };
 const attributed = JSON.parse(JSON.stringify(base));
-attributed.projects = {ape: {id: "ape", name: "APE"}, ot: {id: "ot", name: "OT"}};
 for (const session of attributed.sessions) for (const issue of session.issues) issue.linked_projects = [{id: "ape", name: "APE"}];
+index(attributed, [["ape", "APE", 4, 2]]);
 app = boot(attributed);
+app.$("tab-category").onclick();
+assert.equal(app.$("project-legend").hidden, true, "one project holding every issue filters nothing, so no row");
 app.go("#view=session&project=ot");
-assert.equal(app.rows().length, 0);
-assert.equal(app.cards().filter(card => card.dataset.key).length, 0);
+assert.equal(selected("tab-session"), true, "a project nothing links to is treated as no choice");
 app.go("#view=session&project=ape");
-assert.ok(app.cards().length > 0);
-assert.match(text(app.cards()[0]), /APE/);
 assert.equal(selected("tab-category"), true, "legacy project links open issue grouping");
+assert.equal(app.$("project-legend").hidden, false, "a chosen project keeps the row so it can be cleared");
+assert.deepEqual(app.chosen(), ["APE 4 · 2 会话"]);
 app.$("tab-session").onclick();
 assert.equal(app.cards().length, base.sessions.length);
-assert.equal(app.$("project-choice").hidden, true);
+assert.equal(app.$("project-legend").hidden, true, "the session view does not filter by project");
 assert.ok(app.cards().every(card => !text(card).includes("关联项目")));
 assert.equal(app.location.hash, "#view=session");
 app.$("tab-category").onclick();
-assert.equal(app.$("project-choice").hidden, false);
-assert.match(app.location.hash, /project=ape/);
-app.$("project-clear").onclick();
-assert.doesNotMatch(app.location.hash, /project=/);
-assert.equal(app.$("project-summary").textContent, "关联项目：全部");
+assert.match(app.location.hash, /project=ape/, "the issue view remembers its project");
+app.project("APE").onclick();
+assert.doesNotMatch(app.location.hash, /project=/, "choosing the current project again returns to all");
 
 // Different issues in one session can have different projects or remain unattributed.
 const mixed = JSON.parse(JSON.stringify(base));
-mixed.projects = {
-  workspace: {id: "workspace", name: "Workspace"},
-  a: {id: "a", name: "Alpha", parent_id: "workspace"},
-  b: {id: "b", name: "Beta", parent_id: "a"},
-};
 mixed.sessions[0].issues[0].linked_projects = [{id: "a", name: "Alpha"}];
 mixed.sessions[0].issues[1].linked_projects = [{id: "b", name: "Beta"}];
 mixed.sessions[0].issues[2].linked_projects = [];
+// "workspace" is the registered parent of both, but no issue links to it, so the generator leaves it out.
+index(mixed, [["a", "Alpha", 1, 1], ["b", "Beta", 1, 1]]);
 app = boot(mixed);
+app.go("#view=category");
+assert.equal(app.$("project-legend").attrs.role, "radiogroup");
+assert.deepEqual(app.projects(), ["全部 4", "Alpha 1 · 1 会话", "Beta 1 · 1 会话"], "only linked projects, no empty-association choice");
+assert.doesNotMatch(text(app.$("project-legend")), /待归因|无关联项目|Workspace/);
 app.go("#view=category&project=workspace");
-assert.match(text(app.$("filter-note")), /0 个会话 · 0 个问题/, "ancestors do not inherit project attribution");
-assert.equal(app.cards().filter(card => card.dataset.key).length, 0);
-assert.equal(app.strip().length, 0);
-app.go("#view=category&project=b");
+assert.equal(app.$("filter-note").hidden, true, "ancestors do not inherit project attribution; an unknown project is no choice");
+app.project("Beta").onclick();
+assert.match(app.location.hash, /project=b/);
+assert.match(text(app.$("filter-note")), /1 个会话 · 1 个问题 关联项目：Beta/);
+assert.match(text(app.cards()[0]), /关联项目：\s*Beta/);
+assert.deepEqual(app.chosen(), ["Beta 1 · 1 会话"]);
+assert.deepEqual(app.projects(), ["全部 4", "Alpha 1 · 1 会话", "Beta 1 · 1 会话"], "project counts do not follow the project choice");
+app.project("Alpha").onclick();
+assert.deepEqual(app.chosen(), ["Alpha 1 · 1 会话"], "a new choice replaces the old one");
 assert.match(text(app.$("filter-note")), /1 个会话 · 1 个问题/);
-assert.match(text(app.cards()[0]), /关联项目：Beta/);
+// Progress narrows within the chosen project, while project counts stay independent of progress.
+const alphaProgress = mixed.sessions[0].issues[0].progress;
+const otherProgress = mixed.sessions.flatMap(s => s.issues).find(issue => issue.progress !== alphaProgress).progress;
+const otherLabel = base.progress_legend.find(entry => entry.key === otherProgress).label;
+app.project("全部").onclick();
+app.legend(otherLabel).onclick();
+assert.deepEqual(app.projects(), ["全部 4", "Alpha 1 · 1 会话", "Beta 1 · 1 会话"], "project counts ignore the progress choice");
+app.legend(otherLabel).onclick();
+app.project("Alpha").onclick();
+assert.match(text(app.$("progress-legend")), /全部 1/, "progress counts follow the chosen project");
 app.go("#view=category&project=a&project=b");
-assert.match(text(app.$("filter-note")), /1 个会话 · 2 个问题/);
-app.go("#view=category&project=a");
-assert.match(text(app.$("filter-note")), /1 个会话 · 1 个问题/, "a parent matches only its own directly associated issue");
+assert.deepEqual(app.chosen(), ["Alpha 1 · 1 会话"], "older multi-project links keep their first project");
+assert.match(text(app.$("filter-note")), /1 个会话 · 1 个问题/);
+app.go("#view=category&project=~unattributed");
+assert.equal(app.$("filter-note").hidden, true);
+assert.deepEqual(app.chosen(), ["全部 4"]);
+// Search narrows the counts and drops projects with no match, but the row stays.
+app.search("diagnosed only");
+assert.equal(app.$("project-legend").hidden, false);
+assert.ok(app.projects().length < 3);
+app.search("alpha");
+assert.ok(app.projects().some(label => label.startsWith("Alpha 1")), "project names are searchable");
+app.search("");
+// Clear filter resets the project with the other issue filters.
+app.project("Beta").onclick();
+all(app.$("filter-note")).find(node => node.tag === "button").onclick();
+assert.deepEqual(app.chosen(), ["全部 4"]);
+assert.doesNotMatch(app.location.hash, /project=/);
+// Project names on a category card choose that project.
+const projectButton = all(app.cards()[0]).find(node => node.className.includes("project-link") && node.tag === "button");
+projectButton.onclick();
+assert.match(app.location.hash, new RegExp(`project=${projectButton.textContent === "Alpha" ? "a" : "b"}`));
 app.$("tab-session").onclick();
 assert.equal(app.$("filter-note").hidden, true);
 assert.equal(app.cards().length, 2);
 app.open(app.cards()[0]).onclick();
 assert.equal(app.rows().length, 3);
 assert.ok(app.rows().every(row => all(row).filter(n => n.tag === "a").every(n => !n.href.includes("&project="))));
-app.go("#view=category&project=~unattributed");
-assert.equal(app.$("filter-note").hidden, true);
-const betaInput = app.$("project-filter").children.find(label => label.children[0].value === "b").children[0];
-app.$("project-clear").onclick();
-betaInput.checked = true;
-betaInput.onchange();
-assert.match(app.location.hash, /project=b/);
-assert.match(text(app.$("filter-note")), /1 个会话 · 1 个问题/);
-assert.equal(app.$("project-summary").textContent, "关联项目：已选 1 项");
-app.$("project-choice").open = true;
-app.escape();
-assert.equal(app.$("project-choice").open, false);
-assert.equal(app.$("project-summary").focused, true);
-app.$("project-choice").open = true;
-app.press(betaInput);
-assert.equal(app.$("project-choice").open, true, "clicking a project checkbox keeps the menu open");
-app.press(app.$("project-clear"));
-assert.equal(app.$("project-choice").open, true, "clearing the selection keeps the menu open");
-app.press(app.$("dash-search"));
-assert.equal(app.$("project-choice").open, false, "clicking another control closes the menu");
-app.$("project-choice").open = true;
-app.press(app.$("dash-panel"));
-assert.equal(app.$("project-choice").open, false, "clicking page content closes the menu");
+// A linked ID missing from the registry stays reachable and is marked.
+const unregistered = JSON.parse(JSON.stringify(mixed));
+index(unregistered, [["a", "Alpha", 1, 1], ["b", "b", 1, 1, {registered: false}]]);
+app = boot(unregistered);
+app.go("#view=category");
+assert.match(text(app.project("b")), /（未登记）/);
 
 // Attention counts sessions once, follows search, and is absent from the issue view.
 const uncertain = JSON.parse(JSON.stringify(base));
@@ -494,9 +512,13 @@ const sharedProjects = JSON.parse(JSON.stringify(mixed));
 sharedProjects.sessions[0].issues[0].category = sharedProjects.sessions[0].issues[1].category;
 sharedProjects.sessions[0].issues[0].linked_projects.push({id: "b", name: "Beta"});
 app = boot(sharedProjects);
-app.go("#view=category&project=a&project=b");
-assert.match(text(app.$("filter-note")), /1 个会话 · 2 个问题/, "multiple associations count an issue once");
-assert.match(text(app.cards()[0]), /关联项目：Alpha、Beta/);
+app.go("#view=category");
+assert.deepEqual(app.projects(), ["全部 4", "Beta 2 · 1 会话", "Alpha 1 · 1 会话"], "an issue linked to several projects counts in each, ordered by count");
+assert.match(text(app.$("project-legend")), /各项目数量不能相加/);
+app.project("Beta").onclick();
+assert.match(text(app.$("filter-note")), /1 个会话 · 2 个问题/, "an issue matching the chosen project counts once");
+app.project("Beta").onclick();
+assert.match(text(app.cards()[0]), /关联项目：\s*Alpha\s*、\s*Beta/);
 assert.equal(text(app.cards()[0]).match(/Beta/g).length, 1, "shared project names appear once per category");
 
 // Empty associations contribute no placeholder to a category's project union.
@@ -506,14 +528,18 @@ partialProjects.sessions[0].issues[2].category = partialProjects.sessions[0].iss
 app = boot(partialProjects);
 app.go("#view=category");
 const partialCard = app.cards().find(card => card.dataset.key === partialProjects.sessions[0].issues[0].category);
-assert.equal(partialCard.children.find(node => node.tag === "p").textContent, "关联项目：Alpha、Beta");
+assert.equal(text(partialCard.children.find(node => node.tag === "p")), "关联项目： Alpha 、 Beta");
 assert.match(text(partialCard), /3 个问题/);
 app.open(partialCard).onclick();
 assert.ok(app.rows().some(row => text(row).includes("关联项目：无")));
-assert.doesNotMatch(text(app.$("project-filter")), /待归因|无关联项目/);
+assert.doesNotMatch(text(app.$("project-legend")), /待归因|无关联项目/);
 partialProjects.sessions[0].issues.forEach(issue => { issue.linked_projects = []; });
+partialProjects.project_index = [];
 app = boot(partialProjects);
 app.go("#view=category");
 assert.ok(app.cards().filter(card => card.dataset.key).every(card =>
-  card.children.find(node => node.tag === "p").textContent === "关联项目：无"));
+  text(card.children.find(node => node.tag === "p")) === "关联项目： 无"));
 assert.ok(app.cards().some(card => card.dataset.key));
+assert.equal(app.$("project-legend").hidden, true, "no linked project, no project row");
+
+console.log("Dashboard projects: single choice, counts, legacy links, search and category links passed.");

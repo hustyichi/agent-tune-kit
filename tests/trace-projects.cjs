@@ -6,14 +6,14 @@ const vm = require("node:vm");
 const {test} = require("node:test");
 
 const source = fs.readFileSync(path.join(__dirname, "../agent_tune_kit/visualize/assets/trace/app.js"), "utf8");
-const menuSource = fs.readFileSync(path.join(__dirname, "../agent_tune_kit/visualize/assets/shared/project-menu.js"), "utf8");
 const slice = (start, end) => source.slice(source.indexOf(start), source.indexOf(end));
 const nodes = node => [node, ...node.children.flatMap(nodes)];
 class Element {
-  constructor(tag) { this.tag = tag; this.children = []; this.textContent = ""; this.value = ""; this.dataset = {}; }
+  constructor(tag) { this.tag = tag; this.children = []; this.textContent = ""; this.value = ""; this.dataset = {}; this.className = ""; }
   append(...items) { for (const item of items) { item.parentElement = this; this.children.push(item); } }
   replaceChildren(...items) { this.children = items; }
   setAttribute(name, value) { this[name] = value; }
+  get classList() { return {add: name => { this.className = `${this.className} ${name}`.trim(); }}; }
   querySelectorAll(selector) { return nodes(this).filter(node => node.className === selector.slice(1)); }
   focus() { this.focused = true; }
   closest(selector) {
@@ -23,13 +23,12 @@ class Element {
 }
 const text = node => node.textContent + node.children.map(text).join("");
 
-function boot(hash = "", available = true) {
+function boot(hash = "", available = true, edit = () => {}) {
   const ids = new Map();
   const $ = id => { if (!ids.has(id)) ids.set(id, Object.assign(new Element("div"), {id})); return ids.get(id); };
-  $("project-choice").append($("project-summary"), $("project-filter"), $("project-clear"));
-  const listeners = {};
   const data = {
-    projects: {workspace: {id: "workspace", name: "Workspace"}, server: {id: "server", name: "magic-code-server", parent_id: "workspace"}, other: {id: "other", name: "Other"}},
+    // The generator offers only projects some issue links to; "workspace" is registered but has no issue yet.
+    project_index: [{id: "server", name: "magic-code-server", issues: 1, registered: true}, {id: "other", name: "Other", issues: 1, registered: true}],
     issues: [
       {id: "ISSUE-001", projects: [{id: "server", name: "magic-code-server"}]},
       {id: "ISSUE-002", projects: [{id: "other", name: "Other"}]},
@@ -37,15 +36,15 @@ function boot(hash = "", available = true) {
     ].map(({id, projects}) => ({record: {id, title: id}, linked_projects: projects, progress: {key: "pending", label: "待诊断"}, fragments: [{id: "S1", summary: "Evidence", anchors: []}]})),
     categories: {}, dashboard: {available}, captures: [],
   };
+  edit(data);
   const location = {hash, pathname: "/session/preview.html", search: ""};
   const context = vm.createContext({
     $, data, location, URLSearchParams,
-    document: {getElementById: $, createElement: tag => new Element(tag), createTextNode: text => Object.assign(new Element("#text"), {textContent: text}), addEventListener: (name, fn) => { listeners[name] = fn; }},
+    document: {getElementById: $, createElement: tag => new Element(tag), createTextNode: text => Object.assign(new Element("#text"), {textContent: text}), addEventListener() {}},
     window: {addEventListener() {}},
     history: {replaceState: (_s, _t, url) => { location.hash = url.startsWith("#") ? url : ""; }},
     pretty: JSON.stringify, drawLanes() {}, rememberView() {}, showIssue() {}, renderTraces() {},
   });
-  vm.runInContext(menuSource, context);
   vm.runInContext(`
     let investigation = null, selectedNode = null, railFilter = null, previewIssue = null, scopeBefore = null, expandedFolds = new Set(), eventFocus = null;
     const currentCapture = null;
@@ -53,11 +52,10 @@ function boot(hash = "", available = true) {
     const partNow = () => investigation?.item.fragments[investigation.index];
     const goFragment = index => { investigation.index = index; syncHash(); };
     ${slice("  const el =", "  const markdown =")}
-    ${slice("  const projectSelection =", "  const filters =")}
+    ${slice("  // One linked project at a time", "  const filters =")}
     ${slice("  const progressOf =", "  const shortIssue =")}
     ${slice("  function startIssue(", "  function goFragment(")}
     ${slice("  function syncRailSelection()", '  $("fragment-prev").onclick')}
-    ${slice('  $("project-filter").onchange =', '  $("capture-filter").onchange =')}
     this.render = renderIssueRail; this.syncHash = syncHash; this.applyHash = applyHash;
     this.selectIssue = id => startIssue(issueById.get(id));
     this.selectEvent = () => { investigation = null; selectedNode = {trace_id: "trace-1", id: "obs-1"}; syncHash(); };
@@ -65,46 +63,75 @@ function boot(hash = "", available = true) {
   context.render();
   return {
     $, data, context, location,
-    click: node => listeners.click({target: node}),
-    escape: () => { let stopped = false; listeners.keydown({key: "Escape", preventDefault() {}, stopPropagation() { stopped = true; }}); return stopped; },
     cards: () => $("issue-rail-list").children.filter(node => node.className === "issue-card"),
-    inputs: () => $("project-filter").children.map(label => label.children[0]),
+    choices: () => $("project-legend").children,
+    choice: label => $("project-legend").children.find(node => text(node).startsWith(label)),
+    checked: () => $("project-legend").children.filter(node => node["aria-checked"] === "true").map(node => text(node)),
     go: hash => { location.hash = hash; context.applyHash(); },
-    select: values => {
-      for (const label of $("project-filter").children) label.children[0].checked = values.includes(label.children[0].value);
-      $("project-filter").onchange();
-    },
+    search: value => { $("issue-search").value = value; context.render(); },
   };
 }
 
-test("project selection matches exact projects, OR, legacy links, clear and progress intersection", () => {
+test("only linked projects are offered, one at a time, with counts that ignore the choice", () => {
   const app = boot();
-  app.select(["workspace"]);
-  assert.equal(app.$("rail-count").textContent, "0/3", "a parent does not match a child's issues");
-  app.select(["server"]);
+  assert.deepEqual(app.choices().map(text), ["全部3", "magic-code-server1", "Other1"], "registered projects without issues are not offered");
+  assert.deepEqual(app.checked(), ["全部3"]);
+  app.choice("magic-code-server").onclick();
   assert.equal(app.$("rail-count").textContent, "1/3");
-  app.select(["server", "other"]);
-  assert.deepEqual(app.cards().map(card => card.dataset.issueId), ["ISSUE-001", "ISSUE-002"]);
-  app.$("issue-status").value = "已诊断"; app.context.render();
-  assert.equal(app.$("rail-count").textContent, "0/3");
-  app.$("issue-status").value = "";
-  app.$("project-clear").onclick();
+  assert.deepEqual(app.checked(), ["magic-code-server1"]);
+  assert.deepEqual(app.choices().map(text), ["全部3", "magic-code-server1", "Other1"], "counts do not follow the chosen project");
+  app.choice("Other").onclick();
+  assert.deepEqual(app.cards().map(card => card.dataset.issueId), ["ISSUE-002"], "a new choice replaces the old one");
+  app.choice("Other").onclick();
+  assert.equal(app.$("rail-count").textContent, "3/3", "choosing the current project again returns to all issues");
+  app.choice("Other").onclick();
+  app.choice("全部").onclick();
   assert.equal(app.$("rail-count").textContent, "3/3");
+  assert.equal(app.location.hash, "");
+});
+
+test("search narrows project counts; the progress select is gone", () => {
+  const app = boot();
+  assert.equal(app.$("issue-status").tag, "div", "the page no longer wires a progress select");
+  app.search("issue-002");
+  assert.deepEqual(app.choices().map(text), ["全部1", "Other1"], "the row stays while searching; counts follow the search and empty projects drop out");
+  app.search("magic-code");
+  assert.equal(app.$("rail-count").textContent, "1/3", "project names are searchable");
+  app.search("待诊断");
+  assert.equal(app.$("rail-count").textContent, "3/3", "progress stays searchable without the select");
+});
+
+test("the row hides when choosing a project could not narrow the list", () => {
+  assert.equal(boot().$("project-legend").hidden, false);
+  const none = boot("", true, data => { data.project_index = []; data.issues.forEach(item => { item.linked_projects = []; }); });
+  assert.equal(none.$("project-legend").hidden, true, "no linked issue, nothing to choose");
+  const single = boot("", true, data => {
+    data.project_index = [{id: "server", name: "magic-code-server", issues: 3, registered: true}];
+    data.issues.forEach(item => { item.linked_projects = [{id: "server", name: "magic-code-server"}]; });
+  });
+  assert.equal(single.$("project-legend").hidden, true, "one project covering every issue filters nothing");
+  const partial = boot("", true, data => {
+    data.project_index = [{id: "server", name: "magic-code-server", issues: 1, registered: true}];
+    data.issues[1].linked_projects = [];
+  });
+  assert.deepEqual(partial.choices().map(text), ["全部3", "magic-code-server1"], "one project covering part of the issues still narrows the list");
+  const unregistered = boot("", true, data => { data.project_index[1] = {id: "other", name: "other", issues: 1, registered: false}; });
+  assert.match(text(unregistered.choice("other")), /（未登记）/, "a linked ID missing from the registry stays reachable and says so");
 });
 
 test("a parent project matches only its own directly associated issues", () => {
   const app = boot();
-  app.data.issues[1].linked_projects = [{id: "workspace", name: "Workspace"}];
-  app.select(["workspace"]);
-  assert.deepEqual(app.cards().map(card => card.dataset.issueId), ["ISSUE-002"]);
-  app.select(["server"]);
-  assert.deepEqual(app.cards().map(card => card.dataset.issueId), ["ISSUE-001"]);
-  app.select(["workspace", "server"]);
-  assert.deepEqual(app.cards().map(card => card.dataset.issueId), ["ISSUE-001", "ISSUE-002"]);
+  app.data.issues[1].linked_projects = [{id: "server", name: "magic-code-server"}];
+  app.data.issues[2].linked_projects = [{id: "other", name: "Other"}];
+  app.go("#project=other");
+  assert.deepEqual(app.cards().map(card => card.dataset.issueId), ["ISSUE-003"]);
+  app.go("#project=workspace");
+  assert.equal(app.$("rail-count").textContent, "3/3", "a project nothing links to is treated as no choice");
 });
 
-test("project parameters survive rendering, issue and event navigation, and reload", () => {
-  const app = boot("#project=server&project=~unattributed");
+test("the project parameter survives rendering, issue and event navigation, and reload", () => {
+  const app = boot("#project=~unattributed&project=server&project=other");
+  assert.deepEqual(app.checked(), ["magic-code-server1"], "older links keep their first project still offered");
   for (const action of [() => app.context.syncHash(), () => app.context.selectIssue("ISSUE-001"), () => app.context.selectEvent()]) {
     action();
     assert.deepEqual(new URLSearchParams(app.location.hash.slice(1)).getAll("project"), ["server"]);
@@ -113,17 +140,16 @@ test("project parameters survive rendering, issue and event navigation, and relo
   assert.equal(new URLSearchParams(app.location.hash.slice(1)).get("event"), "trace-1/obs-1");
 });
 
-test("hash navigation restores checkboxes, counts, empty filters and explicit issue visibility", () => {
+test("hash navigation restores the choice, counts and explicit issue visibility", () => {
   const app = boot("#project=server");
   app.go("#project=other");
   assert.deepEqual(app.cards().map(card => card.dataset.issueId), ["ISSUE-002"]);
-  assert.deepEqual(app.inputs().filter(input => input.checked).map(input => input.value), ["other"]);
+  assert.deepEqual(app.checked(), ["Other1"]);
   app.go("#project=server&issue=ISSUE-002");
   assert.deepEqual(app.cards().map(card => card.dataset.issueId), ["ISSUE-001", "ISSUE-002"]);
   app.go("");
   assert.equal(app.$("rail-count").textContent, "3/3");
-  assert.equal(app.inputs().some(input => input.checked), false);
-  assert.equal(app.$("project-summary").textContent, "关联项目：全部");
+  assert.deepEqual(app.checked(), ["全部3"]);
 });
 
 test("initial deep links keep an explicitly selected issue visible even without fragments", () => {
@@ -138,7 +164,7 @@ test("initial deep links keep an explicitly selected issue visible even without 
 
 test("project names render once as links and the dashboard filter", () => {
   const app = boot();
-  assert.doesNotMatch(text(app.$("project-filter")), /待归因|无关联项目/);
+  assert.doesNotMatch(text(app.$("project-legend")), /待归因|无关联项目|Workspace/);
   const card = app.cards()[0];
   assert.equal(text(card).match(/magic-code-server/g).length, 1);
   const links = nodes(card).filter(node => node.tag === "a");
@@ -208,21 +234,4 @@ test("back to dashboard opens the session view without a drawer", () => {
   vm.runInContext(slice("\n  if (data.dashboard.available) {", "  for (const warning of data.warnings)"), app.context);
   assert.equal(app.$("dashboard-link").href, "../index.html#view=session");
   assert.equal(app.$("dashboard-link").hidden, false);
-});
-
-test("the shared project menu keeps internal clicks and dismisses outside clicks and Escape", () => {
-  const app = boot(), choice = app.$("project-choice");
-  for (const node of [app.inputs()[0], app.$("project-clear"), app.$("project-summary")]) {
-    choice.open = true; app.click(node);
-    assert.equal(choice.open, true);
-  }
-  for (const id of ["issue-search", "issue-status", "issue-rail-list", "trace-list"]) {
-    choice.open = true; app.click(app.$(id));
-    assert.equal(choice.open, false);
-  }
-  choice.open = true;
-  assert.equal(app.escape(), true, "Escape must not also exit the active issue");
-  assert.equal(choice.open, false);
-  assert.equal(app.$("project-summary").focused, true);
-  assert.equal(app.escape(), false, "Escape passes through when the menu is closed");
 });

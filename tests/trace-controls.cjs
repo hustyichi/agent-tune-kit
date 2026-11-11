@@ -8,71 +8,39 @@ async function check(browser, file, viewport, dashboard) {
   page.setDefaultTimeout(5000);
   const errors = [];
   page.on("pageerror", error => errors.push(error.message));
-  const settle = () => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   await page.goto(pathToFileURL(file).href);
   if (dashboard) await page.locator("#tab-category").click();
-  const summary = page.locator("#project-summary"), choice = page.locator("#project-choice");
-  const menu = page.locator(".project-menu");
-  const heights = await page.locator('input:not([type=checkbox]):visible, select:visible, #project-summary').evaluateAll(items =>
+  const heights = await page.locator("input:not([type=checkbox]):visible, select:visible").evaluateAll(items =>
     items.map(item => [item.id, item.getBoundingClientRect().height]));
   assert.ok(heights.every(([, height]) => height === 34), JSON.stringify(heights));
+  assert.equal(await page.locator("#issue-status, #project-choice, .project-menu").count(), 0, "dropdown filters are gone");
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "page overflows horizontally");
-  // Exercise long lists and names even when the supplied archive has only a few projects.
-  await page.locator("#project-filter").evaluate(filter => {
+  // Exercise many long project choices even when the supplied archive links few or no projects.
+  const legend = page.locator("#project-legend");
+  await legend.evaluate(box => {
+    box.hidden = false;
     for (let i = 0; i < 24; i++) {
-      const label = document.createElement("label"), input = document.createElement("input");
-      input.type = "checkbox";
-      label.append(input, `测试项目-${i}-` + "long-project-name".repeat(8));
-      filter.append(label);
+      const item = document.createElement("button");
+      item.type = "button"; item.className = "legend-item project-item"; item.setAttribute("role", "radio");
+      item.setAttribute("aria-checked", String(i === 3));
+      const name = document.createElement("span"); name.className = "project-name"; name.textContent = `测试项目-${i}-` + "long-project-name".repeat(8);
+      const count = document.createElement("span"); count.className = "project-count"; count.textContent = String(i);
+      item.append(name, count); box.append(item);
     }
   });
-  const insideViewport = async () => {
-    await settle();
-    const bounds = await menu.evaluate(node => {
-      const r = node.getBoundingClientRect();
-      return {left: r.left, right: r.right, top: r.top, bottom: r.bottom,
-        width: innerWidth, height: innerHeight, overflow: node.scrollWidth > node.clientWidth,
-        reachable: [[r.left + 2, r.top + 2], [r.right - 2, r.bottom - 2]].every(([x,y]) => node.contains(document.elementFromPoint(x,y)))};
-    });
-    assert.ok(bounds.left >= 8 && bounds.right <= bounds.width - 8 && bounds.top >= 8 && bounds.bottom <= bounds.height - 8, JSON.stringify(bounds));
-    assert.equal(bounds.overflow, false, "project names overflow the menu");
-    assert.equal(bounds.reachable, true, "another element covers the menu");
-  };
-  await summary.click();
-  await insideViewport();
-  const checkbox = page.locator("#project-filter input").last();
-  assert.deepEqual(await checkbox.evaluate(node => [node.offsetWidth, node.offsetHeight]), [16, 16]);
-  await checkbox.check();
-  assert.equal(await choice.getAttribute("open"), "", "checkbox selection closes the menu");
-  await insideViewport();
-  await page.locator("#project-clear").click();
-  assert.equal(await choice.getAttribute("open"), "", "clear closes the menu");
-  const outside = page.locator(dashboard ? "#tab-category" : "#issue-search");
-  await outside.evaluate(node => node.addEventListener("click", event => event.stopPropagation(), {once: true}));
-  await outside.click();
-  assert.equal(await choice.getAttribute("open"), null, "outside click must close even when bubbling is stopped");
-  await summary.click();
-  await page.evaluate(() => {
-    window.escapedToPage = false;
-    document.addEventListener("keydown", () => { window.escapedToPage = true; }, {once: true});
+  const bounds = await legend.evaluate(box => {
+    const r = box.getBoundingClientRect();
+    const items = [...box.querySelectorAll(".project-item")].map(node => node.getBoundingClientRect());
+    return {
+      inside: items.every(item => item.left >= r.left - 0.5 && item.right <= r.right + 0.5),
+      wraps: new Set(items.map(item => Math.round(item.top))).size > 1,
+      counts: [...box.querySelectorAll(".project-count")].every(node => node.getBoundingClientRect().width > 0),
+      page: document.documentElement.scrollWidth <= innerWidth,
+    };
   });
-  await page.keyboard.press("Escape");
-  assert.equal(await choice.getAttribute("open"), null);
-  assert.equal(await summary.evaluate(node => node === document.activeElement), true);
-  assert.equal(await page.evaluate(() => window.escapedToPage), false, "Escape must not also close page details");
-  await summary.click();
-  await page.locator(dashboard ? "#dash-stats" : "#lane-title").click();
-  assert.equal(await choice.getAttribute("open"), null, "clicking page content closes the menu");
-  // Force both viewport edges and a lower trigger, independent of the archive's content height.
-  await choice.evaluate(node => { node.style.cssText = "position:fixed;right:8px;bottom:8px;z-index:25"; });
-  await summary.click();
-  await insideViewport();
-  assert.ok((await menu.boundingBox()).y < (await summary.boundingBox()).y, "menu should open upwards near the bottom");
-  await page.setViewportSize({width: 320, height: 360});
-  await insideViewport();
-  await page.keyboard.press("Escape");
+  assert.deepEqual(bounds, {inside: true, wraps: true, counts: true, page: true}, "long project names truncate and the row wraps");
   assert.deepEqual(errors, []);
-  console.log(`${dashboard ? "dashboard" : "detail"} ${viewport.width}×${viewport.height}: controls, menu bounds, scroll, resize and dismissal passed`);
+  console.log(`${dashboard ? "dashboard" : "detail"} ${viewport.width}×${viewport.height}: control heights and project choice layout passed`);
   await page.close();
 }
 

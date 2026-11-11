@@ -21,7 +21,7 @@ item.record.title = longTitle;
 item.record.category = "mock";
 item.linked_projects = projects;
 item.fragments = Array.from({length: 4}, (_, i) => ({...fragment, id: `S${i+1}`, summary: `证据 ${i+1}：核对订单金额、税额和底部合计，保留长摘要的完整定位入口。`}));
-data.projects = Object.fromEntries(projects.map(project => [project.id, project]));
+data.project_index = projects.map(project => ({...project, issues: 1, registered: true}));
 data.categories.mock = {name: "Mock 业务数据不一致"};
 data.dashboard.available = true;
 const normal = structuredClone(item);

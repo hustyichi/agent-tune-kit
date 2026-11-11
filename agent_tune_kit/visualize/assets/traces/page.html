@@ -20,11 +20,11 @@
         <button id="tab-category" type="button" role="tab" aria-controls="dash-panel">问题</button>
       </div>
       <label id="source-choice" hidden><span class="sr-only">来源</span><select id="source-filter"></select></label>
-      <details id="project-choice" class="project-choice"><summary id="project-summary">关联项目：全部</summary><div class="project-menu"><p>按问题实际关联项目筛选</p><button id="project-clear" type="button">清空筛选</button><div id="project-filter" role="group" aria-label="关联项目"></div></div></details>
       <label class="search-label"><span class="sr-only">搜索</span><input id="dash-search" type="search" placeholder="搜索 Session ID、问题编号、标题、分类"></label>
     </div>
     <div id="dash-panel" class="dash-panel" role="tabpanel" aria-labelledby="tab-session">
       <div id="session-attention" class="session-attention" role="status" hidden></div>
+      <div id="project-legend" class="progress-legend" role="group" aria-label="关联项目" hidden></div>
       <div id="progress-legend" class="progress-legend" role="group" aria-label="处理状态" hidden></div>
       <div id="filter-note" class="filter-note" role="status" hidden></div>
       <div id="dash-grid" class="dash-grid"></div>

@@ -23,25 +23,14 @@
   const captureById = new Map(data.captures.map(c => [c.id, c]));
   const issueById = new Map(data.issues.map(item => [item.record.id, item]));
 
-  const projectSelection = new Set(new URLSearchParams(location.hash.slice(1)).getAll("project").filter(id => id !== "~unattributed"));
-  const projectMatches = item => !projectSelection.size || [...projectSelection].some(id => {
-    const projects = item.linked_projects || [];
-    return projects.some(project => project.id === id);
-  });
-  const projectInputs = [];
-  for (const p of Object.values(data.projects || {})) {
-    const label = el("label"), input = el("input");
-    input.type = "checkbox"; input.value = p.id;
-    input.checked = projectSelection.has(p.id);
-    label.append(input, document.createTextNode(p.abbreviation || p.name));
-    $("project-filter").append(label); projectInputs.push(input);
-    input.onchange = () => $("project-filter").onchange();
-  }
-  const updateProjectSummary = () => {
-    $("project-summary").textContent = projectSelection.size ? `关联项目：已选 ${projectSelection.size} 项` : "关联项目：全部";
-  };
-  updateProjectSummary();
-  $("project-clear").onclick = () => { projectInputs.forEach(input => { input.checked = false; }); $("project-filter").onchange(); };
+  // One linked project at a time, or every issue. Only projects this session's issues link to are offered.
+  const PROJECTS = data.project_index || [];
+  const PROJECT = new Map(PROJECTS.map(entry => [entry.id, entry]));
+  // Older links may carry several projects or the removed empty-association value: keep the first one still offered.
+  const projectFrom = params => params.getAll("project").find(id => PROJECT.has(id)) || "";
+  let railProject = projectFrom(new URLSearchParams(location.hash.slice(1)));
+  const projectMatches = item => !railProject || (item.linked_projects || []).some(project => project.id === railProject);
+  const projectLabel = entry => `${entry.name}${entry.deprecated ? "（已弃用）" : entry.registered === false ? "（未登记）" : ""}`;
 
   const filters = ["trace-filter", "type-filter", "trace-search", "record-mode"];
   const list = $("trace-list"), scroller = $("trace-scroll");
@@ -107,7 +96,6 @@
     onRoot: index => openEventDrawer(currentCapture.nodes[index], document.activeElement),
     onIssueBadge: track => {
       $("issue-search").value = "";
-      $("issue-status").value = "";
       railFilter = {track, ids: data.issues.filter(item => item.fragments.some(part => part.capture_id === currentCapture?.id && part.track === track)).map(item => item.record.id)};
       renderIssueRail();
     },
@@ -1120,16 +1108,51 @@
       if (mine && investigation.index >= 2) card.querySelectorAll(".seg-more").forEach(more => { more.open = true; });
     }
   }
+  const searchMatches = (item, text) => !text || pretty(item.record).toLocaleLowerCase().includes(text) ||
+    progressOf(item).label.toLocaleLowerCase().includes(text) || (item.linked_projects || []).some(p => [p.name, ...(p.aliases || [])].some(name => name.toLocaleLowerCase().includes(text)));
+  function chooseProject(id) {
+    railProject = railProject === id ? "" : id;
+    syncHash(); renderIssueRail();
+  }
+  // Project counts follow the search only: the lane filter and the chosen project leave every project's real size.
+  function renderProjectChoice(text) {
+    const box = $("project-legend");
+    box.replaceChildren();
+    const issues = data.issues.filter(item => searchMatches(item, text));
+    const counts = new Map();
+    for (const item of issues) for (const project of item.linked_projects || []) {
+      if (PROJECT.has(project.id)) counts.set(project.id, (counts.get(project.id) || 0) + 1);
+    }
+    const order = new Map(PROJECTS.map((entry, index) => [entry.id, index]));
+    const shown = PROJECTS.filter(entry => counts.get(entry.id) || entry.id === railProject).sort((a, b) =>
+      Number(Boolean(a.deprecated)) - Number(Boolean(b.deprecated)) || Number(a.registered === false) - Number(b.registered === false) ||
+      (counts.get(b.id) || 0) - (counts.get(a.id) || 0) || order.get(a.id) - order.get(b.id));
+    // A single project that holds every issue filters nothing, so the row would only repeat the total. This is judged on
+    // the whole session, not the search, so the row does not vanish while typing.
+    box.hidden = !PROJECTS.length || (PROJECTS.length === 1 && !railProject && PROJECTS[0].issues === data.issues.length);
+    if (box.hidden) return;
+    const choice = (name, n, id, title) => {
+      const item = button("", () => chooseProject(id), "project-item");
+      item.setAttribute("role", "radio");
+      item.setAttribute("aria-checked", String(railProject === id));
+      item.title = title;
+      item.append(el("span", name, "project-name"), el("span", String(n), "project-count"));
+      if (!n) item.classList.add("is-empty");
+      return item;
+    };
+    box.append(choice("全部", issues.length, "", "显示全部问题"));
+    for (const entry of shown) {
+      box.append(choice(projectLabel(entry), counts.get(entry.id) || 0, entry.id,
+        railProject === entry.id ? `取消筛选 ${projectLabel(entry)}` : `只看关联 ${projectLabel(entry)} 的问题`));
+    }
+  }
   function renderIssueRail() {
     const text = $("issue-search").value.toLocaleLowerCase();
-    const status = $("issue-status").value;
+    renderProjectChoice(text);
     const filtered = data.issues.filter(item => {
       if (!projectMatches(item) && new URLSearchParams(location.hash.slice(1)).get("issue") !== item.record.id) return false;
       if (railFilter && !railFilter.ids.includes(item.record.id)) return false;
-      const progress = progressOf(item).label;
-      if (status && progress !== status) return false;
-      if (!text) return true;
-      return pretty(item.record).toLocaleLowerCase().includes(text) || progress.toLocaleLowerCase().includes(text);
+      return searchMatches(item, text);
     });
     $("rail-count").textContent = `${filtered.length}/${data.issues.length}`;
     const box = $("issue-rail-list"); box.replaceChildren();
@@ -1210,7 +1233,7 @@
     syncRailSelection();
   }
   function syncHash() {
-    const parts = [...projectSelection].map(id => `project=${encodeURIComponent(id)}`);
+    const parts = railProject ? [`project=${encodeURIComponent(railProject)}`] : [];
     if (investigation) {
       parts.push(`issue=${encodeURIComponent(investigation.item.record.id)}`);
       const part = partNow();
@@ -1227,9 +1250,7 @@
     if (hash !== location.hash) history.replaceState(null, "", hash || location.pathname + location.search);
     const raw = hash.slice(1);
     const params = new URLSearchParams(raw.includes("=") ? raw : `issue=${raw}`);
-    projectSelection.clear(); params.getAll("project").filter(id => id !== "~unattributed").forEach(id => projectSelection.add(id));
-    for (const input of projectInputs) input.checked = projectSelection.has(input.value);
-    updateProjectSummary();
+    railProject = projectFrom(params);
     const issueId = params.get("issue");
     const seg = params.get("seg");
     const event = params.get("event");
@@ -1266,14 +1287,10 @@
   $("capture-filter").closest("label").hidden = Boolean(currentCapture?.current);
   options($("capture-filter"), data.captures.map(c => c.id));
   if (currentCapture) $("capture-filter").value = currentCapture.id;
-  $("project-filter").onchange = () => { projectSelection.clear(); for (const input of projectInputs) if (input.checked) projectSelection.add(input.value); updateProjectSummary(); const params = new URLSearchParams(location.hash.slice(1)); params.delete("project"); for (const id of projectSelection) params.append("project", id); history.replaceState(null, "", `#${params}`); renderIssueRail(); };
   $("capture-filter").onchange = () => { investigation = null; scopeBefore = null; railFilter = null; chooseCapture(); renderIssueRail(); renderTraces(); };
   $("trace-filter").onchange = () => focusTrace(scope());
   for (const id of ["trace-search","type-filter","record-mode"]) $(id).addEventListener(id === "trace-search" ? "input" : "change", () => renderTraces());
-  const presentProgress = new Set(data.issues.map(item => item.progress.label));
-  options($("issue-status"), data.progress_legend.map(entry => entry.label).filter(label => presentProgress.has(label)), "全部进度");
   $("issue-search").oninput = () => { railFilter = null; renderIssueRail(); };
-  $("issue-status").onchange = () => { railFilter = null; renderIssueRail(); };
   const collapsed = localStorage.getItem(RAIL_KEY) === "1";
   document.body.classList.toggle("rail-collapsed", collapsed);
   $("rail-toggle").setAttribute("aria-expanded", String(!collapsed));

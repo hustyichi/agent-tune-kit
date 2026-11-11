@@ -174,21 +174,84 @@ def validate_links(session_dir, links):
     return links
 
 
-def linked_projects(root, issue):
-    projects = project_map(root)
+def _display_name(entry, project_id):
+    return entry.get("abbreviation") or entry.get("name") or project_id
+
+
+def linked_projects(root, issue, projects=None):
+    """Return the display identity of each project an issue links to, once per project.
+
+    Pages only need the stable ID, the shown name and aliases for search; the rest of the registry stays out of them.
+    Pass ``projects`` (from ``project_map``) when resolving many issues so the registry is read once.
+    """
+    projects = project_map(root) if projects is None else projects
     result = []
     links = issue.get("project_links", [])
     if not isinstance(links, list):
         return result
+    seen = set()
     for link in links:
-        if not isinstance(link, dict) or not isinstance(link.get("project_id"), str):
+        if not isinstance(link, dict) or not isinstance(link.get("project_id"), str) or link["project_id"] in seen:
             continue
-        entry = projects.get(link["project_id"], {})
+        project_id = link["project_id"]
+        seen.add(project_id)
+        entry = projects.get(project_id, {})
+        aliases = entry.get("aliases")
         result.append(
             {
-                **entry,
-                "id": link["project_id"],
-                "name": entry.get("abbreviation") or entry.get("name") or link["project_id"],
+                "id": project_id,
+                "name": _display_name(entry, project_id),
+                "aliases": [alias for alias in aliases if isinstance(alias, str)] if isinstance(aliases, list) else [],
             }
         )
+    return result
+
+
+def project_index(root, linked, projects=None):
+    """Summarize the projects that issues actually link to, for the pages' single-choice project filter.
+
+    ``linked`` yields ``(session_key, linked_projects)`` per issue. Registered projects without any linked issue are
+    left out: nothing could be found by choosing them. A linked ID missing from the registry stays in, shown by its ID,
+    so its issues remain reachable. Counts are per project; an issue linked to several projects counts once in each,
+    so the entries must not be added up as an issue total.
+    """
+    projects = project_map(root) if projects is None else projects
+    found = {}
+    for session, items in linked:
+        for item in items:
+            entry = found.setdefault(
+                item["id"], {"id": item["id"], "name": item["name"], "issues": 0, "sessions": set()}
+            )
+            entry["issues"] += 1
+            entry["sessions"].add(session)
+    names = {}
+    for entry in found.values():
+        names.setdefault(entry["name"], []).append(entry["id"])
+    result = []
+    for entry in found.values():
+        registered = projects.get(entry["id"])
+        name = entry["name"]
+        if len(names[name]) > 1:
+            # Two projects share an abbreviation: tell the filter's choices apart by where each one lives.
+            tail = Path(registered["path"]).name if registered and registered.get("path") else entry["id"]
+            name = f"{name} · {tail or entry['id']}"
+        result.append(
+            {
+                "id": entry["id"],
+                "name": name,
+                "issues": entry["issues"],
+                "sessions": len(entry["sessions"]),
+                "registered": registered is not None,
+                "deprecated": bool(registered and registered.get("deprecated") is True),
+            }
+        )
+    result.sort(
+        key=lambda item: (
+            item["deprecated"],
+            not item["registered"],
+            -item["issues"],
+            item["name"].casefold(),
+            item["id"],
+        )
+    )
     return result

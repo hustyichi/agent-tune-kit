@@ -19,7 +19,7 @@ from agent_tune_kit.results.evidence import safe_path
 from agent_tune_kit.traces import records
 from agent_tune_kit.traces.categories import category_map, load_catalog
 from agent_tune_kit.traces.progress import PROGRESS, issue_progress, parse_instant, summarize
-from agent_tune_kit.traces.projects import linked_projects, project_map
+from agent_tune_kit.traces.projects import linked_projects, load_projects, project_index, project_map
 from agent_tune_kit.traces.store import read_json, trace_root
 from agent_tune_kit.utils.files import write_text_atomic
 
@@ -27,7 +27,6 @@ from .render import neutralize_script_close, open_in_browser, safe_json_for_html
 
 ASSETS = resources.files("agent_tune_kit.visualize").joinpath("assets", "traces")
 SHARED_STYLES = resources.files("agent_tune_kit.visualize").joinpath("assets", "shared", "base.css")
-PROJECT_MENU = resources.files("agent_tune_kit.visualize").joinpath("assets", "shared", "project-menu.js")
 INDEX_NAME = "index.html"
 PREVIEW_NAME = "preview.html"
 SAFE_SOURCE_FIELDS = ("type", "instance", "project", "environment")
@@ -86,7 +85,7 @@ def _verifications(session_dir, owner, change_id):
     return found
 
 
-def _issue_entries(session_dir, status):
+def _issue_entries(session_dir, status, projects):
     """Return one summary per issue and the instants of every record that backs it."""
     changes = {(change["owner_issue"], change["id"]): change for change in status["changes"]}
     entries, stamps = [], []
@@ -106,7 +105,7 @@ def _issue_entries(session_dir, status):
             {
                 "id": issue["id"],
                 "title": _text(issue["title"], TITLE_LIMIT),
-                "linked_projects": linked_projects(session_dir.parent, issue),
+                "linked_projects": linked_projects(session_dir.parent, issue, projects),
                 "category": category if isinstance(category, str) and category else None,
                 "progress": issue_progress(issue, pairs)["key"],
                 "segments": len(issue.get("segments") or []),
@@ -116,7 +115,7 @@ def _issue_entries(session_dir, status):
     return entries, stamps
 
 
-def _session_entry(session_dir):
+def _session_entry(session_dir, projects):
     entry = {
         "dir": session_dir.name,
         "href": f"./{quote(session_dir.name, safe='')}/{PREVIEW_NAME}",
@@ -139,7 +138,7 @@ def _session_entry(session_dir):
         return entry
     session = status["session"]
     detections = [item for item in session.get("detections", []) if isinstance(item, dict)]
-    issues, issue_stamps = _issue_entries(session_dir, status)
+    issues, issue_stamps = _issue_entries(session_dir, status, projects)
     archived = parse_instant(session.get("created_at"))
     updated = _latest([archived, *issue_stamps, *(parse_instant(item.get("updated_at")) for item in detections)])
     mtime = _preview_mtime(session_dir)
@@ -170,8 +169,14 @@ def build_dashboard_data(project_root):
     root = trace_root(project_root)
     if not root.is_dir():
         raise UserActionRequired("No Trace archive found; capture or import a session first.")
+    warnings = []
+    try:
+        load_projects(root)
+    except UserActionRequired:
+        warnings.append("工程目录不可读取；关联项目暂显示记录中的 ID。")
+    projects = project_map(root)
     sessions = [
-        _session_entry(child)
+        _session_entry(child, projects)
         for child in sorted(root.iterdir())
         if child.is_dir() and not child.is_symlink() and (child / "session.json").is_file()
     ]
@@ -179,13 +184,6 @@ def build_dashboard_data(project_root):
         raise UserActionRequired("No archived sessions to summarize.")
     # Newest activity first; sessions whose time is unknown go last.
     sessions.sort(key=lambda item: (item.get("updated_ms") is None, -(item.get("updated_ms") or 0), item["dir"]))
-    warnings = []
-    from agent_tune_kit.traces.projects import load_projects
-
-    try:
-        load_projects(root)
-    except UserActionRequired:
-        warnings.append("工程目录不可读取；关联项目暂显示记录中的 ID。")
     try:
         load_catalog(root)
     except UserActionRequired:
@@ -193,7 +191,11 @@ def build_dashboard_data(project_root):
     return {
         "project": Path(project_root).resolve().name,
         "sessions": sessions,
-        "projects": project_map(root),
+        "project_index": project_index(
+            root,
+            ((session["dir"], issue["linked_projects"]) for session in sessions for issue in session["issues"]),
+            projects,
+        ),
         "categories": {
             key: {name: entry[name] for name in ("name", "definition", "deprecated")}
             for key, entry in category_map(root).items()
@@ -213,6 +215,7 @@ def summarize_dashboard(data):
         "categories": len({issue["category"] for issue in issues if issue["category"]}),
         "uncategorized": sum(1 for issue in issues if not issue["category"]),
         "progress": summarize(issue["progress"] for issue in issues),
+        "projects": [{key: entry[key] for key in ("id", "name", "issues")} for entry in data.get("project_index", [])],
         "stale_previews": sum(
             1 for session in data["sessions"] if not session["error"] and session["preview"]["stale"]
         ),
@@ -231,8 +234,7 @@ def generate_traces(project_root=".", *, overwrite=False, open_browser=True):
         SHARED_STYLES.read_text(encoding="utf-8") + "\n" + ASSETS.joinpath("styles.css").read_text(encoding="utf-8")
     )
     page = template.replace("__STYLES__", styles)
-    scripts = PROJECT_MENU.read_text(encoding="utf-8") + "\n" + ASSETS.joinpath("app.js").read_text(encoding="utf-8")
-    page = page.replace("__APP__", neutralize_script_close(scripts))
+    page = page.replace("__APP__", neutralize_script_close(ASSETS.joinpath("app.js").read_text(encoding="utf-8")))
     # Data goes in last so record text can never be mistaken for a template marker.
     page = page.replace("__DATA__", safe_json_for_html(data))
     write_text_atomic(output, page)
