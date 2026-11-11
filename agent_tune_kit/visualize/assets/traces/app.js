@@ -75,16 +75,6 @@
   // --- small building blocks ------------------------------------------------------------------------------------
   const countBy = issues => { const counts = new Map(); for (const issue of issues) counts.set(issue.progress, (counts.get(issue.progress) || 0) + 1); return counts; };
   const topProgress = counts => [...counts].sort((a, b) => b[1] - a[1] || ORDER.get(a[0]) - ORDER.get(b[0])).slice(0, 2).map(([key, n]) => `${LABEL.get(key)} ${n}`).join(" · ");
-  const miniBar = counts => {
-    const bar = el("div", undefined, "mini-bar");
-    bar.setAttribute("role", "img");
-    bar.setAttribute("aria-label", `问题处理分布：${[...counts].map(([key, n]) => `${LABEL.get(key)} ${n}`).join("，")}`);
-    for (const [key, n] of [...counts].sort((a, b) => ORDER.get(a[0]) - ORDER.get(b[0]))) {
-      const segment = el("i"); segment.className = `tone-${key}`; segment.style.flex = String(n); segment.title = `${LABEL.get(key)} ${n}`;
-      bar.append(segment);
-    }
-    return bar;
-  };
   const flag = (text, bad) => el("span", text, bad ? "flag bad" : "flag");
   const copyText = async text => {
     try { await navigator.clipboard.writeText(text); return true; } catch { /* file:// pages may refuse; fall back below */ }
@@ -273,7 +263,7 @@
       const counts = countBy(matched);
       const row = el("div", undefined, "card-count");
       row.append(el("strong", `${matched.length} 个问题`), el("span", topProgress(counts), "muted"));
-      card.append(row, miniBar(counts));
+      card.append(row);
     } else card.append(el("div", "无保留问题（不代表会话正确）", "card-count muted"));
     const perCategory = new Map(); let none = 0;
     for (const issue of matched) issue.category ? perCategory.set(issue.category, (perCategory.get(issue.category) || 0) + 1) : none++;
@@ -320,7 +310,7 @@
     const row = el("div", undefined, "card-count");
     row.append(el("strong", `${new Set(items.map(item => item.s.dir)).size} 个会话 · ${items.length} 个问题`), el("span", latestOf(items) < 0 ? "发生时间未记录" : `最近发生 ${when(latestOf(items))}`, "muted"));
     card.append(projectLine(items.map(({issue}) => issue)));
-    card.append(row, miniBar(counts), el("div", topProgress(counts), "card-meta"));
+    card.append(row, el("div", topProgress(counts), "card-meta"));
     return card;
   }
   // The distinct projects behind a group of issues; each offered name narrows the issue view to that project.

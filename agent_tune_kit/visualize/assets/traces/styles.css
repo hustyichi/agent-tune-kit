@@ -65,8 +65,6 @@
 .card-definition { font-size: 12px; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden }
 .card-count { font-size: 13px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap }
 .card-count .muted { font-size: 12px }
-.mini-bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: #e6ebef }
-.mini-bar i { display: block; height: 100%; background: var(--tone) }
 .chips { display: flex; flex-wrap: wrap; gap: 4px; position: relative; z-index: 1 }
 button.category-tag { border: 0; cursor: pointer; font: inherit; font-size: 11px }
 button.category-tag:hover { background: #ffe8d2 }

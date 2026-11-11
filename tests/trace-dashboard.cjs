@@ -304,6 +304,10 @@ assert.equal(text(metaOf(timedCard)), "发生于 11-06 12:55", "run start shown 
 assert.equal(metaOf(timedCard).title, "11-06 12:55 – 11-06 13:19", "hover shows the whole run");
 app.$("tab-category").onclick();
 assert.match(text(app.cards()[0]), /最近发生 11-06 12:55/, "category cards name the latest session run");
+assert.ok(app.cards().every(card => !all(card).some(node => node.className.includes("mini-bar"))), "category cards have no progress bar");
+assert.match(text(app.cards()[0]), /(待诊断|已诊断|验证失败|验证通过) \d/, "category cards keep the progress text");
+app.$("tab-session").onclick();
+assert.ok(app.cards().every(card => !all(card).some(node => node.className.includes("mini-bar") || node.attrs.role === "img")), "session cards have no progress bar");
 
 // --- several sources add a source filter ---------------------------------------------------------------------
 const split = JSON.parse(JSON.stringify(base));
