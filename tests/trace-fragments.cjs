@@ -11,8 +11,9 @@ function boot() {
   const elements = new Map();
   const $ = id => {
     if (!elements.has(id)) elements.set(id, {
-      value: "", hidden: false, style: {}, scrollTop: 0, textContent: "",
+      value: "", hidden: false, disabled: false, title: "", style: {}, scrollTop: 0, textContent: "", attrs: {},
       parentElement: {classList: {toggle() {}}}, focus() {}, scrollIntoView() {},
+      setAttribute(name, value) { this.attrs[name] = String(value); }, getAttribute(name) { return this.attrs[name] ?? null; },
     });
     return elements.get(id);
   };
@@ -152,7 +153,7 @@ test("failure-only filtering matches error styling and combines with Trace, type
   app.$("record-mode").value = "error";
   app.context.renderTraces();
   assert.deepEqual(visible(app.rows()), [0, 2, 3, 4]);
-  assert.equal(app.$("trace-count").textContent, "4 条");
+  assert.equal(app.$("trace-count").textContent, "失败 4 / 12 条");
   app.$("trace-search").value = "read";
   app.context.renderTraces();
   assert.deepEqual(visible(app.rows()), [0, 2, 3, 4], "Search must not include matching normal Events");
@@ -162,7 +163,7 @@ test("failure-only filtering matches error styling and combines with Trace, type
   app.$("trace-filter").value = "1";
   app.context.renderTraces();
   assert.deepEqual(visible(app.rows()), []);
-  assert.equal(app.$("trace-count").textContent, "0 条");
+  assert.equal(app.$("trace-count").textContent, "失败 0 / 5 条", "The total counts T1 EVENT rows; node 3 is a TOOL");
   app.$("type-filter").value = "TOOL";
   app.context.renderTraces();
   assert.deepEqual(visible(app.rows()), [3]);
@@ -188,7 +189,41 @@ test("issue navigation restores failure-only filtering and fragment expansion ca
   app.context.exitIssue();
   assert.equal(app.$("record-mode").value, "error");
   assert.deepEqual(visible(app.rows()), [2, 4, 7]);
-  assert.equal(app.$("trace-count").textContent, "3 条");
+  assert.equal(app.$("trace-count").textContent, "失败 3 / 12 条");
+});
+
+test("the failure switch counts within the other filters, stays visible at zero and restores with the view", () => {
+  const app = boot();
+  const pressed = () => [app.$("record-all").getAttribute("aria-pressed"), app.$("record-failed").getAttribute("aria-pressed")];
+  assert.equal(app.$("record-failed-count").textContent, "0");
+  assert.equal(app.$("record-failed").disabled, true, "Zero failures are shown, not hidden, and cannot be chosen");
+  assert.deepEqual(pressed(), ["true", "false"]);
+  for (const i of [1, 2, 4]) app.capture.nodes[i].level = "ERROR";
+  app.context.renderTraces();
+  assert.equal(app.$("record-failed-count").textContent, "3");
+  assert.equal(app.$("record-failed").disabled, false);
+  assert.equal(app.$("trace-count").textContent, "12 条", "Counting failures must not filter the list");
+  app.$("trace-filter").value = "0";
+  app.context.renderTraces();
+  assert.equal(app.$("record-failed-count").textContent, "2", "Count follows the focused Trace before the switch is used");
+  app.context.setRecordMode("error");
+  assert.deepEqual(pressed(), ["false", "true"]);
+  assert.deepEqual(visible(app.rows()), [2, 4]);
+  assert.equal(app.$("trace-count").textContent, "失败 2 / 6 条");
+  app.$("trace-search").value = "no match";
+  app.context.renderTraces();
+  assert.equal(app.$("record-failed-count").textContent, "0");
+  assert.equal(app.$("record-failed").disabled, false, "An active switch stays usable at zero so the selection is visible");
+  app.$("trace-search").value = "";
+  app.context.focusEvents([0, 2, 6]);
+  assert.equal(app.$("record-mode").value, "", "Opening an event group clears the switch like other record filters");
+  assert.equal(app.$("record-failed-count").textContent, "1", "Count stays inside the chosen group");
+  app.context.exitEventFocus();
+  assert.equal(app.$("record-mode").value, "error");
+  assert.deepEqual(pressed(), ["false", "true"]);
+  app.context.setRecordMode("");
+  assert.deepEqual(pressed(), ["true", "false"]);
+  assert.deepEqual(visible(app.rows()), [0, 2, 4, 6, 8, 10]);
 });
 
 test("selecting an issue focuses all its fragments and preserves interleaved records", () => {

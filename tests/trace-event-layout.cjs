@@ -128,21 +128,33 @@ const {chromium} = require("playwright");
       } else {
         assert.equal(await page.locator(".lane-zoom").count(), 0);
       }
-      await page.locator("#record-mode").selectOption({label:"仅看异常"});
+      assert.equal(await page.locator("select#record-mode").count(), 0, "Failure-only viewing is not a dropdown");
+      const failedSwitch = page.getByRole("button", {name:/^⚠?\s*失败 \d+$/});
+      const failedCount = Number(await page.locator("#record-failed-count").textContent());
+      assert.ok(failedCount > 0);
+      assert.ok(await failedSwitch.isVisible());
+      assert.ok(await page.locator("#record-failed").evaluate(el =>
+        el.getBoundingClientRect().top < document.getElementById("trace-scroll").getBoundingClientRect().top), "Switch sits in the heading");
+      await failedSwitch.click();
+      assert.equal(await page.locator("#record-failed").getAttribute("aria-pressed"), "true");
+      assert.match(await page.locator("#trace-count").textContent(), new RegExp(`^失败 ${failedCount} / \\d+ 条$`));
       assert.ok(await page.locator(".trace-row.is-error").count());
       assert.equal(await page.locator(".trace-row:not(.is-error)").count(), 0);
       await page.locator("#trace-search").fill("no matching event");
-      assert.equal(await page.locator("#trace-count").textContent(), "0 条");
+      assert.equal(await page.locator("#trace-count").textContent(), "失败 0 / 0 条");
+      assert.equal(await page.locator("#record-failed").isEnabled(), true, "An active switch stays usable at zero");
       assert.equal(await page.locator("#trace-list .empty").textContent(), "没有符合筛选条件的事件。");
-      await page.locator("#record-mode").selectOption("");
+      await page.locator("#record-all").click();
+      assert.equal(await page.locator("#record-failed").isEnabled(), false, "Zero failures disable the inactive switch");
       await page.locator("#trace-search").fill("");
       assert.ok(await page.locator(".trace-row:not(.is-error)").count());
-      await page.locator("#record-mode").selectOption("error");
+      await page.locator("#record-failed").click();
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "failure switch overflows horizontally");
       await page.locator("#trace-search").fill(failure.id);
       const row = page.locator(`.trace-row[data-node-index="${failure.index}"]`);
       await row.waitFor();
       assert.ok((await row.getAttribute("class")).includes("is-error"));
-      assert.ok(await row.getByRole("img",{name:"执行异常"}).isVisible());
+      assert.ok(await row.getByRole("img",{name:"执行失败"}).isVisible());
       assert.equal(await row.locator(".event-status").textContent(), "失败");
       assert.equal(await row.locator(".event-meta").isVisible(), width > 800);
       const appearance = () => row.evaluate(el => {
@@ -168,7 +180,7 @@ const {chromium} = require("playwright");
       await row.evaluate(el => el.classList.add("in-fragment"));
       const fragment = await appearance();
       assert.ok(fragment.redTint && fragment.marker);
-      assert.ok(await row.getByRole("img",{name:"执行异常"}).isVisible());
+      assert.ok(await row.getByRole("img",{name:"执行失败"}).isVisible());
       assert.deepEqual(errors,[]);
       assert.deepEqual(requests,[], "Event previews must stay offline");
       console.log(`${width}px: column sizing, failure states, selection and offline rendering passed`);

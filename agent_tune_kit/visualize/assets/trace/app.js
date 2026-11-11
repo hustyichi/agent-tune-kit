@@ -631,16 +631,31 @@
         return (left.at ?? Infinity) - (right.at ?? Infinity) || left.track - right.track || a - b;
       });
     }
-    return candidates.filter(i => {
+    const rows = candidates.filter(i => {
       const n = currentCapture.nodes[i];
       if ((track !== null && n.track !== track) || (type && n.type !== type)) return false;
-      if (mode === "error" && !eventState(n).failed) return false;
       if (query) {
         if (!searchable.has(n)) searchable.set(n, pretty(n).toLocaleLowerCase());
         return searchable.get(n).includes(query);
       }
       return true;
     });
+    // The failure switch shows its count before it is chosen, so count within every other active scope and filter.
+    const failed = rows.filter(i => eventState(currentCapture.nodes[i]).failed);
+    return {rows: mode === "error" ? failed : rows, total: rows.length, failed: failed.length};
+  }
+  function syncRecordMode(failed) {
+    const only = $("record-mode").value === "error";
+    $("record-all").setAttribute("aria-pressed", String(!only));
+    $("record-failed").setAttribute("aria-pressed", String(only));
+    $("record-failed-count").textContent = String(failed);
+    // Keep an active switch usable at zero so the selection stays visible; otherwise zero means nothing to look at.
+    $("record-failed").disabled = !only && failed === 0;
+    $("record-failed").title = failed || only ? `只看执行失败的事件（${failed} 条）` : "当前范围没有执行失败的事件";
+  }
+  function setRecordMode(mode) {
+    $("record-mode").value = mode;
+    renderTraces();
   }
   function eventState(n) {
     const out = n.output, input = n.input;
@@ -859,7 +874,7 @@
       if (state.failed) {
         row.classList.add("is-error");
         const icon = el("span", "⚠", "event-error-icon");
-        icon.setAttribute("role", "img"); icon.setAttribute("aria-label", "执行异常"); icon.title = "执行异常";
+        icon.setAttribute("role", "img"); icon.setAttribute("aria-label", "执行失败"); icon.title = "执行失败";
         label.append(icon);
       }
       label.append(el("span", name, "node-name"));
@@ -963,9 +978,12 @@
     $("summary").textContent = notes.join(" · ");
     $("session-stats").textContent = `${native.length} Trace · ${order.length} 条事件 · ${data.issues.length} 问题`;
     scroller.parentElement.classList.toggle("single", tracks.length === 1 || displayedScope !== null);
-    streamRows = filteredRows();
+    const filtered = filteredRows();
+    streamRows = filtered.rows;
+    syncRecordMode(filtered.failed);
     displayRows = buildDisplayRows(streamRows);
-    $("trace-count").textContent = `${streamRows.length} 条`;
+    $("trace-count").textContent = $("record-mode").value === "error"
+      ? `失败 ${streamRows.length} / ${filtered.total} 条` : `${streamRows.length} 条`;
     if (eventFocus) $("trace-count").textContent = streamRows.length === eventFocus.indices.length
       ? `${streamRows.length} 条事件` : `${streamRows.length} / ${eventFocus.indices.length} 条事件`;
     const related = new Set((investigation?.item.fragments || []).filter(p => p.capture_id === currentCapture?.id).flatMap(p => p.anchors));
@@ -1289,7 +1307,9 @@
   if (currentCapture) $("capture-filter").value = currentCapture.id;
   $("capture-filter").onchange = () => { investigation = null; scopeBefore = null; railFilter = null; chooseCapture(); renderIssueRail(); renderTraces(); };
   $("trace-filter").onchange = () => focusTrace(scope());
-  for (const id of ["trace-search","type-filter","record-mode"]) $(id).addEventListener(id === "trace-search" ? "input" : "change", () => renderTraces());
+  for (const id of ["trace-search","type-filter"]) $(id).addEventListener(id === "trace-search" ? "input" : "change", () => renderTraces());
+  $("record-all").onclick = () => setRecordMode("");
+  $("record-failed").onclick = () => setRecordMode("error");
   $("issue-search").oninput = () => { railFilter = null; renderIssueRail(); };
   const collapsed = localStorage.getItem(RAIL_KEY) === "1";
   document.body.classList.toggle("rail-collapsed", collapsed);

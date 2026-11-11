@@ -153,13 +153,24 @@ body.rail-collapsed .rail-list { padding-inline: 4px }
 .toolbar { flex-wrap: wrap; gap: 8px }
 .record-filters { gap: 8px; max-width: 100% }
 .record-filters label { display: block; min-width: 0 }
-#record-mode { width: 104px }
+/* Failure-only viewing is a visible two-state switch next to the title, not a dropdown, so the failure count shows
+   before anyone filters. */
+.record-mode { display: inline-flex; flex-shrink: 0; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: white }
+.record-mode button { display: inline-flex; align-items: center; gap: 4px; min-height: 26px; padding: 2px 10px; border: 0; border-radius: 0; background: transparent; color: var(--muted); font-size: 12px; white-space: nowrap }
+.record-mode button + button { border-left: 1px solid var(--line) }
+.record-mode button:hover:not(:disabled) { background: var(--tint) }
+.record-mode button[aria-pressed=true] { background: var(--tint); color: var(--accent); font-weight: 600 }
+.record-mode #record-failed[aria-pressed=true] { background: #fff2f1; color: #b12c21; box-shadow: inset 0 -2px #c0392b }
+.record-failed-icon, .record-failed-count { color: #b12c21 }
+.record-failed-count { font-weight: 600; font-variant-numeric: tabular-nums }
+.record-mode button:disabled { opacity: 1; color: #9aa8b2 }
+.record-mode button:disabled :is(.record-failed-icon, .record-failed-count) { color: inherit; font-weight: 400 }
 #type-filter { width: 142px }
 #trace-search { width: 208px }
 .toolbar select:has(option:checked:not([value=""])) { border-color: #deb493; color: var(--accent) }
 @container (max-width: 650px) {
   .record-filters { display: grid; width: 100%; grid-template-columns: repeat(2,minmax(0,1fr)) }
-  .record-filters :is(#record-mode,#type-filter,#trace-search) { width: 100% }
+  .record-filters :is(#type-filter,#trace-search) { width: 100% }
   .record-filters .search-label { grid-column: 1/-1 }
 }
 .stream { overflow: hidden; max-height: 100vh; max-height: 100dvh }

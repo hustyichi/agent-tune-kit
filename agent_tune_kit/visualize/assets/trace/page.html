@@ -60,9 +60,8 @@
       </section>
       <section class="record-panel" aria-labelledby="records-title">
         <div class="records-heading">
-          <div class="records-title"><h2 id="records-title">事件</h2><span id="event-range" class="muted" hidden></span><span id="trace-count" class="muted" aria-live="polite"></span><button id="event-reset" type="button" hidden>返回全部</button></div>
+          <div class="records-title"><h2 id="records-title">事件</h2><div class="record-mode" role="group" aria-label="事件范围"><input id="record-mode" type="hidden" value=""><button id="record-all" type="button" aria-pressed="true">全部</button><button id="record-failed" type="button" aria-pressed="false"><span class="record-failed-icon" aria-hidden="true">⚠</span>失败 <span id="record-failed-count" class="record-failed-count">0</span></button></div><span id="event-range" class="muted" hidden></span><span id="trace-count" class="muted" aria-live="polite"></span><button id="event-reset" type="button" hidden>返回全部</button></div>
           <div class="toolbar record-filters">
-            <label><span class="sr-only">事件范围</span><select id="record-mode"><option value="">全部事件</option><option value="error">仅看异常</option></select></label>
             <label><span class="sr-only">类型</span><select id="type-filter"></select></label>
             <label class="search-label"><span class="sr-only">搜索事件</span><input id="trace-search" type="search" placeholder="搜索事件或输入输出"></label>
           </div>
