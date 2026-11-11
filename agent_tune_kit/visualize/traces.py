@@ -1,9 +1,9 @@
 """Project-wide dashboard over every archived session, written to ``.atk/traces/index.html``.
 
-The page only summarizes: identity, actual progress and category per issue, whether the latest detection finished, plus a link into each session's own
-preview. It reads saved records through ``records.status`` (which already verifies evidence digests) and never opens
-raw trace bodies, so it stays small and fast. A damaged session or issue is reported on its own entry and cannot hide
-the healthy ones.
+The page only summarizes: identity, when the session itself ran, actual progress and category per issue, whether the latest
+detection finished, plus a link into each session's own preview. It reads saved records through ``records.status``
+(which already verifies evidence digests); retained trace files are read only for their event times, and no trace body
+is embedded. A damaged session or issue is reported on its own entry and cannot hide the healthy ones.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 
 from agent_tune_kit.errors import UserActionRequired
 from agent_tune_kit.results.evidence import safe_path
-from agent_tune_kit.traces import records
+from agent_tune_kit.traces import query, records
 from agent_tune_kit.traces.categories import category_map, load_catalog
 from agent_tune_kit.traces.progress import PROGRESS, issue_progress, parse_instant, summarize
 from agent_tune_kit.traces.projects import linked_projects, load_projects, project_index, project_map
@@ -45,10 +45,6 @@ def _text(value, limit=TEXT_LIMIT):
     return value if len(value) <= limit else value[: limit - 1] + "…"
 
 
-def _ms(seconds):
-    return None if seconds is None else int(seconds * 1000)
-
-
 def _latest(stamps):
     known = [stamp for stamp in stamps if stamp is not None]
     return max(known) if known else None
@@ -57,6 +53,25 @@ def _latest(stamps):
 def _problem(warning):
     where = next((warning[key] for key in ("issue_id", "change_id", "capture_id", "path") if warning.get(key)), "")
     return _text(f"{where}: {warning.get('error', '')}" if where else warning.get("error", ""), ITEM_LIMIT)
+
+
+def _session_span(session_dir):
+    """Return the earliest and latest event time recorded in the retained trace, in epoch milliseconds.
+
+    This is when the session itself ran, not when ATK imported or processed it. Times are read with the same rules as
+    the session page; a session whose events carry no usable time, or whose trace cannot be read, has no span.
+    """
+    try:
+        items = query.nodes(session_dir)
+    except (OSError, ValueError, RecursionError, UserActionRequired):
+        return None, None
+    stamps = [
+        stamp
+        for item in items
+        for stamp in (query.timestamp_ms(item.get("start_time")), query.timestamp_ms(item.get("end_time")))
+        if stamp is not None
+    ]
+    return (int(min(stamps)), int(max(stamps))) if stamps else (None, None)
 
 
 def _preview_mtime(session_dir):
@@ -109,7 +124,6 @@ def _issue_entries(session_dir, status, projects):
                 "category": category if isinstance(category, str) and category else None,
                 "progress": issue_progress(issue, pairs)["key"],
                 "segments": len(issue.get("segments") or []),
-                "updated_ms": _ms(_latest(own)),
             }
         )
     return entries, stamps
@@ -148,10 +162,14 @@ def _session_entry(session_dir, projects):
     # The drawer is a preview: it only needs to say whether the issue list can be trusted. Scale, capture coverage,
     # focus and gap details stay on the session page, which shows every detection in full.
     last = detections[-1] if detections else None
+    started, ended = _session_span(session_dir)
     entry.update(
         session_id=session["session_id"],
         source={key: _text(session.get("source", {}).get(key), ITEM_LIMIT) for key in SAFE_SOURCE_FIELDS},
-        updated_ms=_ms(updated),
+        # Processing times (import, detection, diagnosis) only decide preview staleness; the page shows when the
+        # session itself ran.
+        started_ms=started,
+        ended_ms=ended,
         detection={"status": _text(last.get("status"), 40)} if last else None,
         issues=issues,
         problems=[_problem(item) for item in status["warnings"][:LIST_LIMIT]],
@@ -182,8 +200,8 @@ def build_dashboard_data(project_root):
     ]
     if not sessions:
         raise UserActionRequired("No archived sessions to summarize.")
-    # Newest activity first; sessions whose time is unknown go last.
-    sessions.sort(key=lambda item: (item.get("updated_ms") is None, -(item.get("updated_ms") or 0), item["dir"]))
+    # Most recently run session first; sessions whose run time is unknown go last.
+    sessions.sort(key=lambda item: (item.get("started_ms") is None, -(item.get("started_ms") or 0), item["dir"]))
     try:
         load_catalog(root)
     except UserActionRequired:

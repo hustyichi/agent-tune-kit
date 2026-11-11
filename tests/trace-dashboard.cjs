@@ -7,6 +7,8 @@ const vm = require("node:vm");
 
 const source = fs.readFileSync(path.join(__dirname, "../agent_tune_kit/visualize/assets/traces/app.js"), "utf8");
 const base = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+// Index-based cases below edit session-a (three issues) first; fixture traces carry no run time, so pin that order.
+base.sessions.sort((x, y) => x.session_id.localeCompare(y.session_id));
 
 class Node {
   constructor(tag) { this.tag = tag; this.children = []; this.textContent = ""; this.className = ""; this.dataset = {}; this.attrs = {}; this.style = {}; this.hidden = false; }
@@ -126,7 +128,10 @@ assert.equal(app.location.hash, "", "an empty hash already means the default vie
 const sessionText = card => text(card);
 assert.ok(app.cards().some(card => sessionText(card).includes("3 个问题")));
 assert.ok(app.cards().some(card => sessionText(card).includes("1 个问题")));
-assert.ok(app.cards().every(card => sessionText(card).includes("local · test")), "source type and environment");
+assert.equal(text(app.$("dash-stats")), "2 会话 · 4 问题 · 环境 test", "a single source is named once, by environment");
+assert.ok(app.cards().every(card => !/local|环境|更新|生成/.test(sessionText(card))), "cards repeat neither the source, how it was obtained, nor processing times");
+const metaOf = card => all(card).find(node => node.className === "card-meta");
+assert.ok(app.cards().every(card => text(metaOf(card)) === "发生时间未记录"), "untimed fixture traces say the run time is unknown");
 assert.equal(app.$("progress-legend").hidden, true);
 assert.equal(app.$("filter-note").hidden, true, "no redundant summary before filtering");
 assert.match(text(app.$("session-attention")), /1 个会话存在验证失败的问题/);
@@ -289,6 +294,17 @@ all(first).find(node => node.className.includes("icon-button")).onclick();
 // The click hands the text to the clipboard before its first await, so no deferred assertion is needed.
 assert.equal(app.context.copied, byDir(base, first.dataset.key === a.dir ? "session-a" : "session-b").session_id);
 
+// --- cards show and order by when the session ran ------------------------------------------------------------
+const timed = JSON.parse(JSON.stringify(base));
+const at = iso => Date.parse(iso);
+Object.assign(timed.sessions[0], {started_ms: at("2026-11-06T04:55:20Z"), ended_ms: at("2026-11-06T05:19:20Z")});
+app = boot(timed);
+const timedCard = app.cards().find(node => node.dataset.key === timed.sessions[0].dir);
+assert.equal(text(metaOf(timedCard)), "发生于 11-06 12:55", "run start shown in Asia/Shanghai");
+assert.equal(metaOf(timedCard).title, "11-06 12:55 – 11-06 13:19", "hover shows the whole run");
+app.$("tab-category").onclick();
+assert.match(text(app.cards()[0]), /最近发生 11-06 12:55/, "category cards name the latest session run");
+
 // --- several sources add a source filter ---------------------------------------------------------------------
 const split = JSON.parse(JSON.stringify(base));
 split.sessions.find(s => s.session_id === "session-b").source.environment = "prod";
@@ -299,7 +315,9 @@ const option = app.$("source-filter").children.find(node => text(node).includes(
 app.$("source-filter").value = option.value;
 app.$("source-filter").onchange();
 assert.equal(app.cards().length, 1);
-assert.match(text(app.$("dash-stats")), /2 会话/, "header totals stay project-wide");
+assert.equal(text(app.$("dash-stats")), "2 会话 · 4 问题", "header totals stay project-wide and name no single environment");
+assert.match(text(metaOf(app.cards()[0])), /^环境 prod · 发生/, "with several sources each card names its environment");
+assert.deepEqual(app.$("source-filter").children.map(text).slice(1).sort(), ["环境 prod", "环境 test"], "filter labels match the cards");
 assert.match(text(app.$("session-attention")), /1 个会话存在验证失败的问题/);
 app.$("tab-category").onclick();
 assert.equal(text(app.$("progress-legend")).includes("验证失败 1"), true);

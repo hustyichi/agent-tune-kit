@@ -3,6 +3,7 @@ import os
 import re
 import shutil
 import subprocess
+from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import quote, unquote
 
@@ -347,12 +348,36 @@ def test_preview_staleness_follows_the_newest_record(project):
     assert dashboard.summarize_dashboard(dashboard.build_dashboard_data(project))["stale_previews"] == 1
 
 
-def test_sessions_are_ordered_by_latest_activity_then_unknown_time_last(tmp_path):
-    older, ref = make_session(tmp_path, "older")
-    newer, other = make_session(tmp_path, "newer")
-    add_issue(newer, other, "Recent activity")
-    assert [e["session_id"] for e in dashboard.build_dashboard_data(tmp_path)["sessions"]][0] == "newer"
-    assert older.exists() and ref
+def import_timed(project, session_id, *times):
+    rows = [{"id": f"obs-{i}", "traceId": "trace-1", "sessionId": session_id, **row} for i, row in enumerate(times)]
+    export = Path(project) / f"{session_id}.json"
+    export.write_text(json.dumps({"data": rows}))
+    result = trace_capture.import_session(project, session_id, SOURCE, export, retention={"allow_body": True})
+    export.unlink()
+    return Path(result["session_dir"])
+
+
+def test_sessions_show_and_sort_by_when_they_ran_not_when_they_were_processed(tmp_path):
+    first = import_timed(
+        tmp_path,
+        "ran-first",
+        {"startTime": "2026-11-06T05:00:00+00:00", "endTime": "2026-11-06T05:30:00+00:00"},
+        {"startTime": "2026-11-06T04:55:00+00:00"},
+    )
+    import_timed(tmp_path, "ran-later", {"startTime": "2026-11-09T07:00:00+00:00"})
+    import_timed(tmp_path, "untimed", {"startTime": "not-a-time"})
+    # Processing the earlier session last must not move it ahead of the session that ran later.
+    add_issue(first, evidence_ref(first, "raw/trace-1.json"), "Processed most recently")
+    sessions = dashboard.build_dashboard_data(tmp_path)["sessions"]
+    assert [e["session_id"] for e in sessions] == ["ran-later", "ran-first", "untimed"]
+    by_id = {e["session_id"]: e for e in sessions}
+    start = int(datetime(2026, 11, 6, 4, 55, tzinfo=UTC).timestamp() * 1000)
+    end = int(datetime(2026, 11, 6, 5, 30, tzinfo=UTC).timestamp() * 1000)
+    assert (by_id["ran-first"]["started_ms"], by_id["ran-first"]["ended_ms"]) == (start, end)
+    assert by_id["untimed"]["started_ms"] is None and by_id["untimed"]["ended_ms"] is None
+    for entry in sessions:
+        assert "updated_ms" not in entry
+        assert all("updated_ms" not in issue for issue in entry["issues"])
 
 
 def test_links_use_the_escaped_archive_directory_name(tmp_path):

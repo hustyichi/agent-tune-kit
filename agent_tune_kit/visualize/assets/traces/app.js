@@ -37,7 +37,11 @@
     const part = Object.fromEntries(stamp.formatToParts(new Date(ms)).map(item => [item.type, item.value]));
     return `${part.month}-${part.day} ${part.hour === "24" ? "00" : part.hour}:${part.minute}`;
   };
-  const sourceText = source => [source.type, source.environment].filter(Boolean).join(" · ") || "来源未记录";
+  // How material was obtained (local import, remote fetch) is not shown: it does not help judge a session.
+  const sourceText = source => source.environment ? `环境 ${source.environment}` : source.instance || source.project || "来源未记录";
+  // When the session itself ran (its earliest event), never when ATK imported or processed it.
+  const ranAt = s => s.started_ms == null ? "发生时间未记录" : `发生于 ${when(s.started_ms)}`;
+  const ranSpan = s => s.started_ms == null ? "轨迹中没有可用的事件时间" : `${when(s.started_ms)} – ${when(s.ended_ms)}`;
   const statusText = value => STATUS[value] || value || "未记录";
 
   // --- derived search text and source scope ---------------------------------------------------------------------
@@ -47,6 +51,18 @@
     s._text = [s.session_id, s.dir, ...Object.values(s.source || {})].join("\n").toLowerCase();
     for (const issue of s.issues) {
       issue._text = [projectText(issue), ...(issue.linked_projects || []).flatMap(p => p.aliases || []), issue.id, issue.title, issue.category || "", issue.category ? categoryName(issue.category) : "未分类", LABEL.get(issue.progress)].join("\n").toLowerCase();
+    }
+  }
+  const sources = new Map();
+  for (const s of data.sessions) if (s._source && !sources.has(s._source)) sources.set(s._source, s.source);
+  // Each source's shortest distinguishing label: its environment, plus the instance when environments repeat.
+  const sourceLabels = new Map();
+  {
+    const seen = new Map();
+    for (const source of sources.values()) seen.set(sourceText(source), (seen.get(sourceText(source)) || 0) + 1);
+    for (const [key, source] of sources) {
+      const label = sourceText(source);
+      sourceLabels.set(key, seen.get(label) > 1 ? `${label} · ${source.instance || source.project}` : label);
     }
   }
   const scoped = () => data.sessions.filter(s => !state.source || s._source === state.source);
@@ -114,7 +130,7 @@
     }
     return groups;
   }
-  const latestOf = items => items.reduce((max, {issue}) => issue.updated_ms != null && issue.updated_ms > max ? issue.updated_ms : max, -1);
+  const latestOf = items => items.reduce((max, {s}) => s.started_ms != null && s.started_ms > max ? s.started_ms : max, -1);
 
   // --- page chrome ----------------------------------------------------------------------------------------------
   const TABS = [["tab-session", "session"], ["tab-category", "category"]];
@@ -249,7 +265,9 @@
       card.append(el("div", s.error, "card-definition"));
       return card;
     }
-    card.append(el("div", `${sourceText(s.source)} · 更新 ${when(s.updated_ms)}`, "card-meta"));
+    const meta = el("div", sources.size > 1 ? `${sourceLabels.get(s._source)} · ${ranAt(s)}` : ranAt(s), "card-meta");
+    meta.title = ranSpan(s);
+    card.append(meta);
     const matched = s.issues.filter(issue => matchIssue(s, issue));
     if (matched.length) {
       const counts = countBy(matched);
@@ -300,7 +318,7 @@
     card.append(head, el("div", info ? info.definition : "分类词表中没有这条分类，按分类 ID 显示。", "card-definition"));
     const counts = countBy(items.map(item => item.issue));
     const row = el("div", undefined, "card-count");
-    row.append(el("strong", `${new Set(items.map(item => item.s.dir)).size} 个会话 · ${items.length} 个问题`), el("span", `最近 ${when(latestOf(items) < 0 ? null : latestOf(items))}`, "muted"));
+    row.append(el("strong", `${new Set(items.map(item => item.s.dir)).size} 个会话 · ${items.length} 个问题`), el("span", latestOf(items) < 0 ? "发生时间未记录" : `最近发生 ${when(latestOf(items))}`, "muted"));
     card.append(projectLine(items.map(({issue}) => issue)));
     card.append(row, miniBar(counts), el("div", topProgress(counts), "card-meta"));
     return card;
@@ -488,18 +506,16 @@
   $("project-name").textContent = data.project;
   $("project-name").hidden = !data.project;
   const allIssues = data.sessions.reduce((sum, s) => sum + s.issues.length, 0);
-  $("dash-stats").textContent = `${data.sessions.length} 会话 · ${allIssues} 问题 · 生成于 ${data.generated_at.slice(5, 16).replace("T", " ")}`;
   for (const text of data.warnings) $("warnings").append(el("p", text, "warning"));
-  const sources = new Map();
-  for (const s of data.sessions) if (s._source && !sources.has(s._source)) sources.set(s._source, s.source);
+  // One source is named once in the header; several are told apart on each card and in the source filter.
+  const environments = new Set([...sources.values()].map(source => source.environment || ""));
+  const sharedEnvironment = environments.size === 1 ? [...environments][0] : "";
+  $("dash-stats").textContent = [`${data.sessions.length} 会话`, `${allIssues} 问题`, sharedEnvironment && `环境 ${sharedEnvironment}`].filter(Boolean).join(" · ");
   if (sources.size > 1) {
-    const base = source => sourceText(source);
-    const seen = new Map([...sources.values()].map(source => [base(source), 0]));
-    for (const source of sources.values()) seen.set(base(source), seen.get(base(source)) + 1);
     const select = $("source-filter");
     const all = el("option", "全部来源"); all.value = ""; select.append(all);
-    for (const [key, source] of sources) {
-      const option = el("option", seen.get(base(source)) > 1 ? `${base(source)} · ${source.project || source.instance}` : base(source));
+    for (const key of sources.keys()) {
+      const option = el("option", sourceLabels.get(key));
       option.value = key; select.append(option);
     }
     $("source-choice").hidden = false;
