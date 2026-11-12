@@ -140,7 +140,7 @@ Run `atk trace --help` to check whether your CLI supports trace tuning. If the c
 - **Langfuse v4**. Use `$atk-trace-init` to record project settings and configure read-only access on first setup. Configuration references credentials by environment-variable name. Then send `$atk-trace-capture Download session <session-id> from <start time> to <end time>`.
 - **Local files**. Send `$atk-trace-capture Import traces for session <session-id> from <file path>, with source <source>`. You can also provide files with verifiable ties to the session during analysis and let detection import them. Analyze an already archived session directly.
 
-The capture step downloads or imports data. Before saving, decide which content to retain and which fields to redact. ATK adds `.atk/traces/` to the project's `.gitignore`.
+The capture step downloads or imports data. Before saving, decide which content to retain and which fields to redact. ATK checks whether Git ignores `.atk/traces/` and adds a rule to the project's `.gitignore` if needed.
 
 `$atk-trace-init` infers and saves the tuning scope from project documents and implementation; later detection, diagnosis, repair and verification use it. No manual configuration is required. You can also say "For this run, focus on this project or component." When you skip initialization, analysis fills in the necessary context and explains any unresolved boundaries.
 

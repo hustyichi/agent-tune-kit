@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import re
+import subprocess
 import uuid
 from contextlib import contextmanager
 from pathlib import Path
@@ -11,7 +12,7 @@ from urllib.parse import urlsplit
 
 from agent_tune_kit.errors import UserActionRequired
 from agent_tune_kit.results.evidence import digest_file, json_bytes, now, safe_path, write_manifest
-from agent_tune_kit.utils.files import write_text_atomic
+from agent_tune_kit.utils.files import atomic_text_writer, write_text_atomic
 
 from . import archive
 
@@ -97,16 +98,41 @@ def trace_root(project_root):
     return safe_path(project, ".atk/traces")
 
 
+def _trace_git_ignored(project):
+    try:
+        result = subprocess.run(
+            ["git", "check-ignore", "-q", "--no-index", "--", ".atk/traces/"],
+            cwd=project,
+            capture_output=True,
+            env={**os.environ, "LC_ALL": "C"},
+            check=False,
+        )
+    except FileNotFoundError:
+        return None
+    if result.returncode in {0, 1}:
+        return result.returncode == 0
+    if result.stderr.startswith((b"fatal: not a git repository", b"fatal: this operation must be run in a work tree")):
+        return None
+    raise UserActionRequired("Git could not check the Trace ignore rules. Check Git status in the project.")
+
+
 def ensure_workspace(project_root):
     project = Path(project_root).resolve()
     root = trace_root(project)
     ignore = safe_path(project, ".gitignore")
-    text = ignore.read_text(encoding="utf-8") if ignore.exists() else ""
-    # An explicit final rule also protects archives after a previous negated rule.
-    rule = "/.atk/traces/"
-    changed = not text.rstrip().endswith(rule)
-    if changed:
-        write_text_atomic(ignore, text + ("\n" if text and not text.endswith("\n") else "") + rule + "\n")
+    ignored = _trace_git_ignored(project)
+    changed = False
+    if ignored is not True:
+        text = ignore.read_bytes().decode("utf-8") if ignore.exists() else ""
+        rule = "/.atk/traces/"
+        changed = text.rstrip("\r\n").rsplit("\n", 1)[-1] != rule
+        if changed:
+            newline = "\r\n" if "\r\n" in text else "\n"
+            separator = newline if text and not text.endswith("\n") else ""
+            with atomic_text_writer(ignore, newline="") as handle:
+                handle.write(text + separator + rule + newline)
+        if ignored is False and not _trace_git_ignored(project):
+            raise UserActionRequired("Git still does not ignore .atk/traces/. Resolve the conflicting ignore rules.")
     root.mkdir(mode=0o700, parents=True, exist_ok=True)
     return root, changed
 

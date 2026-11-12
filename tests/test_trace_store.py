@@ -1,4 +1,7 @@
 import json
+import os
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -132,6 +135,65 @@ def test_init_is_local_idempotent_and_preserves_manual_notes(tmp_path):
     assert {path.name for path in Path(result["trace_root"]).iterdir()} == {"project.md", "config.json"}
     with pytest.raises(UserActionRequired, match="preserve"):
         init_workspace(tmp_path, project_text="overwrite")
+
+
+@pytest.fixture
+def git_project(tmp_path, monkeypatch):
+    if not shutil.which("git"):
+        pytest.skip("Git is required to test ignore rules")
+    for name in list(os.environ):
+        if name.startswith("GIT_"):
+            monkeypatch.delenv(name)
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", os.devnull)
+    subprocess.run(["git", "init", "--quiet", "--template="], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "core.excludesFile", os.devnull], cwd=tmp_path, check=True)
+    return tmp_path
+
+
+@pytest.mark.parametrize(
+    ("rules", "added"),
+    [
+        (b"/.atk/\nother-output/", b""),
+        (b".atk/\n", b""),
+        (b"/.atk/traces/\n# keep this comment\n", b""),
+        (b"/.atk/traces/\n!/.atk/traces/\n", b"/.atk/traces/\n"),
+        (b"# /.atk/traces/\n", b"/.atk/traces/\n"),
+        (b"other-output/", b"\n/.atk/traces/\n"),
+        (b"other-output/\r\n", b"/.atk/traces/\r\n"),
+    ],
+)
+def test_init_respects_effective_git_ignore_rules(git_project, rules, added):
+    ignore = git_project / ".gitignore"
+    ignore.write_bytes(rules)
+    assert init_workspace(git_project)["gitignore_updated"] is bool(added)
+    assert not init_workspace(git_project)["gitignore_updated"]
+    assert ignore.read_bytes() == rules + added
+    subprocess.run(
+        ["git", "check-ignore", "-q", "--no-index", "--", ".atk/traces/example/raw/trace.json"],
+        cwd=git_project,
+        check=True,
+    )
+
+
+def test_init_reports_nested_ignore_conflict_before_writing_archive(git_project):
+    atk_dir = git_project / ".atk"
+    atk_dir.mkdir()
+    (atk_dir / ".gitignore").write_text("!traces/\n")
+    for _ in range(2):
+        with pytest.raises(UserActionRequired, match="still does not ignore"):
+            init_workspace(git_project)
+    assert (git_project / ".gitignore").read_text() == "/.atk/traces/\n"
+    assert not (atk_dir / "traces").exists()
+
+
+def test_init_without_git_requires_a_whole_ignore_rule(tmp_path, monkeypatch):
+    monkeypatch.setenv("PATH", str(tmp_path))
+    ignore = tmp_path / ".gitignore"
+    ignore.write_text("# /.atk/traces/\n")
+    assert init_workspace(tmp_path)["gitignore_updated"]
+    assert not init_workspace(tmp_path)["gitignore_updated"]
+    assert ignore.read_text() == "# /.atk/traces/\n/.atk/traces/\n"
 
 
 @pytest.mark.parametrize(
