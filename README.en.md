@@ -164,9 +164,11 @@ Use Trace IDs to locate evidence within the session and open issue details to re
 ```text
 $atk-trace-diagnose Investigate session <session-id> and propose repair and verification plans.
 $atk-trace-diagnose Investigate ISSUE-001 in session <session-id> and propose a repair and verification plan.
-$atk-trace-optimize Implement the selected plan for ISSUE-001 in session <session-id>.
+$atk-trace-optimize Prepare a detailed implementation plan for ISSUE-001 in session <session-id>, then implement after confirmation.
 $atk-trace-verify Verify the candidate for ISSUE-001 in session <session-id> and check relevant behavior that should still work.
 ```
+
+`$atk-trace-optimize` first lists the files, exact modification locations, before/after behavior and supporting checks in Codex. Discuss adjustments in chat; only after you confirm the final version does it save the detailed plan and edit the code. Material scope expansion requires another confirmation; an unchanged confirmed plan does not. Draft discussion stays in chat by default, while the session preview shows the final plan and actual changes.
 
 Without specified issues, diagnosis reviews all available session traces, selects new issues within the tuning scope and reviews each existing issue. Findings established as unrelated to the implementation may be excluded with their reasons and history preserved; existing issues with uncertain relevance are not simply deleted. Specified issues or concrete symptoms define the investigation scope, and a temporary focus does not permanently exclude other issues. You can start directly with diagnosis without a separate detection invocation.
 

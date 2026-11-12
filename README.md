@@ -164,9 +164,11 @@ $atk-visualize-trace 打开 <session-id> 的执行泳道，从问题跳到相关
 ```text
 $atk-trace-diagnose 调查 <session-id>，给出修复和验证方案。
 $atk-trace-diagnose 调查 <session-id> 的 ISSUE-001，给出修复和验证方案。
-$atk-trace-optimize 实施 <session-id> 的 ISSUE-001 已选定的方案。
+$atk-trace-optimize 为 <session-id> 的 ISSUE-001 准备详细修改方案，确认后实施。
 $atk-trace-verify 验证 <session-id> 的 ISSUE-001 对应候选，并检查相关正常行为。
 ```
+
+`$atk-trace-optimize` 会先在 Codex 中列出具体文件、修改位置、前后行为和配套验证。你可以在对话中调整方案；确认最终版本后，才保存详细实施方案并修改代码。实质扩大范围时会再次确认，同一已确认方案无需重复确认。讨论稿默认保留在对话中；会话预览展示最终方案与实际修改。
 
 未指定问题时，调查默认检查会话中可用的全部轨迹，按调优范围筛选新问题，并逐项审阅已记录的问题。证据确认与现有实现无关的问题可以排除，并保留理由和历史；已记录但关联尚不明确的问题不会直接删除。指定问题或具体症状时，按指定范围调查，临时收窄范围不会永久排除其他问题。可以直接从调查开始，无需先单独执行检测。
 

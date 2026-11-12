@@ -72,6 +72,35 @@ def test_trace_scroll_layout(tmp_path):
                 ],
             },
         )
+    source_file = tmp_path / "reader.py"
+    source_file.write_text("def read(root):\n    return root\n", encoding="utf-8")
+    plan = """## 问题描述
+Relative reads use the wrong directory.
+## 问题根因
+The reader ignores the selected root.
+## 最小修复方案
+Bind the selected root.
+### 详细实施方案
+| 文件与位置 | 具体修改 | 验证 |
+| --- | --- | --- |
+| [reader.py / read](reader.py#L1) | Resolve paths from the selected root. | Check reads from another cwd. |
+
+```python
+return root / requested_path
+```
+
+Do not change the public signature.
+"""
+    records.save_diagnosis(session, "ISSUE-001", plan)
+    # Both language variants must remain expanded beneath the original three headings.
+    records.save_diagnosis(
+        session,
+        "ISSUE-002",
+        plan.replace("问题描述", "Issue description")
+        .replace("问题根因", "Root cause")
+        .replace("最小修复方案", "Minimal fix")
+        .replace("详细实施方案", "Detailed implementation plan"),
+    )
     generated = generate_trace(tmp_path, session_id=session_id, open_browser=False)
     subprocess.run(
         [node, str(Path(__file__).with_name("trace-scroll-layout.cjs")), generated["output_path"]],

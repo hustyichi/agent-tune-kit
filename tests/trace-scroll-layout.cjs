@@ -116,6 +116,30 @@ const metrics = page => page.evaluate(() => {
       await events.evaluate(el => el.scrollTop = el.scrollHeight); await settle(page);
       assert.equal((await metrics(page)).hint, "已到列表末尾");
     }
+    // Final implementation plans render as plans, never as actual changes.
+    for (const viewport of [{width:1512,height:736}, {width:390,height:844}]) {
+      await page.setViewportSize(viewport);
+      for (const [id, heading] of [["ISSUE-001", "详细实施方案"], ["ISSUE-002", "Detailed implementation plan"]]) {
+        await page.goto(url);
+        await page.locator("#issue-search").fill(id);
+        await page.locator(".issue-card").getByRole("button", {name:"详情", exact:true}).click();
+        await page.getByRole("button", {name:"诊断与方案", exact:true}).click();
+        const plan = page.locator(".diagnosis-markdown");
+        assert.equal(await plan.locator("h2").count(), 3);
+        assert.equal(await plan.locator("h3").textContent(), heading);
+        assert.equal(await plan.locator("h3").evaluate(el => Boolean(el.closest("details"))), false);
+        const link = plan.getByRole("link", {name:"reader.py / read"});
+        assert.match(await link.getAttribute("href"), /reader\.py#L1$/);
+        assert.match(await plan.locator("pre code").textContent(), /return root \/ requested_path/);
+        assert.equal(await plan.locator("table tbody tr").count(), 1);
+        await link.scrollIntoViewIfNeeded();
+        assert.ok(await link.isVisible());
+        assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+        await page.getByRole("button", {name:"修改候选", exact:true}).click();
+        assert.equal(await page.locator(".change-item").count(), 0);
+        assert.doesNotMatch(await page.locator("#drawer-content").textContent(), /requested_path/);
+      }
+    }
     assert.deepEqual(errors, []);
     console.log("Independent panes, four length combinations, virtual rows, navigation, end states and responsive layout passed");
   } finally {

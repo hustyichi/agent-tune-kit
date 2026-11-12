@@ -203,7 +203,9 @@ CSV-only judgments remain supported. Integrity is distinct from coverage, source
 
 ## Uncertainty confirmation pattern
 
-Each Skill should inspect repository files first, state the evidence it found, and ask a concise confirmation question only when acting without confirmation would likely corrupt data, write the wrong files, or misinterpret evaluation results.
+Trace optimization additionally follows the [implementation plan confirmation workflow](trace-tuning.md): prepare the concrete file-level plan in chat, obtain confirmation, then save the final plan and modify the implementation. This applies even to reversible implementation edits; reuse an unchanged plan already confirmed in the conversation.
+
+Outside that Trace implementation confirmation, each Skill should inspect repository files first, state the evidence it found, and ask a concise confirmation question only when acting without confirmation would likely corrupt data, write the wrong files, or misinterpret evaluation results.
 
 Ask before proceeding when any of these remain unresolved after inspection:
 
