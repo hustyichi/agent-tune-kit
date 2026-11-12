@@ -21,7 +21,7 @@ Session identity, local path, actual trace/observation counts, selector/field sc
 
 ## Workflow
 
-1. Resolve the session/source and inspect existing status before retrying. A running/interrupted capture may have performed requests; verify retained facts before repeating. Analysis of saved data does not require a new capture.
+1. Read the shared [tuning boundary](../../docs/trace-tuning.md#tuning-boundary) rules and existing `.atk/traces/project.md` when present. Capture follows the requested acquisition scope, not tuning eligibility: keep authorized evidence for outside or unknown components, and do not require init or boundary completion. Resolve the session/source and inspect existing status before retrying. A running/interrupted capture may have performed requests; verify retained facts before repeating. Analysis of saved data does not require a new capture.
 2. Reuse `.atk/traces/config.json` or an explicit config. Missing dataset, runner or Agent runtime is irrelevant. Ask only for necessary source settings; never invent a recent-days window or infer server version from an SDK/export wrapper.
 3. Use `atk trace fetch --session-id <id> --json`, optionally `--config <file> --from-time <timestamp> --to-time <timestamp>`. The CLI handles Session filtering, cursor pagination and updates by native Trace ID. Existing issues survive reimport.
 4. For local material use `atk trace import --session-id <id> --source <source-json> --path <file> --json`, repeating `--path`. Supply `--association <json>` only with sourced association proof; use `--retention <json>` as needed. A supplied ID or directory name alone is not ownership proof. Import necessary ATK execution evidence with original identities/provenance, not an entire project.

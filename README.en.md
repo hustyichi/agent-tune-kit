@@ -142,14 +142,16 @@ Run `atk trace --help` to check whether your CLI supports trace tuning. If the c
 
 The capture step downloads or imports data. Before saving, decide which content to retain and which fields to redact. ATK adds `.atk/traces/` to the project's `.gitignore`.
 
+`$atk-trace-init` infers and saves the tuning scope from project documents and implementation; later detection, diagnosis, repair and verification use it. No manual configuration is required. You can also say "For this run, focus on this project or component." When you skip initialization, analysis fills in the necessary context and explains any unresolved boundaries.
+
 ### 2. Analyze and Review Evidence
 
 ```text
-$atk-trace-detect Check whether session <session-id> completed its task correctly. List issues, evidence, and what you did not inspect.
+$atk-trace-detect Analyze session <session-id> for issues actionable within this project. List evidence and what you did not inspect.
 $atk-visualize-trace Open the execution lanes for session <session-id> and jump from issues to the relevant trace segments and evidence fields.
 ```
 
-Detection retains issues with serious impact, recurrence, direct relevance to your stated focus, or a concrete implementation improvement lead, and explains the retention reason, evidence and inspection scope. Implementation leads include code, configuration, tool contracts, Prompt and Skill; an unresolved cause can proceed to diagnosis. Minor observations with none of these reasons are not saved separately. No retained issues does not prove the session was correct.
+By default, detection retains evidence-backed issues worth pursuing that have a project mechanism, an improvement direction and a minimal verification approach; the root cause may still be uncertain. It explains out-of-scope findings and missing actionability evidence, and still calls attention to serious problems. You can explicitly request a comprehensive quality audit or investigation of a specific symptom without an existing improvement lead. No retained issues does not prove the session was correct.
 
 The capture, detect, diagnose, optimize and verify Skills generate or update `.atk/traces/<session_id>/preview.html` at stage end without opening a browser. Use `$atk-visualize-trace` when you want to open it; refresh an already open page after the file changes. Initialization has no session trace and does not generate an empty page.
 
@@ -166,7 +168,7 @@ $atk-trace-optimize Implement the selected plan for ISSUE-001 in session <sessio
 $atk-trace-verify Verify the candidate for ISSUE-001 in session <session-id> and check relevant behavior that should still work.
 ```
 
-Without specified issues, diagnosis reviews all available session traces and works through existing and newly found issues, prioritizing causes directly related to project code, configuration, tool contracts, Prompt or Skill. Findings established as unrelated to the existing implementation may be skipped with an explanation. Findings with uncertain relevance remain open for investigation. Specified issues or concrete symptoms limit the investigation scope. You can start directly with diagnosis without a separate detection invocation.
+Without specified issues, diagnosis reviews all available session traces, selects new issues within the tuning scope and reviews each existing issue. Findings established as unrelated to the implementation may be excluded with their reasons and history preserved; existing issues with uncertain relevance are not simply deleted. Specified issues or concrete symptoms define the investigation scope, and a temporary focus does not permanently exclude other issues. You can start directly with diagnosis without a separate detection invocation.
 
 Diagnoses and verification conclusions are saved per issue. If the evidence cannot establish which candidate loaded or whether key verification conditions were met, the verification outcome is `inconclusive`. Investigation results identify unread ranges and evidence gaps. As new issues surface, work through them individually or start another analysis with a new session trace.
 

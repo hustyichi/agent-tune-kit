@@ -11,6 +11,8 @@ metadata:
 
 Prepare display data from existing session records and generate the fixed offline browser. Session stages already generate/update their preview and the project dashboard without opening a browser; use this Skill for explicit preview/open requests. This is display initialization, not acquisition, diagnosis or verification.
 
+Before either mode, read the shared [tuning boundary](../../docs/trace-tuning.md#tuning-boundary) rules and existing `.atk/traces/project.md` when present. Display the saved records and their historical scope; a newer boundary never reclassifies issues or removes captured evidence. Missing boundary context does not require init or block rendering.
+
 ## Inputs
 
 Session mode: an explicit session/source with retained captures and available issue records. Capture-only, zero-issue, partial and interrupted sessions are valid. Dashboard mode: the Agent project whose `.atk/traces/` holds at least one archived session.
@@ -53,7 +55,7 @@ Trace writes `.atk/traces/`. Do not allocate `.atk/results/vN`, create a dataset
 
 Sessions contain issues; only individual issues own project associations. Do not store or display a session-level project union. `source.project` remains the trace source namespace. Project filters apply to the dashboard issue view and the issue list within a session; the session overview is unfiltered by project. Modification projects belong to repair records and details.
 
-Use `atk trace project --list --json` to resolve existing project IDs, names, established abbreviations and workspace-relative paths. `--project-root` remains the archive workspace; it is not an attribution target. Prefer user-specified projects for investigation, then follow evidence into other projects. Never invent abbreviations. A caller, runtime location or proposed fix alone does not establish a project association.
+Use `atk trace project --list --json` to resolve existing project IDs, names, established abbreviations and workspace-relative paths. `--project-root` remains the archive workspace; it is not an attribution target. Prefer user-specified projects for investigation; follow cross-project evidence without silently broadening the effective tuning boundary. Never invent abbreviations. A caller, runtime location or proposed fix alone does not establish a project association.
 
 Read the applicable project's README, AGENTS.md and CLAUDE.md (including actual filename case variants) before investigation or modification. Keep project IDs and workspace-relative paths consistent. State inspected and uninspected scope, proposed versus actual modifications, candidate versions and per-project loading evidence. When modifying another project, explain the tradeoff and remaining limits. Do not update parent gitlinks without explicit authorization.
 

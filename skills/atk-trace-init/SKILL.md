@@ -1,6 +1,6 @@
 ---
 name: atk-trace-init
-description: Prepare project context and non-secret sources for session trace tuning; use when initializing or updating Trace configuration without creating batch evaluation adapters.
+description: Infer and save the project's tuning boundary, execution context and non-secret sources; use when initializing or updating Trace configuration without creating batch evaluation adapters.
 metadata:
   compatibility: Requires the installed ATK CLI on PATH with trace and visualize trace commands.
 ---
@@ -9,7 +9,7 @@ metadata:
 
 ## Purpose
 
-Understand the Agent project and prepare reusable context and supported sources. Initialization requires no session, dataset, runner, remote connection or runnable Agent.
+Understand the Agent project and automatically prepare its reusable tuning boundary, execution context and supported sources. Initialization requires no manually specified boundary, session, dataset, runner, remote connection or runnable Agent.
 
 ## Inputs
 
@@ -17,16 +17,16 @@ The current project, existing Trace files, optional `.atk/context.md`, project d
 
 ## Outputs
 
-`.atk/traces/project.md`, non-secret `config.json`, readiness and specific gaps. No session archive, download, issue, Agent execution or evaluation version. Initialization has no bound session and does not generate an empty preview; session stages generate it once retained material exists.
+`.atk/traces/project.md` with the tuning goal, included components, exclusions with reasons, unknowns and sources; non-secret `config.json`, readiness and specific gaps. No session archive, download, issue, Agent execution or evaluation version. Initialization has no bound session and does not generate an empty preview; session stages generate it once retained material exists.
 
 ## Workflow
 
-1. Read project instructions/docs. Identify Agent purpose, relevant code/Prompt/tool locations, known run/verification commands, supporting sources and unknowns. Reference confirmed standards in optional `.atk/context.md`; do not replace it with run notes.
+1. Read and apply the shared [tuning boundary](../../docs/trace-tuning.md#tuning-boundary) procedure. Read existing `.atk/traces/project.md`, optional `.atk/context.md`, the project registry and relevant project instructions/docs. Infer the default boundary from actual responsibilities and implementation entry points; distinguish reusable Agent mechanisms from the business artifacts they operate on. Identify known run/verification commands and sources. Keep unsupported scope judgments as unknowns; ask only about consequential ambiguity that the available material cannot resolve.
 2. Inspect existing Trace files. Preserve human additions and working source settings. Local mode remains valid without remote credentials; do not guess or silently switch instance, project or environment.
 3. Prepare supported configuration only: source instance/project/environment, version clues, credential environment-variable names and necessary retention settings. Do not request plaintext secrets. A present variable is not a verified connection.
-4. Run `atk trace init --json` for minimal local initialization, or `atk trace init --config <json-file> --project-file <markdown-file> --json` with researched input. Existing human context is preserved; inspect reported differences rather than overwriting it. The first Trace writer preserves `.gitignore` and ensures `.atk/traces/` is ignored.
+4. Save the researched boundary and execution context using `atk trace init --project-file <markdown-file> --json`, with `--config <json-file>` when needed. Refer to stable project IDs in `projects.json` instead of duplicating its catalog. For existing human notes, reconcile only supported differences directly in `project.md`, preserving constraints and unrelated content; the CLI protects them from replacement. Bare `atk trace init --json` creates only a placeholder, so fill the available boundary before claiming initialization is complete. Record unavailable details as unknowns without requiring a separate user setup step. The first Trace writer preserves `.gitignore` and ensures `.atk/traces/` is ignored.
 5. Check source paths and credential references without printing values. Perform a minimal read-only connection check only when requested; do not download session bodies as an initialization probe.
-6. Report local material availability, remote configuration readiness, actual connection checks, known execution conditions and gaps separately. Stop unless further work was requested.
+6. Report the saved default boundary, its basis and material unknowns so the user can correct it; do not require confirmation when evidence already supports it. Report local material availability, remote configuration readiness, actual connection checks and execution conditions separately. Stop unless further work was requested.
 
 ## Minimal local configuration
 
@@ -53,7 +53,7 @@ For source/configuration and record fields, locate the plugin root by walking up
 
 ## Projects and scope
 
-Use `atk trace project --list --json` to resolve existing project IDs, names, established abbreviations and workspace-relative paths. `--project-root` remains the archive workspace; it is not an attribution target. Prefer user-specified projects for investigation, then follow evidence into other projects. Never invent abbreviations. A caller, runtime location or proposed fix alone does not establish a project association.
+Use `atk trace project --list --json` to resolve existing project IDs, names, established abbreviations and workspace-relative paths. `--project-root` remains the archive workspace; it is not an attribution target. Prefer user-specified projects for investigation; follow cross-project evidence without silently broadening the effective tuning boundary. Never invent abbreviations. A caller, runtime location or proposed fix alone does not establish a project association.
 
 Read the applicable project's README, AGENTS.md and CLAUDE.md (including actual filename case variants) before investigation or modification. Keep project IDs and workspace-relative paths consistent. State inspected and uninspected scope, proposed versus actual modifications, candidate versions and per-project loading evidence. When modifying another project, explain the tradeoff and remaining limits. Do not update parent gitlinks without explicit authorization.
 

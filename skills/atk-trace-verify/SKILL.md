@@ -21,7 +21,7 @@ A new verification under the change, including execution status, loading evidenc
 
 ## Workflow
 
-1. Read the change and prior attempts. Verify runtime and authorized conditions. Define required behavior, relevant unaffected cases, scope and candidate-loading proof before execution. Use authorized recoverable conditions or explain narrower alternatives/differences.
+1. Read and apply the shared [tuning boundary](../../docs/trace-tuning.md#tuning-boundary) procedure, loading saved project context and filling missing minimal context inline. Read the change, adopted diagnosis, recorded detection scope and prior attempts. Verify runtime and authorized conditions. Reconcile the effective boundary with the actual candidate and authorized verification target; later defaults do not rewrite historical scope or success criteria. Define required behavior, relevant unaffected cases, scope and candidate-loading proof before execution. Use authorized recoverable conditions or explain narrower alternatives/differences in the verification summary and limitations; a tuning boundary does not remove necessary regression checks.
 2. Prepare tested input from the user's real task/permitted context. Keep investigation answers, diagnosis/repair hints, reference results and hidden assertions outside Agent-visible input. Record input provenance and loading proof separately from judge-only criteria.
 3. Before executing, save `status: running` and actual intended `execution` with `atk trace verify --session-id <id> --issue-id <owner-issue> --change-id <change> --data <json-file> --json`. Bind its ID. Resume only after checking run/process IDs, logs and artifacts; preserve failed/blocked/interrupted attempts.
 4. Execute without changing the candidate. Record actual command/input, runtime/loading facts and output. Explicit batch verification uses existing evaluation/diagnosis/report commands and references real results; it does not rewrite old batch artifacts.
@@ -54,7 +54,7 @@ Trace writes `.atk/traces/`. Do not allocate `.atk/results/vN`, create a dataset
 
 ## Projects and scope
 
-Use `atk trace project --list --json` to resolve existing project IDs, names, established abbreviations and workspace-relative paths. `--project-root` remains the archive workspace; it is not an attribution target. Prefer user-specified projects for investigation, then follow evidence into other projects. Never invent abbreviations. A caller, runtime location or proposed fix alone does not establish a project association.
+Use `atk trace project --list --json` to resolve existing project IDs, names, established abbreviations and workspace-relative paths. `--project-root` remains the archive workspace; it is not an attribution target. Prefer user-specified projects for investigation; follow cross-project evidence without silently broadening the effective tuning boundary. Never invent abbreviations. A caller, runtime location or proposed fix alone does not establish a project association.
 
 Read the applicable project's README, AGENTS.md and CLAUDE.md (including actual filename case variants) before investigation or modification. Keep project IDs and workspace-relative paths consistent. State inspected and uninspected scope, proposed versus actual modifications, candidate versions and per-project loading evidence. When modifying another project, explain the tradeoff and remaining limits. Do not update parent gitlinks without explicit authorization.
 
